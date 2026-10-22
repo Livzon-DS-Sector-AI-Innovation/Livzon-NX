@@ -39,13 +39,13 @@ export function WarningPanels({
       border: '#ffa8a8',
       emptyText: '暂无库存预警',
       items: stockWarnings.slice(0, 5).map(w => ({
-        key: w.spare_part_id,
-        label: w.name,
-        sub: `${w.code}`,
+        key: w.spare_part.id,
+        label: w.spare_part.name,
+        sub: `${w.spare_part.code}`,
         meta: (
           <span style={{ color: 'var(--color-error)', fontWeight: 600, fontSize: 13 }}>
-            仅剩 {w.current_qty}{' '}
-            <span style={{ color: 'var(--color-stone)', fontWeight: 400 }}>/ 最低 {w.min_qty}</span>
+            仅剩 {w.stock.current_qty}{' '}
+            <span style={{ color: 'var(--color-stone)', fontWeight: 400 }}>/ 安全 {w.stock.safety_qty}</span>
           </span>
         ),
       })),

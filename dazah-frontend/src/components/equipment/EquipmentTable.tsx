@@ -3,7 +3,7 @@
 import { useCallback, useState, useEffect, useRef } from 'react'
 import { App, Table, Space, Input, Select, Button } from 'antd'
 import { EditOutlined, DeleteOutlined, SearchOutlined, ToolOutlined, PlusOutlined, EyeOutlined, ImportOutlined, HistoryOutlined } from '@ant-design/icons'
-import { Equipment, EquipmentStatus } from '@/types/equipment'
+import { DepartmentOption, Equipment, EquipmentStatus } from '@/types/equipment'
 import { useEquipmentStore } from '@/stores/equipment'
 import { deleteEquipment } from '@/actions/equipment'
 import { linkDanger, linkPrimary, linkWarning } from '@/components/equipment/shared-styles'
@@ -46,33 +46,28 @@ const issueCellStyle = (
   issueFieldSet(note).has(field) ? { color: ISSUE_RED } : undefined
 
 interface EquipmentTableProps {
+  data: Equipment[]
+  total: number
+  page: number
+  pageSize: number
+  departments: DepartmentOption[]
   loading?: boolean
   onPageChange: (page: number, pageSize: number) => void
-  /** 变化时重置分页到第一页 */
-  resetKey: number
   /** 页面所在车间：导入设备归属该车间 */
   workshopCode?: string
 }
 
 
-export function EquipmentTable({ loading = false, onPageChange, resetKey, workshopCode }: EquipmentTableProps) {
+export function EquipmentTable({ data, total, page, pageSize, departments, loading = false, onPageChange, workshopCode }: EquipmentTableProps) {
   const { message, modal } = App.useApp()
-  const {
-    equipments, total,
-    statusFilter, keyword,
-    departments, departmentFilter, setDepartmentFilter,
-    setStatusFilter, setKeyword,
-    openEquipmentDrawer, openRepairDrawer,
-  } = useEquipmentStore()
-
-  // 本地分页
-  const [localPage, setLocalPage] = useState(1)
-  const [localPageSize, setLocalPageSize] = useState(20)
-
-  // resetKey 变化 → 重置到第一页
-  useEffect(() => {
-    setLocalPage(1)
-  }, [resetKey])
+  const statusFilter = useEquipmentStore((s) => s.statusFilter)
+  const keyword = useEquipmentStore((s) => s.keyword)
+  const departmentFilter = useEquipmentStore((s) => s.departmentFilter)
+  const setDepartmentFilter = useEquipmentStore((s) => s.setDepartmentFilter)
+  const setStatusFilter = useEquipmentStore((s) => s.setStatusFilter)
+  const setKeyword = useEquipmentStore((s) => s.setKeyword)
+  const openEquipmentDrawer = useEquipmentStore((s) => s.openEquipmentDrawer)
+  const openRepairDrawer = useEquipmentStore((s) => s.openRepairDrawer)
 
   const [detailOpen, setDetailOpen] = useState(false)
   const [detailEquipment, setDetailEquipment] = useState<Equipment | null>(null)
@@ -108,13 +103,13 @@ export function EquipmentTable({ loading = false, onPageChange, resetKey, worksh
         try {
           await deleteEquipment(record.id)
           message.success('删除设备成功')
-          onPageChange(localPage, localPageSize)
+          onPageChange(page, pageSize)
         } catch (error) {
           message.error(error?.message || '删除设备失败')
         }
       },
     })
-  }, [modal, message, onPageChange, localPage, localPageSize])
+  }, [modal, message, onPageChange, page, pageSize])
 
   // 技术参数 JSON 渲染为「参数名：值；…」文本
   const renderTechParams = (params: Record<string, unknown> | null | undefined) => {
@@ -128,7 +123,7 @@ export function EquipmentTable({ loading = false, onPageChange, resetKey, worksh
     {
       title: '序号', key: 'index', width: 60, fixed: 'start' as const,
       render: (_: unknown, __: Equipment, index: number) =>
-        (localPage - 1) * localPageSize + index + 1,
+        (page - 1) * pageSize + index + 1,
     },
     {
       title: '设备编号', dataIndex: 'equipment_no', key: 'equipment_no', width: 140, fixed: 'start' as const,
@@ -217,23 +212,19 @@ export function EquipmentTable({ loading = false, onPageChange, resetKey, worksh
       </div>
       <div ref={tableWrapRef} style={{ flex: 1, minHeight: 0 }}>
         <Table
-          columns={columns} dataSource={equipments} rowKey="id" size="small"
+          columns={columns} dataSource={data} rowKey="id" size="small"
           loading={loading} scroll={{ x: 'max-content', y: scrollY || undefined }}
           onRow={(record) => ({
             title: record.data_issue_note || undefined,
           })}
           pagination={{
-            current: localPage,
-            pageSize: localPageSize,
-            total: total,
+            current: page,
+            pageSize,
+            total,
             showSizeChanger: true,
             showQuickJumper: true,
             showTotal: (t) => `共 ${t} 条`,
-            onChange: (p, ps) => {
-              setLocalPage(p)
-              if (ps !== localPageSize) setLocalPageSize(ps)
-              onPageChange(p, ps)
-            },
+            onChange: onPageChange,
           }}
         />
       </div>
@@ -246,7 +237,7 @@ export function EquipmentTable({ loading = false, onPageChange, resetKey, worksh
       <EquipmentImportModal
         open={importOpen}
         onClose={() => setImportOpen(false)}
-        onImported={() => onPageChange(1, localPageSize)}
+        onImported={() => onPageChange(1, pageSize)}
         workshopCode={workshopCode}
       />
       <EquipmentImportArchiveDrawer

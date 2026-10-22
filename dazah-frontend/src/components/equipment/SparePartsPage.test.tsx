@@ -23,13 +23,17 @@ import type { SparePart, StockWarning } from '@/types/equipment'
 const sparePart: SparePart = {
   id: 'sp-1', code: 'BJ-001', name: '滤芯', specification: null,
   unit: '个', category: null, default_supplier: null, unit_price: null,
-  min_qty: 5, current_qty: 20, is_active: true,
+  workshop_code: '201-1', safety_qty: 5, current_qty: 20, is_active: true,
   created_at: '', updated_at: '', created_by: null, updated_by: null,
 }
 
 const warning: StockWarning = {
-  spare_part_id: 'sp-2', code: 'BJ-002', name: '密封圈',
-  current_qty: 2, min_qty: 10,
+  spare_part: { ...sparePart, id: 'sp-2', code: 'BJ-002', name: '密封圈' },
+  stock: {
+    id: 'stock-2', spare_part_id: 'sp-2', warehouse_location: null,
+    current_qty: 2, safety_qty: 10, min_order_qty: 1,
+  },
+  shortage: 8,
 }
 
 let root: Root | null = null
@@ -78,7 +82,7 @@ describe('SparePartsPage 库存预警', () => {
 
     const text = document.body.textContent || ''
     // 预警提示条 + 预警行（副标题常含“库存预警”字样，以数据断言为准）
-    expect(text).toContain('1 个备件库存低于最低库存')
+    expect(text).toContain('1 个备件库存低于安全库存')
     expect(text).toContain('BJ-002')
   })
 

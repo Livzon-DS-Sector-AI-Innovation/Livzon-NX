@@ -1,23 +1,32 @@
 'use client'
 
 import { useCallback } from 'react'
-import { App, Table, Button, Space, Input, Badge } from 'antd'
-import { PlusOutlined, EditOutlined, DeleteOutlined, ImportOutlined, WarningOutlined } from '@ant-design/icons'
+import { App, Table, Button, Space, Input } from 'antd'
+import { PlusOutlined, EditOutlined, DeleteOutlined, ImportOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import { SparePart } from '@/types/equipment'
 import { useEquipmentStore } from '@/stores/equipment'
 import { deleteSparePart } from '@/actions/equipment'
-import { pillSuccess, pillNeutral, actionLink, linkPrimary, linkDanger, linkPurple } from '@/components/equipment/shared-styles'
+import { pillSuccess, pillNeutral, linkPrimary, linkDanger, linkPurple } from '@/components/equipment/shared-styles'
 
-interface Props { onRefresh?: () => void }
+interface Props {
+  data: SparePart[]
+  total: number
+  page: number
+  pageSize: number
+  loading?: boolean
+  onPageChange: (page: number, pageSize: number) => void
+  onRefresh?: () => void
+}
 
-export function SparePartTable({ onRefresh }: Props) {
+export function SparePartTable({
+  data, total, page, pageSize, loading = false, onPageChange, onRefresh,
+}: Props) {
   const { message, modal } = App.useApp()
   const {
-    spareParts, sparePartTotal, sparePartPage, sparePartPageSize,
-    sparePartLoading, sparePartKeyword,
-    setSparePartPage, setSparePartPageSize, setSparePartKeyword,
-    openSparePartDrawer, openStockInboundDrawer, stockWarnings,
+    sparePartKeyword,
+    setSparePartKeyword,
+    openSparePartDrawer, openStockInboundDrawer,
   } = useEquipmentStore()
 
   const handleDelete = useCallback((record: SparePart) => {
@@ -42,7 +51,7 @@ export function SparePartTable({ onRefresh }: Props) {
     {
       title: '库存数量', dataIndex: 'current_qty', key: 'current_qty', width: 100, align: 'right',
       render: (qty: number, r) => (
-        <span style={{ color: qty <= r.min_qty ? 'var(--color-error)' : 'var(--color-ink)', fontWeight: qty <= r.min_qty ? 600 : 400 }}>{qty}</span>
+        <span style={{ color: qty <= r.safety_qty ? 'var(--color-error)' : 'var(--color-ink)', fontWeight: qty <= r.safety_qty ? 600 : 400 }}>{qty}</span>
       ),
     },
     {
@@ -67,20 +76,16 @@ export function SparePartTable({ onRefresh }: Props) {
         <Space>
           <Input.Search placeholder="搜索备件名称/编码" allowClear style={{ width: 240 }}
             value={sparePartKeyword || undefined} onSearch={v => setSparePartKeyword(v)} />
-          {stockWarnings.length > 0 && (
-            <Badge count={stockWarnings.length} offset={[-4, 0]}>
-              <Button icon={<WarningOutlined />} style={{ color: '#dd5b00', borderColor: '#dd5b00' }}>库存预警</Button>
-            </Badge>
-          )}
+
         </Space>
         <Button type="primary" icon={<PlusOutlined />} onClick={() => openSparePartDrawer()}>新建备件</Button>
       </div>
-      <Table columns={columns} dataSource={spareParts} rowKey="id" size="small" loading={sparePartLoading}
+      <Table columns={columns} dataSource={data} rowKey="id" size="small" loading={loading}
         scroll={{ x: 'max-content' }}
         pagination={{
-          current: sparePartPage, pageSize: sparePartPageSize, total: sparePartTotal,
+          current: page, pageSize, total,
           showSizeChanger: true, showQuickJumper: true, showTotal: t => `共 ${t} 条`,
-          onChange: (p, s) => { if (s !== sparePartPageSize) { setSparePartPageSize(s) } else { setSparePartPage(p) } },
+          onChange: onPageChange,
         }} />
     </div>
   )

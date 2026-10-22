@@ -3678,7 +3678,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** 备件列表 */
+        /** 备件列表（附库存数量） */
         get: operations["list_spare_parts_api_v1_equipment_spare_parts__get"];
         put?: never;
         /** 创建备件 */
@@ -28998,6 +28998,42 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** ApiResponseEnvelope[CalibrationPlanResponse] */
+        ApiResponseEnvelope_CalibrationPlanResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["CalibrationPlanResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[CalibrationRecordResponse] */
+        ApiResponseEnvelope_CalibrationRecordResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["CalibrationRecordResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** ApiResponseEnvelope[CapaAutoFillFromDeviation] */
         ApiResponseEnvelope_CapaAutoFillFromDeviation_: {
             /**
@@ -29312,6 +29348,24 @@ export interface components {
              */
             code: number;
             data: components["schemas"]["ChecklistResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[ClaimTimeoutConfig] */
+        ApiResponseEnvelope_ClaimTimeoutConfig_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["ClaimTimeoutConfig"];
             /**
              * Message
              * @default success
@@ -29700,6 +29754,222 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** ApiResponseEnvelope[EquipmentCategoryResponse] */
+        ApiResponseEnvelope_EquipmentCategoryResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["EquipmentCategoryResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[EquipmentFeishuAppItem] */
+        ApiResponseEnvelope_EquipmentFeishuAppItem_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["EquipmentFeishuAppItem"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[EquipmentFeishuSyncStatus] */
+        ApiResponseEnvelope_EquipmentFeishuSyncStatus_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["EquipmentFeishuSyncStatus"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[EquipmentImportResult] */
+        ApiResponseEnvelope_EquipmentImportResult_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["EquipmentImportResult"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[EquipmentInspectionFeishuConfigDetail] */
+        ApiResponseEnvelope_EquipmentInspectionFeishuConfigDetail_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["EquipmentInspectionFeishuConfigDetail"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[EquipmentInspectionFeishuConfigTestResult] */
+        ApiResponseEnvelope_EquipmentInspectionFeishuConfigTestResult_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["EquipmentInspectionFeishuConfigTestResult"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[EquipmentInspectionFeishuDeviceList] */
+        ApiResponseEnvelope_EquipmentInspectionFeishuDeviceList_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["EquipmentInspectionFeishuDeviceList"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[EquipmentInspectionTodaySummary] */
+        ApiResponseEnvelope_EquipmentInspectionTodaySummary_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["EquipmentInspectionTodaySummary"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[EquipmentLedgerArchiveDetail] */
+        ApiResponseEnvelope_EquipmentLedgerArchiveDetail_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["EquipmentLedgerArchiveDetail"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[EquipmentResponse] */
+        ApiResponseEnvelope_EquipmentResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["EquipmentResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[EquipmentStatistics] */
+        ApiResponseEnvelope_EquipmentStatistics_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["EquipmentStatistics"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[FailureCodeResponse] */
+        ApiResponseEnvelope_FailureCodeResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["FailureCodeResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** ApiResponseEnvelope[FeeDashboardResponse] */
         ApiResponseEnvelope_FeeDashboardResponse_: {
             /**
@@ -29744,6 +30014,24 @@ export interface components {
              */
             code: number;
             data: components["schemas"]["FeeOverview"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[FeishuRefreshResult] */
+        ApiResponseEnvelope_FeishuRefreshResult_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["FeishuRefreshResult"];
             /**
              * Message
              * @default success
@@ -30096,6 +30384,61 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** ApiResponseEnvelope[LocationResponse] */
+        ApiResponseEnvelope_LocationResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["LocationResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[MaintenancePlanResponse] */
+        ApiResponseEnvelope_MaintenancePlanResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["MaintenancePlanResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[NoneType] */
+        ApiResponseEnvelope_NoneType_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            /** Data */
+            data: null;
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** ApiResponseEnvelope[OosOotRecordOut] */
         ApiResponseEnvelope_OosOotRecordOut_: {
             /**
@@ -30302,6 +30645,42 @@ export interface components {
              */
             code: number;
             data: components["schemas"]["PageTableTabListResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[PersonnelAddResult] */
+        ApiResponseEnvelope_PersonnelAddResult_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["PersonnelAddResult"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[PersonnelResponse] */
+        ApiResponseEnvelope_PersonnelResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["PersonnelResponse"];
             /**
              * Message
              * @default success
@@ -30546,6 +30925,24 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** ApiResponseEnvelope[RoleResponse] */
+        ApiResponseEnvelope_RoleResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["RoleResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** ApiResponseEnvelope[SafetyFeishuAppSettingsDetail] */
         ApiResponseEnvelope_SafetyFeishuAppSettingsDetail_: {
             /**
@@ -30572,6 +30969,42 @@ export interface components {
              */
             code: number;
             data: components["schemas"]["SafetyFeishuSettingsTestResult"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[SparePartResponse] */
+        ApiResponseEnvelope_SparePartResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["SparePartResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[StockResponse] */
+        ApiResponseEnvelope_StockResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["StockResponse"];
             /**
              * Message
              * @default success
@@ -30744,6 +31177,42 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** ApiResponseEnvelope[WorkOrderResponse] */
+        ApiResponseEnvelope_WorkOrderResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["WorkOrderResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[WorkOrderStatistics] */
+        ApiResponseEnvelope_WorkOrderStatistics_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["WorkOrderStatistics"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** ApiResponseEnvelope[dict[str, Any]] */
         ApiResponseEnvelope_dict_str__Any__: {
             /**
@@ -30754,6 +31223,27 @@ export interface components {
             /** Data */
             data: {
                 [key: string]: unknown;
+            };
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[dict[str, EquipmentFeishuSyncTableResult]] */
+        ApiResponseEnvelope_dict_str__EquipmentFeishuSyncTableResult__: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            /** Data */
+            data: {
+                [key: string]: components["schemas"]["EquipmentFeishuSyncTableResult"];
             };
             /**
              * Message
@@ -30869,6 +31359,63 @@ export interface components {
             code: number;
             /** Data */
             data: components["schemas"]["AuthorizationMaterialListItem"][];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[list[CalibrationPlanResponse]] */
+        ApiResponseEnvelope_list_CalibrationPlanResponse__: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            /** Data */
+            data: components["schemas"]["CalibrationPlanResponse"][];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[list[CalibrationRecordResponse]] */
+        ApiResponseEnvelope_list_CalibrationRecordResponse__: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            /** Data */
+            data: components["schemas"]["CalibrationRecordResponse"][];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[list[CandidateResponse]] */
+        ApiResponseEnvelope_list_CandidateResponse__: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            /** Data */
+            data: components["schemas"]["CandidateResponse"][];
             /**
              * Message
              * @default success
@@ -31002,6 +31549,25 @@ export interface components {
             code: number;
             /** Data */
             data: components["schemas"]["ComplaintOut"][];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[list[DepartmentOption]] */
+        ApiResponseEnvelope_list_DepartmentOption__: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            /** Data */
+            data: components["schemas"]["DepartmentOption"][];
             /**
              * Message
              * @default success
@@ -31221,6 +31787,139 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** ApiResponseEnvelope[list[EquipmentFeishuAppItem]] */
+        ApiResponseEnvelope_list_EquipmentFeishuAppItem__: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            /** Data */
+            data: components["schemas"]["EquipmentFeishuAppItem"][];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[list[EquipmentInspectionFeishuConfigDetail]] */
+        ApiResponseEnvelope_list_EquipmentInspectionFeishuConfigDetail__: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            /** Data */
+            data: components["schemas"]["EquipmentInspectionFeishuConfigDetail"][];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[list[EquipmentInspectionFeishuRecordItem]] */
+        ApiResponseEnvelope_list_EquipmentInspectionFeishuRecordItem__: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            /** Data */
+            data: components["schemas"]["EquipmentInspectionFeishuRecordItem"][];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[list[EquipmentInspectionTodaySummaryEntry]] */
+        ApiResponseEnvelope_list_EquipmentInspectionTodaySummaryEntry__: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            /** Data */
+            data: components["schemas"]["EquipmentInspectionTodaySummaryEntry"][];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[list[EquipmentLedgerArchiveSummary]] */
+        ApiResponseEnvelope_list_EquipmentLedgerArchiveSummary__: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            /** Data */
+            data: components["schemas"]["EquipmentLedgerArchiveSummary"][];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[list[EquipmentResponse]] */
+        ApiResponseEnvelope_list_EquipmentResponse__: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            /** Data */
+            data: components["schemas"]["EquipmentResponse"][];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[list[FailureCodeResponse]] */
+        ApiResponseEnvelope_list_FailureCodeResponse__: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            /** Data */
+            data: components["schemas"]["FailureCodeResponse"][];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** ApiResponseEnvelope[list[FeeEntryResponse]] */
         ApiResponseEnvelope_list_FeeEntryResponse__: {
             /**
@@ -31373,6 +32072,63 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** ApiResponseEnvelope[list[MaintainerOption]] */
+        ApiResponseEnvelope_list_MaintainerOption__: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            /** Data */
+            data: components["schemas"]["MaintainerOption"][];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[list[MaintenancePlanResponse]] */
+        ApiResponseEnvelope_list_MaintenancePlanResponse__: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            /** Data */
+            data: components["schemas"]["MaintenancePlanResponse"][];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[list[MaterialConsumeResponse]] */
+        ApiResponseEnvelope_list_MaterialConsumeResponse__: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            /** Data */
+            data: components["schemas"]["MaterialConsumeResponse"][];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** ApiResponseEnvelope[list[OosOotRecordOut]] */
         ApiResponseEnvelope_list_OosOotRecordOut__: {
             /**
@@ -31420,6 +32176,25 @@ export interface components {
             code: number;
             /** Data */
             data: components["schemas"]["OotLimitProductOut"][];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[list[PersonnelResponse]] */
+        ApiResponseEnvelope_list_PersonnelResponse__: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            /** Data */
+            data: components["schemas"]["PersonnelResponse"][];
             /**
              * Message
              * @default success
@@ -31525,6 +32300,63 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** ApiResponseEnvelope[list[RoleResponse]] */
+        ApiResponseEnvelope_list_RoleResponse__: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            /** Data */
+            data: components["schemas"]["RoleResponse"][];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[list[SparePartListItem]] */
+        ApiResponseEnvelope_list_SparePartListItem__: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            /** Data */
+            data: components["schemas"]["SparePartListItem"][];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[list[StockWarningResponse]] */
+        ApiResponseEnvelope_list_StockWarningResponse__: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            /** Data */
+            data: components["schemas"]["StockWarningResponse"][];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** ApiResponseEnvelope[list[SupplierOut]] */
         ApiResponseEnvelope_list_SupplierOut__: {
             /**
@@ -31534,6 +32366,63 @@ export interface components {
             code: number;
             /** Data */
             data: components["schemas"]["SupplierOut"][];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[list[Union[EquipmentCategoryResponse, EquipmentCategoryTree]]] */
+        ApiResponseEnvelope_list_Union_EquipmentCategoryResponse__EquipmentCategoryTree___: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            /** Data */
+            data: (components["schemas"]["EquipmentCategoryResponse"] | components["schemas"]["EquipmentCategoryTree"])[];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[list[Union[LocationResponse, LocationTree]]] */
+        ApiResponseEnvelope_list_Union_LocationResponse__LocationTree___: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            /** Data */
+            data: (components["schemas"]["LocationResponse"] | components["schemas"]["LocationTree"])[];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[list[UserOption]] */
+        ApiResponseEnvelope_list_UserOption__: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            /** Data */
+            data: components["schemas"]["UserOption"][];
             /**
              * Message
              * @default success
@@ -31610,6 +32499,44 @@ export interface components {
             code: number;
             /** Data */
             data: components["schemas"]["ValidationReviewListItem"][];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[list[WorkOrderImageResponse]] */
+        ApiResponseEnvelope_list_WorkOrderImageResponse__: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            /** Data */
+            data: components["schemas"]["WorkOrderImageResponse"][];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[list[WorkOrderResponse]] */
+        ApiResponseEnvelope_list_WorkOrderResponse__: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            /** Data */
+            data: components["schemas"]["WorkOrderResponse"][];
             /**
              * Message
              * @default success
@@ -34142,6 +35069,62 @@ export interface components {
             responsible_person_id?: string | null;
         };
         /**
+         * CalibrationPlanResponse
+         * @description 校准计划响应
+         */
+        CalibrationPlanResponse: {
+            /**
+             * Calibration Type
+             * @enum {string}
+             */
+            calibration_type: "内部校准" | "外部检定";
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: string | null;
+            /** Cycle Months */
+            cycle_months: number;
+            /**
+             * Equipment Id
+             * Format: uuid
+             */
+            equipment_id: string;
+            /** Equipment Name */
+            equipment_name?: string | null;
+            /** Equipment No */
+            equipment_no?: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Last Calibration Date */
+            last_calibration_date: string | null;
+            /** Next Calibration Date */
+            next_calibration_date: string | null;
+            /** Remark */
+            remark: string | null;
+            /** Responsible Person Id */
+            responsible_person_id: string | null;
+            /** Responsible Person Name */
+            responsible_person_name?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "启用" | "停用";
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Updated By */
+            updated_by: string | null;
+        };
+        /**
          * CalibrationPlanUpdate
          * @description 更新校准计划请求
          */
@@ -34221,6 +35204,92 @@ export interface components {
              * @enum {string}
              */
             result: "合格" | "不合格";
+        };
+        /**
+         * CalibrationRecordResponse
+         * @description 校准记录响应
+         */
+        CalibrationRecordResponse: {
+            /** Calibrated By */
+            calibrated_by: string | null;
+            /**
+             * Calibration Date
+             * Format: date
+             */
+            calibration_date: string;
+            /**
+             * Calibration Plan Id
+             * Format: uuid
+             */
+            calibration_plan_id: string;
+            /**
+             * Calibration Type
+             * @enum {string}
+             */
+            calibration_type: "内部校准" | "外部检定";
+            /** Certificate No */
+            certificate_no: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: string | null;
+            /**
+             * Equipment Id
+             * Format: uuid
+             */
+            equipment_id: string;
+            /** Equipment Name */
+            equipment_name?: string | null;
+            /** Equipment No */
+            equipment_no?: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Next Due Date
+             * Format: date
+             */
+            next_due_date: string;
+            /** Remark */
+            remark: string | null;
+            /**
+             * Result
+             * @enum {string}
+             */
+            result: "合格" | "不合格";
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Updated By */
+            updated_by: string | null;
+        };
+        /**
+         * CandidateResponse
+         * @description 可分配人员信息（供其他业务模块调用）
+         */
+        CandidateResponse: {
+            /** Department */
+            department: string | null;
+            /** Feishu Open Id */
+            feishu_open_id: string | null;
+            /** Feishu User Id */
+            feishu_user_id: string | null;
+            /** Name */
+            name: string;
+            /**
+             * Personnel Id
+             * Format: uuid
+             */
+            personnel_id: string;
+            /** Roles */
+            roles?: components["schemas"]["PersonnelRoleInfo"][];
         };
         /** CandidateUpdate */
         CandidateUpdate: {
@@ -35922,6 +36991,36 @@ export interface components {
              * @description 题目内容
              */
             question: string;
+        };
+        /**
+         * ClaimTimeoutConfig
+         * @description 抢单超时配置（按优先级）
+         */
+        ClaimTimeoutConfig: {
+            /**
+             * Emergency
+             * @description 紧急工单超时（分钟）
+             * @default 15
+             */
+            emergency: number;
+            /**
+             * High
+             * @description 高优先级超时（分钟）
+             * @default 30
+             */
+            high: number;
+            /**
+             * Low
+             * @description 低优先级超时（分钟）
+             * @default 120
+             */
+            low: number;
+            /**
+             * Medium
+             * @description 中优先级超时（分钟）
+             * @default 60
+             */
+            medium: number;
         };
         /**
          * ClaimTimeoutUpdateRequest
@@ -39176,6 +40275,25 @@ export interface components {
              * @default 0
              */
             sort_order: number;
+        };
+        /**
+         * DepartmentOption
+         * @description 部门下拉选项（含负责人）
+         */
+        DepartmentOption: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Leader Id */
+            leader_id?: string | null;
+            /** Leader Name */
+            leader_name?: string | null;
+            /** Leader User Id */
+            leader_user_id?: string | null;
+            /** Name */
+            name: string;
         };
         /** DepartmentUpdate */
         DepartmentUpdate: {
@@ -43016,6 +44134,77 @@ export interface components {
             parent_id?: string | null;
         };
         /**
+         * EquipmentCategoryResponse
+         * @description 设备分类响应
+         */
+        EquipmentCategoryResponse: {
+            /** Code */
+            code: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: string | null;
+            /** Description */
+            description: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Parent Id */
+            parent_id: string | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Updated By */
+            updated_by: string | null;
+        };
+        /**
+         * EquipmentCategoryTree
+         * @description 设备分类树形结构
+         */
+        EquipmentCategoryTree: {
+            /**
+             * Children
+             * @default []
+             */
+            children: components["schemas"]["EquipmentCategoryTree"][];
+            /** Code */
+            code: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: string | null;
+            /** Description */
+            description: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Parent Id */
+            parent_id: string | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Updated By */
+            updated_by: string | null;
+        };
+        /**
          * EquipmentCategoryUpdate
          * @description 更新设备分类请求
          */
@@ -43192,6 +44381,50 @@ export interface components {
             name: string;
         };
         /**
+         * EquipmentFeishuAppItem
+         * @description 飞书自建应用凭据条目（Secret 掩码返回）
+         */
+        EquipmentFeishuAppItem: {
+            /**
+             * App Id
+             * @description 飞书应用 App ID
+             */
+            app_id: string;
+            /**
+             * App Secret Configured
+             * @description 是否已配置 App Secret
+             */
+            app_secret_configured: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             * @description 创建时间
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             * @description 应用记录 ID
+             */
+            id: string;
+            /**
+             * Name
+             * @description 应用名称
+             */
+            name: string;
+            /**
+             * Referenced Workshops
+             * @description 引用该应用的巡检配置车间代码
+             */
+            referenced_workshops?: string[];
+            /**
+             * Updated At
+             * Format: date-time
+             * @description 最近更新时间
+             */
+            updated_at: string;
+        };
+        /**
          * EquipmentFeishuAppUpdateRequest
          * @description 更新飞书自建应用凭据请求（Secret 留空保留已保存值）
          */
@@ -43211,6 +44444,213 @@ export interface components {
              * @description 应用名称
              */
             name: string;
+        };
+        /**
+         * EquipmentFeishuSyncStateItem
+         * @description 镜像同步状态行
+         */
+        EquipmentFeishuSyncStateItem: {
+            /** Last Message */
+            last_message?: string | null;
+            /** Last Run At */
+            last_run_at?: string | null;
+            /** Last Status */
+            last_status?: string | null;
+            /** Last Synced At */
+            last_synced_at?: string | null;
+            /** Table Key */
+            table_key: string;
+            /** Total Rows */
+            total_rows?: number | null;
+        };
+        /**
+         * EquipmentFeishuSyncStatus
+         * @description 镜像同步启用状态与各表最近同步情况
+         */
+        EquipmentFeishuSyncStatus: {
+            /** Enabled */
+            enabled: boolean;
+            /** Tables */
+            tables?: components["schemas"]["EquipmentFeishuSyncStateItem"][];
+        };
+        /**
+         * EquipmentFeishuSyncTableResult
+         * @description 单表同步结果（成功含 synced/total，失败仅含 error）
+         */
+        EquipmentFeishuSyncTableResult: {
+            /** Error */
+            error?: string | null;
+            /** Synced */
+            synced?: number | null;
+            /** Total */
+            total?: number | null;
+        };
+        /**
+         * EquipmentImportFailure
+         * @description 台账导入失败行
+         */
+        EquipmentImportFailure: {
+            /** Equipment No */
+            equipment_no?: string | null;
+            /** Reason */
+            reason: string;
+            /** Row */
+            row: number;
+        };
+        /**
+         * EquipmentImportResult
+         * @description 台账导入结果（含留存档 ID）
+         */
+        EquipmentImportResult: {
+            /** Archive Id */
+            archive_id: string;
+            /**
+             * Created
+             * @default 0
+             */
+            created: number;
+            /**
+             * Failed
+             * @default 0
+             */
+            failed: number;
+            /** Failures */
+            failures: components["schemas"]["EquipmentImportFailure"][];
+            /**
+             * Flagged
+             * @default 0
+             */
+            flagged: number;
+            /**
+             * Locations Created
+             * @default 0
+             */
+            locations_created: number;
+            /**
+             * Total Rows
+             * @default 0
+             */
+            total_rows: number;
+            /**
+             * Updated
+             * @default 0
+             */
+            updated: number;
+        };
+        /**
+         * EquipmentInspectionFeishuConfigDetail
+         * @description 设备巡检飞书镜像配置详情（Secret 掩码返回）
+         */
+        EquipmentInspectionFeishuConfigDetail: {
+            /**
+             * App Id
+             * @description 飞书应用 App ID
+             */
+            app_id: string;
+            /**
+             * App Secret Configured
+             * @description 是否已配置 App Secret
+             */
+            app_secret_configured: boolean;
+            /**
+             * App Secret Masked
+             * @description App Secret 掩码
+             */
+            app_secret_masked: string;
+            /**
+             * App Token
+             * @description 多维表格 App Token
+             */
+            app_token: string;
+            /**
+             * Base Url
+             * @description 多维表格完整链接（未填写为空串）
+             */
+            base_url: string;
+            /**
+             * Device Table Id
+             * @description 设备档案表 ID
+             */
+            device_table_id: string;
+            /**
+             * Enabled
+             * @description 当前镜像同步是否实际启用
+             */
+            enabled: boolean;
+            /**
+             * Feishu App Id
+             * @description 引用的自建应用库记录；空=内联凭据
+             */
+            feishu_app_id?: string | null;
+            /**
+             * Feishu App Name
+             * @description 引用的自建应用名称（便于辨认）
+             */
+            feishu_app_name?: string | null;
+            /**
+             * History Table Id
+             * @description 设备历史巡检记录表 ID
+             */
+            history_table_id: string;
+            /**
+             * Is Enabled
+             * @description 启用镜像同步
+             */
+            is_enabled: boolean;
+            /**
+             * Last Test Error
+             * @description 最近连接测试失败原因
+             */
+            last_test_error?: string | null;
+            /**
+             * Last Test Status
+             * @description 最近连接测试结果
+             */
+            last_test_status?: string | null;
+            /**
+             * Last Tested At
+             * @description 最近连接测试时间
+             */
+            last_tested_at?: string | null;
+            /**
+             * Source
+             * @description 当前生效配置来源：数据库行或环境变量回退
+             * @enum {string}
+             */
+            source: "database" | "environment";
+            /**
+             * Today Table Id
+             * @description 今日巡检表 ID
+             */
+            today_table_id: string;
+            /**
+             * Workshop Code
+             * @description 车间代码（配置归属车间）
+             */
+            workshop_code: string;
+        };
+        /**
+         * EquipmentInspectionFeishuConfigTestResult
+         * @description 设备巡检飞书镜像连接测试结果
+         */
+        EquipmentInspectionFeishuConfigTestResult: {
+            /**
+             * Message
+             * @description 结果说明（失败时为脱敏原因）
+             * @default
+             */
+            message: string;
+            /**
+             * Success
+             * @description 测试是否通过
+             */
+            success: boolean;
+            /**
+             * Table Count
+             * @description 读取到的多维表格子表数量
+             * @default 0
+             */
+            table_count: number;
         };
         /**
          * EquipmentInspectionFeishuConfigUpdateRequest
@@ -43248,7 +44688,7 @@ export interface components {
             device_table_id: string;
             /**
              * Feishu App Id
-             * @description 引用自建应用库记录；提供时凭据以应用库为准，忽略内联 App ID/Secret
+             * @description 引用自建应用库；提供时凭据以应用库为准，忽略内联 App ID/Secret
              */
             feishu_app_id?: string | null;
             /**
@@ -43269,6 +44709,350 @@ export interface components {
              * @default
              */
             today_table_id: string;
+        };
+        /**
+         * EquipmentInspectionFeishuDeviceItem
+         * @description 巡检设备清单项（镜像 + 台账关联）
+         */
+        EquipmentInspectionFeishuDeviceItem: {
+            /** Equipment Name */
+            equipment_name?: string | null;
+            /** Equipment No */
+            equipment_no?: string | null;
+            /**
+             * In Ledger
+             * @default false
+             */
+            in_ledger: boolean;
+            /** Last Inspected Date */
+            last_inspected_date?: string | null;
+            /** Location Name */
+            location_name?: string | null;
+            /** Model */
+            model?: string | null;
+            /** Record Id */
+            record_id: string;
+            /**
+             * Today Status
+             * @default pending
+             */
+            today_status: string;
+        };
+        /**
+         * EquipmentInspectionFeishuDeviceList
+         * @description 巡检设备清单返回结构
+         */
+        EquipmentInspectionFeishuDeviceList: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Items */
+            items?: components["schemas"]["EquipmentInspectionFeishuDeviceItem"][];
+        };
+        /**
+         * EquipmentInspectionFeishuRecordItem
+         * @description 巡检记录（飞书镜像）列表项
+         */
+        EquipmentInspectionFeishuRecordItem: {
+            /** Am Clean */
+            am_clean?: string | null;
+            /** Am Fastening */
+            am_fastening?: string | null;
+            /** Am Lubrication */
+            am_lubrication?: string | null;
+            /** Am Sealing */
+            am_sealing?: string | null;
+            /** Am Sound */
+            am_sound?: string | null;
+            /** Am Surface */
+            am_surface?: string | null;
+            /** Am Vibration */
+            am_vibration?: string | null;
+            /** Anomaly Note */
+            anomaly_note?: string | null;
+            /** Equipment Name */
+            equipment_name?: string | null;
+            /** Equipment No */
+            equipment_no?: string | null;
+            /** Has Abnormal */
+            has_abnormal?: boolean | null;
+            /** Id */
+            id: string;
+            /** Last Modified At */
+            last_modified_at?: string | null;
+            /** Pm Clean */
+            pm_clean?: string | null;
+            /** Pm Fastening */
+            pm_fastening?: string | null;
+            /** Pm Lubrication */
+            pm_lubrication?: string | null;
+            /** Pm Sealing */
+            pm_sealing?: string | null;
+            /** Pm Sound */
+            pm_sound?: string | null;
+            /** Pm Surface */
+            pm_surface?: string | null;
+            /** Pm Vibration */
+            pm_vibration?: string | null;
+            /** Process Status */
+            process_status?: string | null;
+            /** Raw Fields */
+            raw_fields?: {
+                [key: string]: unknown;
+            } | null;
+            /** Record Date */
+            record_date?: string | null;
+            /** Record Id */
+            record_id?: string | null;
+            /** Source */
+            source: string;
+            /** Workshop Code */
+            workshop_code: string;
+        };
+        /**
+         * EquipmentInspectionTodaySummary
+         * @description 单车间今日巡检进度
+         */
+        EquipmentInspectionTodaySummary: {
+            /**
+             * Abnormal
+             * @default 0
+             */
+            abnormal: number;
+            /**
+             * Am Inspected
+             * @default 0
+             */
+            am_inspected: number;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /**
+             * Inspected
+             * @default 0
+             */
+            inspected: number;
+            /**
+             * Pm Inspected
+             * @default 0
+             */
+            pm_inspected: number;
+            /**
+             * Total Devices
+             * @default 0
+             */
+            total_devices: number;
+        };
+        /**
+         * EquipmentInspectionTodaySummaryEntry
+         * @description 多车间今日巡检进度汇总项
+         */
+        EquipmentInspectionTodaySummaryEntry: {
+            /**
+             * Abnormal
+             * @default 0
+             */
+            abnormal: number;
+            /**
+             * Am Inspected
+             * @default 0
+             */
+            am_inspected: number;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /**
+             * Inspected
+             * @default 0
+             */
+            inspected: number;
+            /**
+             * Pm Inspected
+             * @default 0
+             */
+            pm_inspected: number;
+            /**
+             * Total Devices
+             * @default 0
+             */
+            total_devices: number;
+            /** Workshop Code */
+            workshop_code: string;
+        };
+        /**
+         * EquipmentLedgerArchiveDetail
+         * @description 台账导入存档详情（含完整表格快照）
+         */
+        EquipmentLedgerArchiveDetail: {
+            /** Col Count */
+            col_count?: number | null;
+            /** Col Widths */
+            col_widths: number[];
+            /** Created At */
+            created_at?: string | null;
+            /** Created By Name */
+            created_by_name?: string | null;
+            /** File Name */
+            file_name: string;
+            /** Id */
+            id: string;
+            /** Import Summary */
+            import_summary?: {
+                [key: string]: unknown;
+            } | null;
+            /** Merges */
+            merges: unknown[];
+            /** Row Count */
+            row_count?: number | null;
+            /** Rows */
+            rows: unknown[][];
+            /** Sheet Name */
+            sheet_name?: string | null;
+            /** Updated At */
+            updated_at?: string | null;
+            /** Workshop Code */
+            workshop_code?: string | null;
+        };
+        /**
+         * EquipmentLedgerArchiveSummary
+         * @description 台账导入存档列表项（不含表格大字段）
+         */
+        EquipmentLedgerArchiveSummary: {
+            /** Col Count */
+            col_count?: number | null;
+            /** Created At */
+            created_at?: string | null;
+            /** Created By Name */
+            created_by_name?: string | null;
+            /** File Name */
+            file_name: string;
+            /** Id */
+            id: string;
+            /** Import Summary */
+            import_summary?: {
+                [key: string]: unknown;
+            } | null;
+            /** Row Count */
+            row_count?: number | null;
+            /** Sheet Name */
+            sheet_name?: string | null;
+            /** Updated At */
+            updated_at?: string | null;
+            /** Workshop Code */
+            workshop_code?: string | null;
+        };
+        /**
+         * EquipmentResponse
+         * @description 设备响应
+         */
+        EquipmentResponse: {
+            /** Arrival Date */
+            arrival_date: string | null;
+            /** Asset Value */
+            asset_value: number | null;
+            /** Category Ids */
+            category_ids?: string[];
+            /** Category Names */
+            category_names?: string | null;
+            /** Commissioning Date */
+            commissioning_date: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: string | null;
+            /** Data Issue Note */
+            data_issue_note: string | null;
+            /** Department Id */
+            department_id?: string | null;
+            /** Department Name */
+            department_name?: string | null;
+            /** Depreciation Years */
+            depreciation_years: number | null;
+            /** Description */
+            description: string | null;
+            /** Equipment No */
+            equipment_no: string;
+            /** Factory No */
+            factory_no: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Importance */
+            importance: string;
+            /**
+             * Location Id
+             * Format: uuid
+             */
+            location_id: string;
+            /** Location Name */
+            location_name?: string | null;
+            /** Manufacturer */
+            manufacturer: string | null;
+            /** Model */
+            model: string | null;
+            /** Name */
+            name: string;
+            /** Production Date */
+            production_date: string | null;
+            /** Responsible Person Id */
+            responsible_person_id?: string | null;
+            /** Responsible Person Name */
+            responsible_person_name?: string | null;
+            /** Specification */
+            specification: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "在用" | "备用" | "维修中" | "停用" | "报废";
+            /** Supplier */
+            supplier: string | null;
+            /** Technical Params */
+            technical_params: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Updated By */
+            updated_by: string | null;
+            /** Warranty Expire Date */
+            warranty_expire_date: string | null;
+            /** Workshop Code */
+            workshop_code: string;
+        };
+        /**
+         * EquipmentStatistics
+         * @description 设备统计
+         */
+        EquipmentStatistics: {
+            /** By Category */
+            by_category: {
+                [key: string]: number;
+            };
+            /** By Location */
+            by_location: {
+                [key: string]: number;
+            };
+            /** By Status */
+            by_status: {
+                [key: string]: number;
+            };
+            /** Total */
+            total: number;
         };
         /**
          * EquipmentUpdate
@@ -44192,6 +45976,41 @@ export interface components {
             sort_order: number;
         };
         /**
+         * FailureCodeResponse
+         * @description 故障代码响应
+         */
+        FailureCodeResponse: {
+            /** Code */
+            code: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: string | null;
+            /** Description */
+            description: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Is Active */
+            is_active: boolean;
+            /** Name */
+            name: string;
+            /** Sort Order */
+            sort_order: number;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Updated By */
+            updated_by: string | null;
+        };
+        /**
          * FailureCodeUpdate
          * @description 更新故障代码请求
          */
@@ -45046,6 +46865,36 @@ export interface components {
              * @constant
              */
             status: "connected";
+        };
+        /**
+         * FeishuRefreshResult
+         * @description 飞书刷新结果
+         */
+        FeishuRefreshResult: {
+            /** Errors */
+            errors?: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Skipped
+             * @description 跳过（无变更）
+             */
+            skipped: number;
+            /**
+             * Total
+             * @description 人员总数
+             */
+            total: number;
+            /**
+             * Unmatched
+             * @description 未匹配（identity 中找不到）
+             */
+            unmatched: number;
+            /**
+             * Updated
+             * @description 成功更新数
+             */
+            updated: number;
         };
         /** FeishuResourceTemplateCreate */
         FeishuResourceTemplateCreate: {
@@ -48520,6 +50369,77 @@ export interface components {
             parent_id?: string | null;
         };
         /**
+         * LocationResponse
+         * @description 位置响应
+         */
+        LocationResponse: {
+            /** Code */
+            code: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: string | null;
+            /** Description */
+            description: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Parent Id */
+            parent_id: string | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Updated By */
+            updated_by: string | null;
+        };
+        /**
+         * LocationTree
+         * @description 位置树形结构
+         */
+        LocationTree: {
+            /**
+             * Children
+             * @default []
+             */
+            children: components["schemas"]["LocationTree"][];
+            /** Code */
+            code: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: string | null;
+            /** Description */
+            description: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Parent Id */
+            parent_id: string | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Updated By */
+            updated_by: string | null;
+        };
+        /**
          * LocationUpdate
          * @description 更新位置请求
          */
@@ -48565,6 +50485,26 @@ export interface components {
              * @default 0
              */
             version: number;
+        };
+        /**
+         * MaintainerOption
+         * @description 工单指派用维修人员选项
+         */
+        MaintainerOption: {
+            /**
+             * Department Id
+             * @default
+             */
+            department_id: string;
+            /**
+             * Employee No
+             * @default
+             */
+            employee_no: string;
+            /** Name */
+            name: string;
+            /** User Id */
+            user_id: string;
         };
         /** MaintenanceBody */
         MaintenanceBody: {
@@ -48638,6 +50578,71 @@ export interface components {
              * @description 负责人ID
              */
             responsible_person_id?: string | null;
+        };
+        /**
+         * MaintenancePlanResponse
+         * @description 维护计划响应
+         */
+        MaintenancePlanResponse: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: string | null;
+            /**
+             * Equipment Id
+             * Format: uuid
+             */
+            equipment_id: string;
+            /** Equipment Name */
+            equipment_name?: string | null;
+            /** Equipment No */
+            equipment_no?: string | null;
+            /** Frequency */
+            frequency: number;
+            /**
+             * Frequency Unit
+             * @enum {string}
+             */
+            frequency_unit: "天" | "周" | "月" | "年";
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Last Maintenance Date */
+            last_maintenance_date: string | null;
+            /** Maintenance Content */
+            maintenance_content: string | null;
+            /** Next Maintenance Date */
+            next_maintenance_date: string | null;
+            /** Plan Name */
+            plan_name: string;
+            /**
+             * Plan Type
+             * @enum {string}
+             */
+            plan_type: "预防性维护" | "预测性维护";
+            /** Remark */
+            remark: string | null;
+            /** Responsible Person Id */
+            responsible_person_id: string | null;
+            /** Responsible Person Name */
+            responsible_person_name?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "启用" | "停用" | "已完成";
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Updated By */
+            updated_by: string | null;
         };
         /**
          * MaintenancePlanUpdate
@@ -48939,6 +50944,38 @@ export interface components {
              * @description 领料清单
              */
             items: components["schemas"]["MaterialConsumeItem"][];
+        };
+        /**
+         * MaterialConsumeResponse
+         * @description 领料记录响应
+         */
+        MaterialConsumeResponse: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Quantity */
+            quantity: number;
+            /** Remark */
+            remark: string | null;
+            /**
+             * Spare Part Id
+             * Format: uuid
+             */
+            spare_part_id: string;
+            /** Transaction Type */
+            transaction_type: string;
+            /**
+             * Work Order Id
+             * Format: uuid
+             */
+            work_order_id: string;
         };
         /** MaterialOptionListResponse */
         MaterialOptionListResponse: {
@@ -52478,6 +54515,20 @@ export interface components {
             workshop_code: string;
         };
         /**
+         * PersonnelAddResult
+         * @description 添加人员结果
+         */
+        PersonnelAddResult: {
+            /** Added */
+            added: string[];
+            /** Errors */
+            errors?: {
+                [key: string]: unknown;
+            }[];
+            /** Skipped */
+            skipped?: string[];
+        };
+        /**
          * PersonnelCategoryAssign
          * @description 人员+角色绑定设备分类请求
          */
@@ -52487,6 +54538,26 @@ export interface components {
              * @description 分类绑定列表
              */
             categories?: components["schemas"]["PersonnelCategoryItem"][];
+        };
+        /**
+         * PersonnelCategoryInfo
+         * @description 人员+角色→分类绑定信息
+         */
+        PersonnelCategoryInfo: {
+            /**
+             * Category Id
+             * Format: uuid
+             */
+            category_id: string;
+            /** Category Name */
+            category_name: string;
+            /**
+             * Role Id
+             * Format: uuid
+             */
+            role_id: string;
+            /** Role Name */
+            role_name: string;
         };
         /**
          * PersonnelCategoryItem
@@ -52505,6 +54576,57 @@ export interface components {
             role_id: string;
         };
         /**
+         * PersonnelResponse
+         * @description 人员响应
+         */
+        PersonnelResponse: {
+            /** Avatar Url */
+            avatar_url?: string | null;
+            /** Categories */
+            categories?: components["schemas"]["PersonnelCategoryInfo"][];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Department */
+            department: string | null;
+            /** Employee No */
+            employee_no: string | null;
+            /** Extended Attrs */
+            extended_attrs: {
+                [key: string]: unknown;
+            } | null;
+            /** Feishu Open Id */
+            feishu_open_id: string | null;
+            /** Feishu User Id */
+            feishu_user_id: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Is Active */
+            is_active: boolean;
+            /** Mobile */
+            mobile: string | null;
+            /** Name */
+            name: string;
+            /** Position */
+            position?: string | null;
+            /** Roles */
+            roles?: components["schemas"]["PersonnelRoleInfo"][];
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** User Id */
+            user_id: string | null;
+            /** Workshop Code */
+            workshop_code: string;
+        };
+        /**
          * PersonnelRoleAssign
          * @description 人员角色分配请求
          */
@@ -52514,6 +54636,23 @@ export interface components {
              * @description 角色 ID 列表
              */
             role_ids: string[];
+        };
+        /**
+         * PersonnelRoleInfo
+         * @description 人员关联的角色信息
+         */
+        PersonnelRoleInfo: {
+            /** Code */
+            code: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Scope */
+            scope: string;
         };
         /**
          * PersonnelStatus
@@ -57024,6 +59163,37 @@ export interface components {
             permission_ids?: string[];
         };
         /**
+         * RoleResponse
+         * @description 角色响应
+         */
+        RoleResponse: {
+            /** Code */
+            code: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Description */
+            description: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Is Active */
+            is_active: boolean;
+            /** Name */
+            name: string;
+            /** Scope */
+            scope: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
          * RoleUpdate
          * @description 更新角色请求
          */
@@ -58870,6 +61040,102 @@ export interface components {
             workshop_code: string;
         };
         /**
+         * SparePartListItem
+         * @description 备件列表项（附当前库存与安全库存，列表端点批量填充）
+         */
+        SparePartListItem: {
+            /** Category */
+            category: string | null;
+            /** Code */
+            code: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: string | null;
+            /**
+             * Current Qty
+             * @default 0
+             */
+            current_qty: number;
+            /** Default Supplier */
+            default_supplier: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Is Active */
+            is_active: boolean;
+            /** Name */
+            name: string;
+            /**
+             * Safety Qty
+             * @default 0
+             */
+            safety_qty: number;
+            /** Specification */
+            specification: string | null;
+            /** Unit */
+            unit: string;
+            /** Unit Price */
+            unit_price: number | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Updated By */
+            updated_by: string | null;
+            /** Workshop Code */
+            workshop_code: string;
+        };
+        /**
+         * SparePartResponse
+         * @description 备件响应
+         */
+        SparePartResponse: {
+            /** Category */
+            category: string | null;
+            /** Code */
+            code: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: string | null;
+            /** Default Supplier */
+            default_supplier: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Is Active */
+            is_active: boolean;
+            /** Name */
+            name: string;
+            /** Specification */
+            specification: string | null;
+            /** Unit */
+            unit: string;
+            /** Unit Price */
+            unit_price: number | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Updated By */
+            updated_by: string | null;
+            /** Workshop Code */
+            workshop_code: string;
+        };
+        /**
          * SparePartUpdate
          * @description 更新备件请求
          */
@@ -59558,6 +61824,40 @@ export interface components {
              * @description 库位
              */
             warehouse_location?: string | null;
+        };
+        /**
+         * StockResponse
+         * @description 库存响应
+         */
+        StockResponse: {
+            /** Current Qty */
+            current_qty: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Min Order Qty */
+            min_order_qty: number;
+            /** Safety Qty */
+            safety_qty: number;
+            /**
+             * Spare Part Id
+             * Format: uuid
+             */
+            spare_part_id: string;
+            /** Warehouse Location */
+            warehouse_location: string | null;
+        };
+        /**
+         * StockWarningResponse
+         * @description 库存预警响应
+         */
+        StockWarningResponse: {
+            /** Shortage */
+            shortage: number;
+            spare_part: components["schemas"]["SparePartResponse"];
+            stock: components["schemas"]["StockResponse"];
         };
         /** SubTankRecordUpdate */
         SubTankRecordUpdate: {
@@ -63062,6 +65362,21 @@ export interface components {
             /** Reason */
             reason: string;
         };
+        /**
+         * UserOption
+         * @description 责任人选择用用户选项
+         */
+        UserOption: {
+            /**
+             * Employee No
+             * @default
+             */
+            employee_no: string;
+            /** Name */
+            name: string;
+            /** User Id */
+            user_id: string;
+        };
         /** UserPagePermissionsOut */
         UserPagePermissionsOut: {
             /** Custom Grants */
@@ -65040,6 +67355,169 @@ export interface components {
              * @description 责任人ID
              */
             responsible_person_id?: string | null;
+        };
+        /**
+         * WorkOrderImageResponse
+         * @description 工单图片响应
+         */
+        WorkOrderImageResponse: {
+            /** File Name */
+            file_name: string;
+            /** File Size */
+            file_size: number | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Uploaded At
+             * Format: date-time
+             */
+            uploaded_at: string;
+            /**
+             * Work Order Id
+             * Format: uuid
+             */
+            work_order_id: string;
+        };
+        /**
+         * WorkOrderResponse
+         * @description 工单响应
+         */
+        WorkOrderResponse: {
+            /** Action Name */
+            action_name?: string | null;
+            /** Actual Duration */
+            actual_duration: number | null;
+            /** Assigned At */
+            assigned_at: string | null;
+            /** Assignee Id */
+            assignee_id: string | null;
+            /** Assignee Name */
+            assignee_name?: string | null;
+            /** Cause Name */
+            cause_name?: string | null;
+            /** Check Result */
+            check_result: string | null;
+            /** Checklist Template Id */
+            checklist_template_id: string | null;
+            /** Completed At */
+            completed_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: string | null;
+            /**
+             * Equipment Id
+             * Format: uuid
+             */
+            equipment_id: string;
+            /** Equipment Name */
+            equipment_name?: string | null;
+            /** Equipment No */
+            equipment_no?: string | null;
+            /** Fault Action Id */
+            fault_action_id: string | null;
+            /** Fault Cause Id */
+            fault_cause_id: string | null;
+            /** Fault Description */
+            fault_description: string | null;
+            /** Fault Symptom Id */
+            fault_symptom_id: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Images */
+            images?: components["schemas"]["WorkOrderImageResponse"][] | null;
+            /** Inspection Task Id */
+            inspection_task_id?: string | null;
+            /** Maintenance Plan Id */
+            maintenance_plan_id: string | null;
+            /**
+             * Order Type
+             * @enum {string}
+             */
+            order_type: "故障维修" | "计划维护" | "巡检" | "校准" | "异常处理" | "日常维护";
+            /** Original Equipment Status */
+            original_equipment_status: string | null;
+            /** Planned Start Date */
+            planned_start_date: string | null;
+            /**
+             * Priority
+             * @enum {string}
+             */
+            priority: "紧急" | "高" | "中" | "低";
+            /** Repair Detail */
+            repair_detail: string | null;
+            /**
+             * Reported At
+             * Format: date-time
+             */
+            reported_at: string;
+            /** Reporter Id */
+            reporter_id: string | null;
+            /** Reporter Name */
+            reporter_name?: string | null;
+            /** Responsible Person Id */
+            responsible_person_id?: string | null;
+            /** Responsible Person Name */
+            responsible_person_name?: string | null;
+            /** Spare Parts Cost */
+            spare_parts_cost: number | null;
+            /** Started At */
+            started_at: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "待处理" | "执行中" | "待验收" | "已完成" | "已关闭";
+            /** Symptom Name */
+            symptom_name?: string | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Updated By */
+            updated_by: string | null;
+            /** Verification Remark */
+            verification_remark: string | null;
+            /** Verification Result */
+            verification_result: ("合格" | "不合格") | null;
+            /** Verified At */
+            verified_at: string | null;
+            /** Verified By */
+            verified_by: string | null;
+            /** Verifier Name */
+            verifier_name?: string | null;
+            /** Work Order No */
+            work_order_no: string;
+        };
+        /**
+         * WorkOrderStatistics
+         * @description 工单统计
+         */
+        WorkOrderStatistics: {
+            /** By Priority */
+            by_priority: {
+                [key: string]: number;
+            };
+            /** By Status */
+            by_status: {
+                [key: string]: number;
+            };
+            /** By Type */
+            by_type: {
+                [key: string]: number;
+            };
+            /** Total */
+            total: number;
         };
         /**
          * WorkOrderUpdate
@@ -71494,7 +73972,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_list_Union_EquipmentCategoryResponse__EquipmentCategoryTree___"];
                 };
             };
             /** @description Validation Error */
@@ -71529,7 +74007,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_EquipmentCategoryResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -71562,7 +74040,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_EquipmentCategoryResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -71599,7 +74077,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_EquipmentCategoryResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -71632,7 +74110,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_NoneType_"];
                 };
             };
             /** @description Validation Error */
@@ -71663,7 +74141,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_list_DepartmentOption__"];
                 };
             };
             /** @description Validation Error */
@@ -71711,7 +74189,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_list_EquipmentResponse__"];
                 };
             };
             /** @description Validation Error */
@@ -71746,7 +74224,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_EquipmentResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -71781,7 +74259,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_EquipmentImportResult_"];
                 };
             };
             /** @description Validation Error */
@@ -71817,7 +74295,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_list_EquipmentLedgerArchiveSummary__"];
                 };
             };
             /** @description Validation Error */
@@ -71850,7 +74328,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_EquipmentLedgerArchiveDetail_"];
                 };
             };
             /** @description Validation Error */
@@ -71883,7 +74361,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_NoneType_"];
                 };
             };
             /** @description Validation Error */
@@ -71981,7 +74459,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_EquipmentStatistics_"];
                 };
             };
             /** @description Validation Error */
@@ -72014,7 +74492,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_EquipmentResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -72051,7 +74529,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_EquipmentResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -72084,7 +74562,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_NoneType_"];
                 };
             };
             /** @description Validation Error */
@@ -72115,7 +74593,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_list_EquipmentFeishuAppItem__"];
                 };
             };
             /** @description Validation Error */
@@ -72150,7 +74628,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_EquipmentFeishuAppItem_"];
                 };
             };
             /** @description Validation Error */
@@ -72187,7 +74665,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_EquipmentFeishuAppItem_"];
                 };
             };
             /** @description Validation Error */
@@ -72220,7 +74698,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_NoneType_"];
                 };
             };
             /** @description Validation Error */
@@ -72254,7 +74732,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_EquipmentInspectionFeishuConfigDetail_"];
                 };
             };
             /** @description Validation Error */
@@ -72292,7 +74770,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_EquipmentInspectionFeishuConfigDetail_"];
                 };
             };
             /** @description Validation Error */
@@ -72323,7 +74801,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_list_EquipmentInspectionFeishuConfigDetail__"];
                 };
             };
             /** @description Validation Error */
@@ -72357,7 +74835,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_EquipmentInspectionFeishuConfigTestResult_"];
                 };
             };
             /** @description Validation Error */
@@ -72393,7 +74871,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_EquipmentInspectionFeishuDeviceList_"];
                 };
             };
             /** @description Validation Error */
@@ -72441,7 +74919,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_list_EquipmentInspectionFeishuRecordItem__"];
                 };
             };
             /** @description Validation Error */
@@ -72475,7 +74953,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_dict_str__EquipmentFeishuSyncTableResult__"];
                 };
             };
             /** @description Validation Error */
@@ -72509,7 +74987,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_EquipmentFeishuSyncStatus_"];
                 };
             };
             /** @description Validation Error */
@@ -72540,7 +75018,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_list_EquipmentInspectionTodaySummaryEntry__"];
                 };
             };
             /** @description Validation Error */
@@ -72574,7 +75052,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_EquipmentInspectionTodaySummary_"];
                 };
             };
             /** @description Validation Error */
@@ -72610,7 +75088,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_list_Union_LocationResponse__LocationTree___"];
                 };
             };
             /** @description Validation Error */
@@ -72645,7 +75123,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_LocationResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -72678,7 +75156,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_LocationResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -72715,7 +75193,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_LocationResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -72748,7 +75226,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_NoneType_"];
                 };
             };
             /** @description Validation Error */
@@ -72790,7 +75268,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_list_CalibrationPlanResponse__"];
                 };
             };
             /** @description Validation Error */
@@ -72825,7 +75303,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_CalibrationPlanResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -72859,7 +75337,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_list_CalibrationPlanResponse__"];
                 };
             };
             /** @description Validation Error */
@@ -72892,7 +75370,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_CalibrationPlanResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -72929,7 +75407,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_CalibrationPlanResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -72962,7 +75440,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_NoneType_"];
                 };
             };
             /** @description Validation Error */
@@ -73004,7 +75482,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_list_CalibrationRecordResponse__"];
                 };
             };
             /** @description Validation Error */
@@ -73039,7 +75517,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_CalibrationRecordResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -73072,7 +75550,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_CalibrationRecordResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -73103,7 +75581,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_ClaimTimeoutConfig_"];
                 };
             };
             /** @description Validation Error */
@@ -73138,7 +75616,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_ClaimTimeoutConfig_"];
                 };
             };
             /** @description Validation Error */
@@ -73169,7 +75647,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_list_FailureCodeResponse__"];
                 };
             };
             /** @description Validation Error */
@@ -73204,7 +75682,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_FailureCodeResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -73237,7 +75715,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_FailureCodeResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -73274,7 +75752,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_FailureCodeResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -73307,7 +75785,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_NoneType_"];
                 };
             };
             /** @description Validation Error */
@@ -73338,7 +75816,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_list_FailureCodeResponse__"];
                 };
             };
             /** @description Validation Error */
@@ -73373,7 +75851,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_FailureCodeResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -73406,7 +75884,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_FailureCodeResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -73443,7 +75921,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_FailureCodeResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -73476,7 +75954,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_NoneType_"];
                 };
             };
             /** @description Validation Error */
@@ -73507,7 +75985,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_list_FailureCodeResponse__"];
                 };
             };
             /** @description Validation Error */
@@ -73542,7 +76020,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_FailureCodeResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -73575,7 +76053,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_FailureCodeResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -73612,7 +76090,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_FailureCodeResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -73645,7 +76123,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_NoneType_"];
                 };
             };
             /** @description Validation Error */
@@ -73682,7 +76160,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_WorkOrderResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -73726,7 +76204,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_list_MaintenancePlanResponse__"];
                 };
             };
             /** @description Validation Error */
@@ -73761,7 +76239,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_MaintenancePlanResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -73795,7 +76273,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_list_MaintenancePlanResponse__"];
                 };
             };
             /** @description Validation Error */
@@ -73828,7 +76306,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_MaintenancePlanResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -73865,7 +76343,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_MaintenancePlanResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -73898,7 +76376,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_NoneType_"];
                 };
             };
             /** @description Validation Error */
@@ -73929,7 +76407,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_list_UserOption__"];
                 };
             };
             /** @description Validation Error */
@@ -73963,7 +76441,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_list_MaintainerOption__"];
                 };
             };
             /** @description Validation Error */
@@ -74009,7 +76487,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_list_WorkOrderResponse__"];
                 };
             };
             /** @description Validation Error */
@@ -74044,7 +76522,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_WorkOrderResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -74078,7 +76556,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_WorkOrderStatistics_"];
                 };
             };
             /** @description Validation Error */
@@ -74111,7 +76589,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_WorkOrderResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -74148,7 +76626,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_WorkOrderResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -74185,7 +76663,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_WorkOrderResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -74218,7 +76696,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_WorkOrderResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -74251,7 +76729,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_WorkOrderResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -74288,7 +76766,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_WorkOrderResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -74321,7 +76799,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_list_WorkOrderImageResponse__"];
                 };
             };
             /** @description Validation Error */
@@ -74358,7 +76836,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_list_WorkOrderImageResponse__"];
                 };
             };
             /** @description Validation Error */
@@ -74392,7 +76870,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_NoneType_"];
                 };
             };
             /** @description Validation Error */
@@ -74459,7 +76937,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_list_MaterialConsumeResponse__"];
                 };
             };
             /** @description Validation Error */
@@ -74496,7 +76974,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_list_MaterialConsumeResponse__"];
                 };
             };
             /** @description Validation Error */
@@ -74529,7 +77007,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_WorkOrderResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -74566,7 +77044,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_WorkOrderResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -74645,7 +77123,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_list_PersonnelResponse__"];
                 };
             };
             /** @description Validation Error */
@@ -74680,7 +77158,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_PersonnelAddResult_"];
                 };
             };
             /** @description Validation Error */
@@ -74718,7 +77196,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_list_CandidateResponse__"];
                 };
             };
             /** @description Validation Error */
@@ -74749,7 +77227,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_FeishuRefreshResult_"];
                 };
             };
             /** @description Validation Error */
@@ -74787,7 +77265,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_list_RoleResponse__"];
                 };
             };
             /** @description Validation Error */
@@ -74822,7 +77300,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_RoleResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -74855,7 +77333,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_RoleResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -74892,7 +77370,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_RoleResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -74925,7 +77403,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_NoneType_"];
                 };
             };
             /** @description Validation Error */
@@ -74958,7 +77436,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_PersonnelResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -74995,7 +77473,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_PersonnelResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -75028,7 +77506,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_NoneType_"];
                 };
             };
             /** @description Validation Error */
@@ -75065,7 +77543,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_PersonnelResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -75102,7 +77580,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_PersonnelResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -75139,7 +77617,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_PersonnelResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -75176,7 +77654,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_PersonnelResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -75220,7 +77698,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_list_SparePartListItem__"];
                 };
             };
             /** @description Validation Error */
@@ -75255,7 +77733,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_SparePartResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -75289,7 +77767,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_list_StockWarningResponse__"];
                 };
             };
             /** @description Validation Error */
@@ -75322,7 +77800,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_SparePartResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -75359,7 +77837,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_SparePartResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -75392,7 +77870,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_NoneType_"];
                 };
             };
             /** @description Validation Error */
@@ -75425,7 +77903,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_StockResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -75462,7 +77940,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_StockResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -75499,7 +77977,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_StockResponse_"];
                 };
             };
             /** @description Validation Error */

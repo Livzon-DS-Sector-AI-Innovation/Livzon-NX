@@ -1,12 +1,25 @@
 'use client'
 
-import { useEffect, useCallback, useRef, useState } from 'react'
-import { App, ConfigProvider, Tabs, Button } from 'antd'
-import zhCN from 'antd/locale/zh_CN'
-import { MenuFoldOutlined, MenuUnfoldOutlined, ReloadOutlined } from '@ant-design/icons'
-import { EquipmentCategory, Location, Equipment, EquipmentStatistics, DepartmentOption } from '@/types/equipment'
+import { useState } from 'react'
+import { App, Tabs, Button } from 'antd'
+import { MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons'
+import {
+  EquipmentCategory,
+  Location,
+  Equipment,
+  EquipmentStatistics,
+  DepartmentOption,
+} from '@/types/equipment'
 import { useEquipmentStore } from '@/stores/equipment'
-import { fetchEquipmentsClient, fetchEquipmentStatisticsClient, fetchCategoriesClient, fetchLocationsClient, fetchDepartmentsClient } from '@/lib/api/equipment-client'
+import {
+  EquipmentQueryProvider,
+  useCategoriesQuery,
+  useDepartmentsQuery,
+  useEquipmentStatisticsQuery,
+  useEquipmentsQuery,
+  useInvalidateEquipment,
+  useLocationsQuery,
+} from './queries'
 import { StatsCards } from './StatsCards'
 import { EquipmentTable } from './EquipmentTable'
 import { CategoryTree } from './CategoryTree'
@@ -28,7 +41,7 @@ interface EquipmentPageProps {
 
 const SIDEBAR_WIDTH = 280
 
-export function EquipmentPage({
+function EquipmentPageInner({
   workshopCode,
   initialCategories,
   initialLocations,
@@ -37,237 +50,210 @@ export function EquipmentPage({
   initialStatistics,
   initialDepartments,
 }: EquipmentPageProps) {
-  const {
-    categories,
-    locations,
-    statistics,
-    equipments,
-    failureCodes,
-    selectedCategory,
-    selectedLocation,
-    statusFilter,
-    departmentFilter,
-    departments,
-    keyword,
-    loading,
-    setSelectedCategory,
-    setSelectedLocation,
-    setCategories,
-    setLocations,
-    setEquipments,
-    setStatistics,
-    setTotal,
-    setLoading,
-    setDepartments,
-  } = useEquipmentStore()
+  const failureCodes = useEquipmentStore((s) => s.failureCodes)
+  const selectedCategory = useEquipmentStore((s) => s.selectedCategory)
+  const selectedLocation = useEquipmentStore((s) => s.selectedLocation)
+  const statusFilter = useEquipmentStore((s) => s.statusFilter)
+  const departmentFilter = useEquipmentStore((s) => s.departmentFilter)
+  const keyword = useEquipmentStore((s) => s.keyword)
+  const setSelectedCategory = useEquipmentStore((s) => s.setSelectedCategory)
+  const setSelectedLocation = useEquipmentStore((s) => s.setSelectedLocation)
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [resetKey, setResetKey] = useState(0)
-  // 用户当前选择的每页条数：筛选/保存后的刷新沿用，避免分页器显示 N 而数据只有 20
-  const pageSizeRef = useRef(20)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(20)
+  const invalidate = useInvalidateEquipment()
 
-  // 初始化 store 数据（包含 SSR 数据）
-  useEffect(() => {
-    setCategories(initialCategories)
-    setLocations(initialLocations)
-    setEquipments(initialEquipments)
-    setTotal(initialTotal)
-    setStatistics(initialStatistics)
-  }, [
-    initialCategories,
-    initialEquipments,
-    initialLocations,
+  // 筛选变化时回到第一页（渲染期调整，避免级联 effect）
+  const filterKey = JSON.stringify([
+    selectedCategory,
+    selectedLocation,
+    departmentFilter,
+    statusFilter,
+    keyword,
+  ])
+  const [lastFilterKey, setLastFilterKey] = useState(filterKey)
+  if (filterKey !== lastFilterKey) {
+    setLastFilterKey(filterKey)
+    setPage(1)
+  }
+
+  const filters = {
+    workshop: workshopCode,
+    category_id: selectedCategory ?? undefined,
+    location_id: selectedLocation ?? undefined,
+    department_id: departmentFilter ?? undefined,
+    status: statusFilter || undefined,
+    keyword: keyword || undefined,
+    page,
+    page_size: pageSize,
+  }
+  const equipmentsQuery = useEquipmentsQuery(filters, {
+    items: initialEquipments,
+    total: initialTotal,
+    page,
+    page_size: pageSize,
+  })
+  const statisticsQuery = useEquipmentStatisticsQuery(
+    workshopCode,
     initialStatistics,
-    initialTotal,
-    setCategories,
-    setEquipments,
-    setLocations,
-    setStatistics,
-    setTotal,
-  ])
+  )
+  const categoriesQuery = useCategoriesQuery(initialCategories)
+  const locationsQuery = useLocationsQuery(initialLocations)
+  const departmentsQuery = useDepartmentsQuery(initialDepartments)
 
-  // 初始化部门列表（服务端数据）
-  useEffect(() => {
-    setDepartments(initialDepartments)
-  }, [initialDepartments, setDepartments])
+  const equipments = equipmentsQuery.data?.items ?? []
+  const statistics = statisticsQuery.data ?? initialStatistics
+  const categories = categoriesQuery.data ?? []
+  const locations = locationsQuery.data ?? []
+  const departments = departmentsQuery.data ?? []
 
-  // 客户端补偿加载：如果服务端初始数据为空（某个 API 失败导致），从客户端重新获取
-  useEffect(() => {
-    const loadMissing = async () => {
-      const tasks: Promise<void>[] = []
-      if (!categories.length) {
-        tasks.push(
-          fetchCategoriesClient().then(cats => { setCategories(cats) }).catch(e => { console.warn('客户端加载分类失败:', e) })
-        )
-      }
-      if (!locations.length) {
-        tasks.push(
-          fetchLocationsClient().then(locs => { setLocations(locs) }).catch(e => { console.warn('客户端加载位置失败:', e) })
-        )
-      }
-      if (!departments.length) {
-        tasks.push(
-          fetchDepartmentsClient().then(depts => { setDepartments(depts) }).catch(e => { console.warn('客户端加载部门失败:', e) })
-        )
-      }
-      if (tasks.length) {
-        await Promise.allSettled(tasks)
-      }
-    }
-    loadMissing()
-  }, [
-    categories.length,
-    departments.length,
-    locations.length,
-    setCategories,
-    setDepartments,
-    setLocations,
-  ])
-
-  // 获取列表数据
-  const fetchData = useCallback(async (p: number, ps: number) => {
-    setLoading(true)
-    try {
-      const equipmentsResponse = await fetchEquipmentsClient({
-        workshop: workshopCode,
-        category_id: selectedCategory,
-        location_id: selectedLocation,
-        department_id: departmentFilter,
-        status: statusFilter || undefined,
-        keyword: keyword || undefined,
-        page: p,
-        page_size: ps,
-      })
-      setEquipments(equipmentsResponse.items)
-      setTotal(equipmentsResponse.total)
-    } catch (error) {
-      console.error('获取设备数据失败:', error)
-    } finally {
-      setLoading(false)
-    }
-  }, [workshopCode, selectedCategory, selectedLocation, departmentFilter, statusFilter, keyword, setEquipments, setTotal, setLoading])
-
-  // 单独刷新统计（仅 mount 或需要时使用）
-  const refreshStatistics = useCallback(async () => {
-    try {
-      const stats = await fetchEquipmentStatisticsClient(workshopCode)
-      setStatistics(stats)
-    } catch { /* 静默 */ }
-  }, [workshopCode, setStatistics])
-
-  // 刷新分类和位置树
-  const refreshCategoriesAndLocations = useCallback(async () => {
-    try {
-      const [cats, locs] = await Promise.all([fetchCategoriesClient(), fetchLocationsClient()])
-      setCategories(cats)
-      setLocations(locs)
-    } catch (error) {
-      console.error('刷新分类/位置失败:', error)
-    }
-  }, [setCategories, setLocations])
-
-  // 筛选变化时重置到第一页（含首次加载）
-  useEffect(() => {
-    fetchData(1, pageSizeRef.current)
-    setResetKey(k => k + 1)
-  }, [fetchData])
+  const refreshEquipments = () => {
+    invalidate('equipments')
+    invalidate('statistics')
+  }
+  const refreshCategoriesAndLocations = () => {
+    invalidate('categories')
+    invalidate('locations')
+  }
 
   const tabItems = [
     {
       key: 'category',
       label: '分类',
-      children: <CategoryTree categories={categories} onRefresh={refreshCategoriesAndLocations} />,
+      children: (
+        <CategoryTree
+          categories={categories}
+          onRefresh={refreshCategoriesAndLocations}
+        />
+      ),
     },
     {
       key: 'location',
       label: '位置',
-      children: <LocationTree locations={locations} onRefresh={refreshCategoriesAndLocations} />,
+      children: (
+        <LocationTree
+          locations={locations}
+          onRefresh={refreshCategoriesAndLocations}
+        />
+      ),
     },
   ]
 
-  const tabBarExtra = (selectedCategory || selectedLocation) ? (
-    <Button
-      type="text"
-      size="small"
-      icon={<ReloadOutlined />}
-      onClick={() => {
-        setSelectedCategory(null)
-        setSelectedLocation(null)
-      }}
-      style={{ color: 'var(--color-stone)', marginRight: 4 }}
-    >
-      重置
-    </Button>
-  ) : null
-
-  const currentStats = statistics ?? initialStatistics
+  const tabBarExtra =
+    selectedCategory || selectedLocation ? (
+      <Button
+        type="text"
+        size="small"
+        onClick={() => {
+          setSelectedCategory(null)
+          setSelectedLocation(null)
+        }}
+        style={{ color: 'var(--color-stone)', marginRight: 4 }}
+      >
+        重置
+      </Button>
+    ) : null
 
   return (
-    <ConfigProvider locale={zhCN}>
-      <App>
-        <div className="flex gap-4" style={{ height: 'calc(100vh - 210px)', minHeight: 400 }}>
-          {/* 左侧：可折叠分类/位置树 */}
-          {!sidebarCollapsed && (
-            <div
-              className="shrink-0"
-              style={{
-                width: SIDEBAR_WIDTH,
-                background: 'var(--color-canvas)',
-                padding: 16,
-                borderRadius: 12,
-                border: '1px solid var(--color-hairline)',
-                display: 'flex', flexDirection: 'column',
-                overflow: 'hidden',
-              }}
-            >
-              <div style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
-                <Tabs items={tabItems} tabBarExtraContent={tabBarExtra} />
-              </div>
-            </div>
-          )}
-
-          {/* 右侧：设备列表 */}
+    <>
+      <div
+        className="flex gap-4"
+        style={{ height: 'calc(100vh - 210px)', minHeight: 400 }}
+      >
+        {/* 左侧：可折叠分类/位置树 */}
+        {!sidebarCollapsed && (
           <div
-            className="flex-1 min-w-0"
+            className="shrink-0"
             style={{
+              width: SIDEBAR_WIDTH,
               background: 'var(--color-canvas)',
-              padding: '16px 20px',
+              padding: 16,
               borderRadius: 12,
               border: '1px solid var(--color-hairline)',
-              display: 'flex', flexDirection: 'column',
+              display: 'flex',
+              flexDirection: 'column',
               overflow: 'hidden',
             }}
           >
-            {/* 折叠按钮 + 统计 + 标题 */}
-            <div className="mb-3 flex items-center gap-3" style={{ flexShrink: 0 }}>
-              <Button
-                type="text"
-                icon={sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-                onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-                style={{ color: 'var(--color-slate)', flexShrink: 0 }}
-              />
-              <StatsCards statistics={currentStats} compact />
-            </div>
-
-            {/* 表格区域 */}
-            <div style={{ flex: 1, overflow: 'hidden', minHeight: 0 }}>
-              <EquipmentTable loading={loading} resetKey={resetKey} onPageChange={(p, ps) => { pageSizeRef.current = ps; fetchData(p, ps) }} workshopCode={workshopCode} />
+            <div style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
+              <Tabs items={tabItems} tabBarExtraContent={tabBarExtra} />
             </div>
           </div>
-        </div>
+        )}
 
-        {/* 抽屉组件 */}
-        <EquipmentDrawer workshopCode={workshopCode} onRefresh={() => { fetchData(1, pageSizeRef.current); setResetKey(k => k + 1) }} />
-        <CategoryDrawer onRefresh={refreshCategoriesAndLocations} />
-        <LocationDrawer onRefresh={refreshCategoriesAndLocations} />
-        <RepairDrawer
-          equipments={equipments.map(e => ({
-            id: e.id, equipment_no: e.equipment_no, name: e.name, importance: e.importance,
-          }))}
-          symptoms={failureCodes.symptoms}
-          onRefresh={() => fetchData(1, pageSizeRef.current)}
-        />
+        {/* 右侧：设备列表 */}
+        <div
+          className="flex-1 min-w-0"
+          style={{
+            background: 'var(--color-canvas)',
+            padding: '16px 20px',
+            borderRadius: 12,
+            border: '1px solid var(--color-hairline)',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+          }}
+        >
+          {/* 折叠按钮 + 统计 + 标题 */}
+          <div className="mb-3 flex items-center gap-3" style={{ flexShrink: 0 }}>
+            <Button
+              type="text"
+              icon={
+                sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />
+              }
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              style={{ color: 'var(--color-slate)', flexShrink: 0 }}
+            />
+            <StatsCards statistics={statistics} compact />
+          </div>
+
+          {/* 表格区域 */}
+          <div style={{ flex: 1, overflow: 'hidden', minHeight: 0 }}>
+            <EquipmentTable
+              data={equipments}
+              total={equipmentsQuery.data?.total ?? 0}
+              page={page}
+              pageSize={pageSize}
+              departments={departments}
+              loading={equipmentsQuery.isLoading || equipmentsQuery.isFetching}
+              onPageChange={(p, s) => {
+                if (s !== pageSize) setPageSize(s)
+                setPage(p)
+              }}
+              workshopCode={workshopCode}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* 抽屉组件 */}
+      <EquipmentDrawer
+        workshopCode={workshopCode}
+        onRefresh={refreshEquipments}
+      />
+      <CategoryDrawer onRefresh={refreshCategoriesAndLocations} />
+      <LocationDrawer onRefresh={refreshCategoriesAndLocations} />
+      <RepairDrawer
+        equipments={equipments.map((e) => ({
+          id: e.id,
+          equipment_no: e.equipment_no,
+          name: e.name,
+          importance: e.importance,
+        }))}
+        symptoms={failureCodes.symptoms}
+        onRefresh={refreshEquipments}
+      />
+    </>
+  )
+}
+
+export function EquipmentPage(props: EquipmentPageProps) {
+  return (
+    <EquipmentQueryProvider>
+      <App>
+        <EquipmentPageInner {...props} />
       </App>
-    </ConfigProvider>
+    </EquipmentQueryProvider>
   )
 }

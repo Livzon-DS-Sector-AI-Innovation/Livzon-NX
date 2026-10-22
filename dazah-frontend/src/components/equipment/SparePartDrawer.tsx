@@ -54,6 +54,10 @@ export function SparePartDrawer({ onRefresh, workshopCode }: SparePartDrawerProp
         await updateSparePart(editingSparePart.id, data)
         message.success('更新成功')
       } else {
+        if (!workshopCode) {
+          message.error('缺少车间代码，无法创建备件')
+          return
+        }
         const data: CreateSparePartInput = {
           code: values.code,
           name: values.name,

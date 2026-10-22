@@ -37,7 +37,7 @@ const equipmentStore = vi.hoisted(() => ({
 }))
 
 vi.mock('@/lib/api/equipment-client', () => api)
-vi.mock('@/stores/equipment', () => ({ useEquipmentStore: () => equipmentStore }))
+vi.mock('@/stores/equipment', () => ({ useEquipmentStore: (selector?: (s: typeof equipmentStore) => unknown) => (selector ? selector(equipmentStore) : equipmentStore) }))
 
 vi.mock('antd', async () => {
   const { createElement } = await import('react')
@@ -46,9 +46,7 @@ vi.mock('antd', async () => {
     createElement('button', { onClick }, children)
   const Tabs = ({ items }: { items: Array<{ children: ReactNode; label: string }> }) =>
     createElement('div', null, items.map((item) => createElement('section', { key: item.label }, item.children)))
-  const ConfigProvider = ({ children, theme }: { children?: ReactNode; theme?: unknown }) =>
-    createElement('div', { 'data-theme-source': theme ? 'local' : 'inherited' }, children)
-  return { App: Wrapper, Button, ConfigProvider, Tabs }
+  return { App: Wrapper, Button, Tabs }
 })
 
 vi.mock('@ant-design/icons', () => ({
@@ -57,8 +55,14 @@ vi.mock('@ant-design/icons', () => ({
   ReloadOutlined: () => null,
 }))
 
+const tablePropsLog: Array<Record<string, unknown>> = []
 vi.mock('./StatsCards', () => ({ StatsCards: () => <div>统计卡片</div> }))
-vi.mock('./EquipmentTable', () => ({ EquipmentTable: () => <div>设备表格</div> }))
+vi.mock('./EquipmentTable', () => ({
+  EquipmentTable: (props: Record<string, unknown>) => {
+    tablePropsLog.push(props)
+    return <div>设备表格</div>
+  },
+}))
 vi.mock('./CategoryTree', () => ({ CategoryTree: () => <div>分类树</div> }))
 vi.mock('./LocationTree', () => ({ LocationTree: () => <div>位置树</div> }))
 vi.mock('./EquipmentDrawer', () => ({ EquipmentDrawer: () => null }))
@@ -67,7 +71,13 @@ vi.mock('./LocationDrawer', () => ({ LocationDrawer: () => null }))
 vi.mock('./RepairDrawer', () => ({ RepairDrawer: () => null }))
 
 import { EquipmentPage } from './EquipmentPage'
-import type { EquipmentCategory, EquipmentStatistics, Location } from '@/types/equipment'
+import type {
+  DepartmentOption,
+  Equipment,
+  EquipmentCategory,
+  EquipmentStatistics,
+  Location,
+} from '@/types/equipment'
 
 const category = (id: string): EquipmentCategory => ({
   id,
@@ -100,6 +110,17 @@ const statistics: EquipmentStatistics = {
   by_location: {},
 }
 
+const equipmentItem = (id: string): Equipment =>
+  ({
+    id,
+    equipment_no: `SB-${id}`,
+    name: `设备-${id}`,
+    workshop_code: '201-1',
+    asset_value: null,
+    depreciation_years: null,
+    data_issue_note: null,
+  }) as unknown as Equipment
+
 const department = (id: string, name: string) => ({
   id,
   name,
@@ -108,12 +129,32 @@ const department = (id: string, name: string) => ({
   leader_id: null,
 })
 
+function pageProps(overrides: {
+  initialCategories?: EquipmentCategory[]
+  initialLocations?: Location[]
+  initialEquipments?: Equipment[]
+  initialTotal?: number
+  initialDepartments?: DepartmentOption[]
+} = {}) {
+  return {
+    workshopCode: '201-1',
+    initialCategories: [category('initial-category')],
+    initialLocations: [location('initial-location')],
+    initialEquipments: [equipmentItem('eq-1')],
+    initialTotal: 1,
+    initialStatistics: statistics,
+    initialDepartments: [department('initial-department', '工程设备部')],
+    ...overrides,
+  }
+}
+
 describe('EquipmentPage data lifecycle', () => {
   let container: HTMLDivElement
   let root: Root
 
   beforeEach(() => {
     vi.clearAllMocks()
+    tablePropsLog.length = 0
     container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
@@ -121,6 +162,7 @@ describe('EquipmentPage data lifecycle', () => {
     api.fetchLocationsClient.mockResolvedValue([location('fallback-location')])
     api.fetchDepartmentsClient.mockResolvedValue([department('fallback-department', '设备部')])
     api.fetchEquipmentsClient.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20 })
+    api.fetchEquipmentStatisticsClient.mockResolvedValue(statistics)
   })
 
   afterEach(() => {
@@ -128,34 +170,50 @@ describe('EquipmentPage data lifecycle', () => {
     container.remove()
   })
 
-  it('hydrates SSR data, compensates missing store data, and requests the active filters', async () => {
-    const initialCategory = category('initial-category')
-    const initialLocation = location('initial-location')
-
+  it('renders SSR data directly without refetching when initial data is present', async () => {
     await act(async () => {
-      root.render(
-        <EquipmentPage
-          workshopCode="201-1"
-          initialCategories={[initialCategory]}
-          initialLocations={[initialLocation]}
-          initialEquipments={[]}
-          initialTotal={3}
-          initialStatistics={statistics}
-          initialDepartments={[department('initial-department', '工程设备部')]}
-        />,
-      )
+      root.render(<EquipmentPage {...pageProps()} />)
       await Promise.resolve()
       await Promise.resolve()
     })
 
-    expect(container.querySelector('[data-theme-source="inherited"]')).not.toBeNull()
-    expect(container.querySelector('[data-theme-source="local"]')).toBeNull()
-    expect(equipmentStore.setCategories).toHaveBeenCalledWith([initialCategory])
-    expect(equipmentStore.setLocations).toHaveBeenCalledWith([initialLocation])
-    expect(equipmentStore.setTotal).toHaveBeenCalledWith(3)
+    expect(tablePropsLog.length).toBeGreaterThan(0)
+    expect(tablePropsLog.at(-1)).toMatchObject({
+      data: [expect.objectContaining({ id: 'eq-1' })],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+    })
+    // 非空 SSR 数据视为新鲜，不触发客户端补偿请求
+    expect(api.fetchEquipmentsClient).not.toHaveBeenCalled()
+    expect(api.fetchCategoriesClient).not.toHaveBeenCalled()
+    expect(api.fetchLocationsClient).not.toHaveBeenCalled()
+    expect(api.fetchDepartmentsClient).not.toHaveBeenCalled()
+  })
+
+  it('compensates with client fetches when SSR data is empty and applies active filters', async () => {
+    await act(async () => {
+      root.render(
+        <EquipmentPage
+          {...pageProps({
+            initialCategories: [],
+            initialLocations: [],
+            initialEquipments: [],
+            initialTotal: 0,
+            initialDepartments: [],
+          })}
+        />,
+      )
+      await Promise.resolve()
+      await Promise.resolve()
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      await Promise.resolve()
+    })
+
     expect(api.fetchCategoriesClient).toHaveBeenCalledOnce()
     expect(api.fetchLocationsClient).toHaveBeenCalledOnce()
     expect(api.fetchDepartmentsClient).toHaveBeenCalledOnce()
+    // 列表查询携带 store 中的活跃筛选
     expect(api.fetchEquipmentsClient).toHaveBeenCalledWith({
       workshop: '201-1',
       category_id: 'category-1',
@@ -166,35 +224,5 @@ describe('EquipmentPage data lifecycle', () => {
       page: 1,
       page_size: 20,
     })
-    expect(equipmentStore.setLoading).toHaveBeenNthCalledWith(1, true)
-    expect(equipmentStore.setLoading).toHaveBeenLastCalledWith(false)
-  })
-
-  it('rehydrates when server props change', async () => {
-    const renderPage = (id: string) => (
-      <EquipmentPage
-        workshopCode="201-1"
-        initialCategories={[category(id)]}
-        initialLocations={[location(id)]}
-        initialEquipments={[]}
-        initialTotal={id === 'first' ? 1 : 2}
-        initialStatistics={statistics}
-        initialDepartments={[department(id, `部门-${id}`)]}
-      />
-    )
-
-    await act(async () => {
-      root.render(renderPage('first'))
-      await Promise.resolve()
-    })
-    await act(async () => {
-      root.render(renderPage('second'))
-      await Promise.resolve()
-    })
-
-    expect(equipmentStore.setCategories).toHaveBeenCalledWith([expect.objectContaining({ id: 'second' })])
-    expect(equipmentStore.setLocations).toHaveBeenCalledWith([expect.objectContaining({ id: 'second' })])
-    expect(equipmentStore.setDepartments).toHaveBeenCalledWith([department('second', '部门-second')])
-    expect(equipmentStore.setTotal).toHaveBeenCalledWith(2)
   })
 })

@@ -299,7 +299,7 @@ export async function fetchAllUsersClient(): Promise<Maintainer[]> {
 
 // ==================== 工单图片 ====================
 export async function fetchWorkOrderImagesClient(workOrderId: string): Promise<WorkOrderImage[]> {
-  const response = await fetch(`/api/v1/equipment/maintenance/work-orders${workOrderId}/images`)
+  const response = await fetch(`/api/v1/equipment/maintenance/work-orders/${workOrderId}/images`)
   if (!response.ok) throw new Error(`请求失败: ${response.status}`)
   const result = await response.json()
   return result.data || []

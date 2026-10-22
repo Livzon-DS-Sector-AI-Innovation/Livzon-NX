@@ -6,6 +6,7 @@ import {
   fetchMaintenancePlansClient,
   fetchSparePartsClient,
   fetchStockWarningsClient,
+  fetchWorkOrderImagesClient,
   fetchWorkOrderMaterialsClient,
   fetchWorkOrderStatisticsClient,
   fetchWorkOrdersClient,
@@ -129,5 +130,18 @@ describe('equipment-client work order materials', () => {
 
     await fetchWorkOrderMaterialsClient('wo-1')
     expect(lastUrl(fetchMock)).toBe('/api/v1/equipment/maintenance/work-orders/wo-1/materials')
+  })
+})
+
+describe('equipment-client work order images', () => {
+  it('fetches images with the work order path segment separated', async () => {
+    // 回归：历史实现把工单号直接拼在 work-orders 后（缺斜杠）导致 404
+    const fetchMock = vi.fn(() =>
+      jsonResponse({ code: 200, data: [] }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await fetchWorkOrderImagesClient('wo-1')
+    expect(lastUrl(fetchMock)).toBe('/api/v1/equipment/maintenance/work-orders/wo-1/images')
   })
 })

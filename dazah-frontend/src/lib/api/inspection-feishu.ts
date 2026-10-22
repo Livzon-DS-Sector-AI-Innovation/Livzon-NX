@@ -166,8 +166,8 @@ export async function fetchFeishuApps(): Promise<FeishuAppItem[]> {
 async function mutateFeishuApp(
   url: string,
   method: 'POST' | 'PUT' | 'DELETE',
-  body?: FeishuAppCreateRequest | FeishuAppUpdateRequest,
   errorMessage: string,
+  body?: FeishuAppCreateRequest | FeishuAppUpdateRequest,
 ): Promise<FeishuAppItem | null> {
   const response = await fetch(url, {
     method,
@@ -183,7 +183,7 @@ async function mutateFeishuApp(
 
 /** 新建自建应用凭据 */
 export function createFeishuApp(data: FeishuAppCreateRequest): Promise<FeishuAppItem | null> {
-  return mutateFeishuApp(`${BASE}/apps`, 'POST', data, '新建应用失败')
+  return mutateFeishuApp(`${BASE}/apps`, 'POST', '新建应用失败', data)
 }
 
 /** 更新自建应用凭据（Secret 留空保留已保存值） */
@@ -191,10 +191,10 @@ export function updateFeishuApp(
   appId: string,
   data: FeishuAppUpdateRequest,
 ): Promise<FeishuAppItem | null> {
-  return mutateFeishuApp(`${BASE}/apps/${appId}`, 'PUT', data, '更新应用失败')
+  return mutateFeishuApp(`${BASE}/apps/${appId}`, 'PUT', '更新应用失败', data)
 }
 
 /** 删除自建应用凭据（仍被巡检配置引用时后端拒绝） */
-export function deleteFeishuApp(appId: string): Promise<null> {
-  return mutateFeishuApp(`${BASE}/apps/${appId}`, 'DELETE', undefined, '删除应用失败')
+export function deleteFeishuApp(appId: string): Promise<FeishuAppItem | null> {
+  return mutateFeishuApp(`${BASE}/apps/${appId}`, 'DELETE', '删除应用失败')
 }

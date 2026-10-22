@@ -160,10 +160,10 @@ export function FeishuAppLibraryCard({ onChanged }: { onChanged?: () => void }) 
     },
     {
       title: '引用车间', width: 200,
-      render: (_, app) => app.referenced_workshops.length > 0
+      render: (_, app) => (app.referenced_workshops ?? []).length > 0
         ? (
           <Space size={4} wrap>
-            {app.referenced_workshops.map((code) => <Tag key={code}>{code}</Tag>)}
+            {(app.referenced_workshops ?? []).map((code) => <Tag key={code}>{code}</Tag>)}
           </Space>
         )
         : <Text type="secondary" style={{ fontSize: 12 }}>未引用</Text>,

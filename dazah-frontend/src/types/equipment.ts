@@ -1,183 +1,130 @@
-// 设备分类
-export interface EquipmentCategory {
-  id: string
-  name: string
-  code: string
-  parent_id: string | null
-  description: string | null
-  created_at: string
-  updated_at: string
-  created_by: string | null
-  updated_by: string | null
-  children?: EquipmentCategory[]
-}
+// 设备模块类型：契约类型统一从 @/types/generated/schema 别名导出，
+// 仅业务枚举、筛选与列表包装等前端专属类型在本文件维护。
+import type { components } from '@/types/generated/schema'
 
-export interface CreateCategoryInput {
-  name: string
-  code: string
-  parent_id?: string
-  description?: string
-}
+type Schemas = components['schemas']
 
-export interface UpdateCategoryInput {
-  name?: string
-  code?: string
-  parent_id?: string
-  description?: string
-}
-
-// 位置管理
-export interface Location {
-  id: string
-  name: string
-  code: string
-  parent_id: string | null
-  description: string | null
-  created_at: string
-  updated_at: string
-  created_by: string | null
-  updated_by: string | null
-  children?: Location[]
-}
-
-export interface CreateLocationInput {
-  name: string
-  code: string
-  parent_id?: string
-  description?: string
-}
-
-export interface UpdateLocationInput {
-  name?: string
-  code?: string
-  parent_id?: string
-  description?: string
-}
-
-// 设备管理
+// ==================== 业务枚举（与后端 Literal 保持一致） ====================
 export type EquipmentStatus = '在用' | '备用' | '维修中' | '停用' | '报废'
 export type EquipmentImportance = '高' | '中' | '低'
+export type FailureCodeType = 'symptom' | 'cause' | 'action'
+export type WorkOrderType = '故障维修' | '计划维护' | '巡检' | '校准' | '异常处理' | '日常维护'
+export type WorkOrderPriority = '紧急' | '高' | '中' | '低'
+export type WorkOrderStatus = '待处理' | '执行中' | '待验收' | '已完成' | '已关闭'
+export type VerificationResult = '合格' | '不合格'
+export type CalibrationType = '内部校准' | '外部检定'
+export type CalibrationResult = '合格' | '不合格'
+export type CalibrationPlanStatus = '启用' | '停用'
+export type MaintenancePlanType = '预防性维护' | '预测性维护'
+export type MaintenancePlanStatus = '启用' | '停用' | '已完成'
+export type FrequencyUnit = '天' | '周' | '月' | '年'
 
-export interface Equipment {
+// ==================== 响应契约（生成类型别名） ====================
+export type EquipmentCategory = Schemas['EquipmentCategoryResponse'] & {
+  children?: EquipmentCategoryTree[]
+}
+export type EquipmentCategoryTree = Schemas['EquipmentCategoryTree']
+
+export type Location = Schemas['LocationResponse'] & {
+  children?: LocationTree[]
+}
+export type LocationTree = Schemas['LocationTree']
+
+export type Equipment = Schemas['EquipmentResponse']
+
+export type FailureCode = Schemas['FailureCodeResponse']
+
+export type WorkOrder = Schemas['WorkOrderResponse']
+export type WorkOrderImage = Schemas['WorkOrderImageResponse']
+
+export type CalibrationPlan = Schemas['CalibrationPlanResponse']
+export type CalibrationRecord = Schemas['CalibrationRecordResponse']
+
+export type SparePart = Schemas['SparePartListItem']
+export type StockWarning = Schemas['StockWarningResponse']
+
+export type MaintenancePlan = Schemas['MaintenancePlanResponse']
+
+export type MaterialRecord = Schemas['MaterialConsumeResponse']
+
+// 检查项模板暂无独立查询端点（未进入 OpenAPI），保留手写契约
+export interface InspectionTemplateItem {
   id: string
-  equipment_no: string
-  name: string
-  category_ids: string[]
-  category_names?: string | null
-  location_id: string
-  location_name?: string | null
-  status: EquipmentStatus
-  importance: EquipmentImportance
-  model: string | null
-  specification: string | null
-  manufacturer: string | null
-  supplier: string | null
-  production_date: string | null
-  factory_no: string | null
-  arrival_date: string | null
-  commissioning_date: string | null
-  description: string | null
-  data_issue_note?: string | null
-  technical_params?: Record<string, unknown> | null
+  template_id: string
+  item_name: string
+  item_description: string | null
+  expected_result: string | null
+  check_method: string | null
+  sort_order: number
   created_at: string
   updated_at: string
-  created_by: string | null
-  updated_by: string | null
-  department_id: string | null
-  department_name: string | null
-  responsible_person_id: string | null
-  responsible_person_name: string | null
-  category?: EquipmentCategory
-  location?: Location
 }
 
-export interface CreateEquipmentInput {
-  name: string
-  equipment_no: string
-  workshop_code?: string
-  category_ids: string[]
-  location_id: string
-  status?: EquipmentStatus
-  importance?: EquipmentImportance
-  model?: string
-  specification?: string
-  manufacturer?: string
-  supplier?: string
-  production_date?: string
-  factory_no?: string
-  arrival_date?: string
-  commissioning_date?: string
-  description?: string
-  data_issue_note?: string | null
-  department_id?: string
-  responsible_person_id?: string
-}
+export type ClaimTimeoutConfig = Schemas['ClaimTimeoutConfig']
 
-export interface UpdateEquipmentInput {
-  name?: string
-  category_ids?: string[]
-  location_id?: string
-  status?: EquipmentStatus
-  importance?: EquipmentImportance
-  model?: string
-  specification?: string
-  manufacturer?: string
-  supplier?: string
-  production_date?: string
-  factory_no?: string
-  arrival_date?: string
-  commissioning_date?: string
-  description?: string
-  data_issue_note?: string | null
-  department_id?: string
-  responsible_person_id?: string | null
-}
+export type Maintainer = Schemas['MaintainerOption']
+
+export type DepartmentOption = Schemas['DepartmentOption']
 
 // ==================== 台账 Excel 导入 ====================
-export interface EquipmentImportFailure {
-  row: number
-  equipment_no: string | null
-  reason: string
-}
-
-export interface EquipmentImportResult {
-  total_rows: number
-  created: number
-  updated: number
-  failed: number
-  flagged?: number
-  locations_created?: number
-  failures: EquipmentImportFailure[]
-}
+export type EquipmentImportFailure = Schemas['EquipmentImportFailure']
+export type EquipmentImportResult = Schemas['EquipmentImportResult']
 
 // ==================== 台账上传存档（回看历次上传） ====================
-export interface EquipmentImportArchiveSummary {
-  id: string
-  workshop_code: string
-  file_name: string
-  sheet_name: string
-  row_count: number
-  col_count: number
-  import_summary:
-    | (Partial<EquipmentImportResult> & {
-        failures?: never
-      })
-    | null
-  created_by_name?: string | null
-  created_at?: string | null
+export type EquipmentImportArchiveSummary = Omit<
+  Schemas['EquipmentLedgerArchiveSummary'],
+  'import_summary'
+> & {
+  import_summary: Partial<EquipmentImportResult> | null
 }
 
-export interface EquipmentImportArchive extends EquipmentImportArchiveSummary {
-  /** 全量二维数组快照（不截断），单元格为字符串/数字/布尔 */
-  rows: unknown[][]
+export type EquipmentImportArchive = Omit<
+  Schemas['EquipmentLedgerArchiveDetail'],
+  'import_summary' | 'merges'
+> & {
+  import_summary: Partial<EquipmentImportResult> | null
   /** 合并单元格（0-based 行列坐标） */
   merges: Array<{ s: { r: number; c: number }; e: { r: number; c: number } }>
-  col_widths: number[]
-  original_path?: string
-  updated_at?: string | null
 }
 
-// 列表和筛选
+// ==================== 统计（by_status 前端按状态枚举收窄） ====================
+export type EquipmentStatistics = Omit<Schemas['EquipmentStatistics'], 'by_status'> & {
+  by_status: Record<EquipmentStatus, number>
+}
+
+export type WorkOrderStatistics = Omit<Schemas['WorkOrderStatistics'], 'by_status'> & {
+  by_status: Record<WorkOrderStatus, number>
+}
+
+// ==================== 请求契约（生成类型别名） ====================
+export type CreateCategoryInput = Schemas['EquipmentCategoryCreate']
+export type UpdateCategoryInput = Schemas['EquipmentCategoryUpdate']
+export type CreateLocationInput = Schemas['LocationCreate']
+export type UpdateLocationInput = Schemas['LocationUpdate']
+export type CreateEquipmentInput = Schemas['EquipmentCreate']
+export type UpdateEquipmentInput = Schemas['EquipmentUpdate']
+export type CreateFailureCodeInput = Schemas['FailureCodeCreate']
+export type UpdateFailureCodeInput = Schemas['FailureCodeUpdate']
+export type CreateWorkOrderInput = Schemas['WorkOrderCreate']
+export type UpdateWorkOrderInput = Schemas['WorkOrderUpdate']
+export type AssignWorkOrderInput = Schemas['WorkOrderAssign']
+export type CompleteWorkOrderInput = Schemas['WorkOrderComplete']
+export type VerifyWorkOrderInput = Schemas['WorkOrderVerify']
+export type CreateCalibrationPlanInput = Schemas['CalibrationPlanCreate']
+export type UpdateCalibrationPlanInput = Schemas['CalibrationPlanUpdate']
+export type CreateCalibrationRecordInput = Schemas['CalibrationRecordCreate']
+export type CreateSparePartInput = Schemas['SparePartCreate']
+export type UpdateSparePartInput = Schemas['SparePartUpdate']
+export type StockInboundInput = Schemas['StockInboundRequest']
+export type CreateMaintenancePlanInput = Schemas['MaintenancePlanCreate']
+export type UpdateMaintenancePlanInput = Schemas['MaintenancePlanUpdate']
+export type InspectionRecordItem = Schemas['InspectionRecordItem']
+export type InspectionCompleteInput = Schemas['InspectionCompleteRequest']
+export type MaterialConsumeItem = Schemas['MaterialConsumeItem']
+export type MaterialConsumeInput = Schemas['MaterialConsumeRequest']
+export type UpdateClaimTimeoutInput = Schemas['ClaimTimeoutUpdateRequest']
+
+// ==================== 前端专属：筛选与列表包装 ====================
 export interface EquipmentFilters {
   workshop?: string
   category_id?: string
@@ -194,135 +141,6 @@ export interface EquipmentListResponse {
   total: number
   page: number
   page_size: number
-}
-
-// 统计
-export interface EquipmentStatistics {
-  total: number
-  by_status: Record<EquipmentStatus, number>
-  by_category: Record<string, number>
-  by_location: Record<string, number>
-}
-
-// ==================== 故障代码 ====================
-export type FailureCodeType = 'symptom' | 'cause' | 'action'
-
-export interface FailureCode {
-  id: string
-  code: string
-  name: string
-  description: string | null
-  sort_order: number
-  is_active: boolean
-  created_at: string
-  updated_at: string
-  created_by: string | null
-  updated_by: string | null
-}
-
-export interface CreateFailureCodeInput {
-  code: string
-  name: string
-  description?: string
-  sort_order?: number
-  is_active?: boolean
-}
-
-export interface UpdateFailureCodeInput {
-  code?: string
-  name?: string
-  description?: string
-  sort_order?: number
-  is_active?: boolean
-}
-
-// ==================== 维修工单 ====================
-export type WorkOrderType = '故障维修' | '计划维护' | '巡检' | '校准' | '异常处理' | '日常维护'
-export type WorkOrderPriority = '紧急' | '高' | '中' | '低'
-export type WorkOrderStatus = '待处理' | '执行中' | '待验收' | '已完成' | '已关闭'
-export type VerificationResult = '合格' | '不合格'
-
-export interface WorkOrder {
-  id: string
-  work_order_no: string
-  equipment_id: string
-  order_type: WorkOrderType
-  priority: WorkOrderPriority
-  status: WorkOrderStatus
-  fault_symptom_id: string | null
-  fault_cause_id: string | null
-  fault_action_id: string | null
-  fault_description: string | null
-  reporter_id: string
-  assignee_id: string | null
-  responsible_person_id: string | null
-  responsible_person_name?: string
-  verified_by: string | null
-  reported_at: string
-  assigned_at: string | null
-  started_at: string | null
-  completed_at: string | null
-  verified_at: string | null
-  verification_result: VerificationResult | null
-  verification_remark: string | null
-  repair_detail: string | null
-  actual_duration: number | null
-  created_at: string
-  updated_at: string
-  created_by: string | null
-  updated_by: string | null
-  maintenance_plan_id: string | null
-  planned_start_date: string | null
-  checklist_template_id: string | null
-  equipment_name?: string
-  equipment_no?: string
-  symptom_name?: string
-  cause_name?: string
-  action_name?: string
-  reporter_name?: string
-  assignee_name?: string
-  verifier_name?: string
-  images?: WorkOrderImage[]
-}
-
-export interface CreateWorkOrderInput {
-  equipment_id: string
-  order_type?: WorkOrderType
-  priority?: WorkOrderPriority
-  fault_symptom_id?: string
-  fault_cause_id?: string
-  fault_action_id?: string
-  fault_description?: string
-  maintenance_plan_id?: string
-  planned_start_date?: string
-  checklist_template_id?: string
-  responsible_person_id: string
-}
-
-export interface UpdateWorkOrderInput {
-  equipment_id?: string
-  order_type?: WorkOrderType
-  priority?: WorkOrderPriority
-  status?: WorkOrderStatus
-  fault_symptom_id?: string
-  fault_cause_id?: string
-  fault_action_id?: string
-  fault_description?: string
-  planned_start_date?: string
-  responsible_person_id?: string
-}
-
-export interface AssignWorkOrderInput {
-  assignee_id: string
-}
-
-export interface CompleteWorkOrderInput {
-  repair_detail: string
-}
-
-export interface VerifyWorkOrderInput {
-  result: VerificationResult
-  remark?: string
 }
 
 export interface WorkOrderFilters {
@@ -342,55 +160,6 @@ export interface WorkOrderListResponse {
   page_size: number
 }
 
-export interface WorkOrderStatistics {
-  total: number
-  by_status: Record<WorkOrderStatus, number>
-  by_type: Record<WorkOrderType, number>
-  by_priority: Record<WorkOrderPriority, number>
-}
-
-// ==================== 校准管理 ====================
-export type CalibrationType = '内部校准' | '外部检定'
-export type CalibrationResult = '合格' | '不合格'
-export type CalibrationPlanStatus = '启用' | '停用'
-
-export interface CalibrationPlan {
-  id: string
-  equipment_id: string
-  calibration_type: CalibrationType
-  cycle_months: number
-  last_calibration_date: string | null
-  next_calibration_date: string | null
-  responsible_person_id: string | null
-  status: CalibrationPlanStatus
-  remark: string | null
-  created_at: string
-  updated_at: string
-  created_by: string | null
-  updated_by: string | null
-  equipment_name?: string
-  equipment_no?: string
-  responsible_person_name?: string
-}
-
-export interface CreateCalibrationPlanInput {
-  equipment_id: string
-  calibration_type: CalibrationType
-  cycle_months: number
-  last_calibration_date?: string
-  responsible_person_id?: string
-  remark?: string
-}
-
-export interface UpdateCalibrationPlanInput {
-  calibration_type?: CalibrationType
-  cycle_months?: number
-  last_calibration_date?: string
-  responsible_person_id?: string
-  status?: CalibrationPlanStatus
-  remark?: string
-}
-
 export interface CalibrationPlanFilters {
   workshop?: string
   equipment_id?: string
@@ -406,35 +175,6 @@ export interface CalibrationPlanListResponse {
   page_size: number
 }
 
-export interface CalibrationRecord {
-  id: string
-  calibration_plan_id: string
-  equipment_id: string
-  calibration_date: string
-  calibration_type: CalibrationType
-  result: CalibrationResult
-  certificate_no: string | null
-  calibrated_by: string | null
-  next_due_date: string
-  remark: string | null
-  created_at: string
-  updated_at: string
-  created_by: string | null
-  updated_by: string | null
-  equipment_name?: string
-  equipment_no?: string
-}
-
-export interface CreateCalibrationRecordInput {
-  calibration_plan_id: string
-  calibration_date: string
-  calibration_type: CalibrationType
-  result: CalibrationResult
-  certificate_no?: string
-  calibrated_by?: string
-  remark?: string
-}
-
 export interface CalibrationRecordFilters {
   workshop?: string
   equipment_id?: string
@@ -448,48 +188,6 @@ export interface CalibrationRecordListResponse {
   total: number
   page: number
   page_size: number
-}
-
-// ==================== 备件管理 ====================
-export interface SparePart {
-  id: string
-  code: string
-  name: string
-  specification: string | null
-  unit: string
-  category: string | null
-  default_supplier: string | null
-  unit_price: number | null
-  min_qty: number
-  current_qty: number
-  is_active: boolean
-  created_at: string
-  updated_at: string
-  created_by: string | null
-  updated_by: string | null
-}
-
-export interface CreateSparePartInput {
-  code: string
-  name: string
-  workshop_code?: string
-  specification?: string
-  unit: string
-  category?: string
-  default_supplier?: string
-  unit_price?: number
-  is_active?: boolean
-}
-
-export interface UpdateSparePartInput {
-  code?: string
-  name?: string
-  specification?: string
-  unit?: string
-  category?: string
-  default_supplier?: string
-  unit_price?: number
-  is_active?: boolean
 }
 
 export interface SparePartFilters {
@@ -508,71 +206,6 @@ export interface SparePartListResponse {
   page_size: number
 }
 
-export interface StockInboundInput {
-  quantity: number
-  warehouse_location?: string
-  remark?: string
-}
-
-export interface StockWarning {
-  spare_part_id: string
-  code: string
-  name: string
-  current_qty: number
-  min_qty: number
-}
-
-// ==================== 维护计划 ====================
-export type MaintenancePlanType = '预防性维护' | '预测性维护'
-export type MaintenancePlanStatus = '启用' | '停用' | '已完成'
-export type FrequencyUnit = '天' | '周' | '月' | '年'
-
-export interface MaintenancePlan {
-  id: string
-  equipment_id: string
-  plan_name: string
-  plan_type: MaintenancePlanType
-  frequency: number
-  frequency_unit: FrequencyUnit
-  last_maintenance_date: string | null
-  next_maintenance_date: string | null
-  responsible_person_id: string | null
-  maintenance_content: string | null
-  status: MaintenancePlanStatus
-  remark: string | null
-  created_at: string
-  updated_at: string
-  created_by: string | null
-  updated_by: string | null
-  equipment_name?: string
-  equipment_no?: string
-  responsible_person_name?: string
-}
-
-export interface CreateMaintenancePlanInput {
-  equipment_id: string
-  plan_name: string
-  plan_type?: MaintenancePlanType
-  frequency: number
-  frequency_unit: FrequencyUnit
-  last_maintenance_date?: string
-  responsible_person_id?: string
-  maintenance_content?: string
-  remark?: string
-}
-
-export interface UpdateMaintenancePlanInput {
-  plan_name?: string
-  plan_type?: MaintenancePlanType
-  frequency?: number
-  frequency_unit?: FrequencyUnit
-  last_maintenance_date?: string
-  responsible_person_id?: string
-  maintenance_content?: string
-  status?: MaintenancePlanStatus
-  remark?: string
-}
-
 export interface MaintenancePlanFilters {
   workshop?: string
   equipment_id?: string
@@ -587,93 +220,4 @@ export interface MaintenancePlanListResponse {
   total: number
   page: number
   page_size: number
-}
-
-// ==================== 巡检（工单巡检结果提交） ====================
-export interface InspectionTemplateItem {
-  id: string
-  template_id: string
-  item_name: string
-  item_description: string | null
-  expected_result: string | null
-  check_method: string | null
-  sort_order: number
-  created_at: string
-  updated_at: string
-}
-
-export interface InspectionRecordItem {
-  item_id: string
-  result: string
-  actual_value?: string
-  remark?: string
-}
-
-export interface InspectionCompleteInput {
-  records: InspectionRecordItem[]
-}
-
-// ==================== 物料领用 ====================
-export interface MaterialConsumeItem {
-  spare_part_id: string
-  quantity: number
-  remark?: string
-}
-
-export interface MaterialConsumeInput {
-  items: MaterialConsumeItem[]
-}
-
-export interface MaterialRecord {
-  id: string
-  work_order_id: string
-  spare_part_id: string
-  quantity: number
-  remark: string | null
-  created_at: string
-  created_by: string | null
-  spare_part_name?: string
-  spare_part_code?: string
-  spare_part_unit?: string
-}
-
-// ==================== 工单图片 ====================
-export interface WorkOrderImage {
-  id: string
-  work_order_id: string
-  file_name: string
-  file_size: number | null
-  uploaded_at: string
-}
-
-// ==================== 抢单超时配置 ====================
-export interface ClaimTimeoutConfig {
-  emergency: number
-  high: number
-  medium: number
-  low: number
-}
-
-export interface UpdateClaimTimeoutInput {
-  emergency?: number
-  high?: number
-  medium?: number
-  low?: number
-}
-
-// ==================== 维修人员 ====================
-export interface Maintainer {
-  user_id: string
-  name: string
-  employee_no: string
-  department_id: string
-}
-
-// ==================== 部门（供下拉选择） ====================
-export interface DepartmentOption {
-  id: string
-  name: string
-  leader_name: string | null
-  leader_user_id: string | null
-  leader_id: string | null
 }

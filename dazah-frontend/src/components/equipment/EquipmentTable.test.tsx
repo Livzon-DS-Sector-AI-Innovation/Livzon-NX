@@ -21,7 +21,7 @@ const storeMock = vi.hoisted(() => ({
   openRepairDrawer: vi.fn(),
 }))
 
-vi.mock('@/stores/equipment', () => ({ useEquipmentStore: () => storeMock }))
+vi.mock('@/stores/equipment', () => ({ useEquipmentStore: (selector?: (s: typeof storeMock) => unknown) => (selector ? selector(storeMock) : storeMock) }))
 vi.mock('@/actions/equipment', () => ({
   deleteEquipment: vi.fn(),
   getEquipmentImportArchives: vi.fn(),
@@ -51,6 +51,9 @@ const equipment = (overrides: Partial<Equipment> = {}): Equipment => ({
   location_name: '201二车间',
   status: '在用',
   importance: '高',
+  workshop_code: '201-1',
+  asset_value: null,
+  depreciation_years: null,
   model: 'RF-1000',
   specification: null,
   manufacturer: '宁波某设备厂',
@@ -60,6 +63,8 @@ const equipment = (overrides: Partial<Equipment> = {}): Equipment => ({
   arrival_date: '2024-06-15',
   commissioning_date: null,
   description: '不锈钢反应釜',
+  data_issue_note: null,
+  warranty_expire_date: null,
   technical_params: { 功率: '3kW', 容积: '500L' },
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
@@ -106,7 +111,7 @@ describe('EquipmentTable ledger columns', () => {
     act(() => {
       root.render(
         <AntApp>
-          <EquipmentTable onPageChange={() => {}} resetKey={0} />
+          <EquipmentTable data={[equipment()]} total={1} page={1} pageSize={20} departments={[]} onPageChange={() => {}} />
         </AntApp>,
       )
     })
@@ -136,22 +141,19 @@ describe('EquipmentTable ledger columns', () => {
   })
 
   it('numbers rows and shows placeholders for empty ledger values', () => {
-    storeMock.equipments = [
-      equipment({
-        id: 'eq-21',
-        equipment_no: 'SB-2024-021',
-        model: null,
-        manufacturer: null,
-        technical_params: null,
-        factory_no: null,
-        description: null,
-      }),
-    ]
-    storeMock.total = 21
+    const row21 = equipment({
+      id: 'eq-21',
+      equipment_no: 'SB-2024-021',
+      model: null,
+      manufacturer: null,
+      technical_params: null,
+      factory_no: null,
+      description: null,
+    })
     act(() => {
       root.render(
         <AntApp>
-          <EquipmentTable onPageChange={() => {}} resetKey={0} />
+          <EquipmentTable data={[row21]} total={21} page={1} pageSize={20} departments={[]} onPageChange={() => {}} />
         </AntApp>,
       )
     })
@@ -166,19 +168,16 @@ describe('EquipmentTable ledger columns', () => {
   })
 
   it('marks only the flagged cells red, not the whole row', () => {
-    storeMock.equipments = [
-      equipment({
-        id: 'eq-31',
-        equipment_no: 'SB-2024-031',
-        production_date: null,
-        data_issue_note: '【出厂日期】原文「201年9月」无法识别，已置空待修正',
-      }),
-    ]
-    storeMock.total = 1
+    const row31 = equipment({
+      id: 'eq-31',
+      equipment_no: 'SB-2024-031',
+      production_date: null,
+      data_issue_note: '【出厂日期】原文「201年9月」无法识别，已置空待修正',
+    })
     act(() => {
       root.render(
         <AntApp>
-          <EquipmentTable onPageChange={() => {}} resetKey={0} />
+          <EquipmentTable data={[row31]} total={1} page={1} pageSize={20} departments={[]} onPageChange={() => {}} />
         </AntApp>,
       )
     })
@@ -226,7 +225,7 @@ describe('EquipmentTable 上传历史入口', () => {
     act(() => {
       root.render(
         <AntApp>
-          <EquipmentTable onPageChange={() => {}} resetKey={0} workshopCode="103" />
+          <EquipmentTable data={[]} total={0} page={1} pageSize={20} departments={[]} onPageChange={() => {}} workshopCode="103" />
         </AntApp>,
       )
     })

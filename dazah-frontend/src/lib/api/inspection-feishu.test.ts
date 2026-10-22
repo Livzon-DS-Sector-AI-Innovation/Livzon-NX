@@ -131,6 +131,7 @@ describe('inspection-feishu api', () => {
       app_id: 'cli_x',
       app_secret: null,
       app_token: 'bascn_x',
+      base_url: '',
       today_table_id: 'tbl_a',
       history_table_id: 'tbl_b',
       device_table_id: 'tbl_c',
@@ -246,13 +247,13 @@ describe('feishu apps api', () => {
     const fetchMock = vi.fn((_url: unknown) =>
       jsonResponse({
         code: 200,
-        data: [{ id: 'app-1', app_id: 'cli_a', app_name: '巡检应用' }],
+        data: [{ id: 'app-1', app_id: 'cli_a', name: '巡检应用' }],
       }),
     )
     vi.stubGlobal('fetch', fetchMock)
 
     await expect(fetchFeishuApps()).resolves.toEqual([
-      { id: 'app-1', app_id: 'cli_a', app_name: '巡检应用' },
+      { id: 'app-1', app_id: 'cli_a', name: '巡检应用' },
     ])
     expect(fetchMock).toHaveBeenCalledWith(`${BASE}/apps`)
 
@@ -267,7 +268,7 @@ describe('feishu apps api', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     await expect(
-      createFeishuApp({ app_id: 'cli_a', app_name: '巡检应用', app_secret: 's1' }),
+      createFeishuApp({ name: '巡检应用', app_id: 'cli_a', app_secret: 's1' }),
     ).resolves.toMatchObject({ id: 'app-1' })
     const post = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
     expect(post[0]).toBe(`${BASE}/apps`)
@@ -275,7 +276,7 @@ describe('feishu apps api', () => {
     expect(JSON.parse(String(post[1].body))).toMatchObject({ app_id: 'cli_a' })
 
     await expect(
-      updateFeishuApp('app-1', { app_name: '巡检应用2', app_secret: '' }),
+      updateFeishuApp('app-1', { name: '巡检应用2', app_id: 'cli_a', app_secret: '' }),
     ).resolves.toMatchObject({ id: 'app-1' })
     const put = fetchMock.mock.calls[1] as unknown as [string, RequestInit]
     expect(put[0]).toBe(`${BASE}/apps/app-1`)

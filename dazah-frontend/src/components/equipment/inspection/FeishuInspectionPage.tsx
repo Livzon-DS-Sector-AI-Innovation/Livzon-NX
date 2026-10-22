@@ -406,7 +406,7 @@ function DevicesTab({
       setLoading(true)
       fetchInspectionFeishuDevices(workshop, keyword || undefined)
         .then((result) => {
-          setDevices(result.items)
+          setDevices(result.items ?? [])
           setTodayDate(result.date || null)
         })
         .catch((error) => message.error((error as Error).message || '加载设备清单失败'))
