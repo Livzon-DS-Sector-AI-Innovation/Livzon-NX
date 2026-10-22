@@ -10,6 +10,10 @@ const api = vi.hoisted(() => ({
   fetchInspectionFeishuSyncStatus: vi.fn(),
   triggerInspectionFeishuSync: vi.fn(),
   testInspectionFeishuConfig: vi.fn(),
+  fetchFeishuApps: vi.fn(),
+  createFeishuApp: vi.fn(),
+  updateFeishuApp: vi.fn(),
+  deleteFeishuApp: vi.fn(),
 }))
 
 vi.mock('@/lib/api/inspection-feishu', () => api)
@@ -60,6 +64,7 @@ beforeEach(() => {
     value: { writeText: vi.fn(async (text: string) => { clipboardWrites.push(text) }) },
   })
   api.fetchInspectionFeishuConfigList.mockResolvedValue([detail101, detail201])
+  api.fetchFeishuApps.mockResolvedValue([])
   api.fetchInspectionFeishuSyncStatus.mockResolvedValue({
     enabled: true,
     tables: [
@@ -89,6 +94,35 @@ function rowOf(code: string): HTMLTableRowElement | undefined {
 }
 
 describe('FeishuConfigPage（飞书配置集中页）', () => {
+  it('自建应用库：列出已存应用与引用车间，未引用可删除', async () => {
+    const appId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+    api.fetchFeishuApps.mockResolvedValue([
+      {
+        id: appId,
+        name: '设备巡检同步应用',
+        app_id: 'cli_lib',
+        app_secret_configured: true,
+        referenced_workshops: ['101-2'],
+        created_at: '2026-10-21T00:00:00Z',
+        updated_at: '2026-10-21T00:00:00Z',
+      },
+    ])
+    await renderPage()
+
+    const library = document.querySelector('[data-testid="feishu-app-library"]')
+    expect(library).toBeTruthy()
+    expect(library?.textContent).toContain('设备巡检同步应用')
+    expect(library?.textContent).toContain('cli_lib')
+    expect(library?.textContent).toContain('已配置')
+    expect(library?.textContent).toContain('101-2')
+  })
+
+  it('自建应用库：空态提示引导新建', async () => {
+    await renderPage()
+    const library = document.querySelector('[data-testid="feishu-app-library"]')
+    expect(library?.textContent).toContain('尚未创建自建应用')
+  })
+
   it('凭据卡按 App ID 去重展示，Secret 不回显明文', async () => {
     await renderPage()
     const text = document.body.textContent || ''
@@ -100,9 +134,9 @@ describe('FeishuConfigPage（飞书配置集中页）', () => {
     expect(text).toContain('201-1')
   })
 
-  it('九个车间全量列出：已配置车间有链接与数据表，未配置车间给配置入口', async () => {
+  it('十个车间全量列出：已配置车间有链接与数据表，未配置车间给配置入口', async () => {
     await renderPage()
-    for (const code of ['101-1', '101-2', '102-1', '102-2', '103', '201-1', '201-2', '201-3', '203']) {
+    for (const code of ['101-1', '101-2', '102-1', '102-2', '103', '201-1', '201-2-MC', '201-2-DR', '201-3', '203']) {
       expect(rowOf(code), `缺少车间行 ${code}`).toBeTruthy()
     }
     const row101 = rowOf('101-2')!
@@ -111,7 +145,7 @@ describe('FeishuConfigPage（飞书配置集中页）', () => {
     expect(row101.textContent).toContain('今日巡检')
     expect(row101.textContent).toContain('镜像 52 行')
 
-    const unconfigured = rowOf('201-2')!
+    const unconfigured = rowOf('201-2-DR')!
     expect(unconfigured.textContent).toContain('未配置')
     expect(unconfigured.textContent).toContain('配置')
   })

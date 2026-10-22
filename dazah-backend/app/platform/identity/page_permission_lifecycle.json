@@ -365,6 +365,66 @@
       "route_path": "/equipment/spare-parts/201-2",
       "actions": {}
     },
+    "equipment:workshop-201-2-MC:assets-201-2-MC": {
+      "status": "retired",
+      "module_code": "equipment",
+      "route_path": "/equipment/assets/201-2-MC",
+      "actions": {}
+    },
+    "equipment:workshop-201-2-MC:inspection-201-2-MC": {
+      "status": "retired",
+      "module_code": "equipment",
+      "route_path": "/equipment/inspection/201-2-MC",
+      "actions": {}
+    },
+    "equipment:workshop-201-2-MC:maintenance-201-2-MC": {
+      "status": "retired",
+      "module_code": "equipment",
+      "route_path": "/equipment/maintenance/201-2-MC",
+      "actions": {}
+    },
+    "equipment:workshop-201-2-MC:personnel-201-2-MC": {
+      "status": "retired",
+      "module_code": "equipment",
+      "route_path": "/equipment/personnel/201-2-MC",
+      "actions": {}
+    },
+    "equipment:workshop-201-2-MC:spare-parts-201-2-MC": {
+      "status": "retired",
+      "module_code": "equipment",
+      "route_path": "/equipment/spare-parts/201-2-MC",
+      "actions": {}
+    },
+    "equipment:workshop-201-2-DR:assets-201-2-DR": {
+      "status": "retired",
+      "module_code": "equipment",
+      "route_path": "/equipment/assets/201-2-DR",
+      "actions": {}
+    },
+    "equipment:workshop-201-2-DR:inspection-201-2-DR": {
+      "status": "retired",
+      "module_code": "equipment",
+      "route_path": "/equipment/inspection/201-2-DR",
+      "actions": {}
+    },
+    "equipment:workshop-201-2-DR:maintenance-201-2-DR": {
+      "status": "retired",
+      "module_code": "equipment",
+      "route_path": "/equipment/maintenance/201-2-DR",
+      "actions": {}
+    },
+    "equipment:workshop-201-2-DR:personnel-201-2-DR": {
+      "status": "retired",
+      "module_code": "equipment",
+      "route_path": "/equipment/personnel/201-2-DR",
+      "actions": {}
+    },
+    "equipment:workshop-201-2-DR:spare-parts-201-2-DR": {
+      "status": "retired",
+      "module_code": "equipment",
+      "route_path": "/equipment/spare-parts/201-2-DR",
+      "actions": {}
+    },
     "equipment:workshop-201-3:assets-201-3": {
       "status": "retired",
       "module_code": "equipment",

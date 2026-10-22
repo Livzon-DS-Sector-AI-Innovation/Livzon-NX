@@ -132,9 +132,9 @@ export function PersonnelPage({
     <div style={{ paddingBottom: 40 }}>
       {/* Tab 内容包进白色卡片 */}
       <div style={{
-        background: '#ffffff',
+        background: 'var(--color-canvas)',
         borderRadius: 12,
-        border: '1px solid #e5e3df',
+        border: '1px solid var(--color-hairline)',
         padding: '4px 24px 24px',
       }}>
         <Tabs

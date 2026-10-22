@@ -26,13 +26,13 @@ const STATUS_PILL: Record<string, React.CSSProperties> = {
     display: 'inline-flex', alignItems: 'center',
     padding: '2px 10px', borderRadius: 4,
     fontSize: 12, fontWeight: 600, lineHeight: '20px',
-    color: '#1aae39', background: '#d9f3e1',
+    color: 'var(--color-success)', background: 'var(--color-success-soft)',
   },
   'false': {
     display: 'inline-flex', alignItems: 'center',
     padding: '2px 10px', borderRadius: 4,
     fontSize: 12, fontWeight: 600, lineHeight: '20px',
-    color: '#787671', background: '#f0eeec',
+    color: 'var(--color-stone)', background: 'var(--color-surface-soft)',
   },
 }
 
@@ -103,7 +103,7 @@ export function PersonnelTable({ roles, workshopCode, onAddClick, onRoleClick, o
             )}
           </div>
         ) : (
-          <Tag style={{ borderRadius: 4, color: '#787671', background: '#f0eeec', border: 'none' }}>全部</Tag>
+          <Tag style={{ borderRadius: 4, color: 'var(--color-stone)', background: 'var(--color-surface-soft)', border: 'none' }}>全部</Tag>
         ),
     },
     {
@@ -161,7 +161,7 @@ export function PersonnelTable({ roles, workshopCode, onAddClick, onRoleClick, o
         marginBottom: 20,
       }}>
         <Input
-          prefix={<SearchOutlined style={{ color: '#a4a097' }} />}
+          prefix={<SearchOutlined style={{ color: 'var(--color-stone)' }} />}
           placeholder="搜索姓名"
           allowClear
           value={keyword}
@@ -169,8 +169,8 @@ export function PersonnelTable({ roles, workshopCode, onAddClick, onRoleClick, o
           style={{
             width: 240,
             borderRadius: 8,
-            background: '#f6f5f4',
-            border: '1px solid #e5e3df',
+            background: 'var(--color-surface)',
+            border: '1px solid var(--color-hairline)',
           }}
         />
         <Text type="secondary" style={{ fontSize: 13 }}>
@@ -192,7 +192,7 @@ export function PersonnelTable({ roles, workshopCode, onAddClick, onRoleClick, o
           showSizeChanger: true,
           showQuickJumper: true,
           showTotal: (t: number) => (
-            <Text style={{ color: '#a4a097', fontSize: 13 }}>共 {t} 条</Text>
+            <Text style={{ color: 'var(--color-stone)', fontSize: 13 }}>共 {t} 条</Text>
           ),
           onChange: (p, ps) => {
             setPage(p)

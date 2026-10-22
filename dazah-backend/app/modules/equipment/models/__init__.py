@@ -18,6 +18,7 @@ from app.modules.equipment.models.failure_code import (
     FailureCause,
     FailureSymptom,
 )
+from app.modules.equipment.models.feishu_app import EquipmentFeishuApp
 from app.modules.equipment.models.inspection import (
     InspectionPhoto,
     InspectionTask,
@@ -67,6 +68,7 @@ __all__ = [
     "EquipmentInspectionFeishuDevice",
     "EquipmentInspectionFeishuRecord",
     "EquipmentInspectionFeishuSyncState",
+    "EquipmentFeishuApp",
     "FailureAction",
     "FailureCause",
     "FailureSymptom",

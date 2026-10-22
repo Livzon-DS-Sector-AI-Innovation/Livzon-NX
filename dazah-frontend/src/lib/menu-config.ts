@@ -40,15 +40,22 @@ export function getPermissionModuleName(moduleCode: string): string {
     || "未命名模块"
 }
 
-/** 设备管理车间常量：页面数据隔离与车间切换块使用（菜单已收敛为功能单页）。 */
-export const EQUIPMENT_WORKSHOPS: ReadonlyArray<{ code: string; label: string }> = [
+/** 设备管理车间常量：页面数据隔离与车间切换块使用（菜单已收敛为功能单页）。
+ *  201 二车间按产品线拆分：霉酚酸（MC，承接原 201-2 数据）与多拉菌素（DR）。
+ *  label 为块上短名；fullName 可选，存在时悬停提示用全名。 */
+export const EQUIPMENT_WORKSHOPS: ReadonlyArray<{
+  code: string
+  label: string
+  fullName?: string
+}> = [
   { code: "101-1", label: "101一车间" },
   { code: "101-2", label: "101二车间" },
   { code: "102-1", label: "102一车间" },
   { code: "102-2", label: "102二车间" },
   { code: "103", label: "103车间" },
   { code: "201-1", label: "201一车间" },
-  { code: "201-2", label: "201二车间" },
+  { code: "201-2-MC", label: "201二车间（MC）", fullName: "201二车间（霉酚酸）" },
+  { code: "201-2-DR", label: "201二车间（DR）", fullName: "201二车间（多拉）" },
   { code: "201-3", label: "201三车间" },
   { code: "203", label: "203车间" },
 ]

@@ -166,3 +166,27 @@ async def test_sync_same_code_in_two_workshops_keeps_both(
         if s.spare_part_id == p.id
     }
     assert stocks == {"C1@101-1": 4, "C1@101-2": 7}
+
+
+async def test_sync_201_2_split_workshops_share_hardware_page(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """201 二车间按产品线拆分后 MC/DR 共用同一五金表：各车间保留各自的行。"""
+    rows = [_row("C9", 5, 1791734400000, name="五金件", price="9")]
+    seen_page_keys: list[str] = []
+
+    async def fake_get_rows(session: Any, *, page_key: str) -> Any:
+        seen_page_keys.append(page_key)
+        return rows, None
+
+    monkeypatch.setattr(
+        spare_part_sync.warehouse_public_api, "get_material_page_rows", fake_get_rows
+    )
+
+    await spare_part_sync.sync_workshop(db_session, "201-2-MC")
+    await spare_part_sync.sync_workshop(db_session, "201-2-DR")
+
+    # 两个新车间代码都映射到 201 二车间的五金分布表
+    assert seen_page_keys == ["hardware-201-2-workshop", "hardware-201-2-workshop"]
+    parts = (await db_session.execute(select(SparePart))).scalars().all()
+    assert sorted(p.workshop_code for p in parts) == ["201-2-DR", "201-2-MC"]

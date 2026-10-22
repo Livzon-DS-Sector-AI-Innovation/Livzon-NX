@@ -208,7 +208,7 @@ export function EquipmentTable({ loading = false, onPageChange, resetKey, worksh
           onChange={(v) => setDepartmentFilter(v || null)}
           options={departments.map(d => ({ label: d.name, value: d.id }))}
         />
-        <Input placeholder="搜索设备编号或名称" prefix={<SearchOutlined style={{ color: '#a4a097' }} />}
+        <Input placeholder="搜索设备编号或名称" prefix={<SearchOutlined style={{ color: 'var(--color-stone)' }} />}
           style={{ width: 240 }} value={keyword} onChange={(e) => setKeyword(e.target.value)} allowClear />
         <div style={{ flex: 1 }} />
         <Button icon={<ImportOutlined />} onClick={() => setImportOpen(true)}>导入台账</Button>

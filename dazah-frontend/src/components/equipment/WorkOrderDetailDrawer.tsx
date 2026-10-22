@@ -17,18 +17,18 @@ import { MaterialRecordTable } from './MaterialRecordTable'
 const { TextArea } = Input
 
 const statusConfig: Record<WorkOrderStatus, { color: string; label: string }> = {
-  '待处理': { color: '#e03131', label: '待处理' },
+  '待处理': { color: 'var(--color-error)', label: '待处理' },
   '执行中': { color: '#dd5b00', label: '执行中' },
   '待验收': { color: '#d4b106', label: '待验收' },
-  '已完成': { color: '#1aae39', label: '已完成' },
-  '已关闭': { color: '#787671', label: '已关闭' },
+  '已完成': { color: 'var(--color-success)', label: '已完成' },
+  '已关闭': { color: 'var(--color-stone)', label: '已关闭' },
 }
 
 const priorityConfig: Record<WorkOrderPriority, { color: string }> = {
-  '紧急': { color: '#e03131' },
+  '紧急': { color: 'var(--color-error)' },
   '高': { color: '#dd5b00' },
   '中': { color: '#5645d4' },
-  '低': { color: '#787671' },
+  '低': { color: 'var(--color-stone)' },
 }
 
 function formatDuration(minutes: number | null): string {
@@ -130,7 +130,7 @@ export function WorkOrderDetailDrawer({ onRefresh }: WorkOrderDetailDrawerProps)
       title: '提交维修完成',
       content: (
         <div style={{ marginTop: 16 }}>
-          <div style={{ marginBottom: 8, fontSize: 14, color: '#37352f' }}>维修过程描述 *</div>
+          <div style={{ marginBottom: 8, fontSize: 14, color: 'var(--color-charcoal)' }}>维修过程描述 *</div>
           <TextArea
             placeholder="请详细描述维修过程和处理措施"
             rows={4}
@@ -162,7 +162,7 @@ export function WorkOrderDetailDrawer({ onRefresh }: WorkOrderDetailDrawerProps)
       title: result === '合格' ? '验收通过' : '验收不通过',
       content: (
         <div style={{ marginTop: 16 }}>
-          {result === '不合格' && <div style={{ marginBottom: 8, fontSize: 14, color: '#37352f' }}>不通过原因 *</div>}
+          {result === '不合格' && <div style={{ marginBottom: 8, fontSize: 14, color: 'var(--color-charcoal)' }}>不通过原因 *</div>}
           <TextArea
             placeholder={result === '合格' ? '验收备注（可选）' : '请说明不通过的原因'}
             rows={3} maxLength={500} showCount
@@ -210,12 +210,12 @@ export function WorkOrderDetailDrawer({ onRefresh }: WorkOrderDetailDrawerProps)
   const timelineItems = []
   if (wo.reported_at) {
     timelineItems.push({
-      color: '#e03131',
+      color: 'var(--color-error)',
       icon: <ClockCircleOutlined style={{ fontSize: 14 }} />,
       content: (
         <div>
-          <div style={{ fontWeight: 500, color: '#1a1a1a' }}>报修</div>
-          <div style={{ fontSize: 13, color: '#787671' }}>{formatTime(wo.reported_at)}</div>
+          <div style={{ fontWeight: 500, color: 'var(--color-ink)' }}>报修</div>
+          <div style={{ fontSize: 13, color: 'var(--color-stone)' }}>{formatTime(wo.reported_at)}</div>
         </div>
       ),
     })
@@ -226,8 +226,8 @@ export function WorkOrderDetailDrawer({ onRefresh }: WorkOrderDetailDrawerProps)
       icon: <UserOutlined style={{ fontSize: 14 }} />,
       content: (
         <div>
-          <div style={{ fontWeight: 500, color: '#1a1a1a' }}>已指派</div>
-          <div style={{ fontSize: 13, color: '#787671' }}>{formatTime(wo.assigned_at)}</div>
+          <div style={{ fontWeight: 500, color: 'var(--color-ink)' }}>已指派</div>
+          <div style={{ fontSize: 13, color: 'var(--color-stone)' }}>{formatTime(wo.assigned_at)}</div>
         </div>
       ),
     })
@@ -238,8 +238,8 @@ export function WorkOrderDetailDrawer({ onRefresh }: WorkOrderDetailDrawerProps)
       icon: <ToolOutlined style={{ fontSize: 14 }} />,
       content: (
         <div>
-          <div style={{ fontWeight: 500, color: '#1a1a1a' }}>开始维修</div>
-          <div style={{ fontSize: 13, color: '#787671' }}>{formatTime(wo.started_at)}</div>
+          <div style={{ fontWeight: 500, color: 'var(--color-ink)' }}>开始维修</div>
+          <div style={{ fontSize: 13, color: 'var(--color-stone)' }}>{formatTime(wo.started_at)}</div>
         </div>
       ),
     })
@@ -250,35 +250,35 @@ export function WorkOrderDetailDrawer({ onRefresh }: WorkOrderDetailDrawerProps)
       icon: <CheckCircleOutlined style={{ fontSize: 14 }} />,
       content: (
         <div>
-          <div style={{ fontWeight: 500, color: '#1a1a1a' }}>提交完成</div>
-          <div style={{ fontSize: 13, color: '#787671' }}>{formatTime(wo.completed_at)}</div>
-          {wo.repair_detail && <div style={{ fontSize: 13, color: '#5d5b54', marginTop: 4 }}>维修描述: {wo.repair_detail}</div>}
+          <div style={{ fontWeight: 500, color: 'var(--color-ink)' }}>提交完成</div>
+          <div style={{ fontSize: 13, color: 'var(--color-stone)' }}>{formatTime(wo.completed_at)}</div>
+          {wo.repair_detail && <div style={{ fontSize: 13, color: 'var(--color-slate)', marginTop: 4 }}>维修描述: {wo.repair_detail}</div>}
         </div>
       ),
     })
   }
   if (wo.verified_at) {
     timelineItems.push({
-      color: wo.verification_result === '合格' ? '#1aae39' : '#e03131',
+      color: wo.verification_result === '合格' ? 'var(--color-success)' : 'var(--color-error)',
       icon: wo.verification_result === '合格'
         ? <CheckCircleOutlined style={{ fontSize: 14 }} />
         : <CloseCircleOutlined style={{ fontSize: 14 }} />,
       content: (
         <div>
-          <div style={{ fontWeight: 500, color: '#1a1a1a' }}>
+          <div style={{ fontWeight: 500, color: 'var(--color-ink)' }}>
             验收 - <Tag color={wo.verification_result === '合格' ? 'success' : 'error'}>{wo.verification_result}</Tag>
           </div>
-          <div style={{ fontSize: 13, color: '#787671' }}>{formatTime(wo.verified_at)}</div>
-          {wo.verification_remark && <div style={{ fontSize: 13, color: '#5d5b54', marginTop: 4 }}>备注: {wo.verification_remark}</div>}
+          <div style={{ fontSize: 13, color: 'var(--color-stone)' }}>{formatTime(wo.verified_at)}</div>
+          {wo.verification_remark && <div style={{ fontSize: 13, color: 'var(--color-slate)', marginTop: 4 }}>备注: {wo.verification_remark}</div>}
         </div>
       ),
     })
   }
   if (wo.status === '已关闭') {
     timelineItems.push({
-      color: '#787671',
+      color: 'var(--color-stone)',
       icon: <StopOutlined style={{ fontSize: 14 }} />,
-      content: <div><div style={{ fontWeight: 500, color: '#1a1a1a' }}>已关闭</div></div>,
+      content: <div><div style={{ fontWeight: 500, color: 'var(--color-ink)' }}>已关闭</div></div>,
     })
   }
 
@@ -297,7 +297,7 @@ export function WorkOrderDetailDrawer({ onRefresh }: WorkOrderDetailDrawerProps)
       onClose={closeWorkOrderDetail}
       destroyOnHidden
     >
-      <Descriptions column={2} size="small" styles={{ label: { color: '#787671', fontSize: 13 }, content: { color: '#1a1a1a', fontSize: 14 } }}>
+      <Descriptions column={2} size="small" styles={{ label: { color: 'var(--color-stone)', fontSize: 13 }, content: { color: 'var(--color-ink)', fontSize: 14 } }}>
         <Descriptions.Item label="工单类型">
           <Tag style={{
             color: wo.order_type === '故障维修' || wo.order_type === '异常处理' ? '#dd5b00'
@@ -324,7 +324,7 @@ export function WorkOrderDetailDrawer({ onRefresh }: WorkOrderDetailDrawerProps)
 
       {wo.images && wo.images.length > 0 && (
         <div style={{ marginTop: 24 }}>
-          <div style={{ fontSize: 15, fontWeight: 600, color: '#1a1a1a', marginBottom: 12 }}>故障图片</div>
+          <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--color-ink)', marginBottom: 12 }}>故障图片</div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {wo.images.map((img) => (
               <Image
@@ -341,7 +341,7 @@ export function WorkOrderDetailDrawer({ onRefresh }: WorkOrderDetailDrawerProps)
       )}
 
       <div style={{ marginTop: 24, marginBottom: 24 }}>
-        <div style={{ fontSize: 15, fontWeight: 600, color: '#1a1a1a', marginBottom: 16 }}>工单进度</div>
+        <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--color-ink)', marginBottom: 16 }}>工单进度</div>
         <Timeline items={timelineItems} />
       </div>
 
@@ -351,7 +351,7 @@ export function WorkOrderDetailDrawer({ onRefresh }: WorkOrderDetailDrawerProps)
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           marginBottom: 12,
         }}>
-          <div style={{ fontSize: 15, fontWeight: 600, color: '#1a1a1a' }}>领料记录</div>
+          <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--color-ink)' }}>领料记录</div>
           {['待处理', '执行中', '待验收'].includes(wo.status) && (
             <MaterialConsumeDrawer
               workOrderId={wo.id}

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  App, Button, Drawer, Form, Input, Space, Switch, Tag, Typography,
+  App, Button, Drawer, Form, Input, Select, Space, Switch, Tag, Typography,
 } from 'antd'
 import {
   SaveOutlined, SecurityScanOutlined,
@@ -10,6 +10,7 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import dayjs from 'dayjs'
 import {
+  fetchFeishuApps,
   fetchInspectionFeishuConfig,
   testInspectionFeishuConfig,
   updateInspectionFeishuConfig,
@@ -23,12 +24,17 @@ import { InspectionQueryProvider } from './InspectionQueryProvider'
 
 const C = {
   ink: 'var(--color-ink)', slate: 'var(--color-slate)', stone: 'var(--color-stone)',
-  hairline: 'var(--color-hairline)', green: '#1aae39', red: '#c0392b',
+  hairline: 'var(--color-hairline)', green: 'var(--color-success)', red: '#c0392b',
 }
 
 const CONFIG_QUERY_KEY = ['equipment', 'inspection-feishu-config'] as const
+const APPS_QUERY_KEY = ['equipment', 'feishu-apps'] as const
+/** 凭据来源下拉的「手动输入」哨兵值（非应用库记录 ID） */
+const CREDENTIAL_SOURCE_MANUAL = '__manual__'
+
 type ConfigFormValues = {
   is_enabled: boolean
+  feishu_app_id?: string
   app_id: string
   app_secret?: string
   app_token: string
@@ -88,10 +94,22 @@ function InspectionFeishuConfigDrawerInner({
   })
   const detail = configQuery.data ?? null
 
+  // 自建应用库清单：凭据来源下拉引用（Secret 不回显）
+  const appsQuery = useQuery({
+    queryKey: APPS_QUERY_KEY,
+    queryFn: () => fetchFeishuApps(),
+    enabled: open,
+  })
+  const apps = appsQuery.data ?? []
+  const credentialSource = Form.useWatch('feishu_app_id', form)
+  const usingAppCredential = credentialSource !== CREDENTIAL_SOURCE_MANUAL
+  const selectedApp = apps.find((a) => a.id === credentialSource)
+
   // 每次打开时拉取最新配置（含缓存场景），随后按数据回填表单
   useEffect(() => {
     if (open) {
       void queryClient.invalidateQueries({ queryKey: configQueryKey })
+      void queryClient.invalidateQueries({ queryKey: APPS_QUERY_KEY })
     }
   }, [open, queryClient, configQueryKey])
 
@@ -99,6 +117,7 @@ function InspectionFeishuConfigDrawerInner({
     if (!open || !configQuery.data) return
     form.setFieldsValue({
       is_enabled: configQuery.data.is_enabled,
+      feishu_app_id: configQuery.data.feishu_app_id ?? CREDENTIAL_SOURCE_MANUAL,
       app_id: configQuery.data.app_id,
       app_secret: '',
       app_token: configQuery.data.app_token,
@@ -136,6 +155,10 @@ function InspectionFeishuConfigDrawerInner({
     setSaving(true)
     try {
       const payload: InspectionFeishuConfigUpdateRequest = {
+        feishu_app_id:
+          values.feishu_app_id && values.feishu_app_id !== CREDENTIAL_SOURCE_MANUAL
+            ? values.feishu_app_id
+            : null,
         app_id: values.app_id.trim(),
         app_secret: values.app_secret?.trim() || null,
         app_token: values.app_token.trim(),
@@ -251,24 +274,54 @@ function InspectionFeishuConfigDrawerInner({
             <Switch />
           </Form.Item>
           <Form.Item
-            name="app_id" label="App ID"
-            rules={[{ required: true, message: '请输入飞书应用 App ID' }]}
+            name="feishu_app_id" label="凭据来源"
+            extra="选择自建应用库后无需填写 App ID / Secret，凭据随应用库更新即时生效"
+            initialValue={CREDENTIAL_SOURCE_MANUAL}
           >
-            <Input placeholder="cli_xxxxxxxx" autoComplete="off" />
-          </Form.Item>
-          <Form.Item
-            name="app_secret" label="App Secret"
-            extra={
-              detail?.app_secret_configured
-                ? `已保存（${detail.app_secret_masked}），留空保持不变`
-                : '首次保存必填'
-            }
-          >
-            <Input.Password
-              placeholder={detail?.app_secret_configured ? '留空保持当前 Secret 不变' : '请输入飞书应用 App Secret'}
-              autoComplete="new-password"
+            <Select
+              data-testid="credential-source-select"
+              loading={appsQuery.isFetching}
+              options={[
+                { value: CREDENTIAL_SOURCE_MANUAL, label: '手动输入' },
+                ...apps.map((a) => ({
+                  value: a.id,
+                  label: `${a.name}（${a.app_id}）`,
+                })),
+              ]}
             />
           </Form.Item>
+          {usingAppCredential ? (
+            <Typography.Paragraph style={{ marginBottom: 16 }}>
+              <Tag color="blue">应用库</Tag>
+              {selectedApp
+                ? `${selectedApp.name} · ${selectedApp.app_id} · Secret ${
+                    selectedApp.app_secret_configured ? '已配置' : '未配置'
+                  }`
+                : '所选应用已不存在，请重新选择或改为手动输入'}
+            </Typography.Paragraph>
+          ) : (
+            <>
+              <Form.Item
+                name="app_id" label="App ID"
+                rules={[{ required: true, message: '请输入飞书应用 App ID' }]}
+              >
+                <Input placeholder="cli_xxxxxxxx" autoComplete="off" />
+              </Form.Item>
+              <Form.Item
+                name="app_secret" label="App Secret"
+                extra={
+                  detail?.app_secret_configured
+                    ? `已保存（${detail.app_secret_masked}），留空保持不变`
+                    : '首次保存必填'
+                }
+              >
+                <Input.Password
+                  placeholder={detail?.app_secret_configured ? '留空保持当前 Secret 不变' : '请输入飞书应用 App Secret'}
+                  autoComplete="new-password"
+                />
+              </Form.Item>
+            </>
+          )}
           <Form.Item
             name="app_token" label="多维表格 App Token"
             rules={[{ required: true, message: '请填写 App Token 或粘贴多维表格链接' }]}

@@ -22,6 +22,7 @@ import {
   triggerInspectionFeishuSync,
 } from '@/lib/api/inspection-feishu'
 import { InspectionFeishuConfigDrawer } from './inspection/InspectionFeishuConfigDrawer'
+import { FeishuAppLibraryCard } from './inspection/FeishuAppLibraryCard'
 
 const { Text, Paragraph } = Typography
 
@@ -163,7 +164,7 @@ export function FeishuConfigPage() {
       render: (label: string, row) => (
         <div>
           <Text strong>{label}</Text>
-          <div style={{ fontSize: 12, color: '#787671' }}>{row.code}</div>
+          <div style={{ fontSize: 12, color: 'var(--color-stone)' }}>{row.code}</div>
         </div>
       ),
     },
@@ -251,7 +252,7 @@ export function FeishuConfigPage() {
         const brief = syncBriefs[row.code]
         if (!brief) return <Text type="secondary" style={{ fontSize: 12 }}>暂无状态</Text>
         return (
-          <div style={{ fontSize: 12, color: '#787671' }}>
+          <div style={{ fontSize: 12, color: 'var(--color-stone)' }}>
             <div>
               镜像 {brief.totalRows} 行
               {brief.lastStatus === 'failed' && (
@@ -298,10 +299,10 @@ export function FeishuConfigPage() {
   return (
     <div style={{ padding: '20px 24px 32px' }}>
       <div style={{ marginBottom: 16 }}>
-        <h2 style={{ fontSize: 22, fontWeight: 600, color: '#1a1a1a', margin: 0, marginBottom: 4 }}>
+        <h2 style={{ fontSize: 22, fontWeight: 600, color: 'var(--color-ink)', margin: 0, marginBottom: 4 }}>
           飞书配置
         </h2>
-        <p style={{ fontSize: 14, color: '#787671', margin: 0 }}>
+        <p style={{ fontSize: 14, color: 'var(--color-stone)', margin: 0 }}>
           设备模块的飞书自建应用凭据与多维表格链接集中存放；巡检数据同步配置按车间管理
         </p>
       </div>
@@ -315,13 +316,15 @@ export function FeishuConfigPage() {
         />
       )}
 
+      <FeishuAppLibraryCard onChanged={() => setReloadKey((k) => k + 1)} />
+
       <Card size="small" style={{ marginBottom: 16 }} title={<Space size={8}><ApiOutlined />应用凭据（自建应用）</Space>}>
         {credentialGroups.length === 0 ? (
           <Text type="secondary">尚未配置任何应用凭据，在下方清单选择车间点「配置」开始</Text>
         ) : credentialGroups.map(([appId, group]) => (
           <div key={appId} style={{ display: 'flex', gap: 24, alignItems: 'center', flexWrap: 'wrap', padding: '4px 0' }}>
             <div>
-              <div style={{ fontSize: 12, color: '#787671', marginBottom: 2 }}>App ID</div>
+              <div style={{ fontSize: 12, color: 'var(--color-stone)', marginBottom: 2 }}>App ID</div>
               <Space size={4}>
                 <Text code>{appId}</Text>
                 <Button
@@ -332,7 +335,7 @@ export function FeishuConfigPage() {
               </Space>
             </div>
             <div>
-              <div style={{ fontSize: 12, color: '#787671', marginBottom: 2 }}>App Secret</div>
+              <div style={{ fontSize: 12, color: 'var(--color-stone)', marginBottom: 2 }}>App Secret</div>
               <Text type="secondary">
                 {group.some((d) => d.app_secret_configured)
                   ? `已配置（${group[0].app_secret_masked || '••••••'}），出于安全不回显明文`
@@ -340,7 +343,7 @@ export function FeishuConfigPage() {
               </Text>
             </div>
             <div>
-              <div style={{ fontSize: 12, color: '#787671', marginBottom: 2 }}>使用车间</div>
+              <div style={{ fontSize: 12, color: 'var(--color-stone)', marginBottom: 2 }}>使用车间</div>
               <Space size={4} wrap>
                 {group.map((d) => <Tag key={d.workshop_code}>{d.workshop_code}</Tag>)}
               </Space>

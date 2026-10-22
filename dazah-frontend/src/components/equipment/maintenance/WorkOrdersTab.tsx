@@ -47,10 +47,10 @@ export function WorkOrdersTab({ onRefresh }: WorkOrdersTabProps) {
           children: (
             <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-end' }}>
               {[
-                { key: 'emergency', label: '紧急', color: '#e03131' },
+                { key: 'emergency', label: '紧急', color: 'var(--color-error)' },
                 { key: 'high', label: '高', color: '#dd5b00' },
                 { key: 'medium', label: '中', color: '#5645d4' },
-                { key: 'low', label: '低', color: '#787671' },
+                { key: 'low', label: '低', color: 'var(--color-stone)' },
               ].map(({ key, label, color }) => (
                 <div key={key}>
                   <div style={{ marginBottom: 4, fontSize: 13, color, fontWeight: 500 }}>{label}优先级</div>
@@ -72,7 +72,7 @@ export function WorkOrdersTab({ onRefresh }: WorkOrdersTabProps) {
 
       <div style={{ marginTop: 16 }}>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="font-semibold" style={{ fontSize: 18, color: '#1a1a1a', lineHeight: 1.4, margin: 0 }}>
+          <h2 className="font-semibold" style={{ fontSize: 18, color: 'var(--color-ink)', lineHeight: 1.4, margin: 0 }}>
             工单列表
           </h2>
           <Button type="primary" icon={<PlusOutlined />} onClick={() => openWorkOrderDrawer()}>

@@ -29,7 +29,7 @@ function StatCard({ title, value, icon, color, bgColor, active, onClick }: StatC
       hoverable
       onClick={onClick}
       style={{
-        background: '#ffffff',
+        background: 'var(--color-canvas)',
         borderRadius: 12,
         border: active ? `2px solid ${color}` : '2px solid #e5e3df',
         cursor: onClick ? 'pointer' : 'default',
@@ -39,8 +39,8 @@ function StatCard({ title, value, icon, color, bgColor, active, onClick }: StatC
     >
       <div className="flex items-center justify-between">
         <div>
-          <div style={{ fontSize: 13, color: '#787671', marginBottom: 4 }}>{title}</div>
-          <div style={{ fontSize: 28, fontWeight: 600, color: '#1a1a1a', lineHeight: 1.2 }}>
+          <div style={{ fontSize: 13, color: 'var(--color-stone)', marginBottom: 4 }}>{title}</div>
+          <div style={{ fontSize: 28, fontWeight: 600, color: 'var(--color-ink)', lineHeight: 1.2 }}>
             {value}
           </div>
         </div>
@@ -73,11 +73,11 @@ const statusCardConfig: {
   statusFilter: WorkOrderStatus | ''
 }[] = [
   { key: 'total', title: '全部工单', icon: <FileTextOutlined />, color: '#5645d4', bgColor: '#ede9f7', statusFilter: '' },
-  { key: 'pending', title: '待处理', icon: <ExclamationCircleOutlined />, color: '#e03131', bgColor: '#fff1f0', statusFilter: '待处理' },
+  { key: 'pending', title: '待处理', icon: <ExclamationCircleOutlined />, color: 'var(--color-error)', bgColor: '#fff1f0', statusFilter: '待处理' },
   { key: 'executing', title: '执行中', icon: <ToolOutlined />, color: '#dd5b00', bgColor: '#fff7e6', statusFilter: '执行中' },
   { key: 'pending_verify', title: '待验收', icon: <ClockCircleOutlined />, color: '#d4b106', bgColor: '#fffbe6', statusFilter: '待验收' },
-  { key: 'completed', title: '已完成', icon: <CheckCircleOutlined />, color: '#1aae39', bgColor: '#e6f7e6', statusFilter: '已完成' },
-  { key: 'closed', title: '已关闭', icon: <StopOutlined />, color: '#787671', bgColor: '#f0eeec', statusFilter: '已关闭' },
+  { key: 'completed', title: '已完成', icon: <CheckCircleOutlined />, color: 'var(--color-success)', bgColor: '#e6f7e6', statusFilter: '已完成' },
+  { key: 'closed', title: '已关闭', icon: <StopOutlined />, color: 'var(--color-stone)', bgColor: 'var(--color-surface-soft)', statusFilter: '已关闭' },
 ]
 
 interface WorkOrderStatsCardsProps {

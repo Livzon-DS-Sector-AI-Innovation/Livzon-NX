@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import date
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
@@ -13,8 +14,11 @@ from app.core.deps import CurrentUser
 from app.core.exceptions import AppException
 from app.core.response import paginated_response, success_response
 from app.modules.equipment.schemas.inspection import (
+    EquipmentFeishuAppCreateRequest,
+    EquipmentFeishuAppUpdateRequest,
     EquipmentInspectionFeishuConfigUpdateRequest,
 )
+from app.modules.equipment.service import feishu_app as app_service
 from app.modules.equipment.service import inspection_feishu_config as config_service
 from app.modules.equipment.service import inspection_feishu_mirror as mirror
 
@@ -203,3 +207,44 @@ async def test_feishu_config(
 ) -> JSONResponse:
     _require_user(current_user)
     return success_response(data=await config_service.test_config(db, workshop))
+
+
+@router.get("/feishu/apps", summary="自建应用库清单（Secret 不回显）")
+async def list_feishu_apps(
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> JSONResponse:
+    _require_user(current_user)
+    return success_response(data=await app_service.list_apps(db))
+
+
+@router.post("/feishu/apps", summary="新建自建应用凭据")
+async def create_feishu_app(
+    data: EquipmentFeishuAppCreateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> JSONResponse:
+    _require_user(current_user)
+    return success_response(data=await app_service.create_app(db, data))
+
+
+@router.put("/feishu/apps/{app_row_id}", summary="更新自建应用凭据")
+async def update_feishu_app(
+    app_row_id: UUID,
+    data: EquipmentFeishuAppUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> JSONResponse:
+    _require_user(current_user)
+    return success_response(data=await app_service.update_app(db, app_row_id, data))
+
+
+@router.delete("/feishu/apps/{app_row_id}", summary="删除自建应用凭据")
+async def delete_feishu_app(
+    app_row_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> JSONResponse:
+    _require_user(current_user)
+    await app_service.delete_app(db, app_row_id)
+    return success_response(data=None)

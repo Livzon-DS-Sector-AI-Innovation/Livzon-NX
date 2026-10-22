@@ -38920,6 +38920,75 @@
         "title": "EquipmentCreate",
         "type": "object"
       },
+      "EquipmentFeishuAppCreateRequest": {
+        "description": "新建飞书自建应用凭据请求",
+        "properties": {
+          "app_id": {
+            "description": "飞书应用 App ID",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "App Id",
+            "type": "string"
+          },
+          "app_secret": {
+            "description": "飞书应用 App Secret",
+            "minLength": 1,
+            "title": "App Secret",
+            "type": "string"
+          },
+          "name": {
+            "description": "应用名称（便于辨认）",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "app_id",
+          "app_secret"
+        ],
+        "title": "EquipmentFeishuAppCreateRequest",
+        "type": "object"
+      },
+      "EquipmentFeishuAppUpdateRequest": {
+        "description": "更新飞书自建应用凭据请求（Secret 留空保留已保存值）",
+        "properties": {
+          "app_id": {
+            "description": "飞书应用 App ID",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "App Id",
+            "type": "string"
+          },
+          "app_secret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "飞书应用 App Secret（留空保留已保存值）",
+            "title": "App Secret"
+          },
+          "name": {
+            "description": "应用名称",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "app_id"
+        ],
+        "title": "EquipmentFeishuAppUpdateRequest",
+        "type": "object"
+      },
       "EquipmentInspectionFeishuConfigUpdateRequest": {
         "description": "保存设备巡检飞书镜像配置请求",
         "properties": {
@@ -38962,6 +39031,19 @@
             "maxLength": 100,
             "title": "Device Table Id",
             "type": "string"
+          },
+          "feishu_app_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "引用自建应用库记录；提供时凭据以应用库为准，忽略内联 App ID/Secret",
+            "title": "Feishu App Id"
           },
           "history_table_id": {
             "default": "",
@@ -107252,6 +107334,230 @@
           }
         },
         "summary": "更新设备",
+        "tags": [
+          "设备管理"
+        ]
+      }
+    },
+    "/api/v1/equipment/inspection/feishu/apps": {
+      "get": {
+        "operationId": "list_feishu_apps_api_v1_equipment_inspection_feishu_apps_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "自建应用库清单（Secret 不回显）",
+        "tags": [
+          "设备管理"
+        ]
+      },
+      "post": {
+        "operationId": "create_feishu_app_api_v1_equipment_inspection_feishu_apps_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EquipmentFeishuAppCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "新建自建应用凭据",
+        "tags": [
+          "设备管理"
+        ]
+      }
+    },
+    "/api/v1/equipment/inspection/feishu/apps/{app_row_id}": {
+      "delete": {
+        "operationId": "delete_feishu_app_api_v1_equipment_inspection_feishu_apps__app_row_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "app_row_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "App Row Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "删除自建应用凭据",
+        "tags": [
+          "设备管理"
+        ]
+      },
+      "put": {
+        "operationId": "update_feishu_app_api_v1_equipment_inspection_feishu_apps__app_row_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "app_row_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "App Row Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EquipmentFeishuAppUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "更新自建应用凭据",
         "tags": [
           "设备管理"
         ]

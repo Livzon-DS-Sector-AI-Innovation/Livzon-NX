@@ -19,11 +19,11 @@ const SCOPE_COLORS: Record<string, { color: string; bg: string; label: string }>
   global: { color: '#0075de', bg: '#dcecfa', label: '全局' },
   inspection: { color: '#7b3ff2', bg: '#e6e0f5', label: '巡检' },
   calibration: { color: '#dd5b00', bg: '#ffe8d4', label: '校准' },
-  maintenance: { color: '#1aae39', bg: '#d9f3e1', label: '维修' },
+  maintenance: { color: 'var(--color-success)', bg: 'var(--color-success-soft)', label: '维修' },
 }
 
 const PASTEL_TINTS = [
-  '#f8f5e8', '#dcecfa', '#d9f3e1', '#ffe8d4', '#fde0ec', '#e6e0f5',
+  '#f8f5e8', '#dcecfa', 'var(--color-success-soft)', '#ffe8d4', '#fde0ec', '#e6e0f5',
 ]
 
 function tintForIndex(i: number): string {
@@ -104,7 +104,7 @@ export function RoleManagePanel({ roles }: Props) {
         marginBottom: 24,
       }}>
         <div>
-          <Text strong style={{ fontSize: 16, color: '#1a1a1a' }}>
+          <Text strong style={{ fontSize: 16, color: 'var(--color-ink)' }}>
             角色列表
           </Text>
           <Text type="secondary" style={{ fontSize: 13, marginLeft: 10 }}>
@@ -133,16 +133,16 @@ export function RoleManagePanel({ roles }: Props) {
         }}>
           <div style={{
             width: 56, height: 56, borderRadius: 16,
-            background: '#f0eeec',
+            background: 'var(--color-surface-soft)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             margin: '0 auto 16px',
           }}>
-            <SafetyCertificateOutlined style={{ fontSize: 24, color: '#a4a097' }} />
+            <SafetyCertificateOutlined style={{ fontSize: 24, color: 'var(--color-stone)' }} />
           </div>
-          <Text strong style={{ fontSize: 15, color: '#37352f', display: 'block', marginBottom: 6 }}>
+          <Text strong style={{ fontSize: 15, color: 'var(--color-charcoal)', display: 'block', marginBottom: 6 }}>
             暂无角色
           </Text>
-          <Text style={{ fontSize: 13, color: '#a4a097' }}>
+          <Text style={{ fontSize: 13, color: 'var(--color-stone)' }}>
             点击「新增角色」创建第一个角色定义
           </Text>
         </div>
@@ -156,9 +156,9 @@ export function RoleManagePanel({ roles }: Props) {
             const scope = SCOPE_COLORS[role.scope] || SCOPE_COLORS.global
             return (
               <div key={role.id} style={{
-                background: '#ffffff',
+                background: 'var(--color-canvas)',
                 borderRadius: 12,
-                border: '1px solid #e5e3df',
+                border: '1px solid var(--color-hairline)',
                 overflow: 'hidden',
                 transition: 'box-shadow 0.15s ease, border-color 0.15s ease',
               }}
@@ -167,7 +167,7 @@ export function RoleManagePanel({ roles }: Props) {
                 e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.06)'
               }}
               onMouseLeave={e => {
-                e.currentTarget.style.borderColor = '#e5e3df'
+                e.currentTarget.style.borderColor = 'var(--color-hairline)'
                 e.currentTarget.style.boxShadow = 'none'
               }}
               >
@@ -181,13 +181,13 @@ export function RoleManagePanel({ roles }: Props) {
                     <span style={{
                       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                       width: 32, height: 32, borderRadius: 8,
-                      background: role.is_active ? '#5645d4' : '#a4a097',
+                      background: role.is_active ? '#5645d4' : 'var(--color-stone)',
                       color: '#fff', fontSize: 14, fontWeight: 700,
                     }}>
                       {role.name.charAt(0)}
                     </span>
                     <div>
-                      <Text strong style={{ fontSize: 15, color: '#1a1a1a', display: 'block', lineHeight: 1.3 }}>
+                      <Text strong style={{ fontSize: 15, color: 'var(--color-ink)', display: 'block', lineHeight: 1.3 }}>
                         {role.name}
                       </Text>
                       <span style={{
@@ -202,7 +202,7 @@ export function RoleManagePanel({ roles }: Props) {
                     </div>
                   </div>
                   {!role.is_active && (
-                    <Tag style={{ borderRadius: 4, color: '#787671', background: '#f0eeec', border: 'none', margin: 0 }}>
+                    <Tag style={{ borderRadius: 4, color: 'var(--color-stone)', background: 'var(--color-surface-soft)', border: 'none', margin: 0 }}>
                       停用
                     </Tag>
                   )}
@@ -210,14 +210,14 @@ export function RoleManagePanel({ roles }: Props) {
 
                 {/* Card body */}
                 <div style={{ padding: '14px 20px' }}>
-                  <Text style={{ fontSize: 13, color: '#5d5b54', lineHeight: 1.5 }}>
+                  <Text style={{ fontSize: 13, color: 'var(--color-slate)', lineHeight: 1.5 }}>
                     {role.description || '暂无描述'}
                   </Text>
                   <div style={{ marginTop: 10 }}>
                     <Text type="secondary" style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 }}>
                       编码
                     </Text>
-                    <Text code style={{ fontSize: 12, marginLeft: 8, color: '#37352f' }}>
+                    <Text code style={{ fontSize: 12, marginLeft: 8, color: 'var(--color-charcoal)' }}>
                       {role.code}
                     </Text>
                   </div>
@@ -234,12 +234,12 @@ export function RoleManagePanel({ roles }: Props) {
                       flex: 1, padding: '10px 0',
                       background: 'transparent', border: 'none',
                       cursor: 'pointer',
-                      color: '#5d5b54', fontSize: 13, fontWeight: 500,
+                      color: 'var(--color-slate)', fontSize: 13, fontWeight: 500,
                       display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                       transition: 'color 0.15s',
                     }}
                     onMouseEnter={e => (e.currentTarget.style.color = '#5645d4')}
-                    onMouseLeave={e => (e.currentTarget.style.color = '#5d5b54')}
+                    onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-slate)')}
                   >
                     <EditOutlined />编辑
                   </button>
@@ -253,12 +253,12 @@ export function RoleManagePanel({ roles }: Props) {
                         flex: 1, padding: '10px 0',
                         background: 'transparent', border: 'none',
                         cursor: 'pointer',
-                        color: '#5d5b54', fontSize: 13, fontWeight: 500,
+                        color: 'var(--color-slate)', fontSize: 13, fontWeight: 500,
                         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                         transition: 'color 0.15s',
                       }}
-                      onMouseEnter={e => (e.currentTarget.style.color = '#e03131')}
-                      onMouseLeave={e => (e.currentTarget.style.color = '#5d5b54')}
+                      onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-error)')}
+                      onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-slate)')}
                     >
                       <DeleteOutlined />删除
                     </button>

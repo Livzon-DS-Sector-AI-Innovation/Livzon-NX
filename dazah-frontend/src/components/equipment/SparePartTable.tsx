@@ -42,7 +42,7 @@ export function SparePartTable({ onRefresh }: Props) {
     {
       title: '库存数量', dataIndex: 'current_qty', key: 'current_qty', width: 100, align: 'right',
       render: (qty: number, r) => (
-        <span style={{ color: qty <= r.min_qty ? '#e03131' : '#1a1a1a', fontWeight: qty <= r.min_qty ? 600 : 400 }}>{qty}</span>
+        <span style={{ color: qty <= r.min_qty ? 'var(--color-error)' : 'var(--color-ink)', fontWeight: qty <= r.min_qty ? 600 : 400 }}>{qty}</span>
       ),
     },
     {

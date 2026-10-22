@@ -5,7 +5,7 @@
  *   import { statusPill, actionLink, pillTab } from '@/components/equipment/shared-styles'
  *
  *   // 状态标签
- *   <span style={statusPill('#1aae39', '#d9f3e1')}>正常</span>
+ *   <span style={statusPill('var(--color-success)', 'var(--color-success-soft)')}>正常</span>
  *
  *   // 操作按钮（无 hover）
  *   <span role="button" onClick={...} style={actionLink('#0075de')}>
@@ -19,7 +19,7 @@
 import type React from 'react'
 
 // ── 状态/结果标签 pill ──
-// 用法：statusPill('#1aae39', '#d9f3e1')
+// 用法：statusPill('var(--color-success)', 'var(--color-success-soft)')
 export const statusPill = (color: string, bg: string): React.CSSProperties => ({
   display: 'inline-flex',
   alignItems: 'center',
@@ -34,10 +34,10 @@ export const statusPill = (color: string, bg: string): React.CSSProperties => ({
 })
 
 // 预设：语义色
-export const pillSuccess = statusPill('#1aae39', '#d9f3e1')
+export const pillSuccess = statusPill('var(--color-success)', 'var(--color-success-soft)')
 export const pillWarning = statusPill('#dd5b00', '#ffe8d4')
-export const pillError   = statusPill('#e03131', '#fde0ec')
-export const pillNeutral = statusPill('#787671', '#f0eeec')
+export const pillError   = statusPill('var(--color-error)', '#fde0ec')
+export const pillNeutral = statusPill('var(--color-stone)', 'var(--color-surface-soft)')
 export const pillInfo    = statusPill('#0075de', '#dcecfa')
 export const pillPurple  = statusPill('#5645d4', '#e6e0f5')
 
@@ -59,9 +59,9 @@ export const actionLink = (color: string): React.CSSProperties => ({
 
 // 预设
 export const linkPrimary = actionLink('#0075de')
-export const linkDanger  = actionLink('#e03131')
-export const linkSuccess = actionLink('#1aae39')
-export const linkMuted   = actionLink('#787671')
+export const linkDanger  = actionLink('var(--color-error)')
+export const linkSuccess = actionLink('var(--color-success)')
+export const linkMuted   = actionLink('var(--color-stone)')
 export const linkPurple  = actionLink('#5645d4')
 export const linkWarning = actionLink('#dd5b00')
 
@@ -72,18 +72,18 @@ export const pillTab = (active: boolean): React.CSSProperties => ({
   fontSize: 13,
   fontWeight: 500,
   lineHeight: '22px',
-  color: active ? '#ffffff' : '#787671',
+  color: active ? '#ffffff' : 'var(--color-stone)',
   background: active ? '#000000' : 'transparent',
-  border: active ? '1px solid #000000' : '1px solid #e5e3df',
+  border: active ? '1px solid #000000' : '1px solid var(--color-hairline)',
   borderRadius: 9999,
   cursor: 'pointer',
 })
 
 // ── 表格容器 ──
 export const tableCard: React.CSSProperties = {
-  background: '#ffffff',
+  background: 'var(--color-canvas)',
   borderRadius: 12,
-  border: '1px solid #e5e3df',
+  border: '1px solid var(--color-hairline)',
   padding: '4px 24px 24px',
 }
 
@@ -91,6 +91,6 @@ export const tableCard: React.CSSProperties = {
 export const monoFont: React.CSSProperties = {
   fontFamily: '"SF Mono", "Fira Code", "Cascadia Code", monospace',
   fontSize: 12,
-  color: '#5d5b54',
+  color: 'var(--color-slate)',
   letterSpacing: -0.2,
 }

@@ -70,14 +70,14 @@ export function SparePartsPage({
         {stockWarnings.length > 0 && (
           <div
             style={{
-              background: '#ffffff',
+              background: 'var(--color-canvas)',
               padding: 20,
               borderRadius: 12,
-              border: '1px solid #e5e3df',
+              border: '1px solid var(--color-hairline)',
               marginBottom: 16,
             }}
           >
-            <div style={{ fontSize: 15, fontWeight: 600, color: '#1a1a1a', marginBottom: 12 }}>
+            <div style={{ fontSize: 15, fontWeight: 600, color: 'var(--color-ink)', marginBottom: 12 }}>
               库存预警
             </div>
             <StockWarningTable />
@@ -85,10 +85,10 @@ export function SparePartsPage({
         )}
         <div
           style={{
-            background: '#ffffff',
+            background: 'var(--color-canvas)',
             padding: 20,
             borderRadius: 12,
-            border: '1px solid #e5e3df',
+            border: '1px solid var(--color-hairline)',
           }}
         >
           <SparePartTable onRefresh={fetchData} />

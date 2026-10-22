@@ -1,6 +1,9 @@
 'use client'
 
 import type {
+  FeishuAppCreateRequest,
+  FeishuAppItem,
+  FeishuAppUpdateRequest,
   InspectionFeishuConfigDetail,
   InspectionFeishuConfigTestResult,
   InspectionFeishuConfigUpdateRequest,
@@ -152,4 +155,46 @@ export async function testInspectionFeishuConfig(
     throw new Error(json?.message || '连接测试失败')
   }
   return json.data
+}
+
+/** 自建应用库清单（Secret 不回显明文） */
+export async function fetchFeishuApps(): Promise<FeishuAppItem[]> {
+  const json = await getJson<FeishuAppItem[]>(`${BASE}/apps`)
+  return json.data ?? []
+}
+
+async function mutateFeishuApp(
+  url: string,
+  method: 'POST' | 'PUT' | 'DELETE',
+  body?: FeishuAppCreateRequest | FeishuAppUpdateRequest,
+  errorMessage: string,
+): Promise<FeishuAppItem | null> {
+  const response = await fetch(url, {
+    method,
+    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  })
+  const json = await response.json().catch(() => null)
+  if (!response.ok || !json || json.code !== 200) {
+    throw new Error(json?.message || errorMessage)
+  }
+  return json.data ?? null
+}
+
+/** 新建自建应用凭据 */
+export function createFeishuApp(data: FeishuAppCreateRequest): Promise<FeishuAppItem | null> {
+  return mutateFeishuApp(`${BASE}/apps`, 'POST', data, '新建应用失败')
+}
+
+/** 更新自建应用凭据（Secret 留空保留已保存值） */
+export function updateFeishuApp(
+  appId: string,
+  data: FeishuAppUpdateRequest,
+): Promise<FeishuAppItem | null> {
+  return mutateFeishuApp(`${BASE}/apps/${appId}`, 'PUT', data, '更新应用失败')
+}
+
+/** 删除自建应用凭据（仍被巡检配置引用时后端拒绝） */
+export function deleteFeishuApp(appId: string): Promise<null> {
+  return mutateFeishuApp(`${BASE}/apps/${appId}`, 'DELETE', undefined, '删除应用失败')
 }

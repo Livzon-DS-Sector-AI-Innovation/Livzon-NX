@@ -20,8 +20,8 @@ interface EquipmentDetailDrawerProps {
 }
 
 const MAINTENANCE_STATUS_MAP: Record<string, { color: string; bg: string }> = {
-  '启用': { color: '#1aae39', bg: '#d9f3e1' },
-  '停用': { color: '#787671', bg: '#f0eeec' },
+  '启用': { color: 'var(--color-success)', bg: 'var(--color-success-soft)' },
+  '停用': { color: 'var(--color-stone)', bg: 'var(--color-surface-soft)' },
   '已完成': { color: '#0075de', bg: '#dcecfa' },
 }
 
@@ -29,15 +29,15 @@ const WORK_ORDER_STATUS_MAP: Record<string, { color: string; bg: string }> = {
   '待处理': { color: '#dd5b00', bg: '#ffe8d4' },
   '执行中': { color: '#7b3ff2', bg: '#e6e0f5' },
   '待验收': { color: '#0075de', bg: '#dcecfa' },
-  '已完成': { color: '#1aae39', bg: '#d9f3e1' },
-  '已关闭': { color: '#787671', bg: '#f0eeec' },
+  '已完成': { color: 'var(--color-success)', bg: 'var(--color-success-soft)' },
+  '已关闭': { color: 'var(--color-stone)', bg: 'var(--color-surface-soft)' },
 }
 
 const TASK_STATUS_MAP: Record<string, { color: string; bg: string }> = {
   '待执行': { color: '#0075de', bg: '#dcecfa' },
   '执行中': { color: '#dd5b00', bg: '#ffe8d4' },
-  '已完成': { color: '#1aae39', bg: '#d9f3e1' },
-  '已关闭': { color: '#787671', bg: '#f0eeec' },
+  '已完成': { color: 'var(--color-success)', bg: 'var(--color-success-soft)' },
+  '已关闭': { color: 'var(--color-stone)', bg: 'var(--color-surface-soft)' },
 }
 
 function localStatusPill(color: string, bg: string): React.CSSProperties {
@@ -45,11 +45,11 @@ function localStatusPill(color: string, bg: string): React.CSSProperties {
 }
 
 const EQUIP_STATUS_MAP: Record<EquipmentStatus, React.CSSProperties> = {
-  '在用': statusPill('#1aae39', '#d9f3e1'),
+  '在用': statusPill('var(--color-success)', 'var(--color-success-soft)'),
   '备用': statusPill('#0075de', '#dcecfa'),
   '维修中': statusPill('#dd5b00', '#ffe8d4'),
-  '停用': statusPill('#787671', '#f0eeec'),
-  '报废': statusPill('#e03131', '#fde0ec'),
+  '停用': statusPill('var(--color-stone)', 'var(--color-surface-soft)'),
+  '报废': statusPill('var(--color-error)', '#fde0ec'),
 }
 
 const IMPORTANCE_MAP: Record<EquipmentImportance, React.CSSProperties> = {
@@ -143,7 +143,7 @@ export function EquipmentDetailDrawer({ open, equipment, categoryName, locationN
     {
       title: '状态', dataIndex: 'status', key: 'status', width: 80,
       render: (s: string) => {
-        const m = MAINTENANCE_STATUS_MAP[s] || { color: '#787671', bg: '#f0eeec' }
+        const m = MAINTENANCE_STATUS_MAP[s] || { color: 'var(--color-stone)', bg: 'var(--color-surface-soft)' }
         return <span style={localStatusPill(m.color, m.bg)}>{s}</span>
       },
     },
@@ -164,12 +164,12 @@ export function EquipmentDetailDrawer({ open, equipment, categoryName, locationN
         const values = AM_PM_KEYS.map((k) => r[k])
         const ok = values.filter((v) => v === '√').length
         const bad = values.filter((v) => v === '×').length
-        if (ok + bad === 0) return <span style={{ color: '#a4a097' }}>未填写</span>
+        if (ok + bad === 0) return <span style={{ color: 'var(--color-stone)' }}>未填写</span>
         return (
           <span>
-            <span style={{ color: '#1aae39' }}>√{ok}</span>
+            <span style={{ color: 'var(--color-success)' }}>√{ok}</span>
             {' / '}
-            <span style={{ color: bad > 0 ? '#c0392b' : '#a4a097' }}>×{bad}</span>
+            <span style={{ color: bad > 0 ? '#c0392b' : 'var(--color-stone)' }}>×{bad}</span>
             {' / 14'}
           </span>
         )
@@ -203,14 +203,14 @@ export function EquipmentDetailDrawer({ open, equipment, categoryName, locationN
     {
       title: '优先级', dataIndex: 'priority', key: 'priority', width: 70,
       render: (p: string) => {
-        const cmap: Record<string, React.CSSProperties> = { '紧急': { color: '#e03131', fontWeight: 600 }, '高': { color: '#dd5b00', fontWeight: 600 } }
+        const cmap: Record<string, React.CSSProperties> = { '紧急': { color: 'var(--color-error)', fontWeight: 600 }, '高': { color: '#dd5b00', fontWeight: 600 } }
         return <span style={{ fontSize: 13, ...cmap[p] }}>{p}</span>
       },
     },
     {
       title: '状态', dataIndex: 'status', key: 'status', width: 80,
       render: (s: string) => {
-        const m = WORK_ORDER_STATUS_MAP[s] || { color: '#787671', bg: '#f0eeec' }
+        const m = WORK_ORDER_STATUS_MAP[s] || { color: 'var(--color-stone)', bg: 'var(--color-surface-soft)' }
         return <span style={localStatusPill(m.color, m.bg)}>{s}</span>
       },
     },
@@ -271,14 +271,14 @@ export function EquipmentDetailDrawer({ open, equipment, categoryName, locationN
       onClose={onClose}
       destroyOnHidden
       styles={{
-        header: { borderBottom: '1px solid #e5e3df', padding: '16px 24px' },
+        header: { borderBottom: '1px solid var(--color-hairline)', padding: '16px 24px' },
         body: { padding: '24px' },
       }}
     >
       {/* 基本信息 */}
       <div style={{ marginBottom: 24 }}>
-        <h3 style={{ fontSize: 15, fontWeight: 600, color: '#1a1a1a', margin: '0 0 16px 0' }}>基本信息</h3>
-        <Descriptions bordered size="small" column={2} styles={{ label: { fontWeight: 500, color: '#5d5b54', width: 100 } }}>
+        <h3 style={{ fontSize: 15, fontWeight: 600, color: 'var(--color-ink)', margin: '0 0 16px 0' }}>基本信息</h3>
+        <Descriptions bordered size="small" column={2} styles={{ label: { fontWeight: 500, color: 'var(--color-slate)', width: 100 } }}>
           <Descriptions.Item label="设备编号">
             <span style={monoFont}>{equipment.equipment_no}</span>
           </Descriptions.Item>
@@ -318,7 +318,7 @@ export function EquipmentDetailDrawer({ open, equipment, categoryName, locationN
 
       {/* 关联记录 */}
       <div>
-        <h3 style={{ fontSize: 15, fontWeight: 600, color: '#1a1a1a', margin: '0 0 16px 0' }}>关联记录</h3>
+        <h3 style={{ fontSize: 15, fontWeight: 600, color: 'var(--color-ink)', margin: '0 0 16px 0' }}>关联记录</h3>
         <Tabs
           activeKey={activeTab}
           onChange={(k) => setActiveTab(k as 'plans' | 'history' | 'orders')}

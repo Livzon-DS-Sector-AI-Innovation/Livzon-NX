@@ -237,7 +237,7 @@ export function EquipmentDrawer({ onRefresh, workshopCode }: EquipmentDrawerProp
       onClose={closeEquipmentDrawer}
       destroyOnHidden
       styles={{
-        header: { borderBottom: '1px solid #e5e3df', padding: '16px 24px' },
+        header: { borderBottom: '1px solid var(--color-hairline)', padding: '16px 24px' },
         body: { padding: '24px' },
       }}
       extra={
@@ -253,7 +253,7 @@ export function EquipmentDrawer({ onRefresh, workshopCode }: EquipmentDrawerProp
         form={form}
         layout="vertical"
         requiredMark="optional"
-        styles={{ label: { fontWeight: 500, color: '#1a1a1a' } }}
+        styles={{ label: { fontWeight: 500, color: 'var(--color-ink)' } }}
       >
         {editingEquipment?.data_issue_note && (
           <div

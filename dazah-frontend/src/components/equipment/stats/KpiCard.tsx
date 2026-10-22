@@ -36,10 +36,10 @@ export function KpiCard({
     <div
       className="kpi-card"
       style={{
-        background: '#ffffff',
+        background: 'var(--color-canvas)',
         borderRadius: 12,
         padding: '20px 24px',
-        border: '1px solid #e5e3df',
+        border: '1px solid var(--color-hairline)',
         position: 'relative',
         overflow: 'hidden',
         animation: `fadeInUp 0.5s ease both`,
@@ -89,7 +89,7 @@ export function KpiCard({
             style={{
               fontSize: 13,
               fontWeight: 500,
-              color: '#5d5b54',
+              color: 'var(--color-slate)',
               marginBottom: 8,
               letterSpacing: '0.01em',
             }}
@@ -103,14 +103,14 @@ export function KpiCard({
                   ? {
                       fontSize: 22,
                       fontWeight: 600,
-                      color: '#a4a097',
+                      color: 'var(--color-stone)',
                       lineHeight: 1.4,
                       letterSpacing: '0.02em',
                     }
                   : {
                       fontSize: 36,
                       fontWeight: 700,
-                      color: '#1a1a1a',
+                      color: 'var(--color-ink)',
                       lineHeight: 1,
                       letterSpacing: '-0.02em',
                       fontFeatureSettings: '"tnum"',
@@ -120,13 +120,13 @@ export function KpiCard({
               {typeof value === 'number' ? animatedValue.toLocaleString() : value}
             </span>
             {!placeholder && suffix && (
-              <span style={{ fontSize: 14, fontWeight: 500, color: '#787671', marginLeft: 2 }}>
+              <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--color-stone)', marginLeft: 2 }}>
                 {suffix}
               </span>
             )}
           </div>
           {placeholder && note && (
-            <div style={{ marginTop: 8, fontSize: 12, color: '#a4a097' }}>{note}</div>
+            <div style={{ marginTop: 8, fontSize: 12, color: 'var(--color-stone)' }}>{note}</div>
           )}
           {trend && (
             <div
@@ -137,7 +137,7 @@ export function KpiCard({
                 marginTop: 8,
                 fontSize: 12,
                 fontWeight: 500,
-                color: trend.direction === 'up' ? '#1aae39' : '#e03131',
+                color: trend.direction === 'up' ? 'var(--color-success)' : 'var(--color-error)',
                 background: trend.direction === 'up' ? '#e6f7e6' : '#fff1f0',
                 borderRadius: 4,
                 padding: '2px 8px',

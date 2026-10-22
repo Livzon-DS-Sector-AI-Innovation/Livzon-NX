@@ -34,7 +34,7 @@ export function WarningPanels({
       title: '备件库存预警',
       count: stockWarnings.length,
       icon: <AlertOutlined />,
-      accent: '#e03131',
+      accent: 'var(--color-error)',
       bg: '#fff1f0',
       border: '#ffa8a8',
       emptyText: '暂无库存预警',
@@ -43,9 +43,9 @@ export function WarningPanels({
         label: w.name,
         sub: `${w.code}`,
         meta: (
-          <span style={{ color: '#e03131', fontWeight: 600, fontSize: 13 }}>
+          <span style={{ color: 'var(--color-error)', fontWeight: 600, fontSize: 13 }}>
             仅剩 {w.current_qty}{' '}
-            <span style={{ color: '#787671', fontWeight: 400 }}>/ 最低 {w.min_qty}</span>
+            <span style={{ color: 'var(--color-stone)', fontWeight: 400 }}>/ 最低 {w.min_qty}</span>
           </span>
         ),
       })),
@@ -88,7 +88,7 @@ export function WarningPanels({
           meta: (
             <span
               style={{
-                color: daysLeft <= 7 ? '#e03131' : '#dd5b00',
+                color: daysLeft <= 7 ? 'var(--color-error)' : '#dd5b00',
                 fontWeight: 600,
                 fontSize: 13,
               }}
@@ -107,9 +107,9 @@ export function WarningPanels({
         <div
           key={panel.title}
           style={{
-            background: '#ffffff',
+            background: 'var(--color-canvas)',
             borderRadius: 12,
-            border: '1px solid #e5e3df',
+            border: '1px solid var(--color-hairline)',
             borderLeft: `3px solid ${panel.accent}`,
             padding: '20px 20px 16px',
             animation: `fadeInUp 0.5s ease both`,
@@ -122,7 +122,7 @@ export function WarningPanels({
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.boxShadow = 'none'
-            e.currentTarget.style.borderColor = '#e5e3df'
+            e.currentTarget.style.borderColor = 'var(--color-hairline)'
           }}
         >
           {/* 标题行 */}
@@ -143,7 +143,7 @@ export function WarningPanels({
             >
               {panel.icon}
             </div>
-            <span style={{ fontSize: 15, fontWeight: 600, color: '#1a1a1a' }}>{panel.title}</span>
+            <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--color-ink)' }}>{panel.title}</span>
             {panel.count > 0 && (
               <span
                 style={{
@@ -165,7 +165,7 @@ export function WarningPanels({
 
           {/* 列表 */}
           {panel.items.length === 0 ? (
-            <div style={{ padding: '20px 0', textAlign: 'center', color: '#a4a097', fontSize: 13 }}>
+            <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--color-stone)', fontSize: 13 }}>
               {panel.emptyText}
             </div>
           ) : (
@@ -193,7 +193,7 @@ export function WarningPanels({
                       style={{
                         fontSize: 13,
                         fontWeight: 500,
-                        color: '#1a1a1a',
+                        color: 'var(--color-ink)',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
@@ -202,7 +202,7 @@ export function WarningPanels({
                       {item.label}
                     </div>
                     {item.sub && (
-                      <div style={{ fontSize: 12, color: '#787671', marginTop: 1 }}>{item.sub}</div>
+                      <div style={{ fontSize: 12, color: 'var(--color-stone)', marginTop: 1 }}>{item.sub}</div>
                     )}
                   </div>
                   <div style={{ flexShrink: 0, marginLeft: 12 }}>{item.meta}</div>

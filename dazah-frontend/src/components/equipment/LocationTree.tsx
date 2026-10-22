@@ -97,7 +97,7 @@ function TreeNode({
           transition: 'background 0.12s ease, border-color 0.12s ease',
           fontSize: 14,
           lineHeight: '20px',
-          color: isSelected ? '#1a1a1a' : '#37352f',
+          color: isSelected ? 'var(--color-ink)' : 'var(--color-charcoal)',
           fontWeight: isSelected ? 500 : 400,
           userSelect: 'none' as const,
         }}
@@ -141,7 +141,7 @@ function TreeNode({
               e.stopPropagation()
               onEdit(node)
             }}
-            style={{ color: '#787671', width: 24, height: 24, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+            style={{ color: 'var(--color-stone)', width: 24, height: 24, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
           />
           <Popconfirm
             title="确定删除此位置？"
@@ -154,7 +154,7 @@ function TreeNode({
               size="small"
               icon={<DeleteOutlined style={{ fontSize: 11 }} />}
               onClick={(e) => e.stopPropagation()}
-              style={{ color: '#e03131', width: 24, height: 24, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+              style={{ color: 'var(--color-error)', width: 24, height: 24, padding: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
             />
           </Popconfirm>
         </Space>
@@ -230,7 +230,7 @@ export function LocationTree({ locations, onRefresh }: LocationTreeProps) {
         </div>
         <Empty
           description="暂无位置"
-          styles={{ description: { color: '#787671' }}}
+          styles={{ description: { color: 'var(--color-stone)' }}}
         />
       </div>
     )

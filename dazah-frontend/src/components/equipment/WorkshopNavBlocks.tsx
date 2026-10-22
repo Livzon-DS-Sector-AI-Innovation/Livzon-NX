@@ -23,6 +23,7 @@ import {
 const { Text } = Typography
 
 // 车间专属色（与生产产线块同一套调色板）
+// 201-2-MC 承接原 201-2 的青色；201-2-DR 多拉产线用品红区分
 const WORKSHOP_COLORS: Record<string, string> = {
   '101-1': '#1677ff',
   '101-2': '#13c2c2',
@@ -30,7 +31,8 @@ const WORKSHOP_COLORS: Record<string, string> = {
   '102-2': '#389e0d',
   '103': '#c41d7f',
   '201-1': '#5645d4',
-  '201-2': '#08979c',
+  '201-2-MC': '#08979c',
+  '201-2-DR': '#eb2f96',
   '201-3': '#cf1322',
   '203': '#d4b106',
 }
@@ -72,20 +74,21 @@ export function WorkshopNavBlocks({ pageKey }: WorkshopNavBlocksProps) {
   const active = urlWorkshop ?? workshopCode
 
   return (
-    <Row gutter={[12, 12]} style={{ marginBottom: 8 }}>
+    // 垂直间距由页面根容器 gap-3 统一提供（与生产概览页一致）
+    <Row gutter={[12, 12]}>
       {visible.map((ws) => {
         const isActive = active === ws.code
         return (
           // 弹性等宽：宽屏 9 块一行铺满，窄屏按 144px 基准自然换行
           <Col key={ws.code} flex="1 1 144px">
             <div
-              title={`切换到 ${ws.label}`}
+              title={`切换到 ${ws.fullName ?? ws.label}`}
               onClick={() => {
                 setWorkshopCode(ws.code)
                 router.push(`${pathname}?workshop=${encodeURIComponent(ws.code)}${moduleSuffix}`, { scroll: false })
               }}
               data-testid={`workshop-block:${ws.code}`}
-              className="flex items-center justify-center gap-2 rounded-lg border bg-white cursor-pointer transition-colors"
+              className="flex items-center justify-center gap-2 rounded-lg border bg-[var(--color-canvas)] cursor-pointer transition-colors"
               style={{
                 height: 56,
                 borderColor: isActive

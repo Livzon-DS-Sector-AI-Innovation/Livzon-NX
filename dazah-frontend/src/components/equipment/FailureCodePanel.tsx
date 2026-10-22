@@ -50,8 +50,8 @@ export function FailureCodePanel({ onRefresh }: FailureCodePanelProps) {
       title: '状态', dataIndex: 'is_active', key: 'is_active', width: 80,
       render: (active: boolean) => (
         <Tag style={{
-          color: active ? '#1aae39' : '#787671',
-          background: active ? '#e6f7e6' : '#f0eeec',
+          color: active ? 'var(--color-success)' : 'var(--color-stone)',
+          background: active ? '#e6f7e6' : 'var(--color-surface-soft)',
           border: 'none', borderRadius: 4,
         }}>{active ? '启用' : '停用'}</Tag>
       ),

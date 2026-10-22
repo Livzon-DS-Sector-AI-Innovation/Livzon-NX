@@ -55,8 +55,8 @@ export function ModuleTabs({
   return (
     <div
       data-testid="equipment-module-tabs"
-      className="rounded-xl border bg-white"
-      style={{ padding: '12px 20px 0', marginBottom: 16, borderColor: '#e5e3df' }}
+      className="rounded-xl border bg-[var(--color-canvas)]"
+      style={{ padding: '12px 20px 0', borderColor: 'var(--color-hairline)' }}
     >
       <Tabs
         activeKey={activeModule}

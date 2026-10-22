@@ -194,7 +194,7 @@ export function EquipmentPage({
         setSelectedCategory(null)
         setSelectedLocation(null)
       }}
-      style={{ color: '#787671', marginRight: 4 }}
+      style={{ color: 'var(--color-stone)', marginRight: 4 }}
     >
       重置
     </Button>
@@ -212,10 +212,10 @@ export function EquipmentPage({
               className="shrink-0"
               style={{
                 width: SIDEBAR_WIDTH,
-                background: '#ffffff',
+                background: 'var(--color-canvas)',
                 padding: 16,
                 borderRadius: 12,
-                border: '1px solid #e5e3df',
+                border: '1px solid var(--color-hairline)',
                 display: 'flex', flexDirection: 'column',
                 overflow: 'hidden',
               }}
@@ -230,10 +230,10 @@ export function EquipmentPage({
           <div
             className="flex-1 min-w-0"
             style={{
-              background: '#ffffff',
+              background: 'var(--color-canvas)',
               padding: '16px 20px',
               borderRadius: 12,
-              border: '1px solid #e5e3df',
+              border: '1px solid var(--color-hairline)',
               display: 'flex', flexDirection: 'column',
               overflow: 'hidden',
             }}
@@ -244,7 +244,7 @@ export function EquipmentPage({
                 type="text"
                 icon={sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
                 onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-                style={{ color: '#5d5b54', flexShrink: 0 }}
+                style={{ color: 'var(--color-slate)', flexShrink: 0 }}
               />
               <StatsCards statistics={currentStats} compact />
             </div>

@@ -33,7 +33,9 @@ export default async function EquipmentConsolePage({
     : EQUIPMENT_PAGE_KEYS.assets
 
   return (
-    <>
+    // 与生产概览页同一节奏容器：页边距 p-4、模块间距 gap-3（12px），
+    // 车间块/模块 Tab/内容区不再各自携带 marginBottom
+    <div className="p-4 flex flex-col gap-3">
       <WorkshopNavBlocks pageKey={pageKey ?? EQUIPMENT_PAGE_KEYS.assets} />
       <ModuleTabs workshop={meta.code} activeModule={activeModule} />
       {activeModule === 'assets' && <AssetsView workshopCode={meta.code} />}
@@ -43,6 +45,6 @@ export default async function EquipmentConsolePage({
       )}
       {activeModule === 'spare-parts' && <SparePartsView workshopCode={meta.code} />}
       {activeModule === 'personnel' && <PersonnelView workshopCode={meta.code} />}
-    </>
+    </div>
   )
 }

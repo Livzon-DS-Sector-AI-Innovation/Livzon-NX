@@ -166,9 +166,45 @@ class InspectionTaskDetailResponse(InspectionTaskResponse):
 
 
 # ═══════════ 飞书镜像配置 ═══════════
+class EquipmentFeishuAppCreateRequest(BaseModel):
+    """新建飞书自建应用凭据请求"""
+
+    name: str = Field(..., min_length=1, max_length=100, description="应用名称（便于辨认）")
+    app_id: str = Field(..., min_length=1, max_length=100, description="飞书应用 App ID")
+    app_secret: str = Field(..., min_length=1, description="飞书应用 App Secret")
+
+
+class EquipmentFeishuAppUpdateRequest(BaseModel):
+    """更新飞书自建应用凭据请求（Secret 留空保留已保存值）"""
+
+    name: str = Field(..., min_length=1, max_length=100, description="应用名称")
+    app_id: str = Field(..., min_length=1, max_length=100, description="飞书应用 App ID")
+    app_secret: str | None = Field(
+        default=None, description="飞书应用 App Secret（留空保留已保存值）"
+    )
+
+
+class EquipmentFeishuAppItem(BaseModel):
+    """飞书自建应用凭据条目（Secret 掩码返回）"""
+
+    id: uuid.UUID = Field(description="应用记录 ID")
+    name: str = Field(description="应用名称")
+    app_id: str = Field(description="飞书应用 App ID")
+    app_secret_configured: bool = Field(description="是否已配置 App Secret")
+    referenced_workshops: list[str] = Field(
+        default_factory=list, description="引用该应用的巡检配置车间代码"
+    )
+    created_at: datetime = Field(description="创建时间")
+    updated_at: datetime = Field(description="最近更新时间")
+
+
 class EquipmentInspectionFeishuConfigUpdateRequest(BaseModel):
     """保存设备巡检飞书镜像配置请求"""
 
+    feishu_app_id: uuid.UUID | None = Field(
+        default=None,
+        description="引用自建应用库记录；提供时凭据以应用库为准，忽略内联 App ID/Secret",
+    )
     app_id: str = Field(default="", max_length=100, description="飞书应用 App ID")
     app_secret: str | None = Field(
         default=None, description="飞书应用 App Secret（留空保留已保存值）"
@@ -197,6 +233,12 @@ class EquipmentInspectionFeishuConfigDetail(BaseModel):
     """设备巡检飞书镜像配置详情（Secret 掩码返回）"""
 
     workshop_code: str = Field(description="车间代码（配置归属车间）")
+    feishu_app_id: uuid.UUID | None = Field(
+        default=None, description="引用的自建应用库记录；空=内联凭据"
+    )
+    feishu_app_name: str | None = Field(
+        default=None, description="引用的自建应用名称（便于辨认）"
+    )
     app_id: str = Field(description="飞书应用 App ID")
     app_secret_masked: str = Field(description="App Secret 掩码")
     app_secret_configured: bool = Field(description="是否已配置 App Secret")

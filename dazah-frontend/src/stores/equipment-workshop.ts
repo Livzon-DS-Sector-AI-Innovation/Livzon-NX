@@ -16,10 +16,16 @@ const KNOWN_WORKSHOP_CODES = new Set([
   "102-2",
   "103",
   "201-1",
-  "201-2",
+  "201-2-MC",
+  "201-2-DR",
   "201-3",
   "203",
 ])
+
+// 旧版本存过的 201-2 已拆分为 201-2-MC（霉酚酸，承接原数据），恢复时归一到新代码
+const LEGACY_WORKSHOP_ALIASES: Record<string, string> = {
+  "201-2": "201-2-MC",
+}
 
 interface EquipmentWorkshopState {
   workshopCode: string
@@ -43,8 +49,10 @@ export function restoreEquipmentWorkshopContext(): void {
   if (typeof window === "undefined") return
   try {
     const saved = window.localStorage.getItem(EQUIPMENT_WORKSHOP_STORAGE_KEY)
-    if (saved && KNOWN_WORKSHOP_CODES.has(saved)) {
-      useEquipmentWorkshopStore.setState({ workshopCode: saved })
+    if (!saved) return
+    const code = LEGACY_WORKSHOP_ALIASES[saved] ?? saved
+    if (KNOWN_WORKSHOP_CODES.has(code)) {
+      useEquipmentWorkshopStore.setState({ workshopCode: code })
     }
   } catch {
     // 存储不可用时保持默认

@@ -20,7 +20,7 @@ export function StockWarningTable() {
     {
       title: '当前库存', dataIndex: 'current_qty', key: 'current_qty', width: 100, align: 'right',
       render: (qty: number) => (
-        <span style={{ color: '#e03131', fontWeight: 600 }}>{qty}</span>
+        <span style={{ color: 'var(--color-error)', fontWeight: 600 }}>{qty}</span>
       ),
     },
     {
@@ -30,7 +30,7 @@ export function StockWarningTable() {
       title: '差额', key: 'difference', width: 100, align: 'right',
       render: (_: unknown, record: StockWarning) => {
         const diff = record.current_qty - record.min_qty
-        return <span style={{ color: '#e03131', fontWeight: 600 }}>{diff}</span>
+        return <span style={{ color: 'var(--color-error)', fontWeight: 600 }}>{diff}</span>
       },
     },
   ]

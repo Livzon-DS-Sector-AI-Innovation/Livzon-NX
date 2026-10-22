@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 
 from sqlalchemy import select
@@ -118,6 +118,39 @@ async def _get_config_row(
     return result.scalars().first()
 
 
+@dataclass(frozen=True)
+class _AppLibraryCredentials:
+    """引用自建应用库时解析出的凭据"""
+
+    app_id: str
+    app_secret: str
+    name: str
+
+
+async def _resolve_app_credentials(
+    db: AsyncSession, app_row_id
+) -> _AppLibraryCredentials | None:
+    """从自建应用库解析凭据；应用不存在或已删除时返回 None（视为未配置）。"""
+    from app.modules.equipment.models.feishu_app import EquipmentFeishuApp
+    from app.modules.equipment.service.feishu_app import decrypt_app_secret
+
+    row = (
+        await db.execute(
+            select(EquipmentFeishuApp).where(
+                EquipmentFeishuApp.id == app_row_id,
+                EquipmentFeishuApp.is_deleted == False,  # noqa: E712
+            )
+        )
+    ).scalars().first()
+    if row is None:
+        return None
+    return _AppLibraryCredentials(
+        app_id=(row.app_id or "").strip(),
+        app_secret=decrypt_app_secret(row.app_secret),
+        name=row.name,
+    )
+
+
 def _empty_config() -> InspectionFeishuEffectiveConfig:
     """未配置的非默认车间：视为未启用，页面展示空态。"""
     return InspectionFeishuEffectiveConfig(
@@ -149,10 +182,17 @@ def _env_config() -> InspectionFeishuEffectiveConfig:
 
 def _row_config(
     row: EquipmentInspectionFeishuConfig,
+    app_creds: _AppLibraryCredentials | None = None,
 ) -> InspectionFeishuEffectiveConfig:
+    """数据库行配置；引用应用库时凭据以应用记录为准（改一处全车间生效）。"""
+    if app_creds is not None:
+        app_id, app_secret = app_creds.app_id, app_creds.app_secret
+    else:
+        app_id = (row.app_id or "").strip()
+        app_secret = _decrypt_stored_secret(row.app_secret)
     return InspectionFeishuEffectiveConfig(
-        app_id=(row.app_id or "").strip(),
-        app_secret=_decrypt_stored_secret(row.app_secret),
+        app_id=app_id,
+        app_secret=app_secret,
         app_token=(row.app_token or "").strip(),
         base_url=(row.base_url or "").strip(),
         today_table_id=(row.today_table_id or "").strip(),
@@ -169,7 +209,20 @@ async def get_effective_config(
     """该车间数据库行优先；默认车间无行时回退环境变量，其余车间视为未配置。"""
     row = await _get_config_row(db, workshop_code)
     if row is not None:
-        return _row_config(row)
+        app_creds = (
+            await _resolve_app_credentials(db, row.feishu_app_id)
+            if row.feishu_app_id
+            else None
+        )
+        if row.feishu_app_id and app_creds is None:
+            # 引用的应用已删除：凭据视为未配置，提示用户改配（镜像停用）
+            logger.warning(
+                "车间 %s 引用的飞书应用库记录已不存在（id=%s），凭据视为未配置",
+                workshop_code,
+                row.feishu_app_id,
+            )
+            return replace(_row_config(row), app_id="", app_secret="")
+        return _row_config(row, app_creds)
     if workshop_code == DEFAULT_WORKSHOP_CODE:
         return _env_config()
     return _empty_config()
@@ -200,11 +253,28 @@ async def get_config_detail(
     db: AsyncSession, workshop_code: str
 ) -> EquipmentInspectionFeishuConfigDetail:
     row = await _get_config_row(db, workshop_code)
-    config = _row_config(row) if row else (
-        _env_config() if workshop_code == DEFAULT_WORKSHOP_CODE else _empty_config()
-    )
+    if row is not None:
+        app_creds = (
+            await _resolve_app_credentials(db, row.feishu_app_id)
+            if row.feishu_app_id
+            else None
+        )
+        if row.feishu_app_id and app_creds is None:
+            config = replace(_row_config(row), app_id="", app_secret="")
+        else:
+            config = _row_config(row, app_creds)
+        feishu_app_id = row.feishu_app_id
+        feishu_app_name = app_creds.name if app_creds else None
+    else:
+        config = (
+            _env_config() if workshop_code == DEFAULT_WORKSHOP_CODE else _empty_config()
+        )
+        feishu_app_id = None
+        feishu_app_name = None
     return EquipmentInspectionFeishuConfigDetail(
         workshop_code=workshop_code,
+        feishu_app_id=feishu_app_id,
+        feishu_app_name=feishu_app_name,
         app_id=config.app_id,
         app_secret_masked=mask_api_key(config.app_secret) if config.app_secret else "",
         app_secret_configured=bool(config.app_secret),
@@ -372,27 +442,40 @@ async def update_config(
     data: EquipmentInspectionFeishuConfigUpdateRequest,
 ) -> EquipmentInspectionFeishuConfigDetail:
     row = await _get_config_row(db, workshop_code)
-    app_id = data.app_id.strip()
-    submitted_secret = (data.app_secret or "").strip()
 
-    if row is None:
-        current_secret = ""
-        if not app_id or not submitted_secret:
+    # 凭据来源二选一：应用库引用（feishu_app_id）优先于内联 App ID/Secret
+    app_creds: _AppLibraryCredentials | None = None
+    if data.feishu_app_id is not None:
+        app_creds = await _resolve_app_credentials(db, data.feishu_app_id)
+        if app_creds is None:
             raise AppException(
-                message=(
-                    "首次保存需填写 App ID 与 App Secret"
-                    "（保存后数据库配置优先于环境变量）"
-                )
+                message="所选自建应用不存在或已删除，请刷新应用库后重选"
             )
-    else:
-        current_secret = _decrypt_stored_secret(row.app_secret)
 
-    # 掩码回传不当作新密钥加密（前端未修改 Secret 时可能原样带回掩码）
-    secret_changed = bool(
-        submitted_secret and submitted_secret != mask_api_key(current_secret)
-    )
-    if secret_changed:
-        current_secret = submitted_secret
+    if app_creds is not None:
+        app_id = app_creds.app_id
+        current_secret = app_creds.app_secret
+    else:
+        app_id = data.app_id.strip()
+        submitted_secret = (data.app_secret or "").strip()
+        if row is None:
+            current_secret = ""
+            if not app_id or not submitted_secret:
+                raise AppException(
+                    message=(
+                        "首次保存需填写 App ID 与 App Secret"
+                        "（或在上方选择已存自建应用）"
+                    )
+                )
+        else:
+            current_secret = _decrypt_stored_secret(row.app_secret)
+        # 掩码回传不当作新密钥加密（前端未修改 Secret 时可能原样带回掩码）
+        secret_changed = bool(
+            submitted_secret and submitted_secret != mask_api_key(current_secret)
+        )
+        if secret_changed:
+            current_secret = submitted_secret
+        manual_secret_changed = secret_changed or row is None
 
     app_token = await _resolve_app_token(
         app_id=app_id,
@@ -410,10 +493,18 @@ async def update_config(
             app_secret=encrypt_api_key(current_secret),
         )
         db.add(row)
-    elif secret_changed:
-        row.app_secret = encrypt_api_key(current_secret)
 
-    row.app_id = app_id
+    if app_creds is not None:
+        # 引用应用库：凭据以应用记录为准，保存当前应用库内容为行内副本
+        row.feishu_app_id = data.feishu_app_id
+        row.app_id = app_creds.app_id
+        row.app_secret = encrypt_api_key(app_creds.app_secret)
+    else:
+        row.feishu_app_id = None
+        row.app_id = app_id
+        if manual_secret_changed:
+            row.app_secret = encrypt_api_key(current_secret)
+
     row.is_enabled = data.is_enabled
     row.app_token = app_token
     row.base_url = _normalized_base_url(data.base_url)

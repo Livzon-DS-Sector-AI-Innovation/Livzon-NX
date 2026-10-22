@@ -18,6 +18,7 @@ const api = vi.hoisted(() => ({
   fetchInspectionFeishuConfig: vi.fn(),
   updateInspectionFeishuConfig: vi.fn(),
   testInspectionFeishuConfig: vi.fn(),
+  fetchFeishuApps: vi.fn(),
 }))
 
 const messages = vi.hoisted(() => ({
@@ -126,6 +127,31 @@ vi.mock('antd', async () => {
   const Password = (props: Parameters<typeof MockInput>[0]) => (
     <MockInput {...props} />
   )
+  const Select = ({
+    options,
+  }: {
+    options?: Array<{ value: string | number; label?: ReactNode }>
+    loading?: boolean
+    ['data-testid']?: string
+  }) => {
+    const binding = useContext(FieldContext)
+    useSyncExternalStore(binding.subscribe, binding.getVersion, binding.getVersion)
+    const value = binding.name ? binding.store[binding.name] : undefined
+    return (
+      <select
+        value={value == null ? '' : String(value)}
+        onChange={(event) => {
+          if (binding.name) binding.setValue(binding.name, event.target.value)
+        }}
+      >
+        {(options ?? []).map((option) => (
+          <option key={option.value} value={String(option.value)}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    )
+  }
   return {
     App: { useApp: () => ({ message: messages }) },
     Button,
@@ -178,9 +204,25 @@ vi.mock('antd', async () => {
           const [form] = useState(() => makeMockForm())
           return [form]
         },
+        useWatch: (name: string | undefined, form?: unknown) => {
+          const api = (form as { __fieldApi?: FieldApi } | undefined)?.__fieldApi
+          const fallback: FieldApi = {
+            store: {},
+            subscribe: () => () => undefined,
+            getVersion: () => 0,
+            setValue: () => undefined,
+          }
+          const field = api ?? fallback
+          return useSyncExternalStore(
+            field.subscribe,
+            () => (name == null ? undefined : field.store[name]),
+            () => undefined,
+          )
+        },
       },
     ),
     Input: Object.assign(MockInput, { Password }),
+    Select,
     Space: ({
       children, orientation,
     }: { children?: ReactNode; orientation?: string }) => (
@@ -266,6 +308,7 @@ describe('InspectionFeishuConfigDrawer', () => {
       true
     vi.clearAllMocks()
     api.fetchInspectionFeishuConfig.mockResolvedValue(detailFixture)
+    api.fetchFeishuApps.mockResolvedValue([])
     container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
@@ -320,6 +363,7 @@ describe('InspectionFeishuConfigDrawer', () => {
     })
 
     expect(api.updateInspectionFeishuConfig).toHaveBeenCalledWith('201-1', {
+      feishu_app_id: null,
       app_id: 'cli_fixture',
       app_secret: null,
       app_token: 'bascn_fixture',
@@ -414,6 +458,67 @@ describe('InspectionFeishuConfigDrawer', () => {
 
     expect(document.body.textContent).toContain(
       '加载飞书配置失败：需要登录才能执行此操作',
+    )
+  })
+
+
+  it('shows app library info and hides manual credential fields when config references an app', async () => {
+    const appId = '11111111-2222-3333-4444-555555555555'
+    api.fetchInspectionFeishuConfig.mockResolvedValue({
+      ...detailFixture,
+      feishu_app_id: appId,
+      feishu_app_name: '设备巡检应用',
+    })
+    api.fetchFeishuApps.mockResolvedValue([
+      {
+        id: appId,
+        name: '设备巡检应用',
+        app_id: 'cli_app1',
+        app_secret_configured: true,
+        referenced_workshops: [],
+        created_at: '2026-10-21T00:00:00Z',
+        updated_at: '2026-10-21T00:00:00Z',
+      },
+    ])
+    await renderDrawer()
+
+    // 应用库摘要可见，手动输入的 App ID / Secret 不渲染
+    expect(document.body.textContent).toContain('设备巡检应用 · cli_app1')
+    expect(document.querySelector('input[placeholder="cli_xxxxxxxx"]')).toBeNull()
+
+    // 保存：payload 带应用库引用，不带 Secret
+    api.updateInspectionFeishuConfig.mockResolvedValue({ ...detailFixture })
+    await act(async () => {
+      findButton('保存配置').click()
+    })
+    for (let i = 0; i < 3; i += 1) {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      })
+    }
+    expect(api.updateInspectionFeishuConfig).toHaveBeenCalledWith(
+      '201-1',
+      expect.objectContaining({ feishu_app_id: appId, app_secret: null }),
+    )
+  })
+
+  it('manual path keeps credential inputs and sends null app reference', async () => {
+    await renderDrawer()
+
+    const appInput = findInputByPlaceholder('cli_xxxxxxxx')
+    expect(appInput).toBeTruthy()
+    api.updateInspectionFeishuConfig.mockResolvedValue({ ...detailFixture })
+    await act(async () => {
+      findButton('保存配置').click()
+    })
+    for (let i = 0; i < 3; i += 1) {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      })
+    }
+    expect(api.updateInspectionFeishuConfig).toHaveBeenCalledWith(
+      '201-1',
+      expect.objectContaining({ feishu_app_id: null }),
     )
   })
 })

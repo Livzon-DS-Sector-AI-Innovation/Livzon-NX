@@ -9,7 +9,7 @@ import type {
 // ============================================================
 // 分类分布水平条
 // ============================================================
-const categoryBarColors = ['#5645d4', '#7b3ff2', '#0075de', '#2a9d99', '#1aae39', '#dd5b00', '#ff64c8', '#f5d75e']
+const categoryBarColors = ['#5645d4', '#7b3ff2', '#0075de', '#2a9d99', 'var(--color-success)', '#dd5b00', '#ff64c8', '#f5d75e']
 
 export function CategoryDistribution({ statistics }: { statistics: EquipmentStatistics }) {
   const maxVal = Math.max(...Object.values(statistics.by_category), 1)
@@ -19,7 +19,7 @@ export function CategoryDistribution({ statistics }: { statistics: EquipmentStat
 
   if (entries.length === 0) {
     return (
-      <div style={{ padding: 40, textAlign: 'center', color: '#787671', fontSize: 14 }}>
+      <div style={{ padding: 40, textAlign: 'center', color: 'var(--color-stone)', fontSize: 14 }}>
         暂无分类数据
       </div>
     )
@@ -46,14 +46,14 @@ export function CategoryDistribution({ statistics }: { statistics: EquipmentStat
                 fontSize: 13,
               }}
             >
-              <span style={{ color: '#1a1a1a', fontWeight: 500 }}>{name}</span>
-              <span style={{ color: '#787671', fontWeight: 500, fontFeatureSettings: '"tnum"' }}>{count}</span>
+              <span style={{ color: 'var(--color-ink)', fontWeight: 500 }}>{name}</span>
+              <span style={{ color: 'var(--color-stone)', fontWeight: 500, fontFeatureSettings: '"tnum"' }}>{count}</span>
             </div>
             <div
               style={{
                 height: 8,
                 borderRadius: 4,
-                background: '#f0eeec',
+                background: 'var(--color-surface-soft)',
                 overflow: 'hidden',
               }}
             >

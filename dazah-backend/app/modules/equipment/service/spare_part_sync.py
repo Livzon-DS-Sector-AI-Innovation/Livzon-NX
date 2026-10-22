@@ -23,13 +23,15 @@ from app.modules.warehouse import public_api as warehouse_public_api
 logger = logging.getLogger(__name__)
 
 # 设备车间 → 仓储五金分布表 page_key
+# 201 二车间按产品线拆分后（MC/DR）仍共用同一物理车间的五金表
 WORKSHOP_HARDWARE_PAGE_KEYS: dict[str, str] = {
     "101-1": "hardware-101-1-workshop",
     "101-2": "hardware-101-2-workshop",
     "102-1": "hardware-102-workshop",
     "103": "hardware-103-workshop",
     "201-1": "hardware-201-1-workshop",
-    "201-2": "hardware-201-2-workshop",
+    "201-2-MC": "hardware-201-2-workshop",
+    "201-2-DR": "hardware-201-2-workshop",
     "201-3": "hardware-201-3-workshop",
     "203": "hardware-203-workshop",
 }

@@ -71,6 +71,7 @@ async function renderConsole(module?: string, workshop?: string) {
       ...(module ? { module } : {}),
     }),
   })) as unknown as { props: { children: unknown[] } }
+  // 页面根元素即节奏容器（与生产概览页一致），其 children 就是模块元素
   const children = element.props.children.filter(Boolean)
   return children as unknown as PageElement[]
 }
@@ -121,6 +122,14 @@ describe('equipment unified console with workshop + module queries', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     defaults()
+  })
+
+  it('wraps modules in the same rhythm container as the production overview (p-4 + gap-3)', async () => {
+    // 车间块/模块 Tab 不自带 marginBottom，页面边距与模块间距全部由根容器统一提供
+    const element = (await EquipmentConsolePage({
+      searchParams: Promise.resolve({ module: 'assets', workshop: '101-2' }),
+    })) as unknown as { props: { className?: string } }
+    expect(element.props.className).toBe('p-4 flex flex-col gap-3')
   })
 
   it('renders the assets module scoped to ?workshop= and passes it to fetches', async () => {

@@ -270,7 +270,7 @@ export function PersonnelCategoryDrawer({
                       <span style={{
                         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                         width: 22, height: 22, borderRadius: 6,
-                        background: isComplete ? '#1aae39' : 'var(--color-steel)',
+                        background: isComplete ? 'var(--color-success)' : 'var(--color-steel)',
                         color: '#fff', fontSize: 11, fontWeight: 700,
                         transition: 'background 0.2s',
                       }}>
@@ -312,7 +312,7 @@ export function PersonnelCategoryDrawer({
                       }}
                       onMouseEnter={e => {
                         e.currentTarget.style.background = '#fde0ec'
-                        e.currentTarget.style.color = '#e03131'
+                        e.currentTarget.style.color = 'var(--color-error)'
                       }}
                       onMouseLeave={e => {
                         e.currentTarget.style.background = 'transparent'

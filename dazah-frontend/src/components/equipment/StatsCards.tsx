@@ -10,10 +10,10 @@ interface StatsCardsProps {
 }
 
 const statusCards = [
-  { key: '' as const, label: '总数', color: '#1a1a1a', dotColor: '#787671' },
-  { key: '在用' as EquipmentStatus, label: '在用', color: '#1aae39', dotColor: '#1aae39' },
+  { key: '' as const, label: '总数', color: 'var(--color-ink)', dotColor: 'var(--color-stone)' },
+  { key: '在用' as EquipmentStatus, label: '在用', color: 'var(--color-success)', dotColor: 'var(--color-success)' },
   { key: '维修中' as EquipmentStatus, label: '维修中', color: '#dd5b00', dotColor: '#dd5b00' },
-  { key: '停用' as EquipmentStatus, label: '停用', color: '#787671', dotColor: '#787671' },
+  { key: '停用' as EquipmentStatus, label: '停用', color: 'var(--color-stone)', dotColor: 'var(--color-stone)' },
 ]
 
 export function StatsCards({ statistics, compact = false }: StatsCardsProps) {
@@ -40,13 +40,13 @@ export function StatsCards({ statistics, compact = false }: StatsCardsProps) {
                 alignItems: 'center',
                 gap: 6,
                 cursor: 'pointer',
-                background: isActive ? '#f0eeec' : 'transparent',
+                background: isActive ? 'var(--color-surface-soft)' : 'transparent',
                 border: isActive ? '1px solid #c8c4be' : '1px solid transparent',
                 borderRadius: 20,
                 padding: '4px 12px',
                 fontSize: 13,
                 fontWeight: isActive ? 600 : 400,
-                color: isActive ? '#1a1a1a' : '#5d5b54',
+                color: isActive ? 'var(--color-ink)' : 'var(--color-slate)',
                 transition: 'all 0.15s ease',
                 fontFamily: 'inherit',
                 lineHeight: '20px',
@@ -99,7 +99,7 @@ export function StatsCards({ statistics, compact = false }: StatsCardsProps) {
                 value={value}
                 styles={{
                   content: { color, fontWeight: 600 },
-                  title: { color: '#5d5b54', fontSize: 14 },
+                  title: { color: 'var(--color-slate)', fontSize: 14 },
                 }}
               />
             </Card>

@@ -72,19 +72,27 @@ afterEach(() => {
 })
 
 describe('WorkshopNavBlocks（产线块样式）', () => {
-  it('渲染 9 个车间块并高亮 URL 指定的车间；无模块参数时点击不带 module', async () => {
+  it('渲染 10 个车间块并高亮 URL 指定的车间；无模块参数时点击不带 module', async () => {
     currentRoute.workshop = '201-1'
     renderBlocks()
     await act(async () => { await new Promise((r) => setTimeout(r, 0)) })
 
     const all = blocks()
-    expect(all).toHaveLength(9)
+    expect(all).toHaveLength(10)
     expect(all[0].getAttribute('data-testid')).toBe('workshop-block:101-1')
     const active = document.querySelector('[data-testid="workshop-block:201-1"]') as HTMLElement
     expect(active).toBeTruthy()
     expect(active.style.borderColor).toContain('var(--color-primary)')
     // 车间名与图标渲染
     expect(active.textContent).toContain('201一车间')
+    // 201 二车间按产品线拆分为霉酚酸 / 多拉两个块；
+    // 两块均显示短名，悬停提示用全名
+    const mcBlock = document.querySelector('[data-testid="workshop-block:201-2-MC"]') as HTMLElement
+    const drBlock = document.querySelector('[data-testid="workshop-block:201-2-DR"]') as HTMLElement
+    expect(mcBlock?.textContent).toContain('201二车间（MC）')
+    expect(mcBlock?.getAttribute('title')).toBe('切换到 201二车间（霉酚酸）')
+    expect(drBlock?.textContent).toContain('201二车间（DR）')
+    expect(drBlock?.getAttribute('title')).toBe('切换到 201二车间（多拉）')
 
     const plain = document.querySelector('[data-testid="workshop-block:203"]') as HTMLElement
     await act(async () => { plain.click() })

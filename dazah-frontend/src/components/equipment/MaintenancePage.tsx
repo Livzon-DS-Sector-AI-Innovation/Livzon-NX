@@ -239,7 +239,7 @@ export function MaintenancePage({
       children: (
         <div>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold" style={{ fontSize: 18, color: '#1a1a1a', lineHeight: 1.4, margin: 0 }}>
+            <h2 className="font-semibold" style={{ fontSize: 18, color: 'var(--color-ink)', lineHeight: 1.4, margin: 0 }}>
               维护计划列表
             </h2>
             <Button type="primary" icon={<PlusOutlined />} onClick={() => openMaintenancePlanDrawer()}>
@@ -255,7 +255,7 @@ export function MaintenancePage({
   return (
     <ConfigProvider locale={zhCN}>
       <App>
-        <div style={{ background: '#ffffff', padding: 20, borderRadius: 12, border: '1px solid #e5e3df' }}>
+        <div style={{ background: 'var(--color-canvas)', padding: 20, borderRadius: 12, border: '1px solid var(--color-hairline)' }}>
           <Tabs activeKey={maintenanceTab} onChange={setMaintenanceTab} items={tabItems} />
         </div>
 

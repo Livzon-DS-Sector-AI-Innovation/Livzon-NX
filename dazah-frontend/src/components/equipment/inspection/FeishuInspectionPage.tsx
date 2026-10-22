@@ -27,7 +27,7 @@ import { InspectionFeishuConfigDrawer } from './InspectionFeishuConfigDrawer'
 const C = {
   ink: 'var(--color-ink)', slate: 'var(--color-slate)', stone: 'var(--color-stone)',
   hairline: 'var(--color-hairline)', surface: 'var(--color-surface)', canvas: 'var(--color-canvas)',
-  green: '#1aae39', red: '#c0392b', purple: '#5645d4',
+  green: 'var(--color-success)', red: '#c0392b', purple: '#5645d4',
 }
 
 const AM_KEYS = ['am_clean', 'am_lubrication', 'am_fastening', 'am_sealing', 'am_vibration', 'am_sound', 'am_surface'] as const

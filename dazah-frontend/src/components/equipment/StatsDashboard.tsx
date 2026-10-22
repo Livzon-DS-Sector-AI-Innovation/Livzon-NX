@@ -108,8 +108,8 @@ export function StatsDashboard({ initialData }: StatsDashboardProps) {
 
       <div
         style={{
-          maxWidth: 1280,
-          margin: '0 auto'
+          // 与统一工作台/飞书配置页一致：铺满内容区宽度，不再 1280 居中限宽
+          width: '100%',
         }}
       >
         {/* ========== 页面标题 ========== */}
@@ -121,9 +121,9 @@ export function StatsDashboard({ initialData }: StatsDashboardProps) {
         >
           <h1
             style={{
-              fontSize: 28,
+              fontSize: 22,
               fontWeight: 600,
-              color: '#1a1a1a',
+              color: 'var(--color-ink)',
               lineHeight: 1.25,
               margin: 0,
               letterSpacing: '-0.01em',
@@ -134,7 +134,7 @@ export function StatsDashboard({ initialData }: StatsDashboardProps) {
           <p
             style={{
               fontSize: 14,
-              color: '#787671',
+              color: 'var(--color-stone)',
               margin: '6px 0 0',
               lineHeight: 1.5,
             }}
@@ -162,9 +162,9 @@ export function StatsDashboard({ initialData }: StatsDashboardProps) {
                 alignItems: 'center',
                 gap: 12,
                 padding: '14px 20px',
-                background: '#ffffff',
+                background: 'var(--color-canvas)',
                 borderRadius: 12,
-                border: '1px solid #e5e3df',
+                border: '1px solid var(--color-hairline)',
                 animation: `fadeInUp 0.45s ease both`,
                 animationDelay: `${80 + i * 70}ms`,
                 opacity: 0.8,
@@ -175,22 +175,22 @@ export function StatsDashboard({ initialData }: StatsDashboardProps) {
                   width: 38,
                   height: 38,
                   borderRadius: 10,
-                  background: '#f0efec',
+                  background: 'var(--color-surface-soft)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   fontSize: 17,
-                  color: '#a4a097',
+                  color: 'var(--color-stone)',
                   flexShrink: 0,
                 }}
               >
                 {link.icon}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 14, fontWeight: 600, color: '#5d5b54', lineHeight: 1.3 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-slate)', lineHeight: 1.3 }}>
                   {link.label}
                 </div>
-                <div style={{ fontSize: 12, color: '#a4a097', marginTop: 1 }}>
+                <div style={{ fontSize: 12, color: 'var(--color-stone)', marginTop: 1 }}>
                   待接入
                 </div>
               </div>
@@ -263,9 +263,9 @@ export function StatsDashboard({ initialData }: StatsDashboardProps) {
           {/* 设备状态分布 */}
           <div
             style={{
-              background: '#ffffff',
+              background: 'var(--color-canvas)',
               borderRadius: 12,
-              border: '1px solid #e5e3df',
+              border: '1px solid var(--color-hairline)',
               padding: '20px 24px',
               animation: 'fadeInUp 0.5s ease both',
               animationDelay: '320ms',
@@ -273,10 +273,10 @@ export function StatsDashboard({ initialData }: StatsDashboardProps) {
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18 }}>
               <BarChartOutlined style={{ fontSize: 16, color: '#5645d4' }} />
-              <h3 style={{ fontSize: 16, fontWeight: 600, color: '#1a1a1a', margin: 0 }}>
+              <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--color-ink)', margin: 0 }}>
                 设备状态分布
               </h3>
-              <span style={{ fontSize: 12, color: '#a4a097', marginLeft: 'auto' }}>
+              <span style={{ fontSize: 12, color: 'var(--color-stone)', marginLeft: 'auto' }}>
                 共 {eq.total} 台
               </span>
             </div>
@@ -286,9 +286,9 @@ export function StatsDashboard({ initialData }: StatsDashboardProps) {
           {/* 设备分类分布 */}
           <div
             style={{
-              background: '#ffffff',
+              background: 'var(--color-canvas)',
               borderRadius: 12,
-              border: '1px solid #e5e3df',
+              border: '1px solid var(--color-hairline)',
               padding: '20px 24px',
               animation: 'fadeInUp 0.5s ease both',
               animationDelay: '400ms',
@@ -296,7 +296,7 @@ export function StatsDashboard({ initialData }: StatsDashboardProps) {
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18 }}>
               <PieChartOutlined style={{ fontSize: 16, color: '#7b3ff2' }} />
-              <h3 style={{ fontSize: 16, fontWeight: 600, color: '#1a1a1a', margin: 0 }}>
+              <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--color-ink)', margin: 0 }}>
                 按分类分布
               </h3>
             </div>
@@ -307,9 +307,9 @@ export function StatsDashboard({ initialData }: StatsDashboardProps) {
         {/* ========== 第三行：工单流转 ========== */}
         <div
           style={{
-            background: '#ffffff',
+            background: 'var(--color-canvas)',
             borderRadius: 12,
-            border: '1px solid #e5e3df',
+            border: '1px solid var(--color-hairline)',
             padding: '24px 28px',
             marginBottom: 28,
             animation: 'fadeInUp 0.5s ease both',
@@ -318,10 +318,10 @@ export function StatsDashboard({ initialData }: StatsDashboardProps) {
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
             <ThunderboltFilled style={{ fontSize: 16, color: '#dd5b00' }} />
-            <h3 style={{ fontSize: 16, fontWeight: 600, color: '#1a1a1a', margin: 0 }}>
+            <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--color-ink)', margin: 0 }}>
               工单流转概览
             </h3>
-            <span style={{ fontSize: 12, color: '#a4a097', marginLeft: 'auto' }}>
+            <span style={{ fontSize: 12, color: 'var(--color-stone)', marginLeft: 'auto' }}>
               共 {wo.total} 个工单
             </span>
           </div>
@@ -340,9 +340,9 @@ export function StatsDashboard({ initialData }: StatsDashboardProps) {
         {/* ========== 第五行：近期工单（全宽） ========== */}
         <div
           style={{
-            background: '#ffffff',
+            background: 'var(--color-canvas)',
             borderRadius: 12,
-            border: '1px solid #e5e3df',
+            border: '1px solid var(--color-hairline)',
             padding: '20px 24px',
             animation: 'fadeInUp 0.5s ease both',
             animationDelay: '560ms',
@@ -351,7 +351,7 @@ export function StatsDashboard({ initialData }: StatsDashboardProps) {
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
             <FileTextOutlined style={{ fontSize: 16, color: '#0075de' }} />
-            <h3 style={{ fontSize: 16, fontWeight: 600, color: '#1a1a1a', margin: 0 }}>
+            <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--color-ink)', margin: 0 }}>
               近期工单
             </h3>
           </div>

@@ -8,10 +8,10 @@ import type {
 // 设备状态分布条
 // ============================================================
 const statusColorMap: Record<string, string> = {
-  '在用': '#1aae39',
+  '在用': 'var(--color-success)',
   '备用': '#0075de',
   '维修中': '#dd5b00',
-  '停用': '#787671',
+  '停用': 'var(--color-stone)',
   '报废': '#c8c4be',
 }
 
@@ -23,7 +23,7 @@ export function StatusDistribution({ statistics }: { statistics: EquipmentStatis
 
   if (entries.length === 0) {
     return (
-      <div style={{ padding: 40, textAlign: 'center', color: '#787671', fontSize: 14 }}>
+      <div style={{ padding: 40, textAlign: 'center', color: 'var(--color-stone)', fontSize: 14 }}>
         暂无设备数据
       </div>
     )
@@ -39,7 +39,7 @@ export function StatusDistribution({ statistics }: { statistics: EquipmentStatis
           borderRadius: 6,
           overflow: 'hidden',
           marginBottom: 20,
-          background: '#f0eeec',
+          background: 'var(--color-surface-soft)',
         }}
       >
         {entries.map(([status, count]) => (
@@ -80,17 +80,17 @@ export function StatusDistribution({ statistics }: { statistics: EquipmentStatis
                   flexShrink: 0,
                 }}
               />
-              <span style={{ flex: 1, fontSize: 14, color: '#1a1a1a', fontWeight: 500 }}>
+              <span style={{ flex: 1, fontSize: 14, color: 'var(--color-ink)', fontWeight: 500 }}>
                 {status}
               </span>
-              <span style={{ fontSize: 14, fontWeight: 600, color: '#1a1a1a', fontFeatureSettings: '"tnum"' }}>
+              <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-ink)', fontFeatureSettings: '"tnum"' }}>
                 {count}
               </span>
-              <span style={{ fontSize: 13, color: '#787671', width: 48, textAlign: 'right', fontFeatureSettings: '"tnum"' }}>
+              <span style={{ fontSize: 13, color: 'var(--color-stone)', width: 48, textAlign: 'right', fontFeatureSettings: '"tnum"' }}>
                 {pct}%
               </span>
               {/* 微型进度条 */}
-              <div style={{ width: 80, height: 4, borderRadius: 2, background: '#f0eeec', overflow: 'hidden' }}>
+              <div style={{ width: 80, height: 4, borderRadius: 2, background: 'var(--color-surface-soft)', overflow: 'hidden' }}>
                 <div
                   style={{
                     height: '100%',

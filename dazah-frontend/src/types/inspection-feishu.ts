@@ -98,8 +98,36 @@ export interface InspectionFeishuRecordListResponse {
   page_size: number
 }
 
+/** 自建应用库条目（Secret 不回显明文） */
+export interface FeishuAppItem {
+  id: string
+  name: string
+  app_id: string
+  app_secret_configured: boolean
+  /** 引用该应用的巡检配置车间代码 */
+  referenced_workshops: string[]
+  created_at: string
+  updated_at: string
+}
+
+export interface FeishuAppCreateRequest {
+  name: string
+  app_id: string
+  app_secret: string
+}
+
+export interface FeishuAppUpdateRequest {
+  name: string
+  app_id: string
+  /** 留空保留已保存值 */
+  app_secret?: string | null
+}
+
 export interface InspectionFeishuConfigDetail {
   workshop_code: string
+  /** 引用的自建应用库记录；空=内联凭据 */
+  feishu_app_id?: string | null
+  feishu_app_name?: string | null
   app_id: string
   app_secret_masked: string
   app_secret_configured: boolean
@@ -117,6 +145,8 @@ export interface InspectionFeishuConfigDetail {
 }
 
 export interface InspectionFeishuConfigUpdateRequest {
+  /** 引用自建应用库记录；提供时凭据以应用库为准 */
+  feishu_app_id?: string | null
   app_id: string
   app_secret?: string | null
   app_token: string

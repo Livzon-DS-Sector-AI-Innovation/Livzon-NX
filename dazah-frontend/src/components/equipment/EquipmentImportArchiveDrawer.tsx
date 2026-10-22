@@ -321,7 +321,7 @@ export function EquipmentImportArchiveDrawer({
       }
       open={open}
       onClose={handleClose}
-      width="80%"
+      size="80%"
       destroyOnClose
     >
       {active ? (

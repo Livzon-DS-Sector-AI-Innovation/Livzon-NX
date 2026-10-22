@@ -8,8 +8,9 @@
 from __future__ import annotations
 
 from datetime import datetime
+from uuid import UUID
 
-from sqlalchemy import Boolean, DateTime, Index, String, Text, text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.shared.base_model import BaseModel
@@ -35,6 +36,13 @@ class EquipmentInspectionFeishuConfig(BaseModel):
         default="201-1",
         server_default="201-1",
         comment="车间代码（如 101-1 / 201-1）",
+    )
+    # 引用自建应用库时凭据以应用记录为准（Secret 改一处全车间生效）；
+    # 为空时使用本行内联 app_id / app_secret（存量配置与手输路径）
+    feishu_app_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("equipment.feishu_apps.id"),
+        nullable=True,
+        comment="引用的自建应用库记录；空=使用本行内联凭据",
     )
     app_id: Mapped[str] = mapped_column(
         String(100), default="", comment="飞书应用 App ID"

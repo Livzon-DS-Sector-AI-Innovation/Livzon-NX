@@ -8,6 +8,7 @@
 - f1c7e9a3d4b6：巡检飞书镜像三张表（记录/设备/同步状态）
 - a3d8f2c6e1b9：巡检飞书镜像配置表（App Secret 加密存储）
 - c4e6f8a0b2d1：台账上传存档表（表格快照 + 导入摘要 + 查询索引）
+- c9d400000063：201 二车间拆分为 201-2-MC / 201-2-DR 的数据与授权归一
 """
 
 import importlib.util
@@ -255,3 +256,88 @@ def test_inspection_feishu_config_base_url_migration(monkeypatch):
         "inspection_feishu_config",
         "base_url",
     )
+
+
+def test_split_workshop_201_2_migration(monkeypatch):
+    """201 二车间拆分：业务表 201-2 → 201-2-MC，授权 key/visible_sections 同步归一。"""
+    module = _load("c9d400000063_split_equipment_workshop_201_2.py")
+    mocks = _mock_ops(monkeypatch, module)
+
+    module.upgrade()
+    sqls = [call.args[0] for call in mocks["execute"].call_args_list]
+    # 3 张无约束表直接改名 + 备件/配置 ×2 + 镜像三表 ×2 + 2 张授权表 × 2 条
+    assert len(sqls) == 17
+    for table in (
+        "equipments",
+        "spare_parts",
+        "inspection_feishu_config",
+        "inspection_feishu_sync_state",
+        "equipment_personnel",
+        "equipment_ledger_archives",
+    ):
+        assert any(
+            f"equipment.{table}" in sql and "'201-2-MC'" in sql for sql in sqls
+        ), table
+    # 唯一索引表先软删/删除与既有 MC 行冲突的旧 201-2 行，再改名
+    assert any(
+        "spare_parts" in sql and "is_deleted = true" in sql for sql in sqls
+    )
+    assert any(
+        "inspection_feishu_records" in sql and sql.startswith("DELETE")
+        for sql in sqls
+    )
+    assert any(
+        "role_page_grants" in sql and "workshop-201-2-MC" in sql for sql in sqls
+    )
+    assert any(
+        "user_page_grants" in sql and "visible_sections" in sql for sql in sqls
+    )
+    # 只改写设备模块授权，不触碰生产模块的 201-2 批次页
+    assert all("production" not in sql for sql in sqls)
+
+    mocks["execute"].reset_mock()
+    module.downgrade()
+    sqls = [call.args[0] for call in mocks["execute"].call_args_list]
+    # 镜像表 DR 行删除、配置/备件冲突行软删、MC 归回 201-2、DR 授权移除
+    assert any(
+        "DELETE FROM equipment.inspection_feishu_records" in sql
+        and "'201-2-DR'" in sql
+        for sql in sqls
+    )
+    assert any("is_deleted = true" in sql for sql in sqls)
+    assert any("equipment:workshop-201-2-DR" in sql for sql in sqls)
+    assert any(
+        "'201-2-MC'" in sql and "'201-2'" in sql and "user_page_grants" in sql
+        for sql in sqls
+    )
+
+
+def test_create_feishu_apps_migration(monkeypatch):
+    """自建应用库表 + 巡检配置 feishu_app_id 引用列。"""
+    module = _load("c9d400000064_create_feishu_apps.py")
+    mocks = _mock_ops(monkeypatch, module)
+
+    module.upgrade()
+    mocks["create_table"].assert_called_once()
+    table_args = mocks["create_table"].call_args
+    assert table_args.args[0] == "feishu_apps"
+    assert table_args.kwargs.get("schema") == "equipment"
+    columns = _columns(mocks["create_table"])
+    assert {"id", "name", "app_id", "app_secret", "is_deleted"} <= set(columns)
+    # created_at/updated_at 带数据库默认值（ORM 依赖 server_default 插入）
+    assert columns["created_at"].server_default is not None
+    assert columns["updated_at"].server_default is not None
+    mocks["create_index"].assert_called_once()
+    assert mocks["create_index"].call_args.kwargs.get("unique") is True
+    mocks["add_column"].assert_called_once()
+    add_args = mocks["add_column"].call_args
+    assert add_args.args[0] == "inspection_feishu_config"
+    assert add_args.args[1].name == "feishu_app_id"
+    assert add_args.kwargs.get("schema") == "equipment"
+
+    module.downgrade()
+    mocks["drop_column"].assert_called_once_with(
+        "inspection_feishu_config", "feishu_app_id", schema="equipment"
+    )
+    mocks["drop_index"].assert_called_once()
+    mocks["drop_table"].assert_called_once_with("feishu_apps", schema="equipment")

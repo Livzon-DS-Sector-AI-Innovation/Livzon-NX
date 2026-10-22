@@ -94,7 +94,7 @@ export function MaterialConsumeDrawer({ workOrderId, spareParts, onRefresh }: Ma
                     </Form.Item>
                     {fields.length > 1 && (
                       <MinusCircleOutlined
-                        style={{ marginTop: 10, color: '#787671', cursor: 'pointer' }}
+                        style={{ marginTop: 10, color: 'var(--color-stone)', cursor: 'pointer' }}
                         onClick={() => remove(name)}
                       />
                     )}

@@ -14,18 +14,18 @@ import {
 } from '@ant-design/icons'
 
 const orderPipelineStages = [
-  { status: '待处理', color: '#e03131', bg: '#fff1f0', icon: <AlertOutlined /> },
+  { status: '待处理', color: 'var(--color-error)', bg: '#fff1f0', icon: <AlertOutlined /> },
   { status: '执行中', color: '#dd5b00', bg: '#fff7e6', icon: <ToolFilled /> },
   { status: '待验收', color: '#d4b106', bg: '#fffbe6', icon: <ClockCircleFilled /> },
-  { status: '已完成', color: '#1aae39', bg: '#e6f7e6', icon: <CheckCircleFilled /> },
-  { status: '已关闭', color: '#787671', bg: '#f0eeec', icon: <CheckCircleFilled /> },
+  { status: '已完成', color: 'var(--color-success)', bg: '#e6f7e6', icon: <CheckCircleFilled /> },
+  { status: '已关闭', color: 'var(--color-stone)', bg: 'var(--color-surface-soft)', icon: <CheckCircleFilled /> },
 ]
 
 const priorityConfig: Record<WorkOrderPriority, { color: string; bg: string; dot: string; label: string }> = {
-  '紧急': { color: '#e03131', bg: '#fff1f0', dot: '#e03131', label: '紧急' },
+  '紧急': { color: 'var(--color-error)', bg: '#fff1f0', dot: 'var(--color-error)', label: '紧急' },
   '高': { color: '#dd5b00', bg: '#fff7e6', dot: '#dd5b00', label: '高' },
   '中': { color: '#0075de', bg: '#e6f0fa', dot: '#0075de', label: '中' },
-  '低': { color: '#787671', bg: '#f0eeec', dot: '#787671', label: '低' },
+  '低': { color: 'var(--color-stone)', bg: 'var(--color-surface-soft)', dot: 'var(--color-stone)', label: '低' },
 }
 
 const typeIcons: Record<string, ReactNode> = {
@@ -41,7 +41,7 @@ import type {
 } from '@/types/equipment'
 
 const typeColors: Record<string, string> = {
-  '故障维修': '#e03131',
+  '故障维修': 'var(--color-error)',
   '计划维护': '#dd5b00',
   '巡检': '#0075de',
   '校准': '#7b3ff2',
@@ -74,9 +74,9 @@ export function WorkOrderPipeline({ statistics }: { statistics: WorkOrderStatist
               <div
                 style={{
                   flex: 1,
-                  background: '#ffffff',
+                  background: 'var(--color-canvas)',
                   borderRadius: 12,
-                  border: `1.5px solid ${count > 0 ? stage.color : '#e5e3df'}`,
+                  border: `1.5px solid ${count > 0 ? stage.color : 'var(--color-hairline)'}`,
                   padding: '18px 16px',
                   textAlign: 'center',
                   animation: `fadeInUp 0.5s ease both`,
@@ -90,7 +90,7 @@ export function WorkOrderPipeline({ statistics }: { statistics: WorkOrderStatist
                   e.currentTarget.style.transform = 'translateY(-3px)'
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = count > 0 ? stage.color : '#e5e3df'
+                  e.currentTarget.style.borderColor = count > 0 ? stage.color : 'var(--color-hairline)'
                   e.currentTarget.style.boxShadow = 'none'
                   e.currentTarget.style.transform = 'translateY(0)'
                 }}
@@ -108,7 +108,7 @@ export function WorkOrderPipeline({ statistics }: { statistics: WorkOrderStatist
                       animation: count > 0 ? 'pulse 2s ease infinite' : 'none',
                     }}
                   />
-                  <span style={{ fontSize: 11, fontWeight: 500, color: '#787671', fontFeatureSettings: '"tnum"' }}>
+                  <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--color-stone)', fontFeatureSettings: '"tnum"' }}>
                     {pct}%
                   </span>
                 </div>
@@ -132,7 +132,7 @@ export function WorkOrderPipeline({ statistics }: { statistics: WorkOrderStatist
                   <span style={{ fontSize: 13, color: stage.color, display: 'flex' }}>
                     {stage.icon}
                   </span>
-                  <span style={{ fontSize: 13, fontWeight: 500, color: '#5d5b54' }}>
+                  <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-slate)' }}>
                     {stage.status}
                   </span>
                 </div>
@@ -142,7 +142,7 @@ export function WorkOrderPipeline({ statistics }: { statistics: WorkOrderStatist
                   style={{
                     height: 3,
                     borderRadius: 2,
-                    background: '#f0eeec',
+                    background: 'var(--color-surface-soft)',
                     marginTop: 12,
                     overflow: 'hidden',
                   }}
@@ -175,8 +175,8 @@ export function WorkOrderPipeline({ statistics }: { statistics: WorkOrderStatist
                       width: 28,
                       height: 28,
                       borderRadius: '50%',
-                      background: '#f6f5f4',
-                      border: '1px solid #e5e3df',
+                      background: 'var(--color-surface)',
+                      border: '1px solid var(--color-hairline)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -205,7 +205,7 @@ export function WorkOrderPipeline({ statistics }: { statistics: WorkOrderStatist
       >
         {/* 按类型分布 */}
         <div>
-          <div style={{ fontSize: 13, fontWeight: 600, color: '#5d5b54', marginBottom: 14, letterSpacing: '0.02em' }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-slate)', marginBottom: 14, letterSpacing: '0.02em' }}>
             按类型分布
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -229,10 +229,10 @@ export function WorkOrderPipeline({ statistics }: { statistics: WorkOrderStatist
                     <span style={{ fontSize: 13, color: accent, width: 16, textAlign: 'center', flexShrink: 0 }}>
                       {typeIcons[type] || <FileTextOutlined />}
                     </span>
-                    <span style={{ fontSize: 13, color: '#1a1a1a', fontWeight: 500, width: 60, flexShrink: 0 }}>
+                    <span style={{ fontSize: 13, color: 'var(--color-ink)', fontWeight: 500, width: 60, flexShrink: 0 }}>
                       {type}
                     </span>
-                    <div style={{ flex: 1, height: 6, borderRadius: 3, background: '#f0eeec', overflow: 'hidden' }}>
+                    <div style={{ flex: 1, height: 6, borderRadius: 3, background: 'var(--color-surface-soft)', overflow: 'hidden' }}>
                       <div
                         style={{
                           height: '100%',
@@ -247,7 +247,7 @@ export function WorkOrderPipeline({ statistics }: { statistics: WorkOrderStatist
                       style={{
                         fontSize: 13,
                         fontWeight: 600,
-                        color: '#1a1a1a',
+                        color: 'var(--color-ink)',
                         width: 32,
                         textAlign: 'right',
                         flexShrink: 0,
@@ -264,7 +264,7 @@ export function WorkOrderPipeline({ statistics }: { statistics: WorkOrderStatist
 
         {/* 按优先级分布 */}
         <div>
-          <div style={{ fontSize: 13, fontWeight: 600, color: '#5d5b54', marginBottom: 14, letterSpacing: '0.02em' }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-slate)', marginBottom: 14, letterSpacing: '0.02em' }}>
             按优先级分布
           </div>
           <div
@@ -304,28 +304,28 @@ export function WorkOrderPipeline({ statistics }: { statistics: WorkOrderStatist
                         flexShrink: 0,
                       }}
                     />
-                    <span style={{ fontSize: 12, color: '#5d5b54', fontWeight: 500 }}>{config.label}</span>
+                    <span style={{ fontSize: 12, color: 'var(--color-slate)', fontWeight: 500 }}>{config.label}</span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
                     <span
                       style={{
                         fontSize: 24,
                         fontWeight: 700,
-                        color: '#1a1a1a',
+                        color: 'var(--color-ink)',
                         lineHeight: 1.1,
                         fontFeatureSettings: '"tnum"',
                       }}
                     >
                       {count}
                     </span>
-                    <span style={{ fontSize: 11, color: '#a4a097' }}>个</span>
+                    <span style={{ fontSize: 11, color: 'var(--color-stone)' }}>个</span>
                   </div>
                   {/* 微型进度条 */}
                   <div
                     style={{
                       height: 3,
                       borderRadius: 2,
-                      background: '#f0eeec',
+                      background: 'var(--color-surface-soft)',
                       marginTop: 8,
                       overflow: 'hidden',
                     }}

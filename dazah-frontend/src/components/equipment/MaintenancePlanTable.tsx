@@ -56,7 +56,7 @@ export function MaintenancePlanTable({ onRefresh, equipments }: Props) {
       render: (d: string | null) => {
         if (!d) return '-'
         const overdue = isOverdue(d)
-        return <span style={{ color: overdue ? '#e03131' : '#1a1a1a', fontWeight: overdue ? 600 : 400 }}>{d}{overdue && <span style={{ marginLeft: 6 }}><span style={pillError}>逾期</span></span>}</span>
+        return <span style={{ color: overdue ? 'var(--color-error)' : 'var(--color-ink)', fontWeight: overdue ? 600 : 400 }}>{d}{overdue && <span style={{ marginLeft: 6 }}><span style={pillError}>逾期</span></span>}</span>
       },
     },
     {

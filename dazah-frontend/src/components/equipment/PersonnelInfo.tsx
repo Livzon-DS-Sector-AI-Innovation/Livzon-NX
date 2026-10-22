@@ -13,7 +13,7 @@ interface PersonnelInfoProps {
   personnel: Pick<Personnel, 'name' | 'employee_no' | 'department' | 'position' | 'mobile' | 'avatar_url' | 'roles'>
 }
 
-const AVATAR_COLORS = ['#5645d4', '#7b3ff2', '#dd5b00', '#0075de', '#1aae39', '#2a9d99']
+const AVATAR_COLORS = ['#5645d4', '#7b3ff2', '#dd5b00', '#0075de', 'var(--color-success)', '#2a9d99']
 
 function avatarColor(name: string): string {
   let hash = 0
@@ -59,16 +59,16 @@ export function PersonnelInfo({ personnel }: PersonnelInfoProps) {
           {name && !avatar_url ? initials(name) : undefined}
         </Avatar>
         <div style={{ minWidth: 0 }}>
-          <Text strong style={{ fontSize: 15, color: '#1a1a1a', display: 'block', lineHeight: '20px' }}>
+          <Text strong style={{ fontSize: 15, color: 'var(--color-ink)', display: 'block', lineHeight: '20px' }}>
             {name || '—'}
           </Text>
           {position && (
-            <Text style={{ fontSize: 12, color: '#787671', lineHeight: '16px' }}>
+            <Text style={{ fontSize: 12, color: 'var(--color-stone)', lineHeight: '16px' }}>
               {position}
             </Text>
           )}
           {!position && department && (
-            <Text style={{ fontSize: 12, color: '#787671', lineHeight: '16px' }}>
+            <Text style={{ fontSize: 12, color: 'var(--color-stone)', lineHeight: '16px' }}>
               {department}
             </Text>
           )}
@@ -79,23 +79,23 @@ export function PersonnelInfo({ personnel }: PersonnelInfoProps) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {employee_no && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <IdcardOutlined style={{ fontSize: 14, color: '#a4a097', width: 16, flexShrink: 0 }} />
-            <Text style={{ fontSize: 11, fontWeight: 600, color: '#a4a097', width: 28, flexShrink: 0, textTransform: 'uppercase', letterSpacing: 0.5 }}>工号</Text>
-            <Text style={{ fontSize: 13, color: '#37352f', fontWeight: 500 }}>{employee_no}</Text>
+            <IdcardOutlined style={{ fontSize: 14, color: 'var(--color-stone)', width: 16, flexShrink: 0 }} />
+            <Text style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-stone)', width: 28, flexShrink: 0, textTransform: 'uppercase', letterSpacing: 0.5 }}>工号</Text>
+            <Text style={{ fontSize: 13, color: 'var(--color-charcoal)', fontWeight: 500 }}>{employee_no}</Text>
           </div>
         )}
         {department && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <BankOutlined style={{ fontSize: 14, color: '#a4a097', width: 16, flexShrink: 0 }} />
-            <Text style={{ fontSize: 11, fontWeight: 600, color: '#a4a097', width: 28, flexShrink: 0, textTransform: 'uppercase', letterSpacing: 0.5 }}>部门</Text>
-            <Text style={{ fontSize: 13, color: '#37352f', fontWeight: 500 }}>{department}</Text>
+            <BankOutlined style={{ fontSize: 14, color: 'var(--color-stone)', width: 16, flexShrink: 0 }} />
+            <Text style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-stone)', width: 28, flexShrink: 0, textTransform: 'uppercase', letterSpacing: 0.5 }}>部门</Text>
+            <Text style={{ fontSize: 13, color: 'var(--color-charcoal)', fontWeight: 500 }}>{department}</Text>
           </div>
         )}
         {mobile && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <PhoneOutlined style={{ fontSize: 14, color: '#a4a097', width: 16, flexShrink: 0 }} />
-            <Text style={{ fontSize: 11, fontWeight: 600, color: '#a4a097', width: 28, flexShrink: 0, textTransform: 'uppercase', letterSpacing: 0.5 }}>手机</Text>
-            <Text style={{ fontSize: 13, color: '#37352f', fontWeight: 500 }}>{mobile}</Text>
+            <PhoneOutlined style={{ fontSize: 14, color: 'var(--color-stone)', width: 16, flexShrink: 0 }} />
+            <Text style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-stone)', width: 28, flexShrink: 0, textTransform: 'uppercase', letterSpacing: 0.5 }}>手机</Text>
+            <Text style={{ fontSize: 13, color: 'var(--color-charcoal)', fontWeight: 500 }}>{mobile}</Text>
           </div>
         )}
       </div>
@@ -107,7 +107,7 @@ export function PersonnelInfo({ personnel }: PersonnelInfoProps) {
           borderTop: '1px solid #ede9e4',
         }}>
           <Text style={{
-            fontSize: 11, fontWeight: 600, color: '#a4a097',
+            fontSize: 11, fontWeight: 600, color: 'var(--color-stone)',
             textTransform: 'uppercase', letterSpacing: 0.5,
             display: 'block', marginBottom: 8,
           }}>
@@ -165,7 +165,7 @@ export function PersonnelInfo({ personnel }: PersonnelInfoProps) {
           display: 'flex', flexDirection: 'column',
           lineHeight: 1.35, minWidth: 0,
         }}>
-          <Text style={{ fontSize: 14, fontWeight: 600, color: '#1a1a1a' }}>
+          <Text style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-ink)' }}>
             {name || '未命名'}
           </Text>
           {department && (

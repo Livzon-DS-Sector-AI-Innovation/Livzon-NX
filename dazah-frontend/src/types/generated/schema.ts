@@ -2714,6 +2714,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/equipment/inspection/feishu/apps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 自建应用库清单（Secret 不回显） */
+        get: operations["list_feishu_apps_api_v1_equipment_inspection_feishu_apps_get"];
+        put?: never;
+        /** 新建自建应用凭据 */
+        post: operations["create_feishu_app_api_v1_equipment_inspection_feishu_apps_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/inspection/feishu/apps/{app_row_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 更新自建应用凭据 */
+        put: operations["update_feishu_app_api_v1_equipment_inspection_feishu_apps__app_row_id__put"];
+        post?: never;
+        /** 删除自建应用凭据 */
+        delete: operations["delete_feishu_app_api_v1_equipment_inspection_feishu_apps__app_row_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/equipment/inspection/feishu/config": {
         parameters: {
             query?: never;
@@ -42729,6 +42765,48 @@ export interface components {
             workshop_code: string;
         };
         /**
+         * EquipmentFeishuAppCreateRequest
+         * @description 新建飞书自建应用凭据请求
+         */
+        EquipmentFeishuAppCreateRequest: {
+            /**
+             * App Id
+             * @description 飞书应用 App ID
+             */
+            app_id: string;
+            /**
+             * App Secret
+             * @description 飞书应用 App Secret
+             */
+            app_secret: string;
+            /**
+             * Name
+             * @description 应用名称（便于辨认）
+             */
+            name: string;
+        };
+        /**
+         * EquipmentFeishuAppUpdateRequest
+         * @description 更新飞书自建应用凭据请求（Secret 留空保留已保存值）
+         */
+        EquipmentFeishuAppUpdateRequest: {
+            /**
+             * App Id
+             * @description 飞书应用 App ID
+             */
+            app_id: string;
+            /**
+             * App Secret
+             * @description 飞书应用 App Secret（留空保留已保存值）
+             */
+            app_secret?: string | null;
+            /**
+             * Name
+             * @description 应用名称
+             */
+            name: string;
+        };
+        /**
          * EquipmentInspectionFeishuConfigUpdateRequest
          * @description 保存设备巡检飞书镜像配置请求
          */
@@ -42762,6 +42840,11 @@ export interface components {
              * @default
              */
             device_table_id: string;
+            /**
+             * Feishu App Id
+             * @description 引用自建应用库记录；提供时凭据以应用库为准，忽略内联 App ID/Secret
+             */
+            feishu_app_id?: string | null;
             /**
              * History Table Id
              * @description 设备历史巡检记录表 ID
@@ -71332,6 +71415,142 @@ export interface operations {
             header?: never;
             path: {
                 equipment_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_feishu_apps_api_v1_equipment_inspection_feishu_apps_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_feishu_app_api_v1_equipment_inspection_feishu_apps_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EquipmentFeishuAppCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_feishu_app_api_v1_equipment_inspection_feishu_apps__app_row_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                app_row_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EquipmentFeishuAppUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_feishu_app_api_v1_equipment_inspection_feishu_apps__app_row_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                app_row_id: string;
             };
             cookie?: {
                 auth_token?: string | null;

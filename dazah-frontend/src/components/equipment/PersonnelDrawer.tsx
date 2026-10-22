@@ -26,7 +26,7 @@ interface UserOption {
 }
 
 function avatarColor(name: string): string {
-  const colors = ['#5645d4', '#7b3ff2', '#dd5b00', '#0075de', '#1aae39', '#e03131']
+  const colors = ['#5645d4', '#7b3ff2', '#dd5b00', '#0075de', 'var(--color-success)', 'var(--color-error)']
   let hash = 0
   for (let i = 0; i < name.length; i++) {
     hash = name.charCodeAt(i) + ((hash << 5) - hash)

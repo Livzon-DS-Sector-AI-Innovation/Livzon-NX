@@ -8,17 +8,17 @@ import type {
 // 近期工单列表
 // ============================================================
 const workOrderStatusStyle: Record<string, { color: string; bg: string }> = {
-  '待处理': { color: '#e03131', bg: '#fff1f0' },
+  '待处理': { color: 'var(--color-error)', bg: '#fff1f0' },
   '执行中': { color: '#dd5b00', bg: '#fff7e6' },
   '待验收': { color: '#d4b106', bg: '#fffbe6' },
-  '已完成': { color: '#1aae39', bg: '#e6f7e6' },
-  '已关闭': { color: '#787671', bg: '#f0eeec' },
+  '已完成': { color: 'var(--color-success)', bg: '#e6f7e6' },
+  '已关闭': { color: 'var(--color-stone)', bg: 'var(--color-surface-soft)' },
 }
 
 export function RecentWorkOrders({ orders }: { orders: WorkOrder[] }) {
   if (orders.length === 0) {
     return (
-      <div style={{ padding: 40, textAlign: 'center', color: '#787671', fontSize: 14 }}>
+      <div style={{ padding: 40, textAlign: 'center', color: 'var(--color-stone)', fontSize: 14 }}>
         暂无近期工单
       </div>
     )
@@ -27,7 +27,7 @@ export function RecentWorkOrders({ orders }: { orders: WorkOrder[] }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       {orders.map((order, i) => {
-        const style = workOrderStatusStyle[order.status] || { color: '#787671', bg: '#f0eeec' }
+        const style = workOrderStatusStyle[order.status] || { color: 'var(--color-stone)', bg: 'var(--color-surface-soft)' }
         return (
           <div
             key={order.id}
@@ -53,7 +53,7 @@ export function RecentWorkOrders({ orders }: { orders: WorkOrder[] }) {
                 height: 32,
                 borderRadius: 2,
                 background:
-                  order.priority === '紧急' ? '#e03131'
+                  order.priority === '紧急' ? 'var(--color-error)'
                   : order.priority === '高' ? '#dd5b00'
                   : order.priority === '中' ? '#0075de'
                   : '#c8c4be',
@@ -61,13 +61,13 @@ export function RecentWorkOrders({ orders }: { orders: WorkOrder[] }) {
               }}
             />
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 500, color: '#1a1a1a' }}>
+              <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--color-ink)' }}>
                 {order.work_order_no}
               </div>
               <div
                 style={{
                   fontSize: 12,
-                  color: '#787671',
+                  color: 'var(--color-stone)',
                   marginTop: 1,
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
@@ -90,7 +90,7 @@ export function RecentWorkOrders({ orders }: { orders: WorkOrder[] }) {
             >
               {order.status}
             </span>
-            <span style={{ fontSize: 12, color: '#a4a097', whiteSpace: 'nowrap' }}>
+            <span style={{ fontSize: 12, color: 'var(--color-stone)', whiteSpace: 'nowrap' }}>
               {order.created_at ? new Date(order.created_at).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' }) : ''}
             </span>
           </div>

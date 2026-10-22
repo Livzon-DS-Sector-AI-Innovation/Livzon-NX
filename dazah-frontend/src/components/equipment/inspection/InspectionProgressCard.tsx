@@ -3,13 +3,13 @@ import { EQUIPMENT_WORKSHOPS } from '@/lib/menu-config'
 import type { InspectionFeishuWorkshopSummary } from '@/types/inspection-feishu'
 
 const C = {
-  ink: '#1a1a1a',
-  slate: '#5d5b54',
-  stone: '#a4a097',
-  hairline: '#e5e3df',
+  ink: 'var(--color-ink)',
+  slate: 'var(--color-slate)',
+  stone: 'var(--color-stone)',
+  hairline: 'var(--color-hairline)',
   rowDivider: '#f2f0ee',
   track: '#f0efec',
-  green: '#1aae39',
+  green: 'var(--color-success)',
   orange: '#e67e22',
   red: '#c0392b',
 }
@@ -36,7 +36,7 @@ export function InspectionProgressCard({
   return (
     <section
       style={{
-        background: '#ffffff',
+        background: 'var(--color-canvas)',
         border: `1px solid ${C.hairline}`,
         borderRadius: 12,
         padding: '18px 22px 8px',
