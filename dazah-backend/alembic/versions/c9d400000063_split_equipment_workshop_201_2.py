@@ -41,7 +41,8 @@ GRANT_KEY_UPGRADE = (
 # 设备页授权的 visible_sections 中旧车间代码归一到 MC
 GRANT_SECTIONS_UPGRADE = (
     "UPDATE {table} SET visible_sections = ("
-    "SELECT jsonb_agg(CASE WHEN elem = to_jsonb('201-2'::text) THEN to_jsonb('201-2-MC'::text) ELSE elem END) "
+    "SELECT jsonb_agg(CASE WHEN elem = to_jsonb('201-2'::text) "
+    "THEN to_jsonb('201-2-MC'::text) ELSE elem END) "
     "FROM jsonb_array_elements(visible_sections) AS t(elem)) "
     "WHERE page_key LIKE 'equipment:%' AND visible_sections @> '\"201-2\"'::jsonb"
 )
@@ -60,7 +61,8 @@ GRANT_DR_KEY_DOWNGRADE = (
 
 GRANT_SECTIONS_DOWNGRADE = (
     "UPDATE {table} SET visible_sections = ("
-    "SELECT jsonb_agg(DISTINCT CASE WHEN elem IN (to_jsonb('201-2-MC'::text), to_jsonb('201-2-DR'::text)) "
+    "SELECT jsonb_agg(DISTINCT CASE WHEN elem IN "
+    "(to_jsonb('201-2-MC'::text), to_jsonb('201-2-DR'::text)) "
     "THEN to_jsonb('201-2'::text) ELSE elem END) "
     "FROM jsonb_array_elements(visible_sections) AS t(elem)) "
     "WHERE page_key LIKE 'equipment:%' "
@@ -109,7 +111,9 @@ def upgrade() -> None:
     )
     # 巡检镜像（可重新同步的派生数据）：冲突行硬删
     _rename_avoiding_collisions(
-        "inspection_feishu_records", "n.source = t.source AND n.record_id = t.record_id", soft=False
+        "inspection_feishu_records",
+        "n.source = t.source AND n.record_id = t.record_id",
+        soft=False,
     )
     _rename_avoiding_collisions(
         "inspection_feishu_devices", "n.record_id = t.record_id", soft=False
