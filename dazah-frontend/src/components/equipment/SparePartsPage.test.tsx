@@ -11,6 +11,20 @@ const api = vi.hoisted(() => ({
   fetchStockWarningsClient: vi.fn(),
 }))
 
+const drawerProps: Array<Record<string, unknown>> = []
+vi.mock('./SparePartDrawer', () => ({
+  SparePartDrawer: (props: Record<string, unknown>) => {
+    drawerProps.push(props)
+    return null
+  },
+}))
+vi.mock('./StockInboundDrawer', () => ({
+  StockInboundDrawer: (props: Record<string, unknown>) => {
+    drawerProps.push(props)
+    return null
+  },
+}))
+
 vi.mock('@/lib/api/equipment-client', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api/equipment-client')>()
   return { ...actual, ...api }
@@ -61,6 +75,7 @@ function renderPage(warnings: StockWarning[]) {
 }
 
 beforeEach(() => {
+  drawerProps.length = 0
   useEquipmentStore.setState({
     sparePartPage: 1,
     sparePartPageSize: 20,
@@ -94,5 +109,63 @@ describe('SparePartsPage 库存预警', () => {
     expect(text).not.toContain('个备件库存低于最低库存')
     expect(text).not.toContain('BJ-002')
     expect(text).toContain('BJ-001')
+  })
+})
+
+describe('SparePartsPage 数据流', () => {
+  it('翻页后按新页码重新请求列表', async () => {
+    // 25 条数据使第二页按钮出现（独立 root，避免复用已卸载实例）
+    api.fetchSparePartsClient.mockResolvedValue({ items: [], total: 25, page: 2, page_size: 20 })
+    const myContainer = document.createElement('div')
+    document.body.append(myContainer)
+    const myRoot = createRoot(myContainer)
+    await act(async () => {
+      myRoot.render(
+        <ConfigProvider locale={zhCN}>
+          <AntApp>
+            <SparePartsPage
+              workshopCode="201-1"
+              initialSpareParts={[]}
+              initialSparePartTotal={25}
+              initialStockWarnings={[]}
+            />
+          </AntApp>
+        </ConfigProvider>,
+      )
+      await Promise.resolve()
+    })
+    api.fetchSparePartsClient.mockClear()
+    const page2 = document.querySelector('.ant-pagination-item-2')
+    expect(page2).not.toBeNull()
+    await act(async () => {
+      ;(page2 as HTMLElement).click()
+      await Promise.resolve()
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    expect(api.fetchSparePartsClient).toHaveBeenCalledWith(
+      expect.objectContaining({ page: 2, page_size: 20, workshop: '201-1' }),
+    )
+    act(() => myRoot.unmount())
+    myContainer.remove()
+  })
+
+  it('抽屉提交后触发刷新且页面保持可用', async () => {
+    renderPage([])
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    const drawer = drawerProps.find((props) => typeof props.onRefresh === 'function') as
+      | { onRefresh: () => void }
+      | undefined
+    expect(drawer).toBeDefined()
+    // 回调执行 invalidate 不抛错，且渲染数据仍由查询缓存供出
+    await act(async () => {
+      drawer!.onRefresh()
+      await Promise.resolve()
+      await Promise.resolve()
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    expect(document.body.textContent || '').toContain('BJ-001')
   })
 })

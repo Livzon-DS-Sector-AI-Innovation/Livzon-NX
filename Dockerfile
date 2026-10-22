@@ -19,7 +19,7 @@ RUN --mount=type=cache,id=dazah-debian-apt,target=/var/cache/apt,sharing=locked 
         fonts-noto-cjk catdoc antiword \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir uv==0.11.32 \
+RUN pip install --no-cache-dir uv==0.13.4 \
     && groupadd --system app \
     && useradd --system --gid app --create-home app \
     && mkdir -p /home/app/.config /home/app/.cache /home/app/.local/share \
@@ -129,7 +129,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 COPY --from=hermes-lark-cli /usr/local/bin/lark-cli /usr/local/bin/lark-cli
 COPY --from=hermes-upstream /opt/hermes-upstream /opt/hermes-upstream
 
-RUN python -m pip install --no-cache-dir uv==0.11.32
+RUN python -m pip install --no-cache-dir uv==0.13.4
 
 COPY Hermes-Lite/pyproject.toml Hermes-Lite/uv.lock ./
 RUN --mount=type=cache,id=dazah-hermes-uv,target=/root/.cache/uv,sharing=locked \

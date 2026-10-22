@@ -127,7 +127,8 @@ def test_single_head_retains_the_safety_reminder_history() -> None:
     cfg.set_main_option("script_location", str(_VERSIONS.parent))
     script = ScriptDirectory.from_config(cfg)
     heads = script.get_heads()
-    assert heads == ["c8e4a2f6d9b3"]
+    # e4c1c9548f00 为设备/安全双链的 merge revision，单一 head 保持不变
+    assert heads == ["e4c1c9548f00"]
     assert "d4e7f1a9c3b5" in {
         revision.revision for revision in script.walk_revisions(head=heads[0])
     }

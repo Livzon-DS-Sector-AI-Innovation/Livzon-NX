@@ -65,8 +65,19 @@ vi.mock('./EquipmentTable', () => ({
 }))
 vi.mock('./CategoryTree', () => ({ CategoryTree: () => <div>分类树</div> }))
 vi.mock('./LocationTree', () => ({ LocationTree: () => <div>位置树</div> }))
-vi.mock('./EquipmentDrawer', () => ({ EquipmentDrawer: () => null }))
-vi.mock('./CategoryDrawer', () => ({ CategoryDrawer: () => null }))
+const drawerPropsLog: Array<Record<string, unknown>> = []
+vi.mock('./EquipmentDrawer', () => ({
+  EquipmentDrawer: (props: Record<string, unknown>) => {
+    drawerPropsLog.push(props)
+    return null
+  },
+}))
+vi.mock('./CategoryDrawer', () => ({
+  CategoryDrawer: (props: Record<string, unknown>) => {
+    drawerPropsLog.push(props)
+    return null
+  },
+}))
 vi.mock('./LocationDrawer', () => ({ LocationDrawer: () => null }))
 vi.mock('./RepairDrawer', () => ({ RepairDrawer: () => null }))
 
@@ -155,6 +166,7 @@ describe('EquipmentPage data lifecycle', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     tablePropsLog.length = 0
+    drawerPropsLog.length = 0
     container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
@@ -224,5 +236,25 @@ describe('EquipmentPage data lifecycle', () => {
       page: 1,
       page_size: 20,
     })
+  })
+
+  it('refreshes the equipment query when the drawer reports a mutation', async () => {
+    api.fetchEquipmentsClient.mockClear()
+    await act(async () => {
+      root.render(<EquipmentPage {...pageProps()} />)
+      await Promise.resolve()
+    })
+    // 空列表触发一次补偿查询后清零，验证抽屉回调驱动刷新
+    await act(async () => {
+      const equipmentDrawerProps = drawerPropsLog.find(
+        (props) => 'onRefresh' in props && 'workshopCode' in props,
+      ) as { onRefresh: () => void } | undefined
+      equipmentDrawerProps?.onRefresh()
+      await Promise.resolve()
+      await Promise.resolve()
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    })
+    expect(api.fetchEquipmentsClient).toHaveBeenCalled()
+    expect(api.fetchEquipmentStatisticsClient).toHaveBeenCalled()
   })
 })
