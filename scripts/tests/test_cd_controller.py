@@ -727,7 +727,7 @@ def oci_fixture(tmp_path, architecture="amd64", manifest_digest=None):
     manifest["platform"] = {"os": "linux", "architecture": architecture}
     index = blob({"schemaVersion": 2, "manifests": [manifest]})
     cd.atomic_json(layout / "oci-layout", {"imageLayoutVersion": "1.0.0"})
-    ref = "node:20-alpine@" + index["digest"]
+    ref = "node:24.22.1-alpine@" + index["digest"]
     return root, {"images": {ref: "node"}}, ref, blobs / layer["digest"][7:]
 
 

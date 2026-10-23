@@ -453,7 +453,7 @@ unclassified:
 | Git | 2.30+ | 全历史 checkout、变更范围 |
 | Python | 3.12 | 后端/脚本 |
 | uv | 与 `dazah-backend/pyproject.toml`/CI 一致 | 后端依赖 |
-| Node.js | 20 | 前端 |
+| Node.js | 24.22.1（含 CVE-2026-111497 的 Brotli 修复） | 前端 |
 | pnpm | 10.33.0（`packageManager` 锁定） | 前端 |
 | PostgreSQL client | 提供 `pg_isready` | 等待测试库 |
 | Playwright Chromium | 预装 + 系统依赖 | E2E（可选） |

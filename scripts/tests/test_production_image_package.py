@@ -157,7 +157,7 @@ def test_production_dockerfile_pins_bases_and_mounts_dependency_caches() -> None
     dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
 
     assert "python:3.12-slim-bookworm@sha256:" in dockerfile
-    assert "node:20-alpine@sha256:" in dockerfile
+    assert "node:24.22.1-alpine@sha256:" in dockerfile
     assert "id=dazah-debian-apt,target=/var/cache/apt" in dockerfile
     assert "id=dazah-backend-uv,target=/home/app/.cache/uv" in dockerfile
     assert "id=dazah-frontend-pnpm,target=/root/.local/share/pnpm/store" in dockerfile
