@@ -39,6 +39,7 @@ desktop.ini
 !/docs/runbooks/production-offline-deployment.md
 !/docs/runbooks/single-host-cd.md
 !/docs/runbooks/single-host-cd-acceptance.md
+!/docs/runbooks/jenkins-ci-cd.md
 !/docs/runbooks/feishu-login-credential-boundary.md
 !/docs/runbooks/edbo-retirement.md
 !/docs/runbooks/page-permission-implementation-status.md
@@ -51,6 +52,8 @@ desktop.ini
 !/scripts/dev-native.ps1
 !/scripts/deploy-production.ps1
 !/scripts/deploy-production-remote.sh
+!/scripts/jenkins/
+!/scripts/jenkins/*.sh
 !/scripts/cd/
 !/scripts/check-coverage-floor.py
 !/scripts/check-diff-coverage.py
