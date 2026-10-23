@@ -48,12 +48,16 @@ vi.mock('@/lib/api/server/registration', async (importOriginal) => routeMocks.mo
 vi.mock('@/lib/api/server/regulatoryTracker', async (importOriginal) => routeMocks.moduleFactory(importOriginal))
 vi.mock('@/lib/api/server/warehouse', async (importOriginal) => routeMocks.moduleFactory(importOriginal))
 
-type RouteLoader = () => Promise<Record<string, unknown>>
+type RouteModule = Record<string, unknown> & { default?: unknown }
+type RouteLoader = () => Promise<RouteModule>
 type GlobImportMeta = ImportMeta & {
-  glob: <T>(patterns: string[], options: { eager: false }) => Record<string, T>
+  glob: (patterns: string[], options: { eager: false }) => Record<string, unknown>
 }
 
-const routeLoaders = (import.meta as GlobImportMeta).glob<RouteLoader>(['./app/**/*.tsx'], { eager: false })
+const routeLoaders = (import.meta as GlobImportMeta).glob(
+  ['./app/**/*.tsx'],
+  { eager: false },
+) as Record<string, RouteLoader>
 
 function routeProps(path: string): Record<string, unknown> {
   const params = {
