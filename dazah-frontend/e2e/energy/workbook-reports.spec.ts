@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto'
 import { expect, test } from '@playwright/test'
 
 test('monthly original dataset views replace duplicate navigation and preserve export filters', async ({ page, context }) => {
+  const errors: string[] = []
+  page.on('pageerror', error => errors.push(error.message))
   await context.addCookies([{ name: 'auth_token', value: `energy-${randomUUID()}`, url: 'http://127.0.0.1:3200' }])
   await page.route('**/__dazah_maintenance_status', route => route.fulfill({ json: { phase: 'normal' } }))
   await page.goto('/energy/reports?year=2026&month=7&dataset=饮用水码')
@@ -13,7 +15,8 @@ test('monthly original dataset views replace duplicate navigation and preserve e
   const selector = page.getByRole('combobox', { name: '数据表', exact: true })
   await selector.click()
   const popup = page.locator('.ant-select-dropdown').filter({ visible: true })
-  await expect(popup.locator('.ant-select-item-option')).toHaveCount(22)
+  await expect(popup.locator('.ant-select-item-option')).toHaveCount(21)
+  await expect(popup.getByText('按统计范围汇总', { exact: true })).toHaveCount(0)
   await popup.getByText('饮用水量', { exact: true }).click()
   await page.getByRole('button', { name: /查\s*询/, exact: true }).click()
   await expect(page).toHaveURL(/dataset=%E9%A5%AE%E7%94%A8%E6%B0%B4%E9%87%8F/)
@@ -26,4 +29,5 @@ test('monthly original dataset views replace duplicate navigation and preserve e
   await page.getByRole('dialog', { name: '能源菜单' }).getByRole('menuitem', { name: '用量分析', exact: true }).click()
   await expect(page.getByRole('heading', { name: '用量分析', exact: true })).toBeVisible()
   await expect(page.getByRole('dialog', { name: '能源菜单' })).toBeHidden()
+  expect(errors).toEqual([])
 })

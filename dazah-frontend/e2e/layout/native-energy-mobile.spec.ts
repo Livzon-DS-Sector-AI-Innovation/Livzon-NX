@@ -13,7 +13,10 @@ test('native energy settings and mobile forms render in both appearance modes', 
     await page.goto('/energy/settings', { waitUntil: 'domcontentloaded' })
     await optionsReady
     await page.getByTitle(appearance === 'light' ? '浅色' : '深色', { exact: true }).click()
-    await expect(page.getByRole('button', { name: '新增计量点', exact: true })).toBeVisible()
+    await expect(page.getByRole('tab', { name: '飞书机器人', exact: true })).toBeVisible()
+    await expect(page.getByRole('tab', { name: 'Excel 导入', exact: true })).toBeVisible()
+    await expect(page.getByRole('tab', { name: '待确认复核', exact: true })).toBeVisible()
+    await expect(page.getByRole('button', { name: '保存机器人配置', exact: true })).toBeVisible()
     await expect(page.locator('html')).toHaveAttribute('data-theme', appearance)
     await page.getByRole('tab', { name: '飞书机器人', exact: true }).click()
     await expect(page.getByRole('button', { name: '保存机器人配置', exact: true })).toBeVisible()
@@ -29,5 +32,5 @@ test('native energy settings and mobile forms render in both appearance modes', 
   await expect(page.getByRole('button', { name: '保存草稿', exact: true })).toBeVisible()
   await mobileInput.fill('112.5')
   await page.getByRole('button', { name: '保存草稿', exact: true }).click()
-  await expect(page.getByText('草稿已保存，正式报表未变更')).toBeVisible()
+  await expect(page.getByText('草稿已保存').first()).toBeVisible()
 })

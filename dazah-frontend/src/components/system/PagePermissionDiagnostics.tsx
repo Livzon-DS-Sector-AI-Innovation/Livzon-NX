@@ -34,7 +34,7 @@ export function PagePermissionDiagnostics() {
 
   useEffect(() => {
     let active = true
-    void getUsers({ status: "active" }).then((response) => {
+    void getUsers({ status: "active", limit: 500 }).then((response) => {
       if (active) setUsers(response.items || [])
     }).catch((error) => {
       if (active) message.error(error instanceof Error ? error.message : "用户列表加载失败")

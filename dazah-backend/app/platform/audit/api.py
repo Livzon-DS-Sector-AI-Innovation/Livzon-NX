@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.response import success_response
-from app.platform.identity.deps import AdminUser
+from app.platform.identity.deps import SystemAdminUser
 
 from .schemas import AuditCategory, GeneralAuditLogDetail, GeneralAuditLogPage
 from .service import GeneralAuditLogService
@@ -21,7 +21,7 @@ router = APIRouter()
     response_model=GeneralAuditLogPage,
 )
 async def list_general_audit_logs(
-    current_user: AdminUser,
+    current_user: SystemAdminUser,
     category: AuditCategory,
     page: int = 1,
     page_size: int = 20,
@@ -51,7 +51,7 @@ async def list_general_audit_logs(
 )
 async def get_general_audit_log(
     log_id: uuid.UUID,
-    current_user: AdminUser,
+    current_user: SystemAdminUser,
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:
     result = await GeneralAuditLogService().get_log(db, log_id=log_id)

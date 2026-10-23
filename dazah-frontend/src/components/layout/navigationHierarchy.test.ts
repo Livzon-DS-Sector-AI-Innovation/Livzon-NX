@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import type { ModuleMenu } from "@/lib/menu-config"
+import { moduleMenus, type ModuleMenu } from "@/lib/menu-config"
 import { getNavigationHierarchy } from "./navigationHierarchy"
 
 const moduleMenu: ModuleMenu = {
@@ -13,6 +13,10 @@ const moduleMenu: ModuleMenu = {
 }
 
 describe("getNavigationHierarchy", () => {
+  it('keeps the legacy energy entry route inside the ledger breadcrumb', () => {
+    const energy = moduleMenus.find(item => item.key === 'energy')!
+    expect(getNavigationHierarchy(energy, '/energy/entry').levels.map(level => level.label)).toEqual(['能源管理', '能源台账'])
+  })
   it("builds clickable ancestors and menu choices for a detail route", () => {
     const result = getNavigationHierarchy(moduleMenu, "/quality/deviations/123")
     expect(result.levels.map((level) => level.label)).toEqual(["质量管理", "记录管理", "偏差台账", "详情"])

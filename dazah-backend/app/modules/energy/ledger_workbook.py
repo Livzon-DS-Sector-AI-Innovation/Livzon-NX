@@ -1,9 +1,10 @@
 """Monthly views of the original energy datasets, backed by native facts."""
 
 from calendar import monthrange
-from datetime import date
+from datetime import date, datetime, timedelta
 
 from openpyxl.utils.cell import get_column_letter
+from pydantic import JsonValue
 from sqlalchemy import select
 
 from app.core.exceptions import AppException
@@ -11,6 +12,7 @@ from app.modules.energy.ledger_models import EnergyImportBatch, EnergyReading
 from app.modules.energy.ledger_schemas import (
     MeterDefinition,
     RuleDefinition,
+    UsageReview,
     UsageRow,
     WorkbookCell,
     WorkbookColumn,
@@ -20,6 +22,7 @@ from app.modules.energy.ledger_schemas import (
 )
 from app.modules.energy.ledger_service import EnergyLedgerService
 from app.modules.energy.ledger_source_policy import manual_input_allowed
+from app.modules.energy.ledger_source_workbook import SourceWorkbook
 from app.modules.energy.ledger_template import stable_code
 
 DATASETS = [
@@ -58,6 +61,10 @@ class EnergyWorkbookService:
         self.definitions: dict[str, MeterDefinition | RuleDefinition] = {}
         self.headers: dict[str, list[str]] = {}
         self.loaded: tuple[int, int] | None = None
+        self.reviews: list[UsageReview] = []
+        self.source_workbook: SourceWorkbook | None = None
+        self.source_batch_id: str | None = None
+        self.source_created_at: datetime | None = None
 
     async def load(self, year: int, month: int) -> None:
         if self.loaded == (year, month):
@@ -66,6 +73,10 @@ class EnergyWorkbookService:
         self.readings.clear()
         self.definitions.clear()
         self.headers.clear()
+        self.source_workbook = None
+        self.source_batch_id = None
+        self.source_created_at = None
+        self.reviews = await self.service.usage_reviews()
         start, end = date(year, month, 1), date(year, month, monthrange(year, month)[1])
         meters = await self.service.meters()
         rules = await self.service.rules()
@@ -77,7 +88,9 @@ class EnergyWorkbookService:
             await self.service.db.scalars(
                 select(EnergyReading).where(
                     EnergyReading.point_id.in_([meter.id for meter in meters]),
-                    EnergyReading.reading_date.between(start, end),
+                    EnergyReading.reading_date.between(
+                        start - timedelta(days=32), end + timedelta(days=32)
+                    ),
                     EnergyReading.is_deleted.is_(False),
                 )
             )
@@ -85,33 +98,141 @@ class EnergyWorkbookService:
         codes = {meter.id: "point:" + meter.definition.code for meter in meters}
         for reading in records:
             self.readings[(codes[reading.point_id], reading.reading_date)] = reading
-        report = await self.service.report(
-            start, end, report_scope="all", include_all=True
-        )
-        self.facts = {(row.metric_key, row.usage_date): row for row in report.rows}
-        # Imported headers are metadata only. Never treat old formula outputs as inputs.
-        if (await self.service.scope()).is_all:
-            batches = (
-                await self.service.db.scalars(
-                    select(EnergyImportBatch)
-                    .where(
-                        EnergyImportBatch.is_deleted.is_(False),
-                        EnergyImportBatch.status == "imported",
-                    )
-                    .order_by(EnergyImportBatch.created_at.desc())
-                    .limit(20)
+        # Full-grid imports preserve source formulas and literal overrides separately
+        # from native meter inputs. Legacy imports retain the native-fact behavior.
+        batches = (
+            await self.service.db.scalars(
+                select(EnergyImportBatch)
+                .where(
+                    EnergyImportBatch.is_deleted.is_(False),
+                    EnergyImportBatch.status == "imported",
                 )
-            ).all()
-            for batch in reversed(batches):
-                sheets = batch.payload.get("sheets")
-                if not isinstance(sheets, list):
+                .order_by(EnergyImportBatch.created_at.desc())
+                .limit(20)
+            )
+        ).all()
+        for batch in reversed(batches):
+            try:
+                source = SourceWorkbook.from_payload(batch.payload)
+            except ValueError as exc:
+                raise AppException(409, "原表快照无效，请重新导入完整原表") from exc
+            if source.covers(year, month):
+                self.source_workbook = source
+                self.source_batch_id = str(batch.id)
+                self.source_created_at = batch.created_at
+            sheets = batch.payload.get("sheets")
+            if not isinstance(sheets, list):
+                continue
+            for sheet in sheets:
+                if isinstance(sheet, dict):
+                    headers = sheet.get("headers")
+                    if isinstance(headers, list):
+                        self.headers[str(sheet["name"])] = [str(x) for x in headers]
+        if self.source_workbook is not None:
+            for (key, day), reading in self.readings.items():
+                definition = self.definitions[key]
+                if self.source_created_at is not None and (
+                    reading.submitted_at is None
+                    or reading.submitted_at < self.source_created_at
+                ):
+                    # An older, rounded import must not replace the newer source's
+                    # full-precision reading. Later submissions still recalculate.
                     continue
-                for sheet in sheets:
-                    if isinstance(sheet, dict):
-                        headers = sheet.get("headers")
-                        if isinstance(headers, list):
-                            self.headers[str(sheet["name"])] = [str(x) for x in headers]
+                if definition.source_column and reading.value is not None:
+                    try:
+                        self.source_workbook.set_reading(
+                            definition.source_sheet,
+                            definition.source_column,
+                            day,
+                            reading.value,
+                            version=reading.version,
+                        )
+                    except ValueError as exc:
+                        raise AppException(
+                            409, "原始读数来源与原表公式冲突，请核对导入版本"
+                        ) from exc
+        if self.source_workbook is None or any(
+            item.name not in self.source_workbook.sheets for item in DATASETS
+        ):
+            report = await self.service.report(
+                start, end, report_scope="all", include_all=True
+            )
+            self.facts = {(row.metric_key, row.usage_date): row for row in report.rows}
         self.loaded = (year, month)
+
+    def source_report(self, year: int, month: int, dataset: str) -> WorkbookReport:
+        """Keep original formulas, source dates and literals in the 21-table view."""
+        book = self.source_workbook
+        if book is None or dataset not in book.sheets:
+            raise AppException(409, "原表快照缺少工作表，请重新导入完整原表")
+        source = book.sheets[dataset]
+        columns: list[WorkbookColumn] = []
+        for column in range(2, max((len(row) for row in source.grid), default=0) + 1):
+            label = source.headers[column - 1] if column <= len(source.headers) else ""
+            if "大罐数量" in label:
+                continue
+            if not label:
+                if not any(
+                    len(row) >= column and row[column - 1] is not None
+                    for row in source.grid
+                ):
+                    continue
+                label = f"原表{get_column_letter(column)}列"
+            definition = next(
+                (
+                    item
+                    for item in self.definitions.values()
+                    if item.source_sheet == dataset and item.source_column == column
+                ),
+                None,
+            )
+            columns.append(
+                WorkbookColumn(
+                    key=str(column),
+                    label=label,
+                    unit=definition.unit if definition else "待确认",
+                    value_kind="reading" if dataset.endswith("码") else "usage",
+                    quantity_kind=definition.quantity_kind if definition else "",
+                )
+            )
+        rows: list[WorkbookDay] = []
+        available, expected = 0, 0
+        for day in range(1, monthrange(year, month)[1] + 1):
+            current = date(year, month, day)
+            cells: dict[str, WorkbookCell] = {}
+            for field in columns:
+                cell = book.cell_on(dataset, int(field.key), current)
+                cell.provenance["source_batch_id"] = self.source_batch_id
+                evidence: list[JsonValue] = [
+                    item
+                    for review in self.reviews
+                    if review.dataset == dataset and review.column == int(field.key)
+                    for item in review.evidence_on(current)
+                ]
+                if evidence:
+                    # Review notes remain evidence; the source value is retained
+                    # for inspection but no longer counts as a complete value.
+                    cell = cell.model_copy(
+                        update={
+                            "status": "pending_review"
+                            if cell.status == "complete"
+                            else cell.status,
+                            "provenance": {**cell.provenance, "review": evidence},
+                        }
+                    )
+                cells[field.key] = cell
+                expected += cell.status != "not_applicable"
+                available += cell.value is not None and cell.status == "complete"
+            rows.append(WorkbookDay(date=current, cells=cells))
+        return WorkbookReport(
+            year=year,
+            month=month,
+            dataset=dataset,
+            columns=columns,
+            rows=rows,
+            expected_count=expected,
+            available_count=available,
+        )
 
     def matches(
         self,
@@ -133,6 +254,8 @@ class EnergyWorkbookService:
         if dataset not in {item.name for item in DATASETS}:
             raise AppException(404, "能源数据表不存在")
         await self.load(year, month)
+        if self.source_workbook is not None and dataset in self.source_workbook.sheets:
+            return self.source_report(year, month, dataset)
         headers = self.headers.get(dataset, [])
         kind = next(item.kind for item in DATASETS if item.name == dataset)
         last_column = max(
@@ -259,9 +382,27 @@ class EnergyWorkbookService:
                         )
                         else "not_applicable"
                     )
+                if field.value_kind == "usage":
+                    evidence = [
+                        item
+                        for review in self.reviews
+                        if review.dataset == dataset and review.column == int(field.key)
+                        for item in review.evidence_on(current)
+                    ]
+                    if evidence:
+                        cell = cell.model_copy(
+                            update={
+                                "value": None,
+                                "status": "pending_review",
+                                "provenance": {**cell.provenance, "review": evidence},
+                            }
+                        )
                 cells[field.key] = cell
                 expected += cell.status != "not_applicable"
-                available += cell.value is not None
+                available += cell.value is not None and cell.status in {
+                    "complete",
+                    "adjusted",
+                }
             rows.append(WorkbookDay(date=current, cells=cells))
         return WorkbookReport(
             year=year,

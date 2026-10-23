@@ -52,6 +52,7 @@ from app.modules.agent.schemas import (
 from app.modules.agent.tool_registration import ensure_agent_tools_registered
 from app.modules.agent.tools import tool_registry
 from app.platform.identity.models import User
+from app.platform.identity.rbac import is_ordinary_admin
 
 
 def _major_version(value: str) -> str:
@@ -76,10 +77,13 @@ class AgentAutomationService:
         user: User,
         scope: str,
         status_value: str | None,
+        platform_admin: bool | None = None,
     ) -> list[AgentAutomation]:
         """Read all candidate pages before merging legacy definitions and runs."""
         page = 1
         page_size = 500
+        if platform_admin is None:
+            platform_admin = await self._is_platform_admin(db, user)
         visible: list[AgentAutomation] = []
         while True:
             items, total = await self.repo.list_automations(
@@ -90,7 +94,13 @@ class AgentAutomationService:
                 page=page,
                 page_size=page_size,
             )
-            visible.extend(item for item in items if self._can_view(user, item, scope))
+            visible.extend(
+                item
+                for item in items
+                if self._can_view(
+                    user, item, scope, platform_admin=platform_admin
+                )
+            )
             if not items or page * page_size >= total:
                 return visible
             page += 1
@@ -486,9 +496,16 @@ class AgentAutomationService:
         page: int,
         page_size: int,
     ) -> AgentAutomationPage:
-        effective_scope = await self._effective_query_scope(db, user=user, scope=scope)
+        platform_admin = await self._is_platform_admin(db, user)
+        effective_scope = await self._effective_query_scope(
+            db, user=user, scope=scope, platform_admin=platform_admin
+        )
         visible = await self._list_visible_automations(
-            db, user=user, scope=effective_scope, status_value=status_value
+            db,
+            user=user,
+            scope=effective_scope,
+            status_value=status_value,
+            platform_admin=platform_admin,
         )
         triggers = await self.repo.list_automation_triggers(
             db, automation_ids=[item.id for item in visible]
@@ -542,20 +559,23 @@ class AgentAutomationService:
         automation_id: uuid.UUID,
     ) -> AgentAutomationOut:
         await self.access_scope_service.get_current_scope(db, user=user)
+        platform_admin = await self._is_platform_admin(db, user)
         automation = await self.repo.get_automation(db, automation_id)
         if automation is None:
             workflow = await self.repo.get_legacy_workflow_any(db, automation_id)
             if (
                 workflow is None
                 or workflow.user_id is None
-                or (workflow.user_id != user.id and user.role != "admin")
+                or (workflow.user_id != user.id and not platform_admin)
             ):
                 raise HTTPException(status.HTTP_404_NOT_FOUND, "自动化不存在")
             return self._legacy_workflow_out(
                 workflow,
                 payload_redacted=workflow.user_id != user.id,
             )
-        if not self._can_view(user, automation, "platform"):
+        if not self._can_view(
+            user, automation, "platform", platform_admin=platform_admin
+        ):
             raise HTTPException(status.HTTP_404_NOT_FOUND, "自动化不存在")
         triggers = await self.repo.list_automation_triggers(
             db, automation_ids=[automation.id]
@@ -569,9 +589,12 @@ class AgentAutomationService:
     async def list_versions(
         self, db: AsyncSession, *, user: User, automation_id: uuid.UUID
     ) -> list[AgentAutomationVersionOut]:
+        platform_admin = await self._is_platform_admin(db, user)
         automation = await self.repo.get_automation(db, automation_id)
         if automation is not None:
-            if not self._can_view(user, automation, "platform"):
+            if not self._can_view(
+                user, automation, "platform", platform_admin=platform_admin
+            ):
                 raise HTTPException(status.HTTP_404_NOT_FOUND, "自动化不存在")
             redact = self._should_redact(user, automation)
             return [
@@ -585,7 +608,7 @@ class AgentAutomationService:
         if (
             workflow is None
             or workflow.user_id is None
-            or (workflow.user_id != user.id and user.role != "admin")
+            or (workflow.user_id != user.id and not platform_admin)
         ):
             raise HTTPException(status.HTTP_404_NOT_FOUND, "自动化不存在")
         return [
@@ -630,9 +653,16 @@ class AgentAutomationService:
         page: int,
         page_size: int,
     ) -> AgentAutomationRunPage:
-        effective_scope = await self._effective_query_scope(db, user=user, scope=scope)
+        platform_admin = await self._is_platform_admin(db, user)
+        effective_scope = await self._effective_query_scope(
+            db, user=user, scope=scope, platform_admin=platform_admin
+        )
         visible = await self._list_visible_automations(
-            db, user=user, scope=effective_scope, status_value=None
+            db,
+            user=user,
+            scope=effective_scope,
+            status_value=None,
+            platform_admin=platform_admin,
         )
         items, total = await self.repo.list_automation_runs(
             db,
@@ -823,17 +853,35 @@ class AgentAutomationService:
     ) -> AgentAutomation:
         await self.access_scope_service.get_current_scope(db, user=user)
         automation = await self.repo.get_automation(db, automation_id)
-        if automation is None or not self._can_view(user, automation, "platform"):
+        platform_admin = await self._is_platform_admin(db, user)
+        if automation is None or not self._can_view(
+            user, automation, "platform", platform_admin=platform_admin
+        ):
             raise HTTPException(status.HTTP_404_NOT_FOUND, "自动化不存在")
         return automation
 
+    async def _is_platform_admin(self, db: AsyncSession, user: User) -> bool:
+        """Platform-wide automation is an audit view, not ordinary administration."""
+        if user.role != "admin":
+            return False
+        return not await is_ordinary_admin(db, user.id)
+
     async def _effective_query_scope(
-        self, db: AsyncSession, *, user: User, scope: str
+        self,
+        db: AsyncSession,
+        *,
+        user: User,
+        scope: str,
+        platform_admin: bool | None = None,
     ) -> str:
         await self.access_scope_service.get_current_scope(db, user=user)
         normalized = scope if scope in {"mine", "shared", "platform"} else "mine"
-        if normalized == "platform" and user.role != "admin":
-            raise HTTPException(status.HTTP_403_FORBIDDEN, "仅管理员可查询平台自动化")
+        if normalized == "platform" and platform_admin is None:
+            platform_admin = await self._is_platform_admin(db, user)
+        if normalized == "platform" and not platform_admin:
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN, "仅系统管理员可查询平台自动化"
+            )
         return normalized
 
     @staticmethod
@@ -884,11 +932,15 @@ class AgentAutomationService:
 
     @staticmethod
     def _can_view(
-        user: User, automation: AgentAutomation, requested_scope: str
+        user: User,
+        automation: AgentAutomation,
+        requested_scope: str,
+        *,
+        platform_admin: bool,
     ) -> bool:
         if automation.owner_user_id == user.id:
             return True
-        if requested_scope == "platform" and user.role == "admin":
+        if requested_scope == "platform" and platform_admin:
             return True
         if automation.scope_type != "shared":
             return False

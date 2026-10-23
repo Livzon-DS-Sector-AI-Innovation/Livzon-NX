@@ -473,7 +473,8 @@ async def update_user(
     if user is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "用户不存在")
 
-    updates = payload.model_dump(exclude_unset=True)
+    updates = payload.model_dump(exclude_unset=True, exclude={"reason"})
+    reason = (payload.reason or "").strip()
     if user.id == current_user.id and (
         {"role", "status", "department"} & updates.keys()
     ):
@@ -488,6 +489,17 @@ async def update_user(
     ):
         if await active_system_admin_count(db) <= 1:
             raise HTTPException(409, "不能停用或移除最后一个可用的系统管理员")
+    role_changed = "role" in updates and updates["role"] != user.role
+    if role_changed and updates["role"] is None:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "角色不能为空",
+        )
+    if role_changed and not reason:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "变更账号角色必须填写原因",
+        )
     authorization_changes = {
         field: getattr(user, field)
         for field in ("role", "status", "department")
@@ -519,6 +531,11 @@ async def update_user(
             actor_id=current_user.id,
             event_type="identity.user_page_grants.changed.v1",
         )
+        new_authorization_values = {
+            field: updates[field] for field in authorization_changes
+        }
+        if role_changed:
+            new_authorization_values["reason"] = reason
         await record_audit_log(
             db,
             action="update_user_authorization_context",
@@ -526,7 +543,7 @@ async def update_user(
             resource_type="identity.user_page_permissions",
             resource_id=user.id,
             old_value=authorization_changes,
-            new_value={field: updates[field] for field in authorization_changes},
+            new_value=new_authorization_values,
         )
     user.updated_by = current_user.id
     await db.flush()

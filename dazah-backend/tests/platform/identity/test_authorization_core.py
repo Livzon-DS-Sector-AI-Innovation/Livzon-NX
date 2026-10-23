@@ -500,12 +500,12 @@ async def test_parallel_grant_writes_and_queued_actor_revocation(
                 asyncio.gather(
                     client.put(
                         f"/identity/users/{user_id}",
-                        json={"role": "user"},
+                        json={"role": "user", "reason": "并发降级验证"},
                         headers={"x-test-actor": "first"},
                     ),
                     client.put(
                         f"/identity/users/{actor_id}",
-                        json={"role": "user"},
+                        json={"role": "user", "reason": "并发降级验证"},
                         headers={"x-test-actor": "second"},
                     ),
                 ),

@@ -12,11 +12,13 @@ const mocks = vi.hoisted(() => ({
   syncFeishuUsers: vi.fn(),
   updateUser: vi.fn(),
 }))
-const navigation = vi.hoisted(() => ({ query: '' }))
+const navigation = vi.hoisted(() => ({ query: '', replace: vi.fn() }))
 
 vi.mock('@/actions/users', () => mocks)
 vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(navigation.query),
+  usePathname: () => '/settings',
+  useRouter: () => ({ replace: navigation.replace }),
 }))
 
 import UserManagementClient from './UserManagementClient'
@@ -27,6 +29,7 @@ describe('UserManagementClient permission entry', () => {
   beforeEach(() => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
     navigation.query = ''
+    navigation.replace.mockReset()
     host = document.createElement('div')
     document.body.append(host)
     mocks.getUsers.mockResolvedValue({
@@ -49,6 +52,7 @@ describe('UserManagementClient permission entry', () => {
   afterEach(() => {
     host.remove()
     navigation.query = ''
+    navigation.replace.mockReset()
     vi.clearAllMocks()
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
@@ -102,18 +106,20 @@ describe('UserManagementClient permission entry', () => {
     await act(async () => root.unmount())
   })
 
-  it('restores a filtered page from the URL', async () => {
+  it('restores a filtered server-side page from the URL', async () => {
     navigation.query = 'tab=users&q=alice&page=2&size=20'
     mocks.getUsers.mockResolvedValue({
-      items: Array.from({ length: 31 }, (_, index) => ({
-        id: `user-${index + 1}`,
-        name: `姓名${index + 1}`,
-        username: `account-${index + 1}`,
+      items: Array.from({ length: 10 }, (_, index) => ({
+        id: `user-${index + 21}`,
+        name: `姓名${index + 21}`,
+        username: `account-${index + 21}`,
         role: 'user',
         status: 'active',
         auth_source: 'local',
       })),
       total: 31,
+      offset: 20,
+      limit: 20,
     })
     const root = createRoot(host)
     await act(async () => {
@@ -122,14 +128,68 @@ describe('UserManagementClient permission entry', () => {
     })
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
 
-    expect(mocks.getUsers).toHaveBeenCalledWith({ keyword: 'alice' })
+    expect(mocks.getUsers).toHaveBeenCalledWith(expect.objectContaining({
+      keyword: 'alice', offset: 20, limit: 20,
+    }))
     expect(host.querySelector<HTMLInputElement>('.ant-input-search input')?.value).toBe('alice')
     expect(host.querySelector('.ant-pagination-item-active')?.textContent).toContain('2')
     expect(host.textContent).toContain('姓名21')
+    expect(host.textContent).toContain('共 31 个账号')
 
-    const replaceState = vi.spyOn(window.history, 'replaceState').mockImplementation(() => {})
     await act(async () => host.querySelector<HTMLElement>('.ant-pagination-item-1')?.click())
-    expect(replaceState).toHaveBeenCalledWith(null, '', '/settings?tab=users&q=alice&size=20')
+    expect(navigation.replace).toHaveBeenCalledWith(
+      '/settings?tab=users&q=alice&page=1&size=20',
+      { scroll: false },
+    )
+
+    await act(async () => root.unmount())
+  })
+
+  it('requests the last page instead of slicing a full user list on the client', async () => {
+    navigation.query = 'tab=users&page=11&page_size=10'
+    mocks.getUsers.mockResolvedValue({
+      items: [{
+        id: 'user-101', name: '第101人', username: 'account-101',
+        role: 'user', status: 'active', auth_source: 'local',
+      }],
+      total: 101,
+      offset: 100,
+      limit: 10,
+    })
+    const root = createRoot(host)
+    await act(async () => {
+      root.render(createElement(AntdApp, null, createElement(UserManagementClient)))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+
+    expect(mocks.getUsers).toHaveBeenCalledWith(expect.objectContaining({ offset: 100, limit: 10 }))
+    expect(host.textContent).toContain('第101人')
+    expect(host.textContent).toContain('共 101 个账号')
+
+    await act(async () => root.unmount())
+  })
+
+  it('does not expose or submit role changes from the profile editor', async () => {
+    mocks.updateUser.mockResolvedValue({})
+    const root = createRoot(host)
+    await act(async () => {
+      root.render(createElement(AntdApp, null, createElement(UserManagementClient)))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+
+    await act(async () => host.querySelector<HTMLButtonElement>('tbody .ant-btn')?.click())
+    const modal = document.querySelector<HTMLElement>('.ant-modal')
+    expect(modal?.textContent).toContain('编辑用户')
+    expect(modal?.textContent).not.toContain('初始角色')
+
+    const ok = modal?.querySelector<HTMLButtonElement>('.ant-modal-footer .ant-btn-primary')
+    await act(async () => ok?.click())
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)) })
+
+    expect(mocks.updateUser).toHaveBeenCalledTimes(1)
+    expect(mocks.updateUser.mock.calls[0][1]).not.toHaveProperty('role')
 
     await act(async () => root.unmount())
   })
@@ -155,6 +215,7 @@ describe('UserManagementClient permission entry', () => {
   })
 
   it('writes submitted searches to the user-list URL', async () => {
+    navigation.query = 'tab=users'
     const root = createRoot(host)
     await act(async () => {
       root.render(createElement(AntdApp, null, createElement(UserManagementClient)))
@@ -168,11 +229,13 @@ describe('UserManagementClient permission entry', () => {
       if (input) setValue?.call(input, '张超')
       input?.dispatchEvent(new Event('input', { bubbles: true }))
     })
-    const replaceState = vi.spyOn(window.history, 'replaceState').mockImplementation(() => {})
     const searchButton = host.querySelector<HTMLButtonElement>('.ant-input-search-btn')
     expect(searchButton).not.toBeNull()
     await act(async () => searchButton?.click())
-    expect(replaceState).toHaveBeenCalledWith(null, '', '/settings?tab=users&q=%E5%BC%A0%E8%B6%85')
+    expect(navigation.replace).toHaveBeenCalledWith(
+      '/settings?tab=users&q=%E5%BC%A0%E8%B6%85',
+      { scroll: false },
+    )
 
     await act(async () => root.unmount())
   })

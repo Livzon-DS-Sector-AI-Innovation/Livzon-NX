@@ -4,8 +4,9 @@ import hashlib
 import io
 import re
 import zipfile
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
+from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 import openpyxl
@@ -15,21 +16,21 @@ from sqlalchemy import select
 
 from app.core.exceptions import AppException
 from app.modules.energy.ledger_models import (
-    EnergyEntryPlan,
-    EnergyEntryTask,
     EnergyImportBatch,
     EnergyMeterPoint,
     EnergyReading,
 )
 from app.modules.energy.ledger_schemas import (
-    EntrySubmission,
-    EntryValue,
+    DirectReadingValue,
+    DirectReadingWrite,
     ImportConfirm,
     ImportResponse,
     MeterDefinition,
-    SnapshotImportRequest,
 )
 from app.modules.energy.ledger_service import EnergyLedgerService
+
+if TYPE_CHECKING:
+    from app.modules.energy.ledger_template import TemplateDraftResponse
 from app.modules.energy.ledger_source_policy import (
     SOURCE_CATEGORIES as SOURCE_CATEGORIES,
 )
@@ -40,7 +41,7 @@ from app.modules.energy.ledger_source_policy import (
     input_column_allowed as input_column_allowed,
 )
 
-IMPORT_POLICY_VERSION = 2
+IMPORT_POLICY_VERSION = 3
 
 
 def validate_import_period(start: date | None, end: date | None) -> None:
@@ -100,9 +101,11 @@ def inspect_xlsx(
     sheets: list[JsonValue] = []
     warnings: list[JsonValue] = []
     formulas: list[JsonValue] = []
+    source_cell_count = 0
     try:
         for sheet in workbook:
             sheet.reset_dimensions()
+            source_grid: list[JsonValue] = []
             cells: list[JsonValue] = []
             headers: list[JsonValue] = []
             computed: set[int] = set()
@@ -110,6 +113,20 @@ def inspect_xlsx(
             for row_index, row in enumerate(sheet.iter_rows(), 1):
                 if row_index > 5000 or len(row) > 200:
                     raise AppException(413, "每张工作表最多 5000 行、200 列")
+                source_cell_count += len(row)
+                if source_cell_count > 100000:
+                    raise AppException(413, "原表快照最多保留100000个单元格")
+                source_grid.append(
+                    [
+                        cell.value.isoformat()
+                        if isinstance(cell.value, (date, datetime))
+                        else cell.value
+                        if isinstance(cell.value, (str, int, float, bool))
+                        or cell.value is None
+                        else str(cell.value)
+                        for cell in row
+                    ]
+                )
                 if row_index == 1:
                     headers = [str(cell.value or "") for cell in row]
                     computed.update(calculated_columns(sheet.title, headers))
@@ -167,6 +184,7 @@ def inspect_xlsx(
                     "headers": headers,
                     "cells": cells,
                     "row_dates": row_dates,
+                    "source_grid": source_grid,
                     "calculated_columns": [column for column in sorted(computed)],
                     "input_columns": [
                         column
@@ -186,8 +204,8 @@ def inspect_xlsx(
         "formulas": formulas,
         "warnings": warnings,
         "notes": [
-            "表码按实际日期计算；公式仅用于核对，不作为原始用量重复导入。",
-            "单位、倍率、共享关系及跨行公式须在配置草案中核对后启用。",
+            "原表逐格保留日期引用、公式与手填值；21表按原公式计算，结果值不重复导入原始计量点。",
+            "原始字段及固定公式从工作簿识别，请核对来源列与公式识别结果。",
             "大罐数量不属于导入或填报项目。",
             *(
                 ["文件未保留公式；结果表仅作核对，不作为人工修正或原始读数导入。"]
@@ -260,17 +278,10 @@ async def confirm_import(
     )
     end_date = date.fromisoformat(end_value) if isinstance(end_value, str) else None
     validate_import_period(start_date, end_date)
-    if any(
-        not in_import_period(item.usage_date, start_date, end_date)
-        for item in payload.adjustments
-    ):
-        raise AppException(422, "人工修正日期超出本次有效导入范围")
-    values: dict[date, list[tuple[UUID, Decimal, date]]] = {}
+    values: dict[tuple[str, date], list[DirectReadingValue]] = {}
     for mapping in payload.mappings:
         meter = await service.repo.get(EnergyMeterPoint, mapping.point_id)
         definition = MeterDefinition.model_validate(meter.definition)
-        if not definition.enabled:
-            raise AppException(422, "请先确认并启用映射的计量点，再导入历史数据")
         source = next(
             (
                 sheet
@@ -297,7 +308,7 @@ async def confirm_import(
         expected_type = "direct" if mapping.sheet == "电量" else "counter"
         if definition.reading_type != expected_type:
             raise AppException(422, "五类表码须为累计读数，电量须为每日直接用量")
-        if definition.source_sheet and (
+        if (
             definition.source_sheet != mapping.sheet
             or definition.source_column != mapping.column
         ):
@@ -331,62 +342,23 @@ async def confirm_import(
                 continue
             if existing:
                 raise AppException(
-                    409, "来源日期已有未完成任务，请先完成该任务后重试导入"
+                    409, "来源日期已有填写草稿，请先处理草稿后重试导入"
                 )
-            task_day = (
-                day + timedelta(days=1) if definition.reading_type == "direct" else day
+            values.setdefault((mapping.sheet, day), []).append(
+                DirectReadingValue(point_id=meter.id, value=value, version=0)
             )
-            values.setdefault(task_day, []).append((meter.id, value, day))
         if not matched:
             raise AppException(422, "选定来源列没有可导入的原始数值")
-    # Dedicated non-scheduled plan retains responsibility and correction access.
-    plan = EnergyEntryPlan(
-        id=uuid4(),
-        version=1,
-        definition={
-            "name": "历史导入",
-            "point_ids": [str(item.point_id) for item in payload.mappings],
-            "owner_ids": [str(service.actor_id)],
-            "publish_time": "08:00",
-            "deadline_time": "10:00",
-            "reminder_time": "10:30",
-            "group_chat_id": "",
-            "enabled": False,
-        },
-        created_by=service.actor_id,
-    )
-    if values:
-        service.db.add(plan)
-    for task_day, entries in values.items():
-        task = EnergyEntryTask(
-            id=uuid4(),
-            plan_id=plan.id,
-            task_date=task_day,
-            definition={**plan.definition, "plan_version": 1},
-            created_by=service.actor_id,
+    from app.modules.energy.ledger_entry import write_entries
+
+    for (dataset, day), entries in values.items():
+        await write_entries(
+            service,
+            DirectReadingWrite(
+                dataset=dataset, reading_date=day, values=entries, reason=payload.reason
+            ),
+            source="import",
         )
-        service.db.add(task)
-        writes: list[EntryValue] = []
-        for point_id, value, day in entries:
-            reading = EnergyReading(
-                id=uuid4(),
-                task_id=task.id,
-                point_id=point_id,
-                reading_date=day,
-                version=0,
-                source="import",
-                exception={},
-            )
-            service.db.add(reading)
-            writes.append(EntryValue(reading_id=reading.id, version=0, value=value))
-        await service.db.flush()
-        await service.submit(
-            task.id,
-            EntrySubmission(values=writes, reason=payload.reason),
-            imported=True,
-        )
-    for adjustment in payload.adjustments:
-        await service.adjust(adjustment)
     batch.status = "imported"
     batch.payload = {
         **batch.payload,
@@ -411,120 +383,90 @@ async def confirm_import(
     return ImportResponse(id=batch.id, status=batch.status, payload=batch.payload)
 
 
-async def preview_snapshot_import(
-    service: EnergyLedgerService, payload: SnapshotImportRequest
-) -> ImportResponse:
-    from app.modules.energy.models import (
-        EnergySheetSnapshot,
-        EnergySnapshotRow,
-        EnergyWorkbookSheet,
-    )
+async def prepare_import(
+    service: EnergyLedgerService, batch_id: UUID
+) -> "TemplateDraftResponse":
+    from app.modules.energy.ledger_models import EnergyCalculationRule
+    from app.modules.energy.ledger_schemas import RuleDefinition
+    from app.modules.energy.ledger_template import extract_template
 
-    validate_import_period(payload.start_date, payload.end_date)
     await service.require_manager()
     await service.repo.serialize_write()
-    sheets: list[JsonValue] = []
-    source_hashes: list[str] = []
-    titles: set[str] = set()
-    for snapshot_id in payload.snapshot_ids:
-        snapshot = await service.db.get(EnergySheetSnapshot, snapshot_id)
-        sheet = (
-            await service.db.get(EnergyWorkbookSheet, snapshot.sheet_id)
-            if snapshot
-            else None
-        )
-        if snapshot is None or sheet is None or snapshot.is_deleted or sheet.is_deleted:
-            raise AppException(404, "历史快照不存在")
-        if sheet.title not in SOURCE_CATEGORIES or sheet.title in titles:
-            raise AppException(422, "每类原始表只能选择一份快照，不导入汇总快照")
-        titles.add(sheet.title)
-        if snapshot.row_count > 5000 or len(snapshot.header_values) > 200:
-            raise AppException(413, "历史快照超过单次处理上限")
-        rows = list(
+    batch = await service.repo.get(EnergyImportBatch, batch_id)
+    try:
+        draft = extract_template(batch.payload)
+    except ValueError as exc:
+        raise AppException(422, "无法识别工作簿字段和公式") from exc
+    points = await service.repo.all(EnergyMeterPoint)
+    rules = await service.repo.all(EnergyCalculationRule)
+    codes: dict[str, str] = {}
+    for field in draft.meters:
+        existing_meter = next(
             (
-                await service.db.scalars(
-                    select(EnergySnapshotRow)
-                    .where(EnergySnapshotRow.snapshot_id == snapshot.id)
-                    .order_by(EnergySnapshotRow.row_index)
-                    .limit(5001)
-                )
-            ).all()
+                item
+                for item in points
+                if item.definition.get("source_sheet") == field.source_sheet
+                and item.definition.get("source_column") == field.source_column
+            ),
+            None,
         )
-        cells: list[JsonValue] = []
-        headers: list[JsonValue] = [header for header in snapshot.header_values]
-        computed = calculated_columns(sheet.title, headers)
-        for row in rows:
-            day = parse_source_date(row.values[0] if row.values else None, payload.year)
-            if day is None or not in_import_period(
-                day, payload.start_date, payload.end_date
-            ):
-                continue
-            for column, raw in enumerate(row.values[1:], 2):
-                if raw is None or isinstance(raw, bool) or column in computed:
-                    continue
-                try:
-                    value = Decimal(str(raw))
-                except InvalidOperation:
-                    continue
-                if value.is_finite():
-                    cells.append(
-                        {
-                            "date": day.isoformat(),
-                            "column": column,
-                            "value": str(value),
-                            "cell": f"row-{row.row_index}-col-{column}",
-                        }
-                    )
-        sheets.append(
-            {
-                "name": sheet.title,
-                "category": SOURCE_CATEGORIES[sheet.title],
-                "headers": headers,
-                "cells": cells,
-                "calculated_columns": [column for column in sorted(computed)],
-                "input_columns": [
-                    column
-                    for column in range(2, len(headers) + 1)
-                    if input_column_allowed(sheet.title, headers, column, computed)
-                ],
-                "snapshot_id": str(snapshot.id),
-            }
+        if existing_meter:
+            codes["point:" + field.code] = "point:" + existing_meter.code
+            continue
+        field_values = field.model_dump()
+        field_values.update(
+            enabled=True,
+            active_from=date(2000, 1, 1),
+            active_to=None,
         )
-        source_hashes.append(f"{snapshot.id}:{snapshot.content_hash}")
-    digest = hashlib.sha256(
-        (
-            f"{IMPORT_POLICY_VERSION}:{payload.year}:"
-            f"{payload.start_date}:{payload.end_date}:"
-            + ":".join(sorted(source_hashes))
-        ).encode()
-    ).hexdigest()
-    existing = await service.db.scalar(
-        select(EnergyImportBatch).where(EnergyImportBatch.content_hash == digest)
-    )
-    if existing:
-        return ImportResponse(
-            id=existing.id, status=existing.status, payload=existing.payload
+        new_meter = EnergyMeterPoint(
+            id=uuid4(),
+            code=field.code,
+            version=1,
+            definition=MeterDefinition.model_validate(field_values).model_dump(
+                mode="json"
+            ),
+            created_by=service.actor_id,
         )
-    item = EnergyImportBatch(
-        id=uuid4(),
-        content_hash=digest,
-        status="preview",
-        payload={
-            "year": payload.year,
-            "policy_version": IMPORT_POLICY_VERSION,
-            "start_date": payload.start_date.isoformat()
-            if payload.start_date
-            else None,
-            "end_date": payload.end_date.isoformat() if payload.end_date else None,
-            "sheets": sheets,
-            "formulas": [],
-            "warnings": [
-                "历史快照不包含可靠的公式来源，汇总计算关系须在配置中单独核对。"
-            ],
-            "source_snapshot_ids": [str(value) for value in payload.snapshot_ids],
-        },
-        created_by=service.actor_id,
-    )
-    service.db.add(item)
+        service.db.add(new_meter)
+        points.append(new_meter)
+        service.revision("meter", new_meter, 1, new_meter.definition, "Excel 原始字段")
+        codes["point:" + field.code] = "point:" + new_meter.code
+    for formula in draft.rules:
+        existing_rule = next(
+            (
+                item
+                for item in rules
+                if item.definition.get("source_sheet") == formula.source_sheet
+                and item.definition.get("source_column") == formula.source_column
+            ),
+            None,
+        )
+        if existing_rule:
+            codes["rule:" + formula.code] = "rule:" + existing_rule.code
+            continue
+        formula_values = formula.model_dump()
+        formula_values.update(
+            enabled=True,
+            active_from=date(2000, 1, 1),
+            active_to=None,
+        )
+        formula_values["terms"] = [
+            dict(term, metric_key=codes.get(term["metric_key"], term["metric_key"]))
+            for term in formula_values["terms"]
+        ]
+        new_rule = EnergyCalculationRule(
+            id=uuid4(),
+            code=formula.code,
+            version=1,
+            definition=RuleDefinition.model_validate(formula_values).model_dump(
+                mode="json"
+            ),
+            created_by=service.actor_id,
+        )
+        service.db.add(new_rule)
+        rules.append(new_rule)
+        service.revision("rule", new_rule, 1, new_rule.definition, "Excel 固定公式")
+        codes["rule:" + formula.code] = "rule:" + new_rule.code
     await service.db.flush()
-    return ImportResponse(id=item.id, status=item.status, payload=item.payload)
+    return draft

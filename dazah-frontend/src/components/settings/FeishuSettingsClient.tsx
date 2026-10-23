@@ -57,6 +57,7 @@ import MemoryGovernanceClient from './MemoryGovernanceClient'
 import AgentModuleCoverageClient from './AgentModuleCoverageClient'
 import SettingsSegmentedNav from './SettingsSegmentedNav'
 import SettingsSubnav from './SettingsSubnav'
+import AgentEntryVisibilitySettings from './AgentEntryVisibilitySettings'
 
 const { Text, Title } = Typography
 
@@ -184,6 +185,7 @@ function Overview({
   const allowedGroupCount = config?.allowed_group_chat_ids?.length ?? 0
   return (
     <Space orientation="vertical" size={16} className="w-full">
+      <AgentEntryVisibilitySettings />
       <Text type="secondary">最近完整刷新：{formatDate(refreshedAt)} · {loading ? '正在刷新' : '手动刷新'} · 队列指标为当前积压，失败投递为累计失败记录</Text>
       {refreshErrors.length > 0 && <Alert type="error" showIcon title={`运行数据加载不完整：${refreshErrors.join('、')}`} description="加载失败的数据已标记为未获取，不代表数量为零。请点击“刷新运行状态”重试；最近完整刷新时间仅在所有数据源成功时更新。" />}
       {status && (!status.configured || !status.gateway_enabled || status.gateway !== 'connected' || status.event_consumer_count === 0) && (
@@ -525,7 +527,7 @@ function IdentityAdmission({ tenantId, appId }: { tenantId: string; appId: strin
             ? new Date(Date.now() - activeDays * 86_400_000).toISOString()
             : undefined,
         }),
-        getUsers({ status: 'active' }),
+        getUsers({ status: 'active', limit: 500 }),
         getExternalIdentityConflicts(),
       ])
       setItems(bindings.items)

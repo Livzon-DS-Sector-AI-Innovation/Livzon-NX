@@ -20,15 +20,20 @@ test('预告允许保存，维护保留表单并阻止新请求，恢复后可�
   await expect(page.getByText(/请完成当前工作并停止操作/).first()).toBeVisible()
   const originalUrl = page.url()
   phase = 'maintenance'
-  const maintenance = page.getByRole('dialog', { name: '系统更新维护' })
+  const maintenance = page.locator('[data-dazah-maintenance-screen]')
   await expect(maintenance).toBeVisible({ timeout: 10_000 })
-  await maintenance.getByRole('button', { name: '我知道了，保留当前页面' }).click()
+  await expect(maintenance).toContainText('系统维护中，请稍候')
   await expect(form.getByLabel('配置名称')).toHaveValue('维护前未保存的工作')
-  let businessRequests = 0
-  page.on('request', request => { if (request.method() === 'POST') businessRequests++ })
-  await form.getByRole('button', { name: '测试 URL' }).click()
-  await expect(maintenance).toBeVisible()
-  expect(businessRequests).toBe(0)
+  // 维护期间受保护的 fetch 直接拒绝，不会发出业务请求。
+  const businessBlocked = await page.evaluate(async () => {
+    try {
+      await fetch('/api/v1/llm/configs', { method: 'POST' })
+      return false
+    } catch {
+      return true
+    }
+  })
+  expect(businessBlocked).toBe(true)
   expect(page.url()).toBe(originalUrl)
   phase = 'normal'
   await expect(maintenance).toBeHidden({ timeout: 10_000 })

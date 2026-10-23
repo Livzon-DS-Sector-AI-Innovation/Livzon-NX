@@ -1,10 +1,11 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { App, Button, Dropdown, Form, Input, Modal, Select, Space, Table, Tag, Typography } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
 import { roleTagColor } from '@/lib/role-tag'
+import { positiveListNumber } from '@/lib/list-url-state'
+import { useListUrlState } from '@/lib/useListUrlState'
 import {
   LockOutlined,
   MoreOutlined,
@@ -33,20 +34,43 @@ const roleOptions = [
   { value: 'admin', label: '系统管理员' },
 ]
 
+const roleFilterOptions = [
+  { value: 'admin', label: '管理员' },
+  { value: 'user', label: '普通用户' },
+]
+
 const statusOptions = [
   { value: 'active', label: '启用' },
   { value: 'disabled', label: '禁用' },
 ]
 
+interface UserFormValues {
+  username?: string
+  password?: string
+  name: string
+  email?: string | null
+  mobile?: string | null
+  employee_no?: string | null
+  department?: string | null
+  position?: string | null
+  role?: 'admin' | 'user'
+  status: 'active' | 'disabled'
+}
+
 export default function UserManagementClient() {
   const { message, modal } = App.useApp()
-  const searchParams = useSearchParams()
-  const keyword = searchParams.get('q')?.trim() || ''
-  const requestedPage = Number(searchParams.get('page'))
-  const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1
-  const requestedSize = Number(searchParams.get('size'))
-  const pageSize = [10, 20, 50].includes(requestedSize) ? requestedSize : 10
+  const { page, params, setListQuery } = useListUrlState(10)
+  const keyword = params.get('q')?.trim() || ''
+  const roleParam = params.get('role')
+  const roleFilter = roleParam === 'admin' || roleParam === 'user' ? roleParam : undefined
+  const statusParam = params.get('status')
+  const statusFilter = statusParam === 'active' || statusParam === 'disabled' ? statusParam : undefined
+  // Keep old `size` links working while new links use the project-wide `page_size`.
+  const legacySize = positiveListNumber(params.get('size'), 0, 200)
+  const pageSize = positiveListNumber(params.get('page_size'), legacySize || 10, 200)
+
   const [users, setUsers] = useState<UserManagementItem[]>([])
+  const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
   const [loadError, setLoadError] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
@@ -55,41 +79,46 @@ export default function UserManagementClient() {
   const [syncing, setSyncing] = useState(false)
   const [passwordUser, setPasswordUser] = useState<UserManagementItem | null>(null)
   const [searchDraft, setSearchDraft] = useState({ keyword, value: keyword })
-  const [form] = Form.useForm()
+  const [form] = Form.useForm<UserFormValues>()
   const [passwordForm] = Form.useForm()
+  const requestSequence = useRef(0)
 
   const searchText = searchDraft.keyword === keyword ? searchDraft.value : keyword
 
-  const updateListUrl = (nextKeyword: string, nextPage: number, nextSize = pageSize) => {
-    const params = new URLSearchParams(searchParams.toString())
-    params.set('tab', 'users')
-    if (nextKeyword) params.set('q', nextKeyword)
-    else params.delete('q')
-    if (nextPage > 1) params.set('page', String(nextPage))
-    else params.delete('page')
-    if (nextSize !== 10) params.set('size', String(nextSize))
-    else params.delete('size')
-    window.history.replaceState(null, '', `/settings?${params.toString()}`)
-  }
-
   const loadUsers = useCallback(async () => {
+    const sequence = ++requestSequence.current
     setLoading(true)
     setLoadError(false)
     try {
-      const result = await getUsers({ keyword: keyword || undefined })
+      const result = await getUsers({
+        keyword: keyword || undefined,
+        role: roleFilter,
+        status: statusFilter,
+        offset: (page - 1) * pageSize,
+        limit: pageSize,
+      })
+      if (sequence !== requestSequence.current) return
       setUsers(result.items || [])
+      setTotal(result.total || 0)
     } catch (error) {
+      if (sequence !== requestSequence.current) return
       console.error(error)
       setLoadError(true)
     } finally {
-      setLoading(false)
+      if (sequence === requestSequence.current) setLoading(false)
     }
-  }, [keyword])
+  }, [keyword, page, pageSize, roleFilter, statusFilter])
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => void loadUsers(), 0)
     return () => window.clearTimeout(timeoutId)
   }, [loadUsers])
+
+  useEffect(() => {
+    if (loading || total <= 0) return
+    const lastPage = Math.max(1, Math.ceil(total / pageSize))
+    if (page > lastPage) setListQuery({ page: lastPage })
+  }, [loading, page, pageSize, setListQuery, total])
 
   const handleCreate = () => {
     setEditingUser(null)
@@ -126,24 +155,23 @@ export default function UserManagementClient() {
 
   const handleEdit = (record: UserManagementItem) => {
     setEditingUser(record)
+    form.resetFields()
     form.setFieldsValue({
-      username: record.username,
+      username: record.username ?? undefined,
       name: record.name,
       email: record.email,
       mobile: record.mobile,
       employee_no: record.employee_no,
       department: record.department,
       position: record.position,
-      role: record.role,
       status: record.status,
     })
     setModalOpen(true)
   }
 
-  const handleSave = async () => {
+  const saveUser = async (values: UserFormValues) => {
+    setSaving(true)
     try {
-      const values = await form.validateFields()
-      setSaving(true)
       if (editingUser) {
         const updateData: UserManagementUpdate = {
           name: values.name,
@@ -152,17 +180,30 @@ export default function UserManagementClient() {
           employee_no: values.employee_no || null,
           department: values.department || null,
           position: values.position || null,
-          role: values.role,
           status: values.status,
         }
         await updateUser(editingUser.id, updateData)
         message.success('用户已更新')
       } else {
-        await createUser(values as LocalUserCreate)
+        const username = values.username?.trim()
+        if (!username || !values.password) throw new Error('请填写用户名和初始密码')
+        const createData: LocalUserCreate = {
+          username,
+          password: values.password,
+          name: values.name,
+          email: values.email || null,
+          mobile: values.mobile || null,
+          employee_no: values.employee_no || null,
+          department: values.department || null,
+          position: values.position || null,
+          role: values.role ?? 'user',
+          status: values.status,
+        }
+        await createUser(createData)
         message.success('用户已创建')
       }
       setModalOpen(false)
-      loadUsers()
+      await loadUsers()
     } catch (error) {
       if (error instanceof Error) message.error(error.message)
     } finally {
@@ -170,12 +211,33 @@ export default function UserManagementClient() {
     }
   }
 
+  const handleSave = async () => {
+    let values: UserFormValues
+    try {
+      values = await form.validateFields()
+    } catch {
+      return
+    }
+    if (!editingUser && values.role === 'admin') {
+      modal.confirm({
+        title: '确认创建系统管理员？',
+        content: '该账号将立即拥有全部平台权限，包括用户、权限、审计和 LLM 配置管理。',
+        okText: '创建系统管理员',
+        cancelText: '取消',
+        okButtonProps: { danger: true },
+        onOk: () => saveUser(values),
+      })
+      return
+    }
+    await saveUser(values)
+  }
+
   const handleStatus = async (record: UserManagementItem) => {
     const nextStatus = record.status === 'active' ? 'disabled' : 'active'
     try {
       await updateUser(record.id, { status: nextStatus })
       message.success(nextStatus === 'active' ? '用户已启用' : '用户已禁用')
-      loadUsers()
+      await loadUsers()
     } catch (error) {
       if (error instanceof Error) message.error(error.message)
       throw error
@@ -310,6 +372,9 @@ export default function UserManagementClient() {
           <Text className="text-[13px] text-[var(--color-steel)]">
             管理开发阶段本地账号，并为飞书 SSO 用户分配平台角色。
           </Text>
+          <p className="m-0 mt-1 text-xs text-[var(--color-steel)]">
+            角色调整请在“权限管理 → 用户角色”中完成，变更需填写原因。
+          </p>
         </div>
         <div className="flex w-full flex-wrap items-center gap-2 xl:w-auto">
           <Input.Search
@@ -320,11 +385,29 @@ export default function UserManagementClient() {
             onSearch={(value) => {
               const nextKeyword = value.trim()
               setSearchDraft({ keyword: nextKeyword, value: nextKeyword })
-              updateListUrl(nextKeyword, 1)
+              setListQuery({ q: nextKeyword || null }, true)
             }}
             className="w-full sm:w-[260px]"
           />
-          <Button icon={<ReloadOutlined />} onClick={loadUsers}>
+          <Select
+            allowClear
+            aria-label="角色筛选"
+            placeholder="全部角色"
+            value={roleFilter}
+            options={roleFilterOptions}
+            style={{ width: 130 }}
+            onChange={(value) => setListQuery({ role: value ?? null }, true)}
+          />
+          <Select
+            allowClear
+            aria-label="状态筛选"
+            placeholder="全部状态"
+            value={statusFilter}
+            options={statusOptions}
+            style={{ width: 120 }}
+            onChange={(value) => setListQuery({ status: value ?? null }, true)}
+          />
+          <Button icon={<ReloadOutlined />} onClick={() => void loadUsers()}>
             刷新
           </Button>
           <Button
@@ -350,13 +433,22 @@ export default function UserManagementClient() {
         rowKey="id"
         loading={loading}
         scroll={{ x: 990 }}
-        locale={{ emptyText: keyword ? '没有符合条件的用户' : '暂无用户' }}
+        locale={{ emptyText: keyword || roleFilter || statusFilter ? '没有符合条件的用户' : '暂无用户' }}
         pagination={{
-          current: Math.min(page, Math.max(1, Math.ceil(users.length / pageSize))),
+          current: page,
           pageSize,
+          total,
           pageSizeOptions: ['10', '20', '50'],
           showSizeChanger: true,
-          onChange: (nextPage, nextSize) => updateListUrl(keyword, nextPage, nextSize),
+          showTotal: (value) => `共 ${value} 个账号`,
+          onChange: (nextPage, nextSize) => {
+            setListQuery(
+              nextSize === pageSize
+                ? { page: nextPage }
+                : { page_size: nextSize, size: null },
+              nextSize !== pageSize,
+            )
+          },
         }}
       />
 
@@ -394,17 +486,18 @@ export default function UserManagementClient() {
           >
             <Input placeholder="用户姓名" />
           </Form.Item>
-          <Space size="large" align="start">
-            <Form.Item name="role" label="角色" style={{ width: 160 }}>
+          {!editingUser && (
+            <Form.Item
+              name="role"
+              label="初始角色"
+              extra="系统管理员拥有全部平台权限；创建后也可在权限管理中调整。"
+            >
               <Select options={roleOptions} />
             </Form.Item>
-            <Form.Item name="status" label="状态" style={{ width: 160 }}>
-              <Select options={statusOptions} />
-            </Form.Item>
-          </Space>
-          <p className="-mt-3 text-xs text-[var(--color-steel)]">
-            普通管理员请在“权限管理 → 用户角色分配”中设置。
-          </p>
+          )}
+          <Form.Item name="status" label="状态" style={{ width: 160 }}>
+            <Select options={statusOptions} />
+          </Form.Item>
           <Form.Item name="email" label="邮箱">
             <Input placeholder="name@example.com" />
           </Form.Item>

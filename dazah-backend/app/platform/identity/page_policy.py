@@ -700,9 +700,10 @@ def _walk_pages(
                 "energy:analysis",
                 "energy:data-quality",
             }:
-                scopes = ("department_tree", "departments", "all")
+                # Energy is plant-wide data; department attribution is disabled.
+                scopes = ("not_applicable",)
             if page_key in {"energy:entry", "energy:settings"}:
-                scopes = ("all",)
+                scopes = ("not_applicable",)
             if page_key in PERSONAL_TODO_SCOPE_PAGES or (
                 page_key.startswith("equipment:workshop-")
                 and raw_key.startswith(("maintenance-", "inspection-"))
@@ -5863,7 +5864,6 @@ def sensitive_action_for_request(method: str, api_path: str) -> str | None:
 
 
 def _energy_ledger_bindings() -> tuple[PageApiBinding, ...]:
-    """Native ledger scope is enforced by task ownership and department queries."""
     viewing = (
         "energy:ledger-overview",
         "energy:reports",
@@ -5875,56 +5875,31 @@ def _energy_ledger_bindings() -> tuple[PageApiBinding, ...]:
     reads = viewing + entry + settings
     rules = [
         ("GET", "/ledger-options", reads, "query", None, "energy.ledger"),
+        ("GET", "/input-fields", entry + settings, "query", None, "not_applicable"),
         (
             "GET",
-            "/meter-points",
-            viewing + settings,
+            "/input-readings",
+            entry + settings,
             "query",
             None,
-            "energy.department",
+            "not_applicable",
         ),
         (
-            "GET",
-            "/calculation-rules",
-            viewing + settings,
-            "query",
-            None,
-            "energy.department",
-        ),
-        (
-            "POST",
-            "/entry-tasks/generate",
+            "PUT",
+            "/input-readings",
             entry + settings,
             "operate",
             None,
-            "energy.manager",
+            "not_applicable",
         ),
-        ("GET", "/entry-plans", entry + settings, "query", None, "energy.owner"),
-        ("GET", "/entry-tasks", entry + settings, "query", None, "energy.owner"),
-        (
-            "GET",
-            "/entry-tasks/{task_id}",
-            entry + settings,
-            "query",
-            None,
-            "energy.owner",
-        ),
-        (
-            "POST",
-            "/entry-tasks/{task_id}/submit",
-            entry + settings,
-            "operate",
-            None,
-            "energy.owner",
-        ),
-        ("GET", "/reporting", viewing + settings, "query", None, "energy.department"),
+        ("GET", "/reporting", viewing + settings, "query", None, "not_applicable"),
         (
             "GET",
             "/reporting/metrics",
             viewing + settings,
             "query",
             None,
-            "energy.department",
+            "not_applicable",
         ),
         (
             "GET",
@@ -5932,7 +5907,7 @@ def _energy_ledger_bindings() -> tuple[PageApiBinding, ...]:
             viewing + settings,
             "query",
             None,
-            "energy.department",
+            "not_applicable",
         ),
         (
             "GET",
@@ -5940,7 +5915,7 @@ def _energy_ledger_bindings() -> tuple[PageApiBinding, ...]:
             viewing + settings,
             "query",
             None,
-            "energy.department",
+            "not_applicable",
         ),
         (
             "GET",
@@ -5948,7 +5923,7 @@ def _energy_ledger_bindings() -> tuple[PageApiBinding, ...]:
             ("energy:reports",),
             "query",
             None,
-            "energy.department",
+            "not_applicable",
         ),
         (
             "GET",
@@ -5956,7 +5931,7 @@ def _energy_ledger_bindings() -> tuple[PageApiBinding, ...]:
             ("energy:reports", "energy:analysis"),
             "query",
             None,
-            "energy.department",
+            "not_applicable",
         ),
         (
             "GET",
@@ -5964,7 +5939,7 @@ def _energy_ledger_bindings() -> tuple[PageApiBinding, ...]:
             viewing + settings,
             "query",
             None,
-            "energy.department",
+            "not_applicable",
         ),
         (
             "GET",
@@ -5972,7 +5947,7 @@ def _energy_ledger_bindings() -> tuple[PageApiBinding, ...]:
             ("energy:data-quality",),
             "query",
             None,
-            "energy.department",
+            "not_applicable",
         ),
         (
             "GET",
@@ -5980,32 +5955,21 @@ def _energy_ledger_bindings() -> tuple[PageApiBinding, ...]:
             entry + settings,
             "query",
             None,
-            "energy.owner",
+            "not_applicable",
         ),
     ]
     rules.extend(
         (method, path, settings, permission, None, "energy.manager")
         for method, path, permission in (
-            ("POST", "/meter-points", "operate"),
-            ("PUT", "/meter-points/{record_id}", "operate"),
-            ("POST", "/calculation-rules", "operate"),
-            ("PUT", "/calculation-rules/{record_id}", "operate"),
-            ("POST", "/calculation-rules/trial", "operate"),
-            ("POST", "/entry-plans", "operate"),
-            ("PUT", "/entry-plans/{record_id}", "operate"),
-            ("POST", "/adjustments", "operate"),
-            ("GET", "/period-locks", "query"),
-            ("PUT", "/period-locks/{month}", "operate"),
             ("GET", "/bot-config", "query"),
             ("PUT", "/bot-config", "operate"),
             ("GET", "/notification-runs", "query"),
             ("POST", "/notification-runs/{record_id}/retry", "operate"),
             ("POST", "/imports/preview", "operate"),
-            ("GET", "/imports/snapshot-options", "query"),
-            ("POST", "/imports/from-snapshot", "operate"),
             ("POST", "/imports/{batch_id}/confirm", "operate"),
-            ("POST", "/imports/{batch_id}/draft-config", "operate"),
-            ("POST", "/reporting/rebuild", "operate"),
+            ("POST", "/imports/{batch_id}/prepare", "operate"),
+            ("GET", "/usage-reviews", "query"),
+            ("PUT", "/usage-reviews", "operate"),
         )
     )
     return _module_api_bindings("energy", rules)

@@ -8,6 +8,7 @@ from contextvars import ContextVar
 from typing import Any
 
 from fastapi import Request
+from starlette.background import BackgroundTasks
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response
 from starlette.routing import Match
@@ -177,11 +178,24 @@ class AuditMiddleware(BaseHTTPMiddleware):
         finally:
             current_audit_request_id.reset(context_token)
         duration_ms = round((time.monotonic() - start_time) * 1000)
-        await self._record(
-            request, request_id, start_time, response.status_code, request_details,
-            duration_ms, response.headers.get("content-length"),
-        )
         response.headers["X-Request-ID"] = request_id
+        # Audit is not part of the business transaction: schedule the write after
+        # the response so a slow audit table cannot add tail latency to every API.
+        # Keep any endpoint-provided background task (for example export cleanup).
+        background = BackgroundTasks()
+        background.add_task(
+            self._record,
+            request,
+            request_id,
+            start_time,
+            response.status_code,
+            request_details,
+            duration_ms,
+            response.headers.get("content-length"),
+        )
+        if response.background is not None:
+            background.add_task(response.background)
+        response.background = background
         return response
 
     async def _record(

@@ -2,6 +2,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -59,10 +60,17 @@ class AccessScopeStub:
 
 
 @pytest.mark.asyncio
-async def test_platform_audit_reads_all_definition_pages_and_run_candidates() -> None:
+async def test_platform_audit_reads_all_definition_pages_and_run_candidates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     admin = SimpleNamespace(id=uuid.uuid4(), role="admin")
     repo = PagedRepository(admin.id)
     service = AgentAutomationService(repo=repo, access_scope_service=AccessScopeStub())
+    # Platform scope is limited to system administrators, not ordinary admins.
+    monkeypatch.setattr(
+        "app.modules.agent.automation_service.is_ordinary_admin",
+        AsyncMock(return_value=False),
+    )
 
     definitions = await service.list_automations(
         None, user=admin, scope="platform", status_value=None, page=26, page_size=20

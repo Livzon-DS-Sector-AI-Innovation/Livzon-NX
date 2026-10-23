@@ -23,22 +23,22 @@ export async function handleEnergyRequest(request, response, token) {
   }
   if (url.pathname.endsWith('/e2e-state')) return send(state)
   if (url.pathname.endsWith('/ledger-options')) return send({ is_manager: true, people: [] })
-  if (url.pathname.endsWith('/entry-tasks') && request.method === 'GET') return send({ items: [state.task], total: 1 })
-  if (url.pathname === `/api/v1/energy/entry-tasks/${taskId}`) return send(state.task)
-  if (url.pathname === `/api/v1/energy/entry-tasks/${taskId}/submit`) {
+  if (url.pathname.endsWith('/input-readings')) {
+    const dataset = url.searchParams.get('dataset')
+    const readingDate = url.searchParams.get('reading_date')
+    if (request.method === 'GET') return send({ reading_date: readingDate, dataset, items: state.task.items.filter(item => dataset === '电量' ? item.category === 'electricity' : item.category === 'drinking_water').map(item => ({ ...item, reading_id: item.id })) })
     const chunks = []; for await (const chunk of request) chunks.push(chunk)
     const body = JSON.parse(Buffer.concat(chunks).toString())
     if (body.values.some(item => item.value === '999')) { response.statusCode = 503; response.end(JSON.stringify({ message: '模拟能源服务暂不可用，输入已保留' })); return true }
-    if (body.values.some(item => state.task.items.find(row => row.id === item.reading_id)?.version !== item.version)) { response.statusCode = 409; response.end(JSON.stringify({ message: '数据已被其他人修改，请刷新' })); return true }
+    if (body.values.some(item => state.task.items.find(row => row.point_id === item.point_id)?.version !== item.version)) { response.statusCode = 409; response.end(JSON.stringify({ message: '数据已被其他人修改，请刷新' })); return true }
     for (const item of body.values) {
-      const row = state.task.items.find(row => row.id === item.reading_id)
+      const row = state.task.items.find(row => row.point_id === item.point_id)
       row.version++
       if (body.draft) row.draft_value = item.value
-      else { row.value = item.value; row.draft_value = null; row.submitted_at = new Date().toISOString() }
+      else { row.value = item.value; row.draft_value = null }
     }
-    state.source = body.source
     state.task.completed_count = state.task.items.filter(item => item.value !== null).length
-    return send(state.task)
+    return send({ reading_date: body.reading_date, dataset: body.dataset, items: state.task.items.filter(item => body.dataset === '电量' ? item.category === 'electricity' : item.category === 'drinking_water').map(item => ({ ...item, reading_id: item.id })) })
   }
   if (url.pathname.endsWith('/reporting') || url.pathname.endsWith('/data-quality')) {
     const rows = state.task.items.map((item, index) => ({ id: `a4000000-0000-0000-0000-00000000000${index + 1}`, metric_key: `point:p${index}`, usage_date: '2026-07-01', name: item.name, category: item.category, unit: item.unit, workshop: '101车间', department: '101车间', report_scope: 'detail', quantity_kind: index ? 'electricity' : 'volume', temperature: '', calculated_value: item.value === null ? null : String(Number(item.value) - (index ? 0 : 100)), effective_value: item.value === null ? null : String(Number(item.value) - (index ? 0 : 100)), status: item.value === null ? 'missing_reading' : 'complete', provenance: { reading_dates: ['2026-07-01', '2026-07-02'], reading_values: [item.previous_value, item.value], configuration_version: 1 } }))
@@ -46,7 +46,7 @@ export async function handleEnergyRequest(request, response, token) {
     const selected = url.pathname.endsWith('/data-quality') ? rows.filter(row => row.effective_value === null) : rows
     return send({ start_date: '2026-07-01', end_date: '2026-07-01', status: state.task.completed_count === 2 ? 'complete' : 'partial', rows: selected, totals, trend: totals.map(row => ({ ...row, usage_date: '2026-07-01' })), distribution: totals.map(row => ({ ...row, workshop: '101车间' })), period_metrics: [], total_count: selected.length, latest_complete_date: state.task.completed_count === 2 ? '2026-07-01' : null, entry_total: 2, entry_completed: state.task.completed_count })
   }
-  if (/\/(meter-points|calculation-rules|entry-plans|period-locks|notification-runs|snapshot-options)$/.test(url.pathname)) return send([])
+  if (/\/(input-fields|notification-runs)$/.test(url.pathname)) return send([])
   if (url.pathname.endsWith('/bot-config')) return send({ definition: { app_id: '', base_url: '', enabled: false }, secret_configured: false, version: 0 })
   return false
 }

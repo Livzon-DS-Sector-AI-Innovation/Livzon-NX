@@ -1578,23 +1578,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/energy/adjustments": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Adjust */
-        post: operations["adjust_api_v1_energy_adjustments_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/energy/bot-config": {
         parameters: {
             query?: never;
@@ -1606,58 +1589,6 @@ export interface paths {
         get: operations["get_bot_api_v1_energy_bot_config_get"];
         /** Put Bot */
         put: operations["put_bot_api_v1_energy_bot_config_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/energy/calculation-rules": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Rules */
-        get: operations["rules_api_v1_energy_calculation_rules_get"];
-        put?: never;
-        /** Create Rule */
-        post: operations["create_rule_api_v1_energy_calculation_rules_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/energy/calculation-rules/trial": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Trial */
-        post: operations["trial_api_v1_energy_calculation_rules_trial_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/energy/calculation-rules/{record_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Update Rule */
-        put: operations["update_rule_api_v1_energy_calculation_rules__record_id__put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -1682,197 +1613,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/energy/entry-plans": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Plans */
-        get: operations["plans_api_v1_energy_entry_plans_get"];
-        put?: never;
-        /** Create Plan */
-        post: operations["create_plan_api_v1_energy_entry_plans_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/energy/entry-plans/{record_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Update Plan */
-        put: operations["update_plan_api_v1_energy_entry_plans__record_id__put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/energy/entry-tasks": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Tasks */
-        get: operations["tasks_api_v1_energy_entry_tasks_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/energy/entry-tasks/generate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Generate Tasks */
-        post: operations["generate_tasks_api_v1_energy_entry_tasks_generate_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/energy/entry-tasks/{task_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Task */
-        get: operations["task_api_v1_energy_entry_tasks__task_id__get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/energy/entry-tasks/{task_id}/submit": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Submit */
-        post: operations["submit_api_v1_energy_entry_tasks__task_id__submit_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/energy/feishu-config": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 获取能源 Wiki 飞书配置 */
-        get: operations["get_feishu_config_api_v1_energy_feishu_config_get"];
-        /** 保存能源 Wiki 飞书配置 */
-        put: operations["save_feishu_config_api_v1_energy_feishu_config_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/energy/feishu-config/test": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** 测试能源 Wiki 飞书连通性 */
-        post: operations["test_feishu_config_api_v1_energy_feishu_config_test_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/energy/feishu/roots": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 查询能源飞书 Wiki/Base 入口 */
-        get: operations["list_energy_feishu_roots_api_v1_energy_feishu_roots_get"];
-        put?: never;
-        /** 新增能源飞书 Wiki/Base 入口 */
-        post: operations["create_energy_feishu_root_api_v1_energy_feishu_roots_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/energy/feishu/roots/{root_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** 修改能源飞书 Wiki/Base 入口 */
-        put: operations["update_energy_feishu_root_api_v1_energy_feishu_roots__root_id__put"];
-        post?: never;
-        /** 停用能源飞书入口 */
-        delete: operations["delete_energy_feishu_root_api_v1_energy_feishu_roots__root_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/energy/imports/from-snapshot": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** From Snapshot */
-        post: operations["from_snapshot_api_v1_energy_imports_from_snapshot_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/energy/imports/preview": {
         parameters: {
             query?: never;
@@ -1884,23 +1624,6 @@ export interface paths {
         put?: never;
         /** Import Preview */
         post: operations["import_preview_api_v1_energy_imports_preview_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/energy/imports/snapshot-options": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Snapshot Options */
-        get: operations["snapshot_options_api_v1_energy_imports_snapshot_options_get"];
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1924,7 +1647,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/energy/imports/{batch_id}/draft-config": {
+    "/api/v1/energy/imports/{batch_id}/prepare": {
         parameters: {
             query?: never;
             header?: never;
@@ -1933,8 +1656,43 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Draft Config */
-        post: operations["draft_config_api_v1_energy_imports__batch_id__draft_config_post"];
+        /** Prepare Workbook */
+        post: operations["prepare_workbook_api_v1_energy_imports__batch_id__prepare_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/energy/input-fields": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Meters */
+        get: operations["meters_api_v1_energy_input_fields_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/energy/input-readings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Input Readings */
+        get: operations["input_readings_api_v1_energy_input_readings_get"];
+        /** Save Input Readings */
+        put: operations["save_input_readings_api_v1_energy_input_readings_put"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1975,41 +1733,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/energy/meter-points": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Meters */
-        get: operations["meters_api_v1_energy_meter_points_get"];
-        put?: never;
-        /** Create Meter */
-        post: operations["create_meter_api_v1_energy_meter_points_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/energy/meter-points/{record_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Update Meter */
-        put: operations["update_meter_api_v1_energy_meter_points__record_id__put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/energy/notification-runs": {
         parameters: {
             query?: never;
@@ -2038,92 +1761,6 @@ export interface paths {
         put?: never;
         /** Retry Notification */
         post: operations["retry_notification_api_v1_energy_notification_runs__record_id__retry_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/energy/overview": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 能源 Wiki 数据分析总览 */
-        get: operations["get_overview_api_v1_energy_overview_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/energy/page-data/{page_key}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 读取能源统一数据页绑定 */
-        get: operations["get_energy_page_data_api_v1_energy_page_data__page_key__get"];
-        /** 发布能源菜单页面的数据表绑定 */
-        put: operations["replace_energy_page_data_api_v1_energy_page_data__page_key__put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/energy/page-data/{page_key}/{binding_id}/records": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 分页读取能源工作表本地快照 */
-        get: operations["get_energy_page_records_api_v1_energy_page_data__page_key___binding_id__records_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/energy/period-locks": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Locks */
-        get: operations["locks_api_v1_energy_period_locks_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/energy/period-locks/{month}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /** Set Lock */
-        put: operations["set_lock_api_v1_energy_period_locks__month__put"];
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2198,23 +1835,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/energy/reporting/rebuild": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Rebuild */
-        post: operations["rebuild_api_v1_energy_reporting_rebuild_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/energy/reporting/trace/{fact_id}": {
         parameters: {
             query?: never;
@@ -2266,172 +1886,18 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/energy/snapshots/{snapshot_id}/rows": {
+    "/api/v1/energy/usage-reviews": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** 分页读取原始快照行 */
-        get: operations["list_snapshot_rows_api_v1_energy_snapshots__snapshot_id__rows_get"];
-        put?: never;
+        /** List Usage Reviews */
+        get: operations["list_usage_reviews_api_v1_energy_usage_reviews_get"];
+        /** Update Usage Reviews */
+        put: operations["update_usage_reviews_api_v1_energy_usage_reviews_put"];
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/energy/sources": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 查询能源来源工作表 */
-        get: operations["list_source_sheets_api_v1_energy_sources_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/energy/sources/batch": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** 批量删除能源资源及本地数据 */
-        delete: operations["batch_delete_source_sheets_api_v1_energy_sources_batch_delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/energy/sources/batch-sync": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** 批量同步能源资源 */
-        post: operations["batch_sync_source_sheets_api_v1_energy_sources_batch_sync_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/energy/sources/documents": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 查询已发现的 Wiki 月度文档 */
-        get: operations["list_source_documents_api_v1_energy_sources_documents_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/energy/sources/{sheet_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** 删除能源资源及本地数据 */
-        delete: operations["delete_source_sheet_api_v1_energy_sources__sheet_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/energy/sources/{sheet_id}/mapping": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 获取工作表字段映射 */
-        get: operations["get_sheet_mapping_api_v1_energy_sources__sheet_id__mapping_get"];
-        /** 保存工作表字段映射 */
-        put: operations["save_sheet_mapping_api_v1_energy_sources__sheet_id__mapping_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/energy/sources/{sheet_id}/mapping/preview": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** 预览字段映射 */
-        post: operations["preview_sheet_mapping_api_v1_energy_sources__sheet_id__mapping_preview_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/energy/sources/{sheet_id}/snapshots": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 查询工作表快照 */
-        get: operations["list_sheet_snapshots_api_v1_energy_sources__sheet_id__snapshots_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/energy/sync-runs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 查询能源 Wiki 同步运行记录 */
-        get: operations["list_sync_runs_api_v1_energy_sync_runs_get"];
-        put?: never;
-        /** 手动触发能源 Wiki 同步 */
-        post: operations["trigger_sync_api_v1_energy_sync_runs_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9091,7 +8557,7 @@ export interface paths {
         put?: never;
         /**
          * Create Config
-         * @description Create a new LLM configuration (admin only).
+         * @description Create a new LLM configuration (system administrator only).
          */
         post: operations["create_config_api_v1_llm_configs_post"];
         delete?: never;
@@ -9154,13 +8620,13 @@ export interface paths {
         get: operations["get_config_api_v1_llm_configs__config_id__get"];
         /**
          * Update Config
-         * @description Update an LLM configuration (admin only).
+         * @description Update an LLM configuration (system administrator only).
          */
         put: operations["update_config_api_v1_llm_configs__config_id__put"];
         post?: never;
         /**
          * Delete Config
-         * @description Soft delete an LLM configuration (admin only).
+         * @description Soft delete an LLM configuration (system administrator only).
          */
         delete: operations["delete_config_api_v1_llm_configs__config_id__delete"];
         options?: never;
@@ -27681,25 +27147,6 @@ export interface components {
             /** Sub Tank Id */
             sub_tank_id: string;
         };
-        /** AdjustmentWrite */
-        AdjustmentWrite: {
-            /** Metric Key */
-            metric_key: string;
-            /**
-             * Mode
-             * @enum {string}
-             */
-            mode: "override" | "delta";
-            /** Reason */
-            reason: string;
-            /**
-             * Usage Date
-             * Format: date
-             */
-            usage_date: string;
-            /** Value */
-            value: number | string;
-        };
         /**
          * AgencySummary
          * @description 按付款方汇总。
@@ -40199,6 +39646,77 @@ export interface components {
              */
             record_id?: string | null;
         };
+        /** DirectReadingItem */
+        DirectReadingItem: {
+            /** Draft Value */
+            draft_value?: string | null;
+            /** Name */
+            name: string;
+            /**
+             * Point Id
+             * Format: uuid
+             */
+            point_id: string;
+            /** Precision */
+            precision: number;
+            /** Reading Id */
+            reading_id?: string | null;
+            /** Unit */
+            unit: string;
+            /** Value */
+            value?: string | null;
+            /**
+             * Version
+             * @default 0
+             */
+            version: number;
+        };
+        /** DirectReadingResponse */
+        DirectReadingResponse: {
+            /** Dataset */
+            dataset: string;
+            /** Items */
+            items: components["schemas"]["DirectReadingItem"][];
+            /**
+             * Reading Date
+             * Format: date
+             */
+            reading_date: string;
+        };
+        /** DirectReadingValue */
+        DirectReadingValue: {
+            /**
+             * Point Id
+             * Format: uuid
+             */
+            point_id: string;
+            /** Value */
+            value: number | string;
+            /** Version */
+            version: number;
+        };
+        /** DirectReadingWrite */
+        DirectReadingWrite: {
+            /** Dataset */
+            dataset: string;
+            /**
+             * Draft
+             * @default false
+             */
+            draft: boolean;
+            /**
+             * Reading Date
+             * Format: date
+             */
+            reading_date: string;
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+            /** Values */
+            values: components["schemas"]["DirectReadingValue"][];
+        };
         /**
          * DocumentDepartmentOut
          * @description Document department output.
@@ -41586,158 +41104,14 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
-        /** EnergyApiResponse[EnergyFeishuConfigResponse] */
-        EnergyApiResponse_EnergyFeishuConfigResponse_: {
+        /** EnergyApiResponse[DirectReadingResponse] */
+        EnergyApiResponse_DirectReadingResponse_: {
             /**
              * Code
              * @default 200
              */
             code: number;
-            data: components["schemas"]["EnergyFeishuConfigResponse"];
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** EnergyApiResponse[EnergyFeishuConnectivityResult] */
-        EnergyApiResponse_EnergyFeishuConnectivityResult_: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            data: components["schemas"]["EnergyFeishuConnectivityResult"];
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** EnergyApiResponse[EnergyFeishuSourceRootResponse] */
-        EnergyApiResponse_EnergyFeishuSourceRootResponse_: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            data: components["schemas"]["EnergyFeishuSourceRootResponse"];
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** EnergyApiResponse[EnergyMappingPreviewResponse] */
-        EnergyApiResponse_EnergyMappingPreviewResponse_: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            data: components["schemas"]["EnergyMappingPreviewResponse"];
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** EnergyApiResponse[EnergyOverviewResponse] */
-        EnergyApiResponse_EnergyOverviewResponse_: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            data: components["schemas"]["EnergyOverviewResponse"];
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** EnergyApiResponse[EnergySheetMappingResponse] */
-        EnergyApiResponse_EnergySheetMappingResponse_: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            data: components["schemas"]["EnergySheetMappingResponse"];
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** EnergyApiResponse[EnergySnapshotRowsData] */
-        EnergyApiResponse_EnergySnapshotRowsData_: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            data: components["schemas"]["EnergySnapshotRowsData"];
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** EnergyApiResponse[EnergySourceDeleteResult] */
-        EnergyApiResponse_EnergySourceDeleteResult_: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            data: components["schemas"]["EnergySourceDeleteResult"];
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** EnergyApiResponse[EnergySyncRunResponse] */
-        EnergyApiResponse_EnergySyncRunResponse_: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            data: components["schemas"]["EnergySyncRunResponse"];
+            data: components["schemas"]["DirectReadingResponse"];
             /**
              * Message
              * @default success
@@ -41784,42 +41158,6 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
-        /** EnergyApiResponse[LockResponse] */
-        EnergyApiResponse_LockResponse_: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            data: components["schemas"]["LockResponse"];
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** EnergyApiResponse[MeterResponse] */
-        EnergyApiResponse_MeterResponse_: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            data: components["schemas"]["MeterResponse"];
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
         /** EnergyApiResponse[NotificationResponse] */
         EnergyApiResponse_NotificationResponse_: {
             /**
@@ -41828,24 +41166,6 @@ export interface components {
              */
             code: number;
             data: components["schemas"]["NotificationResponse"];
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** EnergyApiResponse[PlanResponse] */
-        EnergyApiResponse_PlanResponse_: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            data: components["schemas"]["PlanResponse"];
             /**
              * Message
              * @default success
@@ -41874,60 +41194,6 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
-        /** EnergyApiResponse[RuleResponse] */
-        EnergyApiResponse_RuleResponse_: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            data: components["schemas"]["RuleResponse"];
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** EnergyApiResponse[TaskListResponse] */
-        EnergyApiResponse_TaskListResponse_: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            data: components["schemas"]["TaskListResponse"];
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** EnergyApiResponse[TaskResponse] */
-        EnergyApiResponse_TaskResponse_: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            data: components["schemas"]["TaskResponse"];
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
         /** EnergyApiResponse[TemplateDraftResponse] */
         EnergyApiResponse_TemplateDraftResponse_: {
             /**
@@ -41936,42 +41202,6 @@ export interface components {
              */
             code: number;
             data: components["schemas"]["TemplateDraftResponse"];
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** EnergyApiResponse[TrialResponse] */
-        EnergyApiResponse_TrialResponse_: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            data: components["schemas"]["TrialResponse"];
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** EnergyApiResponse[Union[EnergySheetMappingResponse, NoneType]] */
-        EnergyApiResponse_Union_EnergySheetMappingResponse__NoneType__: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            data: components["schemas"]["EnergySheetMappingResponse"] | null;
             /**
              * Message
              * @default success
@@ -42018,25 +41248,6 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
-        /** EnergyApiResponse[list[EnergyFeishuSourceRootResponse]] */
-        EnergyApiResponse_list_EnergyFeishuSourceRootResponse__: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            /** Data */
-            data: components["schemas"]["EnergyFeishuSourceRootResponse"][];
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
         /** EnergyApiResponse[list[EnergyMetricOption]] */
         EnergyApiResponse_list_EnergyMetricOption__: {
             /**
@@ -42046,101 +41257,6 @@ export interface components {
             code: number;
             /** Data */
             data: components["schemas"]["EnergyMetricOption"][];
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** EnergyApiResponse[list[EnergySnapshotResponse]] */
-        EnergyApiResponse_list_EnergySnapshotResponse__: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            /** Data */
-            data: components["schemas"]["EnergySnapshotResponse"][];
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** EnergyApiResponse[list[EnergySourceDocumentResponse]] */
-        EnergyApiResponse_list_EnergySourceDocumentResponse__: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            /** Data */
-            data: components["schemas"]["EnergySourceDocumentResponse"][];
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** EnergyApiResponse[list[EnergySourceSheetResponse]] */
-        EnergyApiResponse_list_EnergySourceSheetResponse__: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            /** Data */
-            data: components["schemas"]["EnergySourceSheetResponse"][];
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** EnergyApiResponse[list[EnergySyncRunResponse]] */
-        EnergyApiResponse_list_EnergySyncRunResponse__: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            /** Data */
-            data: components["schemas"]["EnergySyncRunResponse"][];
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** EnergyApiResponse[list[LockResponse]] */
-        EnergyApiResponse_list_LockResponse__: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            /** Data */
-            data: components["schemas"]["LockResponse"][];
             /**
              * Message
              * @default success
@@ -42189,25 +41305,6 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
-        /** EnergyApiResponse[list[PlanResponse]] */
-        EnergyApiResponse_list_PlanResponse__: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            /** Data */
-            data: components["schemas"]["PlanResponse"][];
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
         /** EnergyApiResponse[list[RevisionResponse]] */
         EnergyApiResponse_list_RevisionResponse__: {
             /**
@@ -42227,34 +41324,15 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
-        /** EnergyApiResponse[list[RuleResponse]] */
-        EnergyApiResponse_list_RuleResponse__: {
+        /** EnergyApiResponse[list[UsageReviewResponse]] */
+        EnergyApiResponse_list_UsageReviewResponse__: {
             /**
              * Code
              * @default 200
              */
             code: number;
             /** Data */
-            data: components["schemas"]["RuleResponse"][];
-            /**
-             * Message
-             * @default success
-             */
-            message: string;
-            /** Meta */
-            meta?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** EnergyApiResponse[list[SnapshotImportOption]] */
-        EnergyApiResponse_list_SnapshotImportOption__: {
-            /**
-             * Code
-             * @default 200
-             */
-            code: number;
-            /** Data */
-            data: components["schemas"]["SnapshotImportOption"][];
+            data: components["schemas"]["UsageReviewResponse"][];
             /**
              * Message
              * @default success
@@ -42284,187 +41362,6 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
-        /** EnergyFeishuConfigResponse */
-        EnergyFeishuConfigResponse: {
-            /** App Id */
-            app_id: string;
-            /** App Secret Configured */
-            app_secret_configured: boolean;
-            /** App Secret Masked */
-            app_secret_masked: string;
-            /** Config Name */
-            config_name: string;
-            /** Created At */
-            created_at?: string | null;
-            /** Daily Sync Time */
-            daily_sync_time: string;
-            /** Id */
-            id?: string | null;
-            /** Is Active */
-            is_active: boolean;
-            /** Last Successful Sync Date */
-            last_successful_sync_date: string | null;
-            /** Remark */
-            remark: string | null;
-            /** Root Wiki Token */
-            root_wiki_token: string | null;
-            /** Root Wiki Url */
-            root_wiki_url: string;
-            /** Sync Error */
-            sync_error: string | null;
-            /** Sync Status */
-            sync_status: string;
-            /** Timezone */
-            timezone: string;
-            /** Updated At */
-            updated_at?: string | null;
-        };
-        /** EnergyFeishuConfigUpsert */
-        EnergyFeishuConfigUpsert: {
-            /** App Id */
-            app_id: string;
-            /** App Secret */
-            app_secret?: string | null;
-            /**
-             * Config Name
-             * @default 能源 Wiki 数据源
-             */
-            config_name: string;
-            /**
-             * Daily Sync Time
-             * @default 02:00
-             */
-            daily_sync_time: string;
-            /**
-             * Is Active
-             * @default true
-             */
-            is_active: boolean;
-            /** Remark */
-            remark?: string | null;
-            /**
-             * Root Wiki Url
-             * @default
-             */
-            root_wiki_url: string;
-            /**
-             * Timezone
-             * @default Asia/Shanghai
-             */
-            timezone: string;
-        };
-        /** EnergyFeishuConnectivityResult */
-        EnergyFeishuConnectivityResult: {
-            /** Ok */
-            ok: boolean;
-            /** Steps */
-            steps: components["schemas"]["EnergyFeishuConnectivityStep"][];
-        };
-        /** EnergyFeishuConnectivityStep */
-        EnergyFeishuConnectivityStep: {
-            /** Message */
-            message: string;
-            /** Name */
-            name: string;
-            /**
-             * Status
-             * @enum {string}
-             */
-            status: "ok" | "error" | "warning";
-        };
-        /** EnergyFeishuSourceRootInput */
-        EnergyFeishuSourceRootInput: {
-            /**
-             * Is Active
-             * @default true
-             */
-            is_active: boolean;
-            /** Name */
-            name: string;
-            /**
-             * Source Type
-             * @default wiki
-             * @enum {string}
-             */
-            source_type: "wiki" | "base";
-            /** Source Url */
-            source_url: string;
-        };
-        /** EnergyFeishuSourceRootResponse */
-        EnergyFeishuSourceRootResponse: {
-            /** Config Id */
-            config_id: string;
-            /** Discovery Error */
-            discovery_error?: string | null;
-            /** Discovery Status */
-            discovery_status: string;
-            /** Id */
-            id: string;
-            /** Is Active */
-            is_active: boolean;
-            /** Last Discovered At */
-            last_discovered_at?: string | null;
-            /** Name */
-            name: string;
-            /** Root Token */
-            root_token: string;
-            /** Source Type */
-            source_type: string;
-            /** Source Url */
-            source_url: string;
-        };
-        /** EnergyFeishuSourceRootUpdate */
-        EnergyFeishuSourceRootUpdate: {
-            /** Is Active */
-            is_active?: boolean | null;
-            /** Name */
-            name?: string | null;
-            /** Source Type */
-            source_type?: ("wiki" | "base") | null;
-            /** Source Url */
-            source_url?: string | null;
-        };
-        /** EnergyMappingMetricInput */
-        EnergyMappingMetricInput: {
-            /** Energy Type */
-            energy_type: string;
-            /** Meter Key Column */
-            meter_key_column?: string | null;
-            /** Metric Key */
-            metric_key: string;
-            /** Unit */
-            unit?: string | null;
-            /** Unit Column */
-            unit_column?: string | null;
-            /** Value Column */
-            value_column: string;
-            /**
-             * Value Semantics
-             * @default direct
-             * @enum {string}
-             */
-            value_semantics: "direct" | "cumulative";
-        };
-        /** EnergyMappingPreviewResponse */
-        EnergyMappingPreviewResponse: {
-            /** Invalid Row Count */
-            invalid_row_count: number;
-            /** Rows */
-            rows: components["schemas"]["EnergyMappingPreviewRow"][];
-            /** Valid Row Count */
-            valid_row_count: number;
-        };
-        /** EnergyMappingPreviewRow */
-        EnergyMappingPreviewRow: {
-            /** Errors */
-            errors?: string[];
-            /** Row Index */
-            row_index: number;
-            /** Values */
-            values: {
-                [key: string]: unknown;
-            };
-        };
         /** EnergyMetricOption */
         EnergyMetricOption: {
             /**
@@ -42478,480 +41375,6 @@ export interface components {
             name: string;
             /** Unit */
             unit: string;
-        };
-        /** EnergyOverviewDistributionPoint */
-        EnergyOverviewDistributionPoint: {
-            /** Energy Type */
-            energy_type: string;
-            /** Key */
-            key: string;
-            /** Metric Key */
-            metric_key?: string | null;
-            /** Unit */
-            unit: string;
-            /** Value */
-            value: number;
-        };
-        /** EnergyOverviewLatestMetric */
-        EnergyOverviewLatestMetric: {
-            /** Energy Type */
-            energy_type: string;
-            /** Metric Key */
-            metric_key: string;
-            /**
-             * Observed At
-             * Format: date-time
-             */
-            observed_at: string;
-            /** Unit */
-            unit: string;
-            /** Value */
-            value: number;
-        };
-        /** EnergyOverviewMetric */
-        EnergyOverviewMetric: {
-            /** Energy Type */
-            energy_type: string;
-            /** Metric Key */
-            metric_key?: string | null;
-            /** Record Count */
-            record_count: number;
-            /** Total Value */
-            total_value: number;
-            /** Unit */
-            unit: string;
-        };
-        /** EnergyOverviewResponse */
-        EnergyOverviewResponse: {
-            /** Distribution */
-            distribution: components["schemas"]["EnergyOverviewDistributionPoint"][];
-            /** Invalid Count */
-            invalid_count: number;
-            /** Last Observed At */
-            last_observed_at?: string | null;
-            /** Latest Metrics */
-            latest_metrics: components["schemas"]["EnergyOverviewLatestMetric"][];
-            /** Metrics */
-            metrics: components["schemas"]["EnergyOverviewMetric"][];
-            /**
-             * Source Scope
-             * @enum {string}
-             */
-            source_scope: "detail" | "daily_summary" | "energy_summary";
-            /** Trend */
-            trend: components["schemas"]["EnergyOverviewTrendPoint"][];
-        };
-        /** EnergyOverviewTrendPoint */
-        EnergyOverviewTrendPoint: {
-            /**
-             * Date
-             * Format: date
-             */
-            date: string;
-            /** Energy Type */
-            energy_type: string;
-            /** Metric Key */
-            metric_key?: string | null;
-            /** Unit */
-            unit: string;
-            /** Value */
-            value: number;
-        };
-        /** EnergyPageBindingInput */
-        EnergyPageBindingInput: {
-            /**
-             * Is Default
-             * @default false
-             */
-            is_default: boolean;
-            /**
-             * Is Enabled
-             * @default true
-             */
-            is_enabled: boolean;
-            /**
-             * Resource Id
-             * Format: uuid
-             */
-            resource_id: string;
-            /**
-             * Sort Order
-             * @default 0
-             */
-            sort_order: number;
-            /** Tab Name */
-            tab_name: string;
-            /** Visible Field Ids */
-            visible_field_ids?: string[];
-        };
-        /** EnergyPageBindingReplace */
-        EnergyPageBindingReplace: {
-            /** Bindings */
-            bindings: components["schemas"]["EnergyPageBindingInput"][];
-        };
-        /** EnergySheetMappingResponse */
-        EnergySheetMappingResponse: {
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
-            /** Date Column */
-            date_column: string | null;
-            /** Date Format */
-            date_format: string | null;
-            /** Dimensions */
-            dimensions: {
-                [key: string]: string;
-            };
-            /** Header Row */
-            header_row: number;
-            /** Id */
-            id: string;
-            /** Is Current */
-            is_current: boolean;
-            /** Is Enabled */
-            is_enabled: boolean;
-            /** Metrics */
-            metrics: {
-                [key: string]: unknown;
-            }[];
-            /** Schema Hash */
-            schema_hash: string | null;
-            /** Sheet Id */
-            sheet_id: string;
-            /**
-             * Source Role
-             * @enum {string}
-             */
-            source_role: "workshop_detail" | "shared_detail" | "energy_summary" | "daily_summary";
-            /**
-             * Updated At
-             * Format: date-time
-             */
-            updated_at: string;
-            /** Validation Error */
-            validation_error: string | null;
-            /** Version */
-            version: number;
-        };
-        /** EnergySheetMappingUpsert */
-        EnergySheetMappingUpsert: {
-            /** Date Column */
-            date_column?: string | null;
-            /** Date Format */
-            date_format?: string | null;
-            /** Dimensions */
-            dimensions?: {
-                [key: string]: string;
-            };
-            /**
-             * Header Row
-             * @default 1
-             */
-            header_row: number;
-            /**
-             * Is Enabled
-             * @default false
-             */
-            is_enabled: boolean;
-            /** Metrics */
-            metrics?: components["schemas"]["EnergyMappingMetricInput"][];
-            /**
-             * Source Role
-             * @default workshop_detail
-             * @enum {string}
-             */
-            source_role: "workshop_detail" | "shared_detail" | "energy_summary" | "daily_summary";
-        };
-        /** EnergySnapshotResponse */
-        EnergySnapshotResponse: {
-            /**
-             * Captured At
-             * Format: date-time
-             */
-            captured_at: string;
-            /** Content Hash */
-            content_hash: string;
-            /** Header Values */
-            header_values: string[];
-            /** Id */
-            id: string;
-            /** Row Count */
-            row_count: number;
-            /** Sheet Id */
-            sheet_id: string;
-            /** Snapshot Number */
-            snapshot_number: number;
-            /** Source Revision */
-            source_revision: string | null;
-            /** Sync Run Id */
-            sync_run_id: string;
-        };
-        /** EnergySnapshotRowResponse */
-        EnergySnapshotRowResponse: {
-            /** Id */
-            id: string;
-            /** Row Hash */
-            row_hash: string;
-            /** Row Index */
-            row_index: number;
-            /** Snapshot Id */
-            snapshot_id: string;
-            /** Values */
-            values: unknown[];
-        };
-        /** EnergySnapshotRowsData */
-        EnergySnapshotRowsData: {
-            /** Rows */
-            rows: components["schemas"]["EnergySnapshotRowResponse"][];
-            snapshot: components["schemas"]["EnergySnapshotResponse"];
-        };
-        /** EnergySourceBatchRequest */
-        EnergySourceBatchRequest: {
-            /**
-             * Sheet Ids
-             * @description 待操作的能源资源 ID
-             */
-            sheet_ids: string[];
-        };
-        /** EnergySourceDeleteResult */
-        EnergySourceDeleteResult: {
-            /** Binding Count */
-            binding_count: number;
-            /** Deleted Count */
-            deleted_count: number;
-            /** Document Count */
-            document_count: number;
-            /** Fact Count */
-            fact_count: number;
-            /** Mapping Count */
-            mapping_count: number;
-            /** Snapshot Count */
-            snapshot_count: number;
-            /** Snapshot Row Count */
-            snapshot_row_count: number;
-        };
-        /** EnergySourceDocumentResponse */
-        EnergySourceDocumentResponse: {
-            /** Classification Status */
-            classification_status: string;
-            /** Document Token */
-            document_token: string | null;
-            /** Id */
-            id: string;
-            /** Last Synced At */
-            last_synced_at: string | null;
-            /** Node Path */
-            node_path: {
-                [key: string]: string;
-            }[];
-            /** Object Type */
-            object_type: string;
-            /** Parent Node Token */
-            parent_node_token: string | null;
-            /** Period Month */
-            period_month: string | null;
-            /** Title */
-            title: string;
-            /** Wiki Node Token */
-            wiki_node_token: string;
-        };
-        /** EnergySourceSheetResponse */
-        EnergySourceSheetResponse: {
-            /** Document Id */
-            document_id: string;
-            /** Document Title */
-            document_title?: string | null;
-            /** External Sheet Id */
-            external_sheet_id: string;
-            /** Header Row */
-            header_row: number;
-            /** Headers */
-            headers: string[];
-            /** Id */
-            id: string;
-            /** Last Synced At */
-            last_synced_at: string | null;
-            /** Latest Snapshot Id */
-            latest_snapshot_id: string | null;
-            /** Mapping Status */
-            mapping_status: string;
-            /** Period Month */
-            period_month?: string | null;
-            /** Schema Hash */
-            schema_hash: string | null;
-            /** Sheet Index */
-            sheet_index: number;
-            /** Source Role */
-            source_role?: ("workshop_detail" | "shared_detail" | "energy_summary" | "daily_summary") | null;
-            /** Title */
-            title: string;
-        };
-        /** EnergySyncRunResponse */
-        EnergySyncRunResponse: {
-            /** Completed At */
-            completed_at: string | null;
-            /** Config Id */
-            config_id: string;
-            /** Document Count */
-            document_count: number;
-            /** Error Count */
-            error_count: number;
-            /** Error Message */
-            error_message: string | null;
-            /** Fact Count */
-            fact_count: number;
-            /** Id */
-            id: string;
-            /** Scheduled For */
-            scheduled_for: string | null;
-            /** Sheet Count */
-            sheet_count: number;
-            /** Snapshot Count */
-            snapshot_count: number;
-            /**
-             * Started At
-             * Format: date-time
-             */
-            started_at: string;
-            /** Status */
-            status: string;
-            /** Trigger Type */
-            trigger_type: string;
-        };
-        /** EnergySyncTriggerRequest */
-        EnergySyncTriggerRequest: {
-            /**
-             * Force
-             * @description 即使今日已成功同步也创建一次手动同步
-             * @default false
-             */
-            force: boolean;
-        };
-        /** EntryItemResponse */
-        EntryItemResponse: {
-            /**
-             * Category
-             * @enum {string}
-             */
-            category: "drinking_water" | "chilled_water" | "steam" | "circulating_water" | "air" | "electricity";
-            /** Draft Value */
-            draft_value: string | null;
-            /** Estimated Usage */
-            estimated_usage?: string | null;
-            exception?: components["schemas"]["ReadingException-Output"] | null;
-            /**
-             * Frequency
-             * @default daily
-             */
-            frequency: string;
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /**
-             * Multiplier
-             * @default 1
-             */
-            multiplier: string;
-            /** Name */
-            name: string;
-            /**
-             * Point Id
-             * Format: uuid
-             */
-            point_id: string;
-            /** Precision */
-            precision: number;
-            /** Previous Date */
-            previous_date: string | null;
-            /** Previous Value */
-            previous_value: string | null;
-            /**
-             * Reading Date
-             * Format: date
-             */
-            reading_date: string;
-            /** Reading Type */
-            reading_type: string;
-            /** Submitted At */
-            submitted_at: string | null;
-            /** Unit */
-            unit: string;
-            /** Value */
-            value: string | null;
-            /** Version */
-            version: number;
-        };
-        /** EntryPlanDefinition */
-        EntryPlanDefinition: {
-            /**
-             * Deadline Time
-             * @default 10:00
-             */
-            deadline_time: string;
-            /**
-             * Enabled
-             * @default true
-             */
-            enabled: boolean;
-            /**
-             * Group Chat Id
-             * @default
-             */
-            group_chat_id: string;
-            /** Name */
-            name: string;
-            /** Owner Ids */
-            owner_ids: string[];
-            /** Point Ids */
-            point_ids: string[];
-            /**
-             * Publish Time
-             * @default 08:00
-             */
-            publish_time: string;
-            /**
-             * Reminder Time
-             * @default 10:30
-             */
-            reminder_time: string;
-        };
-        /** EntrySubmission */
-        EntrySubmission: {
-            /**
-             * Draft
-             * @default false
-             */
-            draft: boolean;
-            /**
-             * Reason
-             * @default
-             */
-            reason: string;
-            /**
-             * Source
-             * @default platform
-             * @enum {string}
-             */
-            source: "platform" | "feishu";
-            /** Values */
-            values: components["schemas"]["EntryValue"][];
-        };
-        /** EntryValue */
-        EntryValue: {
-            exception?: components["schemas"]["ReadingException-Input"] | null;
-            /**
-             * Reading Id
-             * Format: uuid
-             */
-            reading_id: string;
-            /** Value */
-            value: number | string;
-            /** Version */
-            version: number;
         };
         /**
          * EquipmentCategoryCreate
@@ -45536,14 +43959,6 @@ export interface components {
             /** Total */
             total: number;
         };
-        /** GenerateTasks */
-        GenerateTasks: {
-            /**
-             * Task Date
-             * Format: date
-             */
-            task_date: string;
-        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -46222,8 +44637,6 @@ export interface components {
         };
         /** ImportConfirm */
         ImportConfirm: {
-            /** Adjustments */
-            adjustments?: components["schemas"]["AdjustmentWrite"][];
             /** Mappings */
             mappings: components["schemas"]["ImportMapping"][];
             /** Reason */
@@ -48462,27 +46875,6 @@ export interface components {
              */
             parent_id?: string | null;
         };
-        /** LockResponse */
-        LockResponse: {
-            /** Locked */
-            locked: boolean;
-            /** Month */
-            month: string;
-            /** Version */
-            version: number;
-        };
-        /** LockWrite */
-        LockWrite: {
-            /** Locked */
-            locked: boolean;
-            /** Reason */
-            reason: string;
-            /**
-             * Version
-             * @default 0
-             */
-            version: number;
-        };
         /** MaintenanceBody */
         MaintenanceBody: {
             /**
@@ -49525,7 +47917,7 @@ export interface components {
             type?: ("directory" | "menu" | "button") | null;
         };
         /** MeterDefinition */
-        "MeterDefinition-Input": {
+        MeterDefinition: {
             /**
              * Active From
              * Format: date
@@ -49542,95 +47934,10 @@ export interface components {
             category: "drinking_water" | "chilled_water" | "steam" | "circulating_water" | "air" | "electricity";
             /** Code */
             code: string;
-            /** Department */
-            department: string;
             /**
-             * Enabled
-             * @default false
-             */
-            enabled: boolean;
-            /**
-             * Frequency
-             * @default daily
-             * @enum {string}
-             */
-            frequency: "daily" | "monthly";
-            /**
-             * Multiplier
-             * @default 1
-             */
-            multiplier: number | string;
-            /** Name */
-            name: string;
-            /**
-             * Notes
+             * Department
              * @default
              */
-            notes: string;
-            /**
-             * Precision
-             * @default 3
-             */
-            precision: number;
-            /**
-             * Quantity Kind
-             * @default volume
-             * @enum {string}
-             */
-            quantity_kind: "volume" | "heat" | "mass" | "electricity";
-            /**
-             * Reading Type
-             * @default counter
-             * @enum {string}
-             */
-            reading_type: "counter" | "direct";
-            /**
-             * Report Scope
-             * @default source
-             * @enum {string}
-             */
-            report_scope: "source" | "detail" | "plant" | "check";
-            /** Source Column */
-            source_column?: number | null;
-            /**
-             * Source Sheet
-             * @default
-             */
-            source_sheet: string;
-            /**
-             * Temperature
-             * @default
-             */
-            temperature: string;
-            /** Unit */
-            unit: string;
-            /** Warning Limit */
-            warning_limit?: number | string | null;
-            /**
-             * Workshop
-             * @default
-             */
-            workshop: string;
-        };
-        /** MeterDefinition */
-        "MeterDefinition-Output": {
-            /**
-             * Active From
-             * Format: date
-             */
-            active_from: string;
-            /** Active To */
-            active_to?: string | null;
-            /** Area */
-            area: string;
-            /**
-             * Category
-             * @enum {string}
-             */
-            category: "drinking_water" | "chilled_water" | "steam" | "circulating_water" | "air" | "electricity";
-            /** Code */
-            code: string;
-            /** Department */
             department: string;
             /**
              * Enabled
@@ -49702,27 +48009,13 @@ export interface components {
         };
         /** MeterResponse */
         MeterResponse: {
-            definition: components["schemas"]["MeterDefinition-Output"];
+            definition: components["schemas"]["MeterDefinition"];
             /**
              * Id
              * Format: uuid
              */
             id: string;
             /** Version */
-            version: number;
-        };
-        /** MeterWrite */
-        MeterWrite: {
-            definition: components["schemas"]["MeterDefinition-Input"];
-            /**
-             * Reason
-             * @default
-             */
-            reason: string;
-            /**
-             * Version
-             * @default 0
-             */
             version: number;
         };
         /** ModulePermissionDefinitionOut */
@@ -50078,11 +48371,6 @@ export interface components {
             next_attempt_at: string | null;
             /** Status */
             status: string;
-            /**
-             * Task Id
-             * Format: uuid
-             */
-            task_id: string;
         };
         /** OffboardingRecordCreate */
         OffboardingRecordCreate: {
@@ -52585,17 +50873,6 @@ export interface components {
             /** Title */
             title?: string | null;
         };
-        /** PlanResponse */
-        PlanResponse: {
-            definition: components["schemas"]["EntryPlanDefinition"];
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Version */
-            version: number;
-        };
         /** PlanTrackingRecordCreate */
         PlanTrackingRecordCreate: {
             /**
@@ -52772,20 +51049,6 @@ export interface components {
              * @description 年度
              */
             year?: number | null;
-        };
-        /** PlanWrite */
-        PlanWrite: {
-            definition: components["schemas"]["EntryPlanDefinition"];
-            /**
-             * Reason
-             * @default
-             */
-            reason: string;
-            /**
-             * Version
-             * @default 0
-             */
-            version: number;
         };
         /** PointMappingCreate */
         PointMappingCreate: {
@@ -55996,47 +54259,6 @@ export interface components {
             /** Warning */
             warning?: string | null;
         };
-        /** ReadingException */
-        "ReadingException-Input": {
-            /**
-             * Kind
-             * @enum {string}
-             */
-            kind: "replacement" | "reset" | "rollover";
-            /** New Initial */
-            new_initial: number | string;
-            /** Previous Final */
-            previous_final: number | string;
-            /** Reason */
-            reason: string;
-        };
-        /** ReadingException */
-        "ReadingException-Output": {
-            /**
-             * Kind
-             * @enum {string}
-             */
-            kind: "replacement" | "reset" | "rollover";
-            /** New Initial */
-            new_initial: string;
-            /** Previous Final */
-            previous_final: string;
-            /** Reason */
-            reason: string;
-        };
-        /** RebuildRequest */
-        RebuildRequest: {
-            /**
-             * End Date
-             * Format: date
-             */
-            end_date: string;
-            /**
-             * Start Date
-             * Format: date
-             */
-            start_date: string;
-        };
         /**
          * RectificationReplyRequest
          * @description 整改回复请求（合并了原 complete_rectification 步骤）
@@ -56406,10 +54628,75 @@ export interface components {
              */
             trigger_hour: number;
         };
+        /** ReportBasis */
+        ReportBasis: {
+            /** Nodes */
+            nodes: components["schemas"]["ReportBasisNode"][];
+            /**
+             * Usage Date
+             * Format: date
+             */
+            usage_date: string;
+        };
+        /** ReportBasisNode */
+        ReportBasisNode: {
+            /** Calculated Value */
+            calculated_value?: string | null;
+            /**
+             * Coefficient
+             * @default 1
+             */
+            coefficient: string;
+            /**
+             * Multiplier
+             * @default 1
+             */
+            multiplier: string;
+            /** Name */
+            name: string;
+            /** Node Id */
+            node_id: string;
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+            /**
+             * Operation
+             * @default
+             */
+            operation: string;
+            /** Parent Id */
+            parent_id?: string | null;
+            /** Reading Dates */
+            reading_dates?: string[];
+            /**
+             * Reading Type
+             * @default
+             */
+            reading_type: string;
+            /** Reading Values */
+            reading_values?: (string | null)[];
+            /**
+             * Source Column
+             * @default
+             */
+            source_column: string;
+            /**
+             * Source Sheet
+             * @default
+             */
+            source_sheet: string;
+            /** Status */
+            status: string;
+            /** Value */
+            value?: string | null;
+        };
         /** ReportDistribution */
         ReportDistribution: {
             /** Available Count */
             available_count: number;
+            basis?: components["schemas"]["ReportBasis"] | null;
             /**
              * Category
              * @enum {string}
@@ -56484,6 +54771,7 @@ export interface components {
         ReportTotal: {
             /** Available Count */
             available_count: number;
+            basis?: components["schemas"]["ReportBasis"] | null;
             /**
              * Category
              * @enum {string}
@@ -56504,6 +54792,7 @@ export interface components {
         ReportTrend: {
             /** Available Count */
             available_count: number;
+            basis?: components["schemas"]["ReportBasis"] | null;
             /**
              * Category
              * @enum {string}
@@ -56974,7 +55263,7 @@ export interface components {
             name?: string | null;
         };
         /** RuleDefinition */
-        "RuleDefinition-Input": {
+        RuleDefinition: {
             /**
              * Active From
              * Format: date
@@ -56989,7 +55278,10 @@ export interface components {
             category: "drinking_water" | "chilled_water" | "steam" | "circulating_water" | "air" | "electricity";
             /** Code */
             code: string;
-            /** Department */
+            /**
+             * Department
+             * @default
+             */
             department: string;
             /**
              * Enabled
@@ -57040,7 +55332,7 @@ export interface components {
              */
             temperature: string;
             /** Terms */
-            terms: components["schemas"]["RuleTerm-Input"][];
+            terms: components["schemas"]["RuleTerm"][];
             /** Unit */
             unit: string;
             /**
@@ -57049,105 +55341,8 @@ export interface components {
              */
             workshop: string;
         };
-        /** RuleDefinition */
-        "RuleDefinition-Output": {
-            /**
-             * Active From
-             * Format: date
-             */
-            active_from: string;
-            /** Active To */
-            active_to?: string | null;
-            /**
-             * Category
-             * @enum {string}
-             */
-            category: "drinking_water" | "chilled_water" | "steam" | "circulating_water" | "air" | "electricity";
-            /** Code */
-            code: string;
-            /** Department */
-            department: string;
-            /**
-             * Enabled
-             * @default false
-             */
-            enabled: boolean;
-            /**
-             * Frequency
-             * @default daily
-             * @enum {string}
-             */
-            frequency: "daily" | "monthly";
-            /** Name */
-            name: string;
-            /**
-             * Notes
-             * @default
-             */
-            notes: string;
-            /**
-             * Operation
-             * @default sum
-             * @enum {string}
-             */
-            operation: "sum" | "ratio";
-            /**
-             * Quantity Kind
-             * @default volume
-             * @enum {string}
-             */
-            quantity_kind: "volume" | "heat" | "mass" | "electricity" | "ratio";
-            /**
-             * Report Scope
-             * @default detail
-             * @enum {string}
-             */
-            report_scope: "source" | "detail" | "plant" | "check";
-            /** Source Column */
-            source_column?: number | null;
-            /**
-             * Source Sheet
-             * @default
-             */
-            source_sheet: string;
-            /**
-             * Temperature
-             * @default
-             */
-            temperature: string;
-            /** Terms */
-            terms: components["schemas"]["RuleTerm-Output"][];
-            /** Unit */
-            unit: string;
-            /**
-             * Workshop
-             * @default
-             */
-            workshop: string;
-        };
-        /** RuleResponse */
-        RuleResponse: {
-            definition: components["schemas"]["RuleDefinition-Output"];
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Version */
-            version: number;
-        };
         /** RuleTerm */
-        "RuleTerm-Input": {
-            /**
-             * Coefficient
-             * @default 1
-             */
-            coefficient: number | string;
-            /** Metric Key */
-            metric_key: string;
-        };
-        /** RuleTerm */
-        "RuleTerm-Output": {
+        RuleTerm: {
             /**
              * Coefficient
              * @default 1
@@ -57155,20 +55350,6 @@ export interface components {
             coefficient: string;
             /** Metric Key */
             metric_key: string;
-        };
-        /** RuleWrite */
-        RuleWrite: {
-            definition: components["schemas"]["RuleDefinition-Input"];
-            /**
-             * Reason
-             * @default
-             */
-            reason: string;
-            /**
-             * Version
-             * @default 0
-             */
-            version: number;
         };
         /**
          * SafetyCheckCreate
@@ -58656,34 +56837,6 @@ export interface components {
              */
             workshop?: string | null;
         };
-        /** SnapshotImportOption */
-        SnapshotImportOption: {
-            /**
-             * Captured At
-             * Format: date-time
-             */
-            captured_at: string;
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Sheet Title */
-            sheet_title: string;
-            /** Snapshot Number */
-            snapshot_number: number;
-        };
-        /** SnapshotImportRequest */
-        SnapshotImportRequest: {
-            /** End Date */
-            end_date?: string | null;
-            /** Snapshot Ids */
-            snapshot_ids: string[];
-            /** Start Date */
-            start_date?: string | null;
-            /** Year */
-            year: number;
-        };
         /** SodiumStepCreate */
         SodiumStepCreate: {
             /** Alkali Usage */
@@ -59948,38 +58101,6 @@ export interface components {
              */
             to_date: string;
         };
-        /** TaskListResponse */
-        TaskListResponse: {
-            /** Items */
-            items: components["schemas"]["TaskResponse"][];
-            /** Total */
-            total: number;
-        };
-        /** TaskResponse */
-        TaskResponse: {
-            /** Completed Count */
-            completed_count: number;
-            /** Deadline Time */
-            deadline_time: string;
-            /**
-             * Id
-             * Format: uuid
-             */
-            id: string;
-            /** Items */
-            items: components["schemas"]["EntryItemResponse"][];
-            /** Name */
-            name: string;
-            /** Owner Ids */
-            owner_ids: string[];
-            /**
-             * Task Date
-             * Format: date
-             */
-            task_date: string;
-            /** Total Count */
-            total_count: number;
-        };
         /** TeamCreate */
         TeamCreate: {
             /**
@@ -60020,9 +58141,9 @@ export interface components {
             /** Issues */
             issues: string[];
             /** Meters */
-            meters: components["schemas"]["MeterDefinition-Output"][];
+            meters: components["schemas"]["MeterDefinition"][];
             /** Rules */
-            rules: components["schemas"]["RuleDefinition-Output"][];
+            rules: components["schemas"]["RuleDefinition"][];
         };
         /** TokenResponse */
         TokenResponse: {
@@ -61741,35 +59862,6 @@ export interface components {
             /** Metric Key */
             metric_key: string;
         };
-        /** TrialRequest */
-        TrialRequest: {
-            /**
-             * Usage Date
-             * Format: date
-             */
-            usage_date: string;
-        };
-        /** TrialResponse */
-        TrialResponse: {
-            /**
-             * Usage Date
-             * Format: date
-             */
-            usage_date: string;
-            /** Values */
-            values: components["schemas"]["TrialValue"][];
-        };
-        /** TrialValue */
-        TrialValue: {
-            /** Metric Key */
-            metric_key: string;
-            /** Name */
-            name: string;
-            /** Status */
-            status: string;
-            /** Value */
-            value: string | null;
-        };
         /**
          * TrueFalseQuestion
          * @description 判断题
@@ -62792,6 +60884,80 @@ export interface components {
             /** Validation Type */
             validation_type?: string | null;
         };
+        /** UsageReview */
+        UsageReview: {
+            /** Column */
+            column: number;
+            /** Dataset */
+            dataset: string;
+            /** Periods */
+            periods?: components["schemas"]["UsageReviewPeriod-Input"][];
+        };
+        /** UsageReviewPeriod */
+        "UsageReviewPeriod-Input": {
+            /**
+             * End Date
+             * Format: date
+             */
+            end_date: string;
+            /** Reason */
+            reason: string;
+            /** Reported Values */
+            reported_values?: {
+                [key: string]: number | string;
+            };
+            /** Source */
+            source: string;
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+        };
+        /** UsageReviewPeriod */
+        "UsageReviewPeriod-Output": {
+            /**
+             * End Date
+             * Format: date
+             */
+            end_date: string;
+            /** Reason */
+            reason: string;
+            /** Reported Values */
+            reported_values?: {
+                [key: string]: string;
+            };
+            /** Source */
+            source: string;
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+        };
+        /** UsageReviewResponse */
+        UsageReviewResponse: {
+            /** Column */
+            column: number;
+            /** Dataset */
+            dataset: string;
+            /** Periods */
+            periods?: components["schemas"]["UsageReviewPeriod-Output"][];
+            /** Updated At */
+            updated_at?: string | null;
+            /** Updated By */
+            updated_by?: string | null;
+        };
+        /** UsageReviewUpdate */
+        UsageReviewUpdate: {
+            /**
+             * Reason
+             * @default Web 复核
+             */
+            reason: string;
+            /** Reviews */
+            reviews: components["schemas"]["UsageReview"][];
+        };
         /** UsageRow */
         UsageRow: {
             /** Calculated Value */
@@ -62943,6 +61109,11 @@ export interface components {
             name?: string | null;
             /** Position */
             position?: string | null;
+            /**
+             * Reason
+             * @description 角色变更原因；变更账号角色时必填
+             */
+            reason?: string | null;
             /** Role */
             role?: ("admin" | "user") | null;
             /** Status */
@@ -69249,41 +67420,6 @@ export interface operations {
             };
         };
     };
-    adjust_api_v1_energy_adjustments_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AdjustmentWrite"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnergyApiResponse_UsageRow_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     get_bot_api_v1_energy_bot_config_get: {
         parameters: {
             query?: never;
@@ -69350,144 +67486,6 @@ export interface operations {
             };
         };
     };
-    rules_api_v1_energy_calculation_rules_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnergyApiResponse_list_RuleResponse__"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_rule_api_v1_energy_calculation_rules_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RuleWrite"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnergyApiResponse_RuleResponse_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    trial_api_v1_energy_calculation_rules_trial_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TrialRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnergyApiResponse_TrialResponse_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_rule_api_v1_energy_calculation_rules__record_id__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                record_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RuleWrite"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnergyApiResponse_RuleResponse_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     quality_api_v1_energy_data_quality_get: {
         parameters: {
             query: {
@@ -69514,519 +67512,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EnergyApiResponse_ReportResponse_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    plans_api_v1_energy_entry_plans_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnergyApiResponse_list_PlanResponse__"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_plan_api_v1_energy_entry_plans_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PlanWrite"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnergyApiResponse_PlanResponse_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_plan_api_v1_energy_entry_plans__record_id__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                record_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PlanWrite"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnergyApiResponse_PlanResponse_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    tasks_api_v1_energy_entry_tasks_get: {
-        parameters: {
-            query: {
-                start_date: string;
-                end_date: string;
-                page?: number;
-                page_size?: number;
-                mine?: boolean;
-            };
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnergyApiResponse_TaskListResponse_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    generate_tasks_api_v1_energy_entry_tasks_generate_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["GenerateTasks"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnergyApiResponse_TaskListResponse_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    task_api_v1_energy_entry_tasks__task_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                task_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnergyApiResponse_TaskResponse_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    submit_api_v1_energy_entry_tasks__task_id__submit_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                task_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["EntrySubmission"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnergyApiResponse_TaskResponse_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_feishu_config_api_v1_energy_feishu_config_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnergyApiResponse_EnergyFeishuConfigResponse_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    save_feishu_config_api_v1_energy_feishu_config_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["EnergyFeishuConfigUpsert"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnergyApiResponse_EnergyFeishuConfigResponse_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    test_feishu_config_api_v1_energy_feishu_config_test_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnergyApiResponse_EnergyFeishuConnectivityResult_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_energy_feishu_roots_api_v1_energy_feishu_roots_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnergyApiResponse_list_EnergyFeishuSourceRootResponse__"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_energy_feishu_root_api_v1_energy_feishu_roots_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["EnergyFeishuSourceRootInput"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnergyApiResponse_EnergyFeishuSourceRootResponse_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_energy_feishu_root_api_v1_energy_feishu_roots__root_id__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                root_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["EnergyFeishuSourceRootUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnergyApiResponse_EnergyFeishuSourceRootResponse_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_energy_feishu_root_api_v1_energy_feishu_roots__root_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                root_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    from_snapshot_api_v1_energy_imports_from_snapshot_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SnapshotImportRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnergyApiResponse_ImportResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -70079,37 +67564,6 @@ export interface operations {
             };
         };
     };
-    snapshot_options_api_v1_energy_imports_snapshot_options_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnergyApiResponse_list_SnapshotImportOption__"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     import_confirm_api_v1_energy_imports__batch_id__confirm_post: {
         parameters: {
             query?: never;
@@ -70147,7 +67601,7 @@ export interface operations {
             };
         };
     };
-    draft_config_api_v1_energy_imports__batch_id__draft_config_post: {
+    prepare_workbook_api_v1_energy_imports__batch_id__prepare_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -70167,6 +67621,106 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EnergyApiResponse_TemplateDraftResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    meters_api_v1_energy_input_fields_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnergyApiResponse_list_MeterResponse__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    input_readings_api_v1_energy_input_readings_get: {
+        parameters: {
+            query: {
+                reading_date: string;
+                dataset: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnergyApiResponse_DirectReadingResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_input_readings_api_v1_energy_input_readings_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DirectReadingWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnergyApiResponse_DirectReadingResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -70232,109 +67786,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EnergyApiResponse_LedgerOptions_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    meters_api_v1_energy_meter_points_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnergyApiResponse_list_MeterResponse__"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_meter_api_v1_energy_meter_points_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MeterWrite"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnergyApiResponse_MeterResponse_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_meter_api_v1_energy_meter_points__record_id__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                record_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MeterWrite"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnergyApiResponse_MeterResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -70415,221 +67866,6 @@ export interface operations {
             };
         };
     };
-    get_overview_api_v1_energy_overview_get: {
-        parameters: {
-            query: {
-                start_time: string;
-                end_time: string;
-                energy_type?: string | null;
-                group_by?: string | null;
-                source_scope?: "detail" | "daily_summary" | "energy_summary";
-                workshop?: string | null;
-                source_sheet_title?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnergyApiResponse_EnergyOverviewResponse_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_energy_page_data_api_v1_energy_page_data__page_key__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                page_key: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    replace_energy_page_data_api_v1_energy_page_data__page_key__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                page_key: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["EnergyPageBindingReplace"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_energy_page_records_api_v1_energy_page_data__page_key___binding_id__records_get: {
-        parameters: {
-            query?: {
-                keyword?: string | null;
-                page?: number;
-                page_size?: number;
-            };
-            header?: never;
-            path: {
-                page_key: string;
-                binding_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    locks_api_v1_energy_period_locks_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnergyApiResponse_list_LockResponse__"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    set_lock_api_v1_energy_period_locks__month__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                month: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["LockWrite"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnergyApiResponse_LockResponse_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     report_api_v1_energy_reporting_get: {
         parameters: {
             query: {
@@ -70641,6 +67877,7 @@ export interface operations {
                 metric_key?: string | null;
                 page?: number;
                 page_size?: number;
+                include_basis?: boolean;
             };
             header?: never;
             path?: never;
@@ -70770,41 +68007,6 @@ export interface operations {
             };
         };
     };
-    rebuild_api_v1_energy_reporting_rebuild_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RebuildRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnergyApiResponse_ReportResponse_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     trace_api_v1_energy_reporting_trace__fact_id__get: {
         parameters: {
             query?: never;
@@ -70908,48 +68110,9 @@ export interface operations {
             };
         };
     };
-    list_snapshot_rows_api_v1_energy_snapshots__snapshot_id__rows_get: {
+    list_usage_reviews_api_v1_energy_usage_reviews_get: {
         parameters: {
-            query?: {
-                page?: number;
-                page_size?: number;
-            };
-            header?: never;
-            path: {
-                snapshot_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnergyApiResponse_EnergySnapshotRowsData_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_source_sheets_api_v1_energy_sources_get: {
-        parameters: {
-            query?: {
-                period_month?: string | null;
-                mapping_status?: string | null;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: {
@@ -70964,7 +68127,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EnergyApiResponse_list_EnergySourceSheetResponse__"];
+                    "application/json": components["schemas"]["EnergyApiResponse_list_UsageReviewResponse__"];
                 };
             };
             /** @description Validation Error */
@@ -70978,7 +68141,7 @@ export interface operations {
             };
         };
     };
-    batch_delete_source_sheets_api_v1_energy_sources_batch_delete: {
+    update_usage_reviews_api_v1_energy_usage_reviews_put: {
         parameters: {
             query?: never;
             header?: never;
@@ -70989,7 +68152,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["EnergySourceBatchRequest"];
+                "application/json": components["schemas"]["UsageReviewUpdate"];
             };
         };
         responses: {
@@ -70999,317 +68162,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EnergyApiResponse_EnergySourceDeleteResult_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    batch_sync_source_sheets_api_v1_energy_sources_batch_sync_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["EnergySourceBatchRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnergyApiResponse_EnergySyncRunResponse_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_source_documents_api_v1_energy_sources_documents_get: {
-        parameters: {
-            query?: {
-                period_month?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnergyApiResponse_list_EnergySourceDocumentResponse__"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_source_sheet_api_v1_energy_sources__sheet_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                sheet_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnergyApiResponse_EnergySourceDeleteResult_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_sheet_mapping_api_v1_energy_sources__sheet_id__mapping_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                sheet_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnergyApiResponse_Union_EnergySheetMappingResponse__NoneType__"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    save_sheet_mapping_api_v1_energy_sources__sheet_id__mapping_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                sheet_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["EnergySheetMappingUpsert"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnergyApiResponse_EnergySheetMappingResponse_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    preview_sheet_mapping_api_v1_energy_sources__sheet_id__mapping_preview_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                sheet_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["EnergySheetMappingUpsert"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnergyApiResponse_EnergyMappingPreviewResponse_"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_sheet_snapshots_api_v1_energy_sources__sheet_id__snapshots_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                sheet_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnergyApiResponse_list_EnergySnapshotResponse__"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_sync_runs_api_v1_energy_sync_runs_get: {
-        parameters: {
-            query?: {
-                page?: number;
-                page_size?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnergyApiResponse_list_EnergySyncRunResponse__"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    trigger_sync_api_v1_energy_sync_runs_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["EnergySyncTriggerRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EnergyApiResponse_EnergySyncRunResponse_"];
+                    "application/json": components["schemas"]["EnergyApiResponse_list_UsageReviewResponse__"];
                 };
             };
             /** @description Validation Error */
