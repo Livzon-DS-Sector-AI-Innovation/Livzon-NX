@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { App, Button, Drawer, Input, InputNumber, Modal, Select, Space, Table, Typography } from 'antd'
+import { App, Button, Drawer, Grid, Input, InputNumber, Modal, Select, Space, Table, Typography } from 'antd'
 import dayjs from 'dayjs'
 import PlatformNotice from '@/components/shared/PlatformNotice'
 import { saveDirectReadings } from '@/actions/energy-ledger'
@@ -33,6 +33,8 @@ export function EnergyEntryClient() {
   const [busy, setBusy] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [historyId, setHistoryId] = useState<string>()
+  const screens = Grid.useBreakpoint()
+  const compact = !screens.md
   const query = reportQuery({ reading_date: date, dataset })
   const readings = useQuery({ queryKey: ['energy-ledger', 'input-readings', query], queryFn: () => ledgerRequest<DirectReading>(`/input-readings?${query}`), enabled: Boolean(date) })
   const history = useQuery({ queryKey: ['energy-ledger', 'history', historyId], queryFn: () => ledgerRequest<Revision[]>(`/ledger-history/reading/${historyId}`), enabled: Boolean(historyId) })
@@ -75,6 +77,9 @@ export function EnergyEntryClient() {
     } catch (cause) { setError(cause instanceof Error ? cause.message : '保存未完成，输入已保留') }
     finally { setBusy(false) }
   }
+  const valueInput = (row: Item) => (
+    <InputNumber<string> className={styles.entryValue} stringMode min="0" precision={row.precision} disabled={!canOperate || busy} aria-label={`${fieldName(row.name)}本次填写`} value={values[row.point_id] ?? row.draft_value ?? undefined} onChange={value => { allowNavigation.current = false; setValues(current => ({ ...current, [row.point_id]: value ?? '' })) }} />
+  )
   return <>
     <div className={styles.filters}>
       <div className={styles.filterField}><label htmlFor="energy-entry-date">数据日期</label><EnergyDatePicker id="energy-entry-date" label="数据日期" disabled={busy} allowClear={false} value={date} onChange={value => changeSelection(() => setDate(value))} /></div>
@@ -83,11 +88,14 @@ export function EnergyEntryClient() {
     </div>
     {(error || readings.error) && <PlatformNotice type="error" title={error || readings.error?.message} description="输入已保留，请核对字段数值或数据版本后重试。" action={<Button onClick={() => void readings.refetch()}>重试</Button>} />}
     {!readings.isPending && !readings.error && !items.length && <PlatformNotice title="该原始表暂无当前权限内的字段" description="能源管理员可通过历史导入识别原表字段与公式，无需配置责任分组或生成清单。" />}
-    <Table<Item> className={styles.entryTable} tableLayout="fixed" rowKey="point_id" dataSource={items} loading={readings.isFetching} pagination={false} scroll={{ x: 900 }} columns={[
+    <Table<Item> className={styles.entryTable} tableLayout="fixed" rowKey="point_id" dataSource={items} loading={readings.isFetching} pagination={false} columns={compact ? [
+      { title: '原始字段', dataIndex: 'name', ellipsis: true, render: (name: string, row) => <div>{fieldName(name)}<span className={styles.savedHint}>已保存 {formatAmount(row.value)}</span></div> },
+      { title: '本次填写', width: 200, render: (_, row) => valueInput(row) },
+    ] : [
       { title: '原始字段', dataIndex: 'name', ellipsis: true, render: (name: string) => fieldName(name) },
       { title: '单位', dataIndex: 'unit', width: 90 },
       { title: '已保存数值', width: 200, align: 'right', render: (_, row) => formatAmount(row.value) },
-      { title: '本次填写', width: 240, render: (_, row) => <InputNumber<string> className={styles.entryValue} stringMode min="0" precision={row.precision} disabled={!canOperate || busy} aria-label={`${fieldName(row.name)}本次填写`} value={values[row.point_id] ?? row.draft_value ?? undefined} onChange={value => { allowNavigation.current = false; setValues(current => ({ ...current, [row.point_id]: value ?? '' })) }} /> },
+      { title: '本次填写', width: 240, render: (_, row) => valueInput(row) },
       { title: '修改记录', width: 140, align: 'center', render: (_, row) => row.reading_id ? <Button type="link" onClick={() => setHistoryId(row.reading_id!)}>查看记录</Button> : '—' },
     ]} />
     {items.length > 0 && <Space orientation="vertical" style={{ width: '100%' }}>
