@@ -114,6 +114,16 @@ def _build_detail(
         ),
         hazard_due_notify_chat_ids=list(model.hazard_due_notify_chat_ids or []),
         hazard_due_notify_user_ids=list(model.hazard_due_notify_user_ids or []),
+        fire_expiry_notify_enabled=model.fire_expiry_notify_enabled,
+        fire_expiry_notify_milestones=list(
+            model.fire_expiry_notify_milestones or [30, 15, 7]
+        ),
+        fire_expiry_notify_chat_ids=list(
+            model.fire_expiry_notify_chat_ids or []
+        ),
+        fire_expiry_notify_user_ids=list(
+            model.fire_expiry_notify_user_ids or []
+        ),
         is_enabled=model.is_enabled,
         knowledge_last_sync_status=model.knowledge_last_sync_status,
         knowledge_last_sync_error=model.knowledge_last_sync_error,
@@ -163,6 +173,16 @@ async def update_safety_feishu_app_settings(
             ),
                 hazard_due_notify_chat_ids=list(data.hazard_due_notify_chat_ids or []),
                 hazard_due_notify_user_ids=list(data.hazard_due_notify_user_ids or []),
+                fire_expiry_notify_enabled=data.fire_expiry_notify_enabled,
+                fire_expiry_notify_milestones=list(
+                    data.fire_expiry_notify_milestones or [30, 15, 7]
+                ),
+                fire_expiry_notify_chat_ids=list(
+                    data.fire_expiry_notify_chat_ids or []
+                ),
+                fire_expiry_notify_user_ids=list(
+                    data.fire_expiry_notify_user_ids or []
+                ),
                 is_enabled=data.is_enabled,
             )
             db.add(model)
@@ -205,6 +225,20 @@ async def update_safety_feishu_app_settings(
             if "hazard_due_notify_user_ids" in data.model_fields_set:
                 model.hazard_due_notify_user_ids = list(
                     data.hazard_due_notify_user_ids or []
+                )
+            if "fire_expiry_notify_enabled" in data.model_fields_set:
+                model.fire_expiry_notify_enabled = data.fire_expiry_notify_enabled
+            if "fire_expiry_notify_milestones" in data.model_fields_set:
+                model.fire_expiry_notify_milestones = list(
+                    data.fire_expiry_notify_milestones or []
+                )
+            if "fire_expiry_notify_chat_ids" in data.model_fields_set:
+                model.fire_expiry_notify_chat_ids = list(
+                    data.fire_expiry_notify_chat_ids or []
+                )
+            if "fire_expiry_notify_user_ids" in data.model_fields_set:
+                model.fire_expiry_notify_user_ids = list(
+                    data.fire_expiry_notify_user_ids or []
                 )
         await db.commit()
         return _build_detail(model)

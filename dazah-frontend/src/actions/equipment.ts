@@ -13,10 +13,8 @@ import {
   CreateFailureCodeInput, UpdateFailureCodeInput,
   CreateWorkOrderInput, UpdateWorkOrderInput, AssignWorkOrderInput, CompleteWorkOrderInput, VerifyWorkOrderInput,
   CreateCalibrationPlanInput, UpdateCalibrationPlanInput, CreateCalibrationRecordInput,
-  CreateSparePartInput, UpdateSparePartInput, StockInboundInput, StockAdjustInput,
+  CreateSparePartInput, UpdateSparePartInput, StockInboundInput,
   CreateMaintenancePlanInput, UpdateMaintenancePlanInput,
-  CreateInspectionTemplateInput, UpdateInspectionTemplateInput,
-  CreateInspectionTemplateItemInput, UpdateInspectionTemplateItemInput,
   InspectionCompleteInput, MaterialConsumeInput,
 } from '@/types/equipment'
 
@@ -335,15 +333,6 @@ export async function stockInbound(sparePartId: string, data: StockInboundInput)
   return result
 }
 
-export async function stockAdjust(sparePartId: string, data: StockAdjustInput) {
-  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/spare-parts/${sparePartId}/stock/adjust`, {
-    method: 'POST',
-    body: JSON.stringify(data),
-  })
-  revalidatePath('/equipment')
-  return result
-}
-
 // ==================== 维护计划 ====================
 export async function createMaintenancePlan(data: CreateMaintenancePlanInput) {
   const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/maintenance/plans/`, {
@@ -371,59 +360,7 @@ export async function deleteMaintenancePlan(id: string) {
   return result
 }
 
-// ==================== 巡检模板 ====================
-export async function createInspectionTemplate(data: CreateInspectionTemplateInput) {
-  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/maintenance/inspection-templates/`, {
-    method: 'POST',
-    body: JSON.stringify(data),
-  })
-  revalidatePath('/equipment')
-  return result
-}
-
-export async function updateInspectionTemplate(id: string, data: UpdateInspectionTemplateInput) {
-  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/maintenance/inspection-templates/${id}`, {
-    method: 'PUT',
-    body: JSON.stringify(data),
-  })
-  revalidatePath('/equipment')
-  return result
-}
-
-export async function deleteInspectionTemplate(id: string) {
-  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/maintenance/inspection-templates/${id}`, {
-    method: 'DELETE',
-  })
-  revalidatePath('/equipment')
-  return result
-}
-
-export async function createInspectionTemplateItem(templateId: string, data: CreateInspectionTemplateItemInput) {
-  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/maintenance/inspection-templates/${templateId}/items`, {
-    method: 'POST',
-    body: JSON.stringify(data),
-  })
-  revalidatePath('/equipment')
-  return result
-}
-
-export async function updateInspectionTemplateItem(itemId: string, data: UpdateInspectionTemplateItemInput) {
-  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/maintenance/inspection-templates/items/${itemId}`, {
-    method: 'PUT',
-    body: JSON.stringify(data),
-  })
-  revalidatePath('/equipment')
-  return result
-}
-
-export async function deleteInspectionTemplateItem(itemId: string) {
-  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/maintenance/inspection-templates/items/${itemId}`, {
-    method: 'DELETE',
-  })
-  revalidatePath('/equipment')
-  return result
-}
-
+// ==================== 巡检完成（工单巡检结果提交） ====================
 export async function completeInspection(workOrderId: string, data: InspectionCompleteInput) {
   const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/maintenance/inspection-templates/complete/${workOrderId}`, {
     method: 'POST',
@@ -459,14 +396,6 @@ export async function uploadWorkOrderImages(workOrderId: string, formData: FormD
   revalidatePath('/equipment')
   const json = await result.json()
   return json.data
-}
-
-export async function deleteWorkOrderImage(workOrderId: string, imageId: string) {
-  const result = await actionFetch(`${API_BASE_URL}/api/v1/equipment/maintenance/work-orders/${workOrderId}/images/${imageId}`, {
-    method: 'DELETE',
-  })
-  revalidatePath('/equipment')
-  return result
 }
 
 // ==================== 抢单 ====================
@@ -543,7 +472,7 @@ export async function fetchEquipmentStatistics(workshop?: string): Promise<any> 
   return json.data
 }
 
-/** 各已启用镜像车间的今日巡检进度（设备仪表盘汇总）；失败降级为空列表 */
+/** 各已启用镜像车间的今日巡检进度（设备汇总页）；失败降级为空列表 */
 export async function fetchInspectionTodaySummaries(): Promise<InspectionFeishuWorkshopSummary[]> {
   try {
     const res = await fetch(
@@ -671,24 +600,6 @@ export async function fetchMaintenancePlans(filters: any = {}): Promise<any> {
   }
 }
 
-export async function fetchInspectionTemplates(filters: any = {}): Promise<any> {
-  const params = new URLSearchParams()
-  if (filters.equipment_id) params.append('equipment_id', filters.equipment_id)
-  if (filters.is_active !== undefined) params.append('is_active', String(filters.is_active))
-  params.append('page', String(filters.page || 1))
-  params.append('page_size', String(filters.page_size || 20))
-
-  const res = await fetch(`${API_BASE_URL}/api/v1/equipment/inspection-templates?${params.toString()}`, {
-    cache: 'no-store',
-  })
-  if (!res.ok) return { items: [], total: 0 }
-  const json = await res.json()
-  return {
-    items: json.data || [],
-    total: json.meta?.total || 0,
-  }
-}
-
 export async function fetchCategories(): Promise<any[]> {
   const res = await fetch(`${API_BASE_URL}/api/v1/equipment/categories`, {
     cache: 'no-store',
@@ -729,7 +640,7 @@ export async function fetchStockWarnings(workshop?: string): Promise<any> {
 }
 
 export async function fetchOverdueMaintenancePlans(): Promise<any> {
-  const res = await fetch(`${API_BASE_URL}/api/v1/equipment/maintenance-plans/overdue`, {
+  const res = await fetch(`${API_BASE_URL}/api/v1/equipment/maintenance/plans/overdue`, {
     cache: 'no-store',
     headers: await getAuthHeaders(),
   })

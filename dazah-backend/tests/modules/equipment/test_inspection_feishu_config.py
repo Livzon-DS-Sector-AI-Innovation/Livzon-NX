@@ -808,3 +808,79 @@ async def test_update_config_wraps_wiki_resolve_errors(
                 app_token="https://x.feishu.cn/wiki/WikiNodeError",
             ),
         )
+
+
+async def test_update_config_persists_base_url(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """飞书配置页：多维表格完整链接（含租户域名）随配置保存并可回读。"""
+    _patch_env_empty(monkeypatch)
+    link = "https://j0eukrlohu.feishu.cn/base/WehRbElQcaxkqRsvvehc7oxrnNf"
+    detail = await config_service.update_config(
+        db_session,
+        "101-2",
+        EquipmentInspectionFeishuConfigUpdateRequest(
+            app_id="cli_ws",
+            app_secret="secret_value",
+            app_token="bascn_1012",
+            base_url=link,
+            today_table_id="tbl_today",
+            history_table_id="tbl_history",
+            device_table_id="tbl_devices",
+            is_enabled=True,
+        ),
+    )
+    assert detail.base_url == link
+
+    # 非 https 链接拒绝保存
+    with pytest.raises(AppException):
+        await config_service.update_config(
+            db_session,
+            "101-2",
+            EquipmentInspectionFeishuConfigUpdateRequest(
+                app_id="cli_ws",
+                app_secret="",
+                app_token="bascn_1012",
+                base_url="http://insecure.example/base/x",
+                today_table_id="tbl_today",
+                history_table_id="tbl_history",
+                device_table_id="tbl_devices",
+                is_enabled=True,
+            ),
+        )
+
+
+async def test_list_config_details_covers_rows_and_default_workshop(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """飞书配置清单：返回全部已配置车间 + 默认车间（环境变量回退）。"""
+    _patch_env_empty(monkeypatch)
+    monkeypatch.setattr(config_service.settings, "EQUIPMENT_FEISHU_APP_ID", "cli_env")
+    monkeypatch.setattr(
+        config_service.settings, "EQUIPMENT_FEISHU_APP_SECRET", "env_secret"
+    )
+    monkeypatch.setattr(
+        config_service.settings,
+        "EQUIPMENT_FEISHU_BITABLE_APP_TOKEN",
+        "bascn_env",
+    )
+    await config_service.update_config(
+        db_session,
+        "101-2",
+        EquipmentInspectionFeishuConfigUpdateRequest(
+            app_id="cli_ws",
+            app_secret="secret_value",
+            app_token="bascn_1012",
+            today_table_id="tbl_today",
+            history_table_id="tbl_history",
+            device_table_id="tbl_devices",
+            is_enabled=True,
+        ),
+    )
+    details = await config_service.list_config_details(db_session)
+    by_workshop = {d.workshop_code: d for d in details}
+    assert set(by_workshop) == {"101-2", "201-1"}
+    assert by_workshop["101-2"].source == "database"
+    assert by_workshop["101-2"].app_token == "bascn_1012"
+    assert by_workshop["201-1"].source == "environment"
+    assert by_workshop["201-1"].app_token == "bascn_env"

@@ -1,7 +1,14 @@
 import { redirect } from 'next/navigation'
 
-// 人员配置已按车间拆分路由（/equipment/personnel/<车间代码>）；
-// 旧入口保留重定向，当前唯一已配置车间为 201一车间。
-export default function PersonnelPageRedirect() {
-  redirect('/equipment/personnel/201-1')
+// 旧功能页路径收敛到统一工作台：/equipment/personnel[?workshop=] → /equipment[?workshop=&module=personnel]
+export default async function PersonnelRedirect({
+  searchParams,
+}: {
+  searchParams: Promise<{ workshop?: string }>
+}) {
+  const { workshop } = await searchParams
+  const query = workshop
+    ? `workshop=${encodeURIComponent(workshop)}&module=personnel`
+    : 'module=personnel'
+  redirect(`/equipment?${query}`)
 }

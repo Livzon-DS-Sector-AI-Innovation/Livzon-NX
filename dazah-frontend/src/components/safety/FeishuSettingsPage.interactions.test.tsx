@@ -12,6 +12,8 @@ const mocks = vi.hoisted(() => ({
   getSafetyFeishuWsStatus: vi.fn(),
   restartSafetyFeishuWs: vi.fn(),
   testRadarNotify: vi.fn(),
+  testFireExpiryNotify: vi.fn(),
+  testHazardDueNotify: vi.fn(),
   getSafetyPageFeishuConfigs: vi.fn(),
   saveSafetyPageFeishuConfig: vi.fn(),
   testSafetyPageFeishuConfig: vi.fn(),
@@ -23,6 +25,8 @@ vi.mock('@/actions/safety', () => ({
   saveSafetyFeishuSettings: mocks.saveSafetyFeishuSettings,
   testSafetyFeishuSettings: mocks.testSafetyFeishuSettings,
   testRadarNotify: mocks.testRadarNotify,
+  testFireExpiryNotify: mocks.testFireExpiryNotify,
+  testHazardDueNotify: mocks.testHazardDueNotify,
   getSafetyFeishuWsStatus: mocks.getSafetyFeishuWsStatus,
   restartSafetyFeishuWs: mocks.restartSafetyFeishuWs,
   getSafetyPageFeishuConfigs: mocks.getSafetyPageFeishuConfigs,
@@ -174,6 +178,13 @@ function findButton(container: HTMLElement, text: string): HTMLButtonElement | u
   ) as HTMLButtonElement | undefined
 }
 
+function clickLastButton(container: HTMLElement, text: string): void {
+  const matches = Array.from(container.querySelectorAll('button')).filter((button) =>
+    button.textContent?.includes(text)
+  ) as HTMLButtonElement[]
+  matches.at(-1)?.click()
+}
+
 function findInput(container: HTMLElement, placeholder: string): HTMLInputElement | undefined {
   return Array.from(container.querySelectorAll('input')).find((input) =>
     input.placeholder?.includes(placeholder)
@@ -193,6 +204,8 @@ beforeEach(() => {
   mocks.getSafetyFeishuWsStatus.mockResolvedValue({ code: 200, data: { connected: true } })
   mocks.saveSafetyFeishuSettings.mockResolvedValue({ code: 200, data: settingsDetail })
   mocks.testRadarNotify.mockResolvedValue({ code: 200, data: { sent: 2, errors: [] } })
+  mocks.testFireExpiryNotify.mockResolvedValue({ code: 200, data: { sent: 3, errors: [] } })
+  mocks.testHazardDueNotify.mockResolvedValue({ code: 200, data: { sent: 1, errors: [] } })
   // 「页面数据表映射」标签页默认无已登记镜像页，卡片渲染为空态
   mocks.getSafetyPageFeishuConfigs.mockResolvedValue({ code: 200, data: { items: [] } })
 })
@@ -400,6 +413,68 @@ describe('FeishuSettingsPage interactions', () => {
     expect(payload.radar_notify_user_ids).toEqual(['ou_group9'])
   })
 
+  it('edits fire expiry notify fields', async () => {
+    rendered = renderPage({ initialSettings: settingsDetail, initialWsStatus: null })
+    await settle()
+
+    setInput(rendered!.container, '提醒天数', '30,15,7')
+    setInput(rendered!.container, 'chat_id', 'oc_x')
+    setInput(rendered!.container, 'open_id', 'ou_y')
+    await settle()
+
+    const fireSwitch = document.body.querySelector(
+      '[aria-label="启用消防器材有效期提醒"]',
+    ) as HTMLElement | undefined
+    if (fireSwitch) {
+      await act(async () => {
+        fireSwitch.click()
+        await settle()
+      })
+    }
+  })
+  it('blocks the fire expiry test when app id is empty', async () => {
+    rendered = renderPage({ initialSettings: settingsDetail, initialWsStatus: null })
+    await settle()
+
+    // 清空 App ID 后点消防测试：应警告且不调用保存/发送
+    const appInput = findInput(rendered!.container, 'App ID')
+    if (appInput) setInput(rendered!.container, 'App ID', '')
+    await settle()
+    clickLastButton(rendered!.container, '发送测试提醒')
+    await settle()
+
+    expect(mocks.message.warning).toHaveBeenCalledWith('请先填写飞书应用 App ID')
+    expect(mocks.testFireExpiryNotify).not.toHaveBeenCalled()
+  })
+  it('sends a fire expiry notify test after saving the current settings', async () => {
+    rendered = renderPage({ initialSettings: settingsDetail, initialWsStatus: null })
+    await settle()
+
+    act(() => clickLastButton(rendered!.container, '发送测试提醒'))
+    await settle()
+
+    expect(mocks.saveSafetyFeishuSettings).toHaveBeenCalled()
+    expect(mocks.testFireExpiryNotify).toHaveBeenCalled()
+    expect(mocks.message.success).toHaveBeenCalledWith('测试提醒已发送（3 个目标）')
+
+    // 无有效目标：sent=0 时展示后端错误明细
+    mocks.testFireExpiryNotify.mockResolvedValueOnce({ code: 200, data: { sent: 0, errors: ['未配置提醒目标'] } })
+    act(() => clickLastButton(rendered!.container, '发送测试提醒'))
+    await settle()
+    expect(mocks.message.error).toHaveBeenCalledWith('未配置提醒目标')
+
+    // 接口失败分支
+    mocks.testFireExpiryNotify.mockResolvedValueOnce({ code: 500, message: '飞书不可用' })
+    act(() => clickLastButton(rendered!.container, '发送测试提醒'))
+    await settle()
+    expect(mocks.message.error).toHaveBeenCalledWith('飞书不可用')
+
+    // 保存失败时不再发测试通知
+    mocks.saveSafetyFeishuSettings.mockResolvedValueOnce({ code: 500, message: '凭证无效' })
+    act(() => clickLastButton(rendered!.container, '发送测试提醒'))
+    await settle()
+    expect(mocks.message.error).toHaveBeenCalledWith('凭证无效')
+  })
   it('sends a radar notify test after saving the current targets', async () => {
     rendered = renderPage({ initialSettings: settingsDetail, initialWsStatus: null })
     await settle()

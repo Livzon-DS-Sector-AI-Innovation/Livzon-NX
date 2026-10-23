@@ -1,7 +1,7 @@
 """Drop retired energy closing, adjustment and entry-plan tables.
 
 Revision ID: d1f2a3b4c5d6
-Revises: c9d400000061
+Revises: c8e4a2f6d9b3
 
 The native ledger no longer exposes period closing, manual adjustments or
 generated entry plans. Historical Wiki snapshot tables are intentionally
@@ -15,7 +15,7 @@ from sqlalchemy.dialects import postgresql
 from alembic import op
 
 revision = "d1f2a3b4c5d6"
-down_revision = "c9d400000061"
+down_revision = "c8e4a2f6d9b3"
 branch_labels = None
 depends_on = None
 

@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppException
 from app.modules.equipment.models import Equipment, Location, WorkOrder
+from app.modules.equipment.models.inspection import InspectionTask
 from app.modules.equipment.models.inspection_template import (
     InspectionTemplate,
     InspectionTemplateItem,
@@ -20,7 +21,6 @@ from app.modules.equipment.repository.work_order import (
 from app.modules.equipment.service.inspection import (
     close_task,
     complete_task,
-    create_task,
     start_task,
     submit_equipment_check,
 )
@@ -144,16 +144,18 @@ async def inspection_task(
 ) -> Any:
     from datetime import UTC, datetime
 
-    task = await create_task(
-        db_session,
-        {
-            "plan_type": "设备巡检",
-            "equipment_id": equipment_with_dept.id,
-            "template_ids": [template_with_items.id],
-            "assigned_to": inspector.id,
-            "planned_time": datetime.now(UTC),
-        },
+    # create_task 已随旧轨 HTTP 下线：直接构造任务行（机器人路径的存量形态）
+    task = InspectionTask(
+        task_no=f"IT-TEST-{uuid.uuid4().hex[:8]}",
+        plan_type="设备巡检",
+        equipment_id=equipment_with_dept.id,
+        template_ids=[str(template_with_items.id)],
+        assigned_to=inspector.id,
+        planned_time=datetime.now(UTC),
+        status="待执行",
     )
+    db_session.add(task)
+    await db_session.flush()
     task = await start_task(db_session, task.id)
     return task
 
@@ -358,17 +360,18 @@ async def test_work_order_no_responsible_person(
 
     from datetime import UTC, datetime
 
-    # 创建任务并启动
-    task = await create_task(
-        db_session,
-        {
-            "plan_type": "设备巡检",
-            "equipment_id": eq_no_dept.id,
-            "template_ids": [template_with_items.id],
-            "assigned_to": inspector.id,
-            "planned_time": datetime.now(UTC),
-        },
+    # 直接构造任务行（create_task 已下线）并启动
+    task = InspectionTask(
+        task_no=f"IT-TEST-{uuid.uuid4().hex[:8]}",
+        plan_type="设备巡检",
+        equipment_id=eq_no_dept.id,
+        template_ids=[str(template_with_items.id)],
+        assigned_to=inspector.id,
+        planned_time=datetime.now(UTC),
+        status="待执行",
     )
+    db_session.add(task)
+    await db_session.flush()
     task = await start_task(db_session, task.id)
 
     # 提交异常

@@ -105,7 +105,7 @@ export default async function StatsPage() {
       console.warn('今日巡检进度加载失败:', inspectionResult.reason)
     }
   } catch (error) {
-    console.warn('设备仪表盘数据加载异常:', error)
+    console.warn('设备汇总数据加载异常:', error)
   }
 
   return (

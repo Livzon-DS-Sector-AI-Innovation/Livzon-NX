@@ -113,6 +113,12 @@ export async function fetchInspectionFeishuConfig(
   return json.data
 }
 
+/** 飞书配置清单：已配置车间 + 默认车间（环境变量回退），Secret 掩码返回 */
+export async function fetchInspectionFeishuConfigList(): Promise<InspectionFeishuConfigDetail[]> {
+  const json = await getJson<InspectionFeishuConfigDetail[]>(`${BASE}/config-list`)
+  return json.data ?? []
+}
+
 /** 保存飞书镜像配置（Secret 留空保留已保存值） */
 export async function updateInspectionFeishuConfig(
   workshop: string,

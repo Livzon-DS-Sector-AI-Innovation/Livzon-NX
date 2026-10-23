@@ -9,7 +9,7 @@ import {
   ApartmentOutlined, UserOutlined, ThunderboltOutlined,
 } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { fetchCategories } from '@/lib/api/equipment'
+import { fetchCategoriesClient as fetchCategories } from '@/lib/api/equipment-client'
 import { assignCategories } from '@/actions/equipment-personnel'
 import type {
   EquipmentRole, CategoryAssignItem, PersonnelCategoryInfo,

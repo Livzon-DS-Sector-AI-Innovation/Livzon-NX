@@ -1,13 +1,14 @@
 """Safety ORM models."""
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import (
     JSON,
     Boolean,
+    Date,
     DateTime,
     Float,
     ForeignKey,
@@ -1165,6 +1166,26 @@ class HazardIdentification(BaseModel):
     )
     responsible_person: Mapped[str | None] = mapped_column(
         String(100), nullable=True, comment="责任人"
+    )
+
+    # ── 车间台账专用字段（对齐车间 Excel 表头） ──
+    tense: Mapped[str | None] = mapped_column(
+        String(50), nullable=True, comment="时态（过去/现在/将来）"
+    )
+    state: Mapped[str | None] = mapped_column(
+        String(50), nullable=True, comment="状态（正常/异常/紧急）"
+    )
+    responsible_unit: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, comment="责任单位"
+    )
+    check_frequency: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, comment="检查频次"
+    )
+    check_standard: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="检查标准（设备设施清单）"
+    )
+    is_major_hazard: Mapped[str | None] = mapped_column(
+        String(10), nullable=True, comment="是否重要危险源（是/否）"
     )
 
     # ── AI 流程状态 ──
@@ -2697,6 +2718,25 @@ class SafetyFeishuAppSettings(BaseModel):
     hazard_due_notify_user_ids: Mapped[list[Any] | None] = mapped_column(
         JSON, nullable=True, default=list, comment="到期提醒个人 open_id 列表"
     )
+    fire_expiry_notify_enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+        comment="是否启用消防器材有效期到期提醒（每天检查，进入提醒节点才推送）",
+    )
+    fire_expiry_notify_milestones: Mapped[list[Any] | None] = mapped_column(
+        JSON,
+        nullable=True,
+        default=list,
+        comment="有效期提醒节点天数列表（如 [30,15,7]；0 = 已过期节点）",
+    )
+    fire_expiry_notify_chat_ids: Mapped[list[Any] | None] = mapped_column(
+        JSON, nullable=True, default=list, comment="有效期提醒群 chat_id 列表"
+    )
+    fire_expiry_notify_user_ids: Mapped[list[Any] | None] = mapped_column(
+        JSON, nullable=True, default=list, comment="有效期提醒个人 open_id 列表"
+    )
 
 
 class HazardDueNotificationLog(BaseModel):
@@ -2940,6 +2980,11 @@ class SafetyPageFeishuConfig(BaseModel):
             "主绑定（table_id 列）是第一个页签，本列表是其余页签"
         ),
     )
+    writeback_table_id: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+        comment="点检记录回写子表 table_id（灭火器/消防栓点检页专用，同一 Base）",
+    )
     is_enabled: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
@@ -3068,4 +3113,233 @@ class WorkshopClassification(BaseModel):
         default="ai",
         server_default="ai",
         comment="来源: ai=LLM 自动归类",
+    )
+
+
+# ==================== 灭火器 / 消防栓点检 ====================
+
+
+class FireEquipment(BaseModel):
+    """消防器材台账（「灭火器及消防栓点检」镜像页的结构化投影）。
+
+    数据来源是飞书多维表格的各车间子表（经 ``page_table_mirror_records``
+    镜像），投影时按字段名启发式抽取 编号 / 归属部门 / 存放位置，器材类型
+    优先取记录字段、其次按子表名判断。二维码与扫码点检都基于本表 id。
+    """
+
+    __tablename__ = "fire_equipment"
+    __table_args__ = (
+        Index(
+            "uq_safety_fire_equipment_source_record",
+            "table_id",
+            "record_id",
+            unique=True,
+            postgresql_where=text("is_deleted = false"),
+        ),
+        Index(
+            "ix_safety_fire_equipment_page",
+            "page_key",
+            "is_deleted",
+        ),
+        {"schema": "safety"},
+    )
+
+    page_key: Mapped[str] = mapped_column(
+        String(160), nullable=False, comment="来源镜像页标识"
+    )
+    table_id: Mapped[str] = mapped_column(
+        String(64), nullable=False, comment="来源飞书子表 table_id"
+    )
+    record_id: Mapped[str] = mapped_column(
+        String(64), nullable=False, comment="来源飞书记录 record_id"
+    )
+    tab_name: Mapped[str] = mapped_column(
+        String(120),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="来源子表页签名（车间）",
+    )
+    equipment_type: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="extinguisher",
+        server_default="extinguisher",
+        comment="器材类型: extinguisher=灭火器 / hydrant=消防栓",
+    )
+    equipment_no: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="器材编号（如 灭火器编号/消防栓编号 列值）",
+    )
+    department: Mapped[str] = mapped_column(
+        String(200),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="归属部门/车间",
+    )
+    location: Mapped[str] = mapped_column(
+        String(200),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="存放位置",
+    )
+    fields: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=dict, comment="镜像解码后的全部字段值"
+    )
+    search_text: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="",
+        server_default="",
+        comment="关键字搜索文本（编号/部门/位置/子表名）",
+    )
+    last_inspected_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="最近一次点检时间"
+    )
+    last_inspection_result: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+        comment="最近一次点检结论: pass=合格 / fail=不合格",
+    )
+    expiry_date: Mapped[date | None] = mapped_column(
+        Date,
+        nullable=True,
+        comment="有效日期（投影自飞书 有效日期/有效期 等字段）",
+    )
+    last_synced_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=datetime.now(UTC),
+        server_default=text("now()"),
+        comment="该行最近投影同步时间",
+    )
+
+
+class FireExpiryNotificationLog(BaseModel):
+    """有效期提醒推送记录：每台器材每个提醒节点只推一次（0 = 已过期节点）。"""
+
+    __tablename__ = "fire_expiry_notification_log"
+    __table_args__ = (
+        UniqueConstraint(
+            "equipment_id",
+            "milestone_days",
+            name="uq_fire_expiry_notify_once_per_milestone",
+        ),
+        {"schema": "safety"},
+    )
+
+    equipment_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("safety.fire_equipment.id"),
+        nullable=False,
+        comment="器材 id（safety.fire_equipment）",
+    )
+    milestone_days: Mapped[int] = mapped_column(
+        Integer, nullable=False, comment="触发的提醒节点天数；0 表示已过期节点"
+    )
+    notified_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+
+
+class FireInspectionRecord(BaseModel):
+    """消防器材点检记录（扫码或网页提交，一次点检一行）。
+
+    ``items`` 存当次点检的完整检查项快照（含文案），检查卡内容调整后
+    历史记录仍按当时口径展示；器材基础信息同样快照，台账删除不影响追溯。
+    """
+
+    __tablename__ = "fire_inspection_records"
+    __table_args__ = (
+        Index(
+            "ix_safety_fire_inspections_equipment",
+            "equipment_id",
+            "inspected_at",
+        ),
+        Index(
+            "ix_safety_fire_inspections_inspected_at",
+            "inspected_at",
+        ),
+        {"schema": "safety"},
+    )
+
+    equipment_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("safety.fire_equipment.id"),
+        nullable=False,
+        comment="器材 id（safety.fire_equipment）",
+    )
+    equipment_type: Mapped[str] = mapped_column(
+        String(20), nullable=False, comment="器材类型快照: extinguisher/hydrant"
+    )
+    equipment_no: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="器材编号快照",
+    )
+    department: Mapped[str] = mapped_column(
+        String(200),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="归属部门快照",
+    )
+    location: Mapped[str] = mapped_column(
+        String(200),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="存放位置快照",
+    )
+    items: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=list,
+        comment="检查项快照 [{key, label, result: ok/fail, remark}]",
+    )
+    result: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        comment="点检结论: pass=全部合格 / fail=存在不合格项",
+    )
+    failed_items: Mapped[list[dict[str, Any]] | None] = mapped_column(
+        JSONB,
+        nullable=True,
+        default=list,
+        comment="不合格项 [{key, label}]",
+    )
+    abnormal_action: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="异常处理措施"
+    )
+    inspector_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True, comment="点检人用户 id"
+    )
+    inspector_name: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="点检人姓名",
+    )
+    inspected_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, comment="点检时间"
+    )
+    source: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="web",
+        server_default="web",
+        comment="提交来源: scan=扫码页 / web=网页端",
+    )
+    feishu_record_id: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+        comment="回写飞书点检记录表的 record_id（NULL=待回写）",
     )

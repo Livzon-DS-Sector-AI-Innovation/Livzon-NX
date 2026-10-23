@@ -25,6 +25,8 @@ import {
   SearchOutlined,
   ExportOutlined,
   DownloadOutlined,
+  EditOutlined,
+  ImportOutlined,
   SafetyCertificateOutlined,
   WarningOutlined,
   AlertOutlined,
@@ -33,25 +35,31 @@ import {
 } from '@ant-design/icons'
 import {
   getHazardIdentifications,
+  getHazardFilterOptions,
   getHILedgerStats,
   exportHazardLedgerPdf,
 } from '@/actions/safety'
-import type { HazardIdentification, HazardLedgerStats } from '@/types/safety'
-import {
-  OVERALL_STATUS_OPTIONS_HI,
-  RISK_LEVEL_OPTIONS,
+import type {
+  HazardFilterOptions,
+  HazardIdentification,
+  HazardLedgerStats,
+  HazardPositionOption,
 } from '@/types/safety'
+import { RISK_LEVEL_OPTIONS } from '@/types/safety'
+import { usePagePermissions } from '@/hooks/usePagePermissions'
+import HazardLedgerEditDrawer from './HazardLedgerEditDrawer'
+import HazardLedgerImportModal from './HazardLedgerImportModal'
 import dayjs from 'dayjs'
 
 const { Text } = Typography
 const { RangePicker } = DatePicker
 
-// 风险等级图标映射
+// 风险等级图标映射（四级用蓝色，与车间图例红/橙/黄/蓝一致）
 const RISK_ICONS: Record<string, React.ReactNode> = {
   level_1: <SafetyCertificateOutlined style={{ color: '#f5222d' }} />,
   level_2: <WarningOutlined style={{ color: '#fa8c16' }} />,
   level_3: <AlertOutlined style={{ color: '#faad14' }} />,
-  level_4: <InfoCircleOutlined style={{ color: '#52c41a' }} />,
+  level_4: <InfoCircleOutlined style={{ color: '#1677ff' }} />,
 }
 
 // 风险等级卡片配置
@@ -59,7 +67,7 @@ const RISK_CARD_CONFIG: Record<string, { label: string; color: string; bgColor: 
   level_1: { label: '重大风险', color: '#f5222d', bgColor: '#fff1f0' },
   level_2: { label: '较大风险', color: '#fa8c16', bgColor: '#fff7e6' },
   level_3: { label: '一般风险', color: '#faad14', bgColor: '#fffbe6' },
-  level_4: { label: '低风险', color: '#52c41a', bgColor: '#f6ffed' },
+  level_4: { label: '低风险', color: '#1677ff', bgColor: '#e6f4ff' },
 }
 
 export default function HazardLedgerPanel() {
@@ -77,6 +85,13 @@ export default function HazardLedgerPanel() {
   const [riskLevel, setRiskLevel] = useState<string | undefined>()
   const [dateRange, setDateRange] = useState<[string, string] | null>(null)
   const { message } = App.useApp()
+  const { canImport, canOperate } = usePagePermissions()
+
+  // ── 车间表格导入 Modal 状态 ──
+  const [importModalOpen, setImportModalOpen] = useState(false)
+
+  // ── 在线编辑 Drawer 状态 ──
+  const [editingRecord, setEditingRecord] = useState<HazardIdentification | null>(null)
 
   // ── AI 导出 Modal 状态 ──
   const [exportModalOpen, setExportModalOpen] = useState(false)
@@ -86,6 +101,35 @@ export default function HazardLedgerPanel() {
 
   // ── 展开行 key ──
   const [expandedRowKeys, setExpandedRowKeys] = useState<string[]>([])
+
+  // ── 部门/岗位下拉选项（取自已入账数据，导入后自动刷新） ──
+  const [deptOptions, setDeptOptions] = useState<string[]>([])
+  const [positionPairs, setPositionPairs] = useState<HazardPositionOption[]>([])
+
+  const loadFilterOptions = async () => {
+    try {
+      const res = await getHazardFilterOptions()
+      if (res.code === 200 && res.data) {
+        const options = res.data as HazardFilterOptions
+        setDeptOptions(options.departments || [])
+        setPositionPairs(options.positions || [])
+      }
+    } catch {
+      // non-critical
+    }
+  }
+
+  useEffect(() => {
+    queueMicrotask(loadFilterOptions)
+  }, [])
+
+
+  // 岗位选项随部门联动；未选部门时展示全部
+  const positionOptions = (
+    department ? positionPairs.filter((pair) => pair.department === department) : positionPairs
+  )
+    .map((pair) => pair.position)
+    .filter((value, idx, arr) => arr.indexOf(value) === idx)
 
   const loadStats = async () => {
     try {
@@ -216,51 +260,151 @@ export default function HazardLedgerPanel() {
     return <Tag color={colorMap[level] || 'default'}>{level}</Tag>
   }
 
+  // 列结构对齐车间 Excel《作业活动安全风险分级管控措施清单》表头：
+  // 风险点（序号/类别/名称）| 危险源（作业步骤/危险源辨识）| 事故类型 | 时态 | 状态
+  // | 安全风险等级评定（L/E/C/D/风险等级）| 风险管控措施（工程/管理/个体防护/应急）
+  // | 管控主体（管控层级/责任单位/责任人员）| 检查频次
+  // 表头分组配色：对齐车间 Excel 的黄/橙/绿/蓝/红分组色带，
+  // 横向滚动时分组标签移出视野也能凭颜色分辨归属
+  const GROUP_BG = {
+    risk: '#FFF1B8', // 风险点 / 危险源 / 事故类型 / 时态 / 状态（黄）
+    assess: '#FFD591', // 安全风险等级评定（橙）
+    control: '#D9F7BE', // 风险管控措施（绿）
+    owner: '#BAE7FF', // 管控主体（蓝）
+    frequency: '#FFCCC7', // 检查频次（红）
+  } as const
+
+  const headerCell = (bg: string) => () => ({ style: { background: bg } })
+
+  const textCol = (
+    title: string,
+    dataIndex: keyof HazardIdentification,
+    width: number,
+    options?: { wrap?: boolean; bg?: string }
+  ) => ({
+    title,
+    dataIndex,
+    key: dataIndex as string,
+    width,
+    ellipsis: !options?.wrap || undefined,
+    render: (v?: string) => v || '-',
+    ...(options?.wrap
+      ? {
+          onCell: () => ({
+            style: { whiteSpace: 'normal' as const, wordBreak: 'break-all' as const },
+          }),
+        }
+      : {}),
+    ...(options?.bg ? { onHeaderCell: headerCell(options.bg) } : {}),
+  })
+
+  const numCol = (
+    title: string,
+    dataIndex: keyof HazardIdentification,
+    bg?: string
+  ) => ({
+    title,
+    dataIndex,
+    key: dataIndex as string,
+    width: 48,
+    align: 'center' as const,
+    render: (v?: number) => v ?? '-',
+    ...(bg ? { onHeaderCell: headerCell(bg) } : {}),
+  })
+
   const columns: ColumnsType<HazardIdentification> = [
-    { title: '编号', dataIndex: 'hazard_id_no', key: 'hazard_id_no', width: 120 },
-    { title: '部门', dataIndex: 'department', key: 'department', width: 90, ellipsis: true },
-    { title: '岗位', dataIndex: 'position', key: 'position', width: 90, ellipsis: true },
     {
-      title: '生产步骤', dataIndex: 'production_step', key: 'production_step', width: 140, ellipsis: true,
+      title: '序号',
+      key: 'row_no',
+      width: 55,
+      align: 'center',
+      fixed: 'left',
+      render: (_, __, idx) => (queryParams.page - 1) * queryParams.page_size + idx + 1,
+    },
+    { title: '部门', dataIndex: 'department', key: 'department', width: 95, ellipsis: true, fixed: 'left' },
+    { title: '岗位', dataIndex: 'position', key: 'position', width: 95, ellipsis: true, fixed: 'left' },
+    {
+      title: '风险点',
+      onHeaderCell: headerCell(GROUP_BG.risk),
+      children: [
+        textCol('类别', 'hazard_type', 95, { bg: GROUP_BG.risk }),
+        textCol('名称', 'production_step', 150, { bg: GROUP_BG.risk }),
+      ],
     },
     {
-      title: '作业活动', dataIndex: 'specific_activity', key: 'specific_activity', width: 140, ellipsis: true,
-      render: (v?: string) => v || '-',
+      title: '危险源',
+      onHeaderCell: headerCell(GROUP_BG.risk),
+      children: [
+        textCol('作业步骤', 'specific_activity', 150, { wrap: true, bg: GROUP_BG.risk }),
+        textCol('危险源辨识', 'unsafe_behavior', 210, { wrap: true, bg: GROUP_BG.risk }),
+      ],
+    },
+    textCol('可能发生的事故类型及后果', 'possible_accident', 140, { wrap: true, bg: GROUP_BG.risk }),
+    textCol('时态', 'tense', 70, { bg: GROUP_BG.risk }),
+    textCol('状态', 'state', 70, { bg: GROUP_BG.risk }),
+    {
+      title: '安全风险等级评定',
+      onHeaderCell: headerCell(GROUP_BG.assess),
+      children: [
+        numCol('可能性L', 'l_inherent', GROUP_BG.assess),
+        numCol('暴露频次E', 'e_inherent', GROUP_BG.assess),
+        numCol('严重性C', 'c_inherent', GROUP_BG.assess),
+        numCol('危险度D', 'd_inherent', GROUP_BG.assess),
+        {
+          title: '风险等级',
+          key: 'inherent_risk',
+          width: 95,
+          onHeaderCell: headerCell(GROUP_BG.assess),
+          render: (_, r) => getRiskTag(r.inherent_risk_level, r.inherent_risk_label),
+        },
+      ],
     },
     {
-      title: '事故类型', dataIndex: 'possible_accident', key: 'possible_accident', width: 100, ellipsis: true,
-      render: (v?: string) => v || '-',
+      title: '风险管控措施',
+      onHeaderCell: headerCell(GROUP_BG.control),
+      children: [
+        textCol('工程措施', 'existing_engineering_controls', 200, { wrap: true, bg: GROUP_BG.control }),
+        textCol('管理措施', 'existing_management_controls', 200, { wrap: true, bg: GROUP_BG.control }),
+        textCol('个体防护', 'existing_ppe', 150, { wrap: true, bg: GROUP_BG.control }),
+        textCol('应急措施', 'existing_emergency_measures', 150, { wrap: true, bg: GROUP_BG.control }),
+      ],
     },
     {
-      title: '固有风险', key: 'inherent_risk', width: 90,
-      render: (_, r) => getRiskTag(r.inherent_risk_level, r.inherent_risk_label),
+      title: '管控主体',
+      onHeaderCell: headerCell(GROUP_BG.owner),
+      children: [
+        {
+          title: '管控层级',
+          dataIndex: 'control_level',
+          key: 'control_level',
+          width: 85,
+          onHeaderCell: headerCell(GROUP_BG.owner),
+          render: (v?: string) => getControlLevelTag(v),
+        },
+        textCol('责任单位', 'responsible_unit', 110, { wrap: true, bg: GROUP_BG.owner }),
+        textCol('责任人员', 'responsible_person', 90, { bg: GROUP_BG.owner }),
+      ],
     },
+    textCol('检查频次', 'check_frequency', 90, { wrap: true, bg: GROUP_BG.frequency }),
     {
-      title: '残余风险', key: 'residual_risk', width: 90,
-      render: (_, r) => getRiskTag(r.residual_risk_level, r.residual_risk_label),
-    },
-    {
-      title: '措施后风险', key: 'post_risk', width: 90,
-      render: (_, r) => getRiskTag(r.post_risk_level, r.post_risk_label),
-    },
-    {
-      title: '管控层级', dataIndex: 'control_level', key: 'control_level', width: 80,
-      render: (v?: string) => getControlLevelTag(v),
-    },
-    { title: '责任人', dataIndex: 'responsible_person', key: 'responsible_person', width: 80, ellipsis: true },
-    {
-      title: '创建时间', dataIndex: 'created_at', key: 'created_at', width: 110,
-      render: (v: string) => v ? dayjs(v).format('YYYY-MM-DD') : '-',
-    },
-    {
-      title: '操作', key: 'action', width: 70, fixed: 'right',
+      title: '操作', key: 'action', width: 110, fixed: 'right',
       render: (_, r) => (
-        <Button
-          type="link" size="small"
-          onClick={() => router.push(`/safety/hazard-identification/${r.id}`)}
-        >
-          查看
-        </Button>
+        <Space size={0}>
+          <Button
+            type="link" size="small"
+            onClick={() => router.push(`/safety/hazard-identification/${r.id}`)}
+          >
+            查看
+          </Button>
+          {canOperate && (
+            <Button
+              type="link" size="small" icon={<EditOutlined />}
+              onClick={() => setEditingRecord(r)}
+            >
+              编辑
+            </Button>
+          )}
+        </Space>
       ),
     },
   ]
@@ -288,6 +432,19 @@ export default function HazardLedgerPanel() {
     return (
       <div style={{ padding: '12px 24px', background: '#fafafa', borderRadius: 8 }}>
         <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+          {(record.check_standard || record.is_major_hazard || record.equipment_facilities) && (
+            <Descriptions size="small" column={3} colon={false} title={<Text strong style={{ fontSize: 13 }}>设备设施信息</Text>}>
+              {record.equipment_facilities && (
+                <Descriptions.Item label="设备设施">{record.equipment_facilities}</Descriptions.Item>
+              )}
+              {record.check_standard && (
+                <Descriptions.Item label="检查标准" span={2}>{record.check_standard}</Descriptions.Item>
+              )}
+              {record.is_major_hazard && (
+                <Descriptions.Item label="重要危险源">{record.is_major_hazard}</Descriptions.Item>
+              )}
+            </Descriptions>
+          )}
           {lecRow('固有风险评价', record.l_inherent, record.e_inherent, record.c_inherent, record.d_inherent, record.inherent_risk_level, record.inherent_risk_label)}
 
           {(record.existing_engineering_controls || record.existing_management_controls || record.existing_ppe || record.existing_emergency_measures) && (
@@ -345,6 +502,11 @@ export default function HazardLedgerPanel() {
           </p>
         </div>
         <Space>
+          {canImport && (
+            <Button icon={<ImportOutlined />} onClick={() => setImportModalOpen(true)}>
+              导入车间表格
+            </Button>
+          )}
           <Button type="primary" icon={<ExportOutlined />} onClick={() => setExportModalOpen(true)}>
             导出 PDF
           </Button>
@@ -407,21 +569,29 @@ export default function HazardLedgerPanel() {
             style={{ width: 200 }}
             allowClear
           />
-          <Input
+          <Select
             placeholder="部门"
+            showSearch
+            allowClear
             value={department}
-            onChange={(e) => setDepartment(e.target.value || undefined)}
-            onPressEnter={handleSearch}
-            style={{ width: 120 }}
-            allowClear
+            onChange={(v) => {
+              setDepartment(v || undefined)
+              // 切换部门后，若已选岗位不属于新部门则清空
+              if (v && position && !positionPairs.some((p) => p.department === v && p.position === position)) {
+                setPosition(undefined)
+              }
+            }}
+            style={{ width: 150 }}
+            options={deptOptions.map((d) => ({ value: d, label: d }))}
           />
-          <Input
+          <Select
             placeholder="岗位"
-            value={position}
-            onChange={(e) => setPosition(e.target.value || undefined)}
-            onPressEnter={handleSearch}
-            style={{ width: 120 }}
+            showSearch
             allowClear
+            value={position}
+            onChange={(v) => setPosition(v || undefined)}
+            style={{ width: 150 }}
+            options={positionOptions.map((p) => ({ value: p, label: p }))}
           />
           <Select
             placeholder="风险等级"
@@ -459,7 +629,7 @@ export default function HazardLedgerPanel() {
           dataSource={data}
           rowKey="id"
           loading={loading}
-          scroll={{ x: 1400 }}
+          scroll={{ x: 2600 }}
           size="small"
           expandable={{
             expandedRowRender,
@@ -529,6 +699,32 @@ export default function HazardLedgerPanel() {
           )}
         </div>
       </Modal>
+
+      {/* ── 车间表格导入 Modal ── */}
+      <HazardLedgerImportModal
+        open={importModalOpen}
+        onClose={() => setImportModalOpen(false)}
+        onImported={() => {
+          loadData()
+          loadStats()
+          loadFilterOptions()
+        }}
+      />
+
+      {/* ── 在线编辑 Drawer ── */}
+      {editingRecord && (
+        <HazardLedgerEditDrawer
+          key={`${editingRecord.id}-${editingRecord.updated_at}`}
+          record={editingRecord}
+          open
+          onClose={() => setEditingRecord(null)}
+          onSaved={() => {
+            loadData()
+            loadStats()
+            loadFilterOptions()
+          }}
+        />
+      )}
     </div>
   )
 }

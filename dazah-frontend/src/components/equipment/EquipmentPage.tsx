@@ -4,7 +4,7 @@ import { useEffect, useCallback, useRef, useState } from 'react'
 import { App, ConfigProvider, Tabs, Button } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
 import { MenuFoldOutlined, MenuUnfoldOutlined, ReloadOutlined } from '@ant-design/icons'
-import { EquipmentCategory, Location, Equipment, EquipmentStatistics } from '@/types/equipment'
+import { EquipmentCategory, Location, Equipment, EquipmentStatistics, DepartmentOption } from '@/types/equipment'
 import { useEquipmentStore } from '@/stores/equipment'
 import { fetchEquipmentsClient, fetchEquipmentStatisticsClient, fetchCategoriesClient, fetchLocationsClient, fetchDepartmentsClient } from '@/lib/api/equipment-client'
 import { StatsCards } from './StatsCards'
@@ -18,20 +18,18 @@ import { RepairDrawer } from './RepairDrawer'
 
 interface EquipmentPageProps {
   workshopCode: string
-  workshopLabel: string
   initialCategories: EquipmentCategory[]
   initialLocations: Location[]
   initialEquipments: Equipment[]
   initialTotal: number
   initialStatistics: EquipmentStatistics
-  initialDepartments: import('@/lib/api/equipment').DepartmentOption[]
+  initialDepartments: DepartmentOption[]
 }
 
 const SIDEBAR_WIDTH = 280
 
 export function EquipmentPage({
   workshopCode,
-  workshopLabel,
   initialCategories,
   initialLocations,
   initialEquipments,
@@ -207,21 +205,6 @@ export function EquipmentPage({
   return (
     <ConfigProvider locale={zhCN}>
       <App>
-        {/* 标题行 */}
-        <div style={{ marginBottom: 24 }}>
-          <h2
-            style={{
-              fontSize: 22, fontWeight: 600, color: '#1a1a1a',
-              margin: 0, marginBottom: 4, lineHeight: 1.3,
-            }}
-          >
-            设备台账 · {workshopLabel}
-          </h2>
-          <p style={{ fontSize: 14, color: '#787671', margin: 0, lineHeight: 1.5 }}>
-            {workshopLabel} · 分类管理 · 位置管理 · 设备档案 · 状态追踪
-          </p>
-        </div>
-
         <div className="flex gap-4" style={{ height: 'calc(100vh - 210px)', minHeight: 400 }}>
           {/* 左侧：可折叠分类/位置树 */}
           {!sidebarCollapsed && (

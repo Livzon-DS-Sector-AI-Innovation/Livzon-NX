@@ -9,8 +9,10 @@ import {
 } from '@ant-design/icons'
 import { useEquipmentStore } from '@/stores/equipment'
 import { assignWorkOrder, startWorkOrder, completeWorkOrder, verifyWorkOrder, closeWorkOrder, claimWorkOrder } from '@/actions/equipment'
-import { WorkOrderStatus, WorkOrderPriority, Maintainer } from '@/types/equipment'
-import { fetchMaintainersClient, fetchWorkOrderByIdClient } from '@/lib/api/equipment-client'
+import { WorkOrderStatus, WorkOrderPriority, Maintainer, SparePart } from '@/types/equipment'
+import { fetchMaintainersClient, fetchWorkOrderByIdClient, fetchSparePartsClient } from '@/lib/api/equipment-client'
+import { MaterialConsumeDrawer } from './MaterialConsumeDrawer'
+import { MaterialRecordTable } from './MaterialRecordTable'
 
 const { TextArea } = Input
 
@@ -51,6 +53,9 @@ export function WorkOrderDetailDrawer({ onRefresh }: WorkOrderDetailDrawerProps)
   const { workOrderDetailOpen, viewingWorkOrder, closeWorkOrderDetail, setViewingWorkOrder } = useEquipmentStore()
 
   const [maintainers, setMaintainersState] = useState<Maintainer[]>([])
+  const [spareParts, setSpareParts] = useState<SparePart[]>([])
+  // 领料成功后递增 key 重建领料记录表（记录表挂载时自取数）
+  const [materialsKey, setMaterialsKey] = useState(0)
 
   const refreshDetail = async (id: string) => {
     try {
@@ -62,6 +67,9 @@ export function WorkOrderDetailDrawer({ onRefresh }: WorkOrderDetailDrawerProps)
   useEffect(() => {
     if (workOrderDetailOpen) {
       fetchMaintainersClient().then(setMaintainersState).catch(() => {})
+      fetchSparePartsClient({ page_size: 200 })
+        .then((res) => setSpareParts(res.items))
+        .catch(() => {})
     }
   }, [workOrderDetailOpen])
 
@@ -335,6 +343,29 @@ export function WorkOrderDetailDrawer({ onRefresh }: WorkOrderDetailDrawerProps)
       <div style={{ marginTop: 24, marginBottom: 24 }}>
         <div style={{ fontSize: 15, fontWeight: 600, color: '#1a1a1a', marginBottom: 16 }}>工单进度</div>
         <Timeline items={timelineItems} />
+      </div>
+
+      {/* 领料记录：维修期间可领用备件（扣库存），完成后仅可回看 */}
+      <div style={{ marginTop: 24, marginBottom: 24 }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          marginBottom: 12,
+        }}>
+          <div style={{ fontSize: 15, fontWeight: 600, color: '#1a1a1a' }}>领料记录</div>
+          {['待处理', '执行中', '待验收'].includes(wo.status) && (
+            <MaterialConsumeDrawer
+              workOrderId={wo.id}
+              spareParts={spareParts}
+              onRefresh={() => {
+                setMaterialsKey((k) => k + 1)
+                fetchSparePartsClient({ page_size: 200 })
+                  .then((res) => setSpareParts(res.items))
+                  .catch(() => {})
+              }}
+            />
+          )}
+        </div>
+        <MaterialRecordTable key={materialsKey} workOrderId={wo.id} />
       </div>
 
       <div style={{ borderTop: '1px solid #ede9e4', paddingTop: 16 }}>

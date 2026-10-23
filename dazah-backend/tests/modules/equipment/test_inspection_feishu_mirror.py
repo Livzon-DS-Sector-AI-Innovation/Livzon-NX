@@ -802,19 +802,17 @@ async def test_list_records_today_source_only_returns_cst_today_rows(
     assert [r.record_id for r in rows] == ["rec_today_cur", "rec_history_cur"]
     assert total == 2
 
-    # history 来源不套用今日口径，仍按条件过滤（含已拆分的原始行）
+    # history 来源不套用今日口径，但已拆分的合并原始行同样不展示
+    # （回归：历史列表出现 199 字符合并行撑宽表格）
     history_rows, history_total = await mirror.list_records(
         db_session, workshop_code="201-1", source="history"
     )
-    assert [r.record_id for r in history_rows] == [
-        "rec_history_cur",
-        "rec_history_split",
-    ]
-    assert history_total == 2
+    assert [r.record_id for r in history_rows] == ["rec_history_cur"]
+    assert history_total == 1
 
     # 缺省 source 不受今日口径限制（设备详情抽屉按设备聚合全部记录）
     _, all_total = await mirror.list_records(db_session, workshop_code="201-1")
-    assert all_total == 4
+    assert all_total == 3
 
 
 # ---------- 车间隔离 ----------
@@ -879,3 +877,40 @@ async def test_sync_scopes_records_by_workshop(db_session, monkeypatch) -> None:
         ):
             env_patch.setattr(feishu_config.settings, key, "")
         assert await feishu_config.is_mirror_enabled(db_session, "203") is False
+
+
+async def test_list_records_excludes_split_raw_rows(db_session) -> None:
+    """巡检记录/聚合口径不展示多设备合并填写的原始行（处理状态=已拆分）。
+
+    回归：通用列表仅今日口径过滤已拆分行，历史 Tab 会显示 199 字符的
+    合并原始行并撑宽表格；未启用该字段的表（NULL）不受影响。
+    """
+    for record_id, status, name in (
+        ("rec_normal", "有效记录", "糖化罐2#"),
+        ("rec_split", "已拆分", "A101A102A103"),
+        ("rec_legacy", None, "legacy 设备"),
+    ):
+        db_session.add(
+            EquipmentInspectionFeishuRecord(
+                workshop_code="201-1",
+                source="history",
+                record_id=record_id,
+                record_date=date(2026, 10, 13),
+                equipment_name=name,
+                process_status=status,
+            )
+        )
+    await db_session.flush()
+
+    items, total = await mirror.list_records(
+        db_session, workshop_code="201-1", source="history"
+    )
+    assert total == 2
+    assert {item.record_id for item in items} == {"rec_normal", "rec_legacy"}
+
+    # 显式按状态筛选时仍可查到原始行（保留审计口径）
+    explicit, explicit_total = await mirror.list_records(
+        db_session, workshop_code="201-1", source="history", process_status="已拆分"
+    )
+    assert explicit_total == 1
+    assert [item.record_id for item in explicit] == ["rec_split"]

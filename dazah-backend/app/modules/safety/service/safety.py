@@ -1805,6 +1805,10 @@ class SafetyService(_SafetyCoreService):
             date_to,
         )
 
+    async def get_hazard_filter_options(self) -> dict[str, Any]:
+        """台账筛选下拉选项（部门/岗位取自已入账记录）"""
+        return await self.repo.get_hazard_filter_options()
+
     async def get_hazard_risk_options(
         self,
         department: str | None = None,

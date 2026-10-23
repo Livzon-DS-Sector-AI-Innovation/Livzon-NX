@@ -995,12 +995,8 @@ async def test_permission_verification_derives_module_access_from_pages(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("explicit_target", [False, True])
-@pytest.mark.parametrize("scope_type", ["not_applicable", "self"])
-async def test_legacy_equipment_grants_project_only_to_default_workshop(
-    explicit_target: bool, scope_type: str,
-) -> None:
-    target = "equipment:workshop-201-1:inspection-201-1"
+async def test_equipment_functional_grants_stay_functional() -> None:
+    """设备模块收敛为功能单页：全量功能授权保持原样，不再向车间叶标识投影。"""
     grants = [
         SimpleNamespace(
             page_key="equipment:inspection",
@@ -1008,18 +1004,8 @@ async def test_legacy_equipment_grants_project_only_to_default_workshop(
             sensitive_actions=[],
             scope_type="not_applicable",
             department_ids=[],
-        )
+        ),
     ]
-    if explicit_target:
-        grants.append(
-            SimpleNamespace(
-                page_key=target,
-                permissions=["access"] if scope_type == "self" else [],
-                sensitive_actions=[],
-                scope_type=scope_type,
-                department_ids=[],
-            )
-        )
     service = PagePermissionService(repo=_PageRepo(user_grants=grants))
     result = await service.effective_grants(
         None,
@@ -1027,8 +1013,8 @@ async def test_legacy_equipment_grants_project_only_to_default_workshop(
         resolved_roles=[],
     )
     by_key = {grant.page_key: grant for grant in result}
-    assert by_key[target].permissions == (
-        [] if explicit_target else ["access", "query", "operate"]
-    )
-    assert "equipment:workshop-101-1:inspection-101-1" not in by_key
-    assert by_key["equipment:inspection"].permissions == ["access", "query", "operate"]
+    assert by_key["equipment:inspection"].permissions == [
+        "access", "query", "operate",
+    ]
+    # workshop-叶授权标识已退役，任何情况下都不再生成
+    assert not any(key.startswith("equipment:workshop-") for key in by_key)

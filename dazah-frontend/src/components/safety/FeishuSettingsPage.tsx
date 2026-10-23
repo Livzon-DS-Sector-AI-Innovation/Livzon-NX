@@ -12,6 +12,7 @@ import { App, Button, Card, Input, Space, Switch, Tabs, Tag, Typography } from '
 
 import {
   getSafetyFeishuSettings,
+  testFireExpiryNotify,
   testHazardDueNotify,
   testRadarNotify,
   getSafetyFeishuWsStatus,
@@ -85,6 +86,14 @@ export default function FeishuSettingsPage({
       initialSettings?.hazard_due_notify_chat_ids ?? [],
     hazard_due_notify_user_ids:
       initialSettings?.hazard_due_notify_user_ids ?? [],
+    fire_expiry_notify_enabled:
+      initialSettings?.fire_expiry_notify_enabled ?? false,
+    fire_expiry_notify_milestones:
+      initialSettings?.fire_expiry_notify_milestones ?? [30, 15, 7],
+    fire_expiry_notify_chat_ids:
+      initialSettings?.fire_expiry_notify_chat_ids ?? [],
+    fire_expiry_notify_user_ids:
+      initialSettings?.fire_expiry_notify_user_ids ?? [],
     is_enabled: initialSettings?.is_enabled ?? true,
   })
   const [notifyChatIdsText, setNotifyChatIdsText] = useState(
@@ -106,6 +115,17 @@ export default function FeishuSettingsPage({
     (initialSettings?.hazard_due_notify_milestones ?? [30, 15, 7]).join(',')
   )
   const [dueTesting, setDueTesting] = useState(false)
+  // 消防器材有效期提醒推送的目标/节点输入
+  const [fireChatIdsText, setFireChatIdsText] = useState(
+    (initialSettings?.fire_expiry_notify_chat_ids ?? []).join('\n')
+  )
+  const [fireUserIdsText, setFireUserIdsText] = useState(
+    (initialSettings?.fire_expiry_notify_user_ids ?? []).join('\n')
+  )
+  const [fireMilestonesText, setFireMilestonesText] = useState(
+    (initialSettings?.fire_expiry_notify_milestones ?? [30, 15, 7]).join(',')
+  )
+  const [fireTesting, setFireTesting] = useState(false)
   const [wsStatus, setWsStatus] = useState<WsStatus | null>(
     (initialWsStatus as WsStatus | null) ?? null
   )
@@ -127,8 +147,15 @@ export default function FeishuSettingsPage({
         .filter((n) => Number.isInteger(n) && n > 0 && n <= 365),
       hazard_due_notify_chat_ids: parseIds(dueChatIdsText),
       hazard_due_notify_user_ids: parseIds(dueUserIdsText),
+      fire_expiry_notify_enabled: form.fire_expiry_notify_enabled,
+      fire_expiry_notify_milestones: fireMilestonesText
+        .split(/[,，\s]+/)
+        .map((s) => parseInt(s, 10))
+        .filter((n) => Number.isInteger(n) && n >= 0 && n <= 365),
+      fire_expiry_notify_chat_ids: parseIds(fireChatIdsText),
+      fire_expiry_notify_user_ids: parseIds(fireUserIdsText),
     }),
-    [form, notifyChatIdsText, notifyUserIdsText, dueChatIdsText, dueUserIdsText, milestonesText]
+    [form, notifyChatIdsText, notifyUserIdsText, dueChatIdsText, dueUserIdsText, milestonesText, fireChatIdsText, fireUserIdsText, fireMilestonesText]
   )
 
   const handleSave = useCallback(async () => {
@@ -180,6 +207,36 @@ export default function FeishuSettingsPage({
       }
     } finally {
       setDueTesting(false)
+    }
+  }, [buildDuePayload, form.app_id, message])
+
+  const handleTestFireExpiryNotify = useCallback(async () => {
+    if (!form.app_id.trim()) {
+      message.warning('请先填写飞书应用 App ID')
+      return
+    }
+    setFireTesting(true)
+    try {
+      // 先保存当前提醒配置，再发测试卡片
+      const saveRes = await saveSafetyFeishuSettings(buildDuePayload())
+      if (saveRes.code !== 200) {
+        message.error(saveRes.message || '保存配置失败')
+        return
+      }
+      setSettings(saveRes.data ?? null)
+      const res = await testFireExpiryNotify()
+      if (res.code === 200 && res.data) {
+        const d = res.data as { sent?: number; errors?: string[] }
+        if ((d.sent ?? 0) > 0) {
+          message.success(`测试提醒已发送（${d.sent} 个目标）`)
+        } else {
+          message.error((d.errors ?? []).join('；') || '发送失败')
+        }
+      } else {
+        message.error(res.message || '测试发送失败')
+      }
+    } finally {
+      setFireTesting(false)
     }
   }, [buildDuePayload, form.app_id, message])
 
@@ -504,6 +561,72 @@ export default function FeishuSettingsPage({
               icon={<SendOutlined />}
               onClick={() => void handleTestDueNotify()}
               loading={dueTesting}
+            >
+              发送测试提醒
+            </Button>
+          </div>
+        </Space>
+      </Card>
+      <Card title="消防器材有效期提醒（灭火器/消防栓到期推送）">
+        <Space orientation="vertical" size={12} style={{ display: 'flex' }}>
+          <Space size={12} wrap>
+            <Typography.Text>启用有效期提醒</Typography.Text>
+            <Switch
+              aria-label="启用消防器材有效期提醒"
+              checked={form.fire_expiry_notify_enabled}
+              onChange={(checked) =>
+                setForm((current) => ({
+                  ...current,
+                  fire_expiry_notify_enabled: checked,
+                }))
+              }
+            />
+            <Typography.Text type="secondary">
+              每天 08:20 检查消防器材台账：器材「有效日期」进入下方某个提醒节点
+              或已过期时，推送到下方群和个人；同一台器材同一节点只推一次。
+              节点填 0 表示过期后再推一次。
+            </Typography.Text>
+          </Space>
+          <Space.Compact block>
+            <Button disabled style={{ cursor: 'default', width: 140 }}>
+              提醒节点（天）
+            </Button>
+            <Input
+              value={fireMilestonesText}
+              placeholder="到期前提醒天数，如 30,15,7；填 0 表示过期后再提醒一次"
+              onChange={(event) => setFireMilestonesText(event.target.value)}
+            />
+          </Space.Compact>
+          <Space.Compact block>
+            <Button disabled style={{ cursor: 'default', width: 140 }}>
+              群 chat_id
+            </Button>
+            <Input
+              value={fireChatIdsText}
+              placeholder="提醒群 chat_id，多个用英文逗号分隔（oc_ 开头）"
+              onChange={(event) => setFireChatIdsText(event.target.value)}
+            />
+          </Space.Compact>
+          <Space.Compact block>
+            <Button disabled style={{ cursor: 'default', width: 140 }}>
+              个人 open_id
+            </Button>
+            <Input
+              value={fireUserIdsText}
+              placeholder="提醒个人 open_id，多个用英文逗号分隔（ou_ 开头）"
+              onChange={(event) => setFireUserIdsText(event.target.value)}
+            />
+          </Space.Compact>
+          <Typography.Text type="secondary">
+            提醒内容包含器材编号、部门、位置、责任人与到期天数；
+            数据来自飞书台账的「有效日期」列（同步后自动更新）。
+            修改后先「保存配置」，再点「发送测试提醒」验证。
+          </Typography.Text>
+          <div>
+            <Button
+              icon={<SendOutlined />}
+              onClick={() => void handleTestFireExpiryNotify()}
+              loading={fireTesting}
             >
               发送测试提醒
             </Button>

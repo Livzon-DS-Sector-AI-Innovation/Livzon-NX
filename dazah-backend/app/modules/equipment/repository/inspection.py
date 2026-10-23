@@ -17,36 +17,7 @@ from app.modules.equipment.models.inspection_template import (
     InspectionRecord,
 )
 
-
 # ═══════════ 路线 ═══════════
-async def get_max_task_no(db: AsyncSession) -> str | None:
-    today = datetime.now().strftime("%Y%m%d")
-    prefix = f"IT-{today}-"
-    stmt = (
-        select(InspectionTask.task_no)
-        .where(InspectionTask.task_no.like(f"{prefix}%"))
-        .order_by(InspectionTask.task_no.desc())
-        .limit(1)
-    )
-    result = await db.execute(stmt)
-    return result.scalar_one_or_none()
-
-
-async def create_task(db: AsyncSession, data: dict[str, Any]) -> InspectionTask:
-    task = InspectionTask(**data)
-    db.add(task)
-    await db.flush()
-    # eager re-fetch 加载关联，避免 _task_to_response 访问关系时 MissingGreenlet
-    result = await db.execute(
-        select(InspectionTask)
-        .options(
-            selectinload(InspectionTask.equipment),
-            selectinload(InspectionTask.assignee),
-        )
-        .where(InspectionTask.id == task.id)
-    )
-    return result.scalar_one()
-
 
 async def get_task_by_id(db: AsyncSession, task_id: uuid.UUID) -> InspectionTask | None:
     stmt = (
