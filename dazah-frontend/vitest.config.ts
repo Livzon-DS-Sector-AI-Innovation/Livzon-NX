@@ -23,6 +23,11 @@ export default defineConfig({
     // legitimately exceed Vitest's 5s default even though they are fast in
     // isolation. Keep a bounded suite-wide timeout instead of flaky failures.
     testTimeout: 15000,
+    // Vitest forwards worker console output over RPC. Under the coverage run the
+    // heavy Ant Design warning burst can race with worker teardown and fail the
+    // job with EnvironmentTeardownError even though every test passed. Printing
+    // worker console output directly removes that RPC hop without hiding results.
+    disableConsoleIntercept: true,
     coverage: {
       provider: 'v8',
       include: ['src/**/*.{ts,tsx}'],
