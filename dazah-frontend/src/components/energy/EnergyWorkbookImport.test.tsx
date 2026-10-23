@@ -9,7 +9,7 @@ vi.mock('@tanstack/react-query', () => ({
   useQuery: ({ queryFn }: { queryFn: () => unknown }) => { void queryFn(); return { data: [], isPending: state.pending, error: state.error, refetch: state.refetch } },
 }))
 vi.mock('@/lib/api/energy-ledger', () => ({ ledgerRequest: vi.fn(async () => []) }))
-vi.mock('./EnergyImportClient', () => ({ EnergyImportClient: ({ initialYear, excelOnly, onChanged }: { initialYear: number; excelOnly: boolean; onChanged: () => unknown }) => <button onClick={() => void onChanged()}>原始 Excel 导入 {initialYear} {String(excelOnly)}</button> }))
+vi.mock('./EnergyImportClient', () => ({ EnergyImportClient: ({ initialYear, onChanged }: { initialYear: number; onChanged: () => unknown }) => <button onClick={() => void onChanged()}>原始 Excel 导入 {initialYear}</button> }))
 import { ledgerRequest } from '@/lib/api/energy-ledger'
 import { EnergyWorkbookImport } from './EnergyWorkbookImport'
 let root: Root | undefined
@@ -22,7 +22,7 @@ it('loads settings-scoped mapping and refreshes all ledger queries after import'
   await mount()
   const context = { headers: { 'X-Dazah-Page-Path': '/energy/settings' } }
   expect(ledgerRequest).toHaveBeenCalledWith('/input-fields', context)
-  expect(document.body.textContent).toContain('原始 Excel 导入 2026 true')
+  expect(document.body.textContent).toContain('原始 Excel 导入 2026')
   await act(async () => document.querySelector('button')?.click())
   expect(state.invalidate).toHaveBeenCalledWith({ queryKey: ['energy-ledger'] })
 })

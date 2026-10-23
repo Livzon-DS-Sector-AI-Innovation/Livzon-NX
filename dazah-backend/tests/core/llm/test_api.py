@@ -13,7 +13,7 @@ from app.core.llm import api as llm_api
 from app.core.llm.capabilities import LLMCapabilities
 from app.core.llm.config import LLMConfigModel
 from app.core.llm.exceptions import LLMConfigError
-from app.platform.identity.deps import require_admin
+from app.platform.identity.deps import require_admin, require_system_admin
 
 SimpleNamespace: Any = _SimpleNamespace
 
@@ -23,6 +23,9 @@ async def llm_api_client() -> AsyncIterator[AsyncClient]:
     test_app = FastAPI()
     test_app.include_router(llm_api.router, prefix="/api/v1")
     test_app.dependency_overrides[require_admin] = lambda: SimpleNamespace(id="admin")
+    test_app.dependency_overrides[require_system_admin] = lambda: SimpleNamespace(
+        id="admin"
+    )
     test_app.dependency_overrides[get_db] = lambda: None
     async with AsyncClient(
         transport=ASGITransport(app=test_app), base_url="http://test"
@@ -193,6 +196,9 @@ async def test_save_and_activate_do_not_contact_provider(
     app = FastAPI()
     app.include_router(llm_api.router, prefix="/api/v1")
     app.dependency_overrides[require_admin] = lambda: SimpleNamespace(id=uuid.uuid4())
+    app.dependency_overrides[require_system_admin] = lambda: SimpleNamespace(
+        id=uuid.uuid4()
+    )
     app.dependency_overrides[get_db] = lambda: db
 
     async def unexpected_probe(**_kwargs: object) -> LLMCapabilities:
@@ -271,6 +277,9 @@ async def test_connection_uses_fast_text_probe_and_maps_failure(
     app = FastAPI()
     app.include_router(llm_api.router, prefix="/api/v1")
     app.dependency_overrides[require_admin] = lambda: SimpleNamespace(id=uuid.uuid4())
+    app.dependency_overrides[require_system_admin] = lambda: SimpleNamespace(
+        id=uuid.uuid4()
+    )
     app.dependency_overrides[get_db] = lambda: db
     monkeypatch.setattr(llm_api, "decrypt_api_key", lambda _key: "test-key")
     calls: list[dict[str, object]] = []

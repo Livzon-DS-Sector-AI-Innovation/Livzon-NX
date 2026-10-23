@@ -259,16 +259,46 @@
         "key": "stats",
         "name": "设备汇总",
         "path": "/equipment/stats",
-        "icon": null,
         "permission_code": null,
         "disabled": false,
         "children": null
       },
       {
-        "key": "console",
-        "name": "设备管理",
-        "path": "/equipment",
-        "icon": null,
+        "key": "assets",
+        "name": "设备台账",
+        "path": "/equipment/assets",
+        "permission_code": null,
+        "disabled": false,
+        "children": null
+      },
+      {
+        "key": "maintenance",
+        "name": "维护保养",
+        "path": "/equipment/maintenance",
+        "permission_code": null,
+        "disabled": false,
+        "children": null
+      },
+      {
+        "key": "inspection",
+        "name": "设备巡检",
+        "path": "/equipment/inspection",
+        "permission_code": null,
+        "disabled": false,
+        "children": null
+      },
+      {
+        "key": "spare-parts",
+        "name": "备件管理",
+        "path": "/equipment/spare-parts",
+        "permission_code": null,
+        "disabled": false,
+        "children": null
+      },
+      {
+        "key": "personnel",
+        "name": "人员配置",
+        "path": "/equipment/personnel",
         "permission_code": null,
         "disabled": false,
         "children": null
@@ -277,7 +307,6 @@
         "key": "feishu-config",
         "name": "飞书配置",
         "path": "/equipment/feishu-config",
-        "icon": null,
         "permission_code": null,
         "disabled": false,
         "children": null

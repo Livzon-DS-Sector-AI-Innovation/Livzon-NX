@@ -106,9 +106,8 @@ it('uses daily trend data for overview cards even without a shared complete date
   expect(card.textContent).toContain('原表数值单位')
   expect(node.querySelector('[aria-label="原始读数填报进度"]')).toBeNull()
   const trend = node.querySelector('[aria-label="电量用量趋势"]')!
-  expect(trend.textContent).toContain('单位：千瓦时')
+  expect(trend.textContent).toContain('单位：原表数值单位')
   expect(trend.textContent).toContain('有效 1 / 31 天')
-  expect(trend.textContent).not.toContain('原表数值单位')
   expect(state.queries.some(key => key[1] === 'overview' && new URLSearchParams(key[2]).get('include_basis') === 'true')).toBe(true)
   await act(async () => root.unmount())
 })

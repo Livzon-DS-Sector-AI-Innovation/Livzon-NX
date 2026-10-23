@@ -61,7 +61,7 @@ it.each([false, true])('shows original field names without the development prefi
   const rows = document.querySelectorAll('tbody tr[data-row-key]')
   expect(rows[0].querySelector('td')?.textContent).toBe('201一车间（-5°）')
   expect(rows[1].querySelector('td')?.textContent).toBe('103车间开发验证管道')
-  expect(rows[1].querySelectorAll('td')[1].textContent).toBe('0')
+  expect(rows[1].querySelectorAll('td')[2].textContent).toBe('0')
   expect(document.querySelector('[aria-label="201一车间（-5°）本次填写"]')).not.toBeNull()
   expect(document.querySelector('label[for="energy-entry-date"]')?.textContent).toBe('数据日期')
   expect(document.querySelector('label[for="energy-entry-dataset"]')?.textContent).toBe('原始数据表')
