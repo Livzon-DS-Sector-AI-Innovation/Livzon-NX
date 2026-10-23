@@ -20,8 +20,8 @@ const source=JSON.parse(process.argv[2]);
  let tick,visible,requests=0,events=[],response={status:204,headers:{get:()=>null}};
  const document={hidden:false,querySelector:()=>({}),addEventListener:(event,fn)=>{assert.equal(event,"visibilitychange");visible=fn}};
  const context={document,window:{dispatchEvent:event=>events.push(event.detail)},CustomEvent:class{constructor(type,options){assert.equal(type,"dazah:maintenance");this.detail=options.detail}},
-  location:{replace:()=>{throw new Error("must preserve existing page")}},Number,
-  setInterval:(fn,ms)=>{assert.equal(ms,5000);tick=fn},
+  location:{replace:()=>{throw new Error("must preserve existing page")}},Number,Date:{now:()=>1000000},
+  setInterval:(fn,ms)=>{assert.ok(ms===1000||ms===5000);if(ms===5000)tick=fn},
   fetch:async(path,options)=>{assert.equal(path,"/__dazah_maintenance_status");assert.equal(options.cache,"no-store");requests++;return response}};
  vm.runInNewContext(source,context);await new Promise(setImmediate);
  assert.equal(events.at(-1).phase,"normal");
@@ -61,16 +61,51 @@ const vm=require("node:vm"),assert=require("node:assert/strict");
 (async()=>{
  let notice,tick,phase="announced";
  const document={hidden:false,querySelector:()=>null,getElementById:()=>notice,
-  createElement:()=>({style:{},setAttribute:(k,v)=>assert.equal(v,"status"),remove:()=>{notice=undefined}}),
+  createElement:()=>({style:{},dataset:{},setAttribute:(k,v)=>assert.equal(v,"status"),remove:()=>{notice=undefined}}),
   body:{appendChild:n=>{notice=n}},addEventListener:()=>{}};
  vm.runInNewContext(JSON.parse(process.argv[2]),{document,Date,Number,
-  window:{dispatchEvent:()=>{}},CustomEvent:class{},setInterval:fn=>{tick=fn},
+  window:{dispatchEvent:()=>{}},CustomEvent:class{},setInterval:(fn,ms)=>{if(ms===5000)tick=fn},
   fetch:async()=>({status:phase==="normal"?204:200,headers:{get:()=>null},
    json:async()=>({phase,starts_at:Date.now()/1000+180})})});
  await new Promise(setImmediate);
  assert.match(notice.textContent,/完成并保存当前工作/);
  assert.match(notice.textContent,/剩余 180 秒/);
  phase="normal";await tick();assert.equal(notice,undefined);
+})().catch(e=>{console.error(e);process.exit(1)});
+'''
+    result = subprocess.run(["node", "-e", harness, "unused", json.dumps(source)],
+                            capture_output=True, text=True, encoding="utf-8", timeout=15)
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="Node runtime required")
+def test_legacy_page_enters_full_screen_at_deadline_even_with_a_pending_probe():
+    import json
+    config = (ROOT / "deploy/nginx-maintenance.conf").read_text(encoding="utf-8")
+    source = re.search(r"return 200 '(.*?)';", config, re.DOTALL).group(1)
+    harness = '''
+const vm=require("node:vm"),assert=require("node:assert/strict");
+(async()=>{
+ let notice,now=1000000,deadline,poll,visible,mode="announced",requests=0,focus=0;
+ const originalInput={value:"未保存内容"};
+ const document={hidden:false,querySelector:()=>null,getElementById:()=>notice,
+  createElement:()=>({style:{},dataset:{},setAttribute:()=>{},focus:()=>{focus++},remove:()=>{notice=undefined}}),
+  body:{appendChild:n=>{notice=n}},addEventListener:(event,fn)=>{visible=fn}};
+ vm.runInNewContext(JSON.parse(process.argv[2]),{document,Date:{now:()=>now},Number,
+  window:{dispatchEvent:()=>{}},CustomEvent:class{},
+  location:{replace:()=>assert.fail("must not navigate or reload")},
+  setInterval:(fn,ms)=>{if(ms===1000)deadline=fn;else poll=fn},
+  fetch:async()=>{requests++;if(mode==="pending")return new Promise(()=>{});
+   return {status:mode==="normal"?204:200,headers:{get:()=>null},json:async()=>({phase:"announced",starts_at:1180})}}});
+ await new Promise(setImmediate);
+ assert.match(notice.textContent,/剩余 180 秒/);
+ now+=179000;deadline();assert.match(notice.textContent,/剩余 1 秒/);
+ mode="pending";void poll();let before=requests;
+ now+=1000;deadline();
+ assert.match(notice.textContent,/系统维护中，请稍候/);
+ assert.match(notice.style.cssText,/inset:0/);assert.match(notice.style.cssText,/CanvasText/);
+ assert.equal(focus,1);assert.equal(requests,before);assert.equal(originalInput.value,"未保存内容");
+ document.hidden=false;await visible();assert.match(notice.textContent,/系统维护中/);
 })().catch(e=>{console.error(e);process.exit(1)});
 '''
     result = subprocess.run(["node", "-e", harness, "unused", json.dumps(source)],

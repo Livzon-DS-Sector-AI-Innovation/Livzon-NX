@@ -155,7 +155,8 @@ async def test_ordinary_admin_keeps_business_access_but_cannot_open_system_setti
             assert (await client.get("/identity/admin/roles")).status_code == 200
             assert (
                 await client.put(
-                    f"/identity/users/{target.id}", json={"role": "user"}
+                    f"/identity/users/{target.id}",
+                    json={"role": "user", "reason": "验证普通管理员降权"},
                 )
             ).status_code == 200
             assert target.role == "user"
@@ -166,6 +167,47 @@ async def test_ordinary_admin_keeps_business_access_but_cannot_open_system_setti
                     UserRole.is_deleted.is_(False),
                 )
             )
+
+
+@pytest.mark.asyncio
+async def test_role_change_requires_a_reason(db_session, monkeypatch):
+    connection = await db_session.connection()
+    async with AsyncSession(
+        bind=connection,
+        join_transaction_mode="create_savepoint",
+        expire_on_commit=False,
+    ) as db:
+        actor = User(
+            name=f"系统管理员-{uuid4().hex}",
+            username=f"system-admin-{uuid4().hex}",
+            role="admin",
+        )
+        target = User(
+            name=f"待授权用户-{uuid4().hex}",
+            username=f"target-{uuid4().hex}",
+            role="user",
+        )
+        db.add_all([actor, target])
+        await db.flush()
+        app = FastAPI()
+        app.include_router(api.user_router, prefix="/identity")
+        app.dependency_overrides[get_db] = lambda: db
+        app.dependency_overrides[deps.get_current_user] = lambda: actor
+        monkeypatch.setattr(api, "publish_permissions_changed", AsyncMock())
+        monkeypatch.setattr(api, "publish_data_scope_changed", AsyncMock())
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            user_url = f"/identity/users/{target.id}"
+            rejected = await client.put(user_url, json={"role": "admin"})
+            assert rejected.status_code == 422, rejected.text
+            assert target.role == "user"
+
+            accepted = await client.put(
+                user_url, json={"role": "admin", "reason": "任命系统管理员"}
+            )
+            assert accepted.status_code == 200, accepted.text
+            assert target.role == "admin"
 
 
 @pytest.mark.asyncio
@@ -220,7 +262,9 @@ async def test_role_and_identity_promotion_demotion_are_consistent(
             assert await resolve_user_permissions(db, target.id) == ["*"]
             promoted_version = target.grant_version
 
-            response = await client.put(user_url, json={"role": "user"})
+            response = await client.put(
+                user_url, json={"role": "user", "reason": "验证降权流程"}
+            )
             assert response.status_code == 200, response.text
             assert target.grant_version > promoted_version
             assert not await PagePermissionService().is_super_admin(
@@ -235,7 +279,9 @@ async def test_role_and_identity_promotion_demotion_are_consistent(
                 )
             )
             assert (
-                await client.put(user_url, json={"role": "admin"})
+                await client.put(
+                    user_url, json={"role": "admin", "reason": "验证恢复管理员"}
+                )
             ).status_code == 200
             assert (
                 await client.put(

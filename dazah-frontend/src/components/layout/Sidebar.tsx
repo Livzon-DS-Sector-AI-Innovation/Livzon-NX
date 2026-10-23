@@ -149,6 +149,7 @@ function findSelectedKey(
       return pathname === parsed[0]
     }
     return matchesMenuPath(item.path, pathname, query)
+      || Boolean(item.activePaths?.some(path => matchesMenuPath(path, pathname, query)))
   })
   return match?.key
 }

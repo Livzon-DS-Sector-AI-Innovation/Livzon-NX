@@ -5080,30 +5080,30 @@
       }
     },
     "energy:history:sources": {
-      "status": "active",
+      "status": "retired",
       "module_code": "energy",
       "route_path": "/energy/sources",
       "actions": {}
     },
     "energy:history:data": {
-      "status": "active",
+      "status": "retired",
       "module_code": "energy",
       "route_path": "/energy/data",
       "actions": {}
     },
     "energy:history:sync-runs": {
-      "status": "active",
+      "status": "retired",
       "module_code": "energy",
       "route_path": "/energy/sync-runs",
       "actions": {}
     },
     "energy:history:feishu-config": {
-      "status": "active",
+      "status": "retired",
       "module_code": "energy",
       "route_path": "/energy/feishu-config",
       "actions": {
         "sync_config": {
-          "status": "active",
+          "status": "retired",
           "category": "integration_admin"
         }
       }

@@ -59,6 +59,9 @@ class Settings(BaseSettings):
     # Audit
     AUDIT_RETENTION_DAYS: int = 7
     USER_OPERATION_AUDIT_RETENTION_DAYS: int = Field(default=30, ge=1)
+    # Security/business audit evidence is retained for three years by default.
+    # Set to 0 to keep non-operation audit records indefinitely.
+    AUDIT_NON_OPERATION_RETENTION_DAYS: int = Field(default=1095, ge=0)
 
     # Feishu / Lark — platform app shared by SSO, org sync, IM and common Bitable.
     FEISHU_APP_ID: str = ""

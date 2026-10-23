@@ -30,7 +30,7 @@ vi.mock('@ant-design/icons', () => ({
 }))
 
 vi.mock('antd', () => ({
-  Menu: ({ items = [], onClick, onOpenChange, openKeys = [], mode, triggerSubMenuAction }: {
+  Menu: ({ items = [], onClick, onOpenChange, openKeys = [], selectedKeys = [], mode, triggerSubMenuAction }: {
     items?: Array<{
       key?: string | number
       label?: ReactNode
@@ -41,11 +41,12 @@ vi.mock('antd', () => ({
     onClick?: (info: { key: string }) => void
     onOpenChange?: (keys: string[]) => void
     openKeys?: string[]
+    selectedKeys?: string[]
     mode?: string
     triggerSubMenuAction?: string
   }) => createElement(
     'div',
-    { 'data-menu-mode': mode, 'data-menu-trigger': triggerSubMenuAction },
+    { 'data-menu-mode': mode, 'data-menu-trigger': triggerSubMenuAction, 'data-selected-keys': selectedKeys.join(',') },
     items.filter((item) => item?.key).flatMap((item) => {
       const key = String(item?.key)
       const isOpen = openKeys.includes(key)
@@ -106,6 +107,19 @@ afterEach(() => {
 })
 
 describe('Sidebar width control', () => {
+  it('highlights the single ledger item while filling through its compatible route', async () => {
+    navigation.pathname = '/energy/entry'
+    const host = document.createElement('div'); document.body.append(host)
+    const root = createRoot(host)
+    const modules: ModuleMenu[] = [{ key: 'energy', moduleCode: 'energy', label: '能源管理', icon: 'bolt', path: '/energy', children: [
+      { key: 'reports', label: '能源台账', path: '/energy/reports', activePaths: ['/energy/entry'] },
+    ] }]
+    try {
+      await act(async () => root.render(createElement(Sidebar, { user: { ...user, role: 'admin' }, modules })))
+      expect(host.querySelector('[data-selected-keys="reports"]')).not.toBeNull()
+      expect(host.querySelectorAll('[data-menu-key="reports"]')).toHaveLength(1)
+    } finally { await act(async () => root.unmount()) }
+  })
   const modules: ModuleMenu[] = [{
     key: 'purchasing', moduleCode: 'procurement', label: '采购管理',
     icon: 'shopping', path: '/purchasing', children: menuItems,

@@ -26,7 +26,7 @@ function findMenuTrail(items: SubMenuItem[], pathname: string, ancestors: Naviga
     }
     const trail = [...ancestors, level]
     if (item.path) {
-      const path = item.path.split("?")[0]
+      const path = item.activePaths?.includes(pathname) ? pathname : item.path.split("?")[0]
       if (pathname === path || pathname.startsWith(`${path}/`)) {
         if (!best || path.length > (best.at(-1)?.path?.split("?")[0].length || 0)) best = trail
       }

@@ -71,10 +71,12 @@ _LEGACY_SEED_MENUS: list[dict[str, Any]] = [
         "/energy",
         icon="bolt",
         children=[
-            _n("overview", "能源总览", "/energy"),
-            _n("devices", "数据源配置", "/energy/devices"),
-            _n("alerts", "预警管理", "/energy/alerts"),
-            _n("collect-logs", "采集日志", "/energy/collect-logs"),
+            _n("overview", "能源仪表盘", "/energy"),
+            _n("entry", "原始数据填写", "/energy/entry"),
+            _n("reports", "能源台账", "/energy/reports"),
+            _n("analysis", "用量分析", "/energy/analysis"),
+            _n("data-quality", "数据质量", "/energy/data-quality"),
+            _n("settings", "配置管理", "/energy/settings"),
         ],
     ),
     # ── 安全管理（按化工安全生产管理体系分级）───────────────────

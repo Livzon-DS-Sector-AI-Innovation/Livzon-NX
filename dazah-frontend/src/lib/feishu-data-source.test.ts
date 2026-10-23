@@ -7,9 +7,7 @@ describe('native energy pages remain independent of archived Wiki mappings', () 
       expect(getFeishuMappedMenuTarget('energy', path, new URLSearchParams('source=feishu&task=example'))).toBeUndefined()
     },
   )
-  it('does not offer native reporting pages as spreadsheet mapping targets', () => {
-    const energyPages = getFeishuModuleDefinition('energy').pages
-    expect(energyPages.some(page => page.value === 'energy.drinking_water')).toBe(true)
-    expect(energyPages.every(page => page.label.startsWith('历史来源 / '))).toBe(true)
+  it('does not offer retired historical pages as spreadsheet mapping targets', () => {
+    expect(getFeishuModuleDefinition('energy').pages).toEqual([])
   })
 })

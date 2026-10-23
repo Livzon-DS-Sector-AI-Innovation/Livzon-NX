@@ -5,12 +5,27 @@ vi.mock('@/lib/server-api', () => ({ getServerApiBaseUrl: () => 'http://backend.
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 
 import {
-  exportUserPagePermissionHistory, getUserPagePermissionHistory,
+  exportUserPagePermissionHistory, getUserPagePermissionHistory, getUsers,
   previewUserPagePermissionRollback, replaceUserPagePermissions,
   rollbackUserPagePermissions, syncFeishuUsers,
 } from './users'
 
 afterEach(() => vi.unstubAllGlobals())
+
+it('requests a server-side user page with filters instead of loading every account', async () => {
+  const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+    data: { items: [], total: 101, offset: 100, limit: 10 },
+  })))
+  vi.stubGlobal('fetch', fetchMock)
+
+  await expect(getUsers({
+    keyword: 'alice', role: 'admin', status: 'active', offset: 100, limit: 10,
+  })).resolves.toEqual({ items: [], total: 101, offset: 100, limit: 10 })
+  expect(fetchMock).toHaveBeenCalledWith(
+    'http://backend.test/api/v1/identity/users?keyword=alice&role=admin&status=active&offset=100&limit=10',
+    expect.objectContaining({ headers: expect.any(Object) }),
+  )
+})
 
 it('sends an explicit deny, version and reason without inventing grants', async () => {
   const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: { grant_version: 5 } })))

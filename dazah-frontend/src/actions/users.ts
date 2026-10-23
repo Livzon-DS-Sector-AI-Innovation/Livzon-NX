@@ -93,11 +93,15 @@ export async function getUsers(params?: {
   keyword?: string
   role?: 'admin' | 'user'
   status?: 'active' | 'disabled'
+  offset?: number
+  limit?: number
 }) {
   const search = new URLSearchParams()
   if (params?.keyword) search.set('keyword', params.keyword)
   if (params?.role) search.set('role', params.role)
   if (params?.status) search.set('status', params.status)
+  if (params?.offset !== undefined) search.set('offset', String(params.offset))
+  if (params?.limit !== undefined) search.set('limit', String(params.limit))
   const query = search.toString()
   return fetchIdentity<UserManagementListResponse>(
     `/users${query ? `?${query}` : ''}`
