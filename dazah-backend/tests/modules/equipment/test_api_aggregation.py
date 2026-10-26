@@ -1,6 +1,6 @@
 """设备模块 API 聚合入口：路由挂载完整性。"""
 
-from app.modules.api import router
+from app.modules.equipment.api import router
 
 
 def test_equipment_api_aggregation_exposes_key_routes() -> None:
