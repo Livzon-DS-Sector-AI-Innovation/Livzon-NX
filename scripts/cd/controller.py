@@ -349,7 +349,7 @@ class Controller:
             raise Refused("unexpected data root")
 
     def compose(self, *args: str, timeout=180, output=None) -> str:
-        files = ["compose.yml", "compose.edge.yml", "compose.single-host.yml", "compose.release.yml"]
+        files = ["compose.yml", "compose.edge.yml", "compose.release.yml"]
         argv = ["docker", "compose", "--project-name", "dazah", "--env-file", str(self.current / ".env")]
         for name in files:
             if (self.current / name).exists():
@@ -540,7 +540,7 @@ class Controller:
             service: {"image": image, "pull_policy": "never"} for service, image in images.items()}})
 
     def site_checksums(self) -> dict:
-        names = ("compose.yml", "compose.edge.yml", "compose.single-host.yml", ".env", "nginx.default.conf",
+        names = ("compose.yml", "compose.edge.yml", ".env", "nginx.default.conf",
                  "nginx-maintenance.conf", "nginx-capacity.conf", "migration-policy.json")
         return {name: digest(self.current / name) for name in names if (self.current / name).is_file()}
 

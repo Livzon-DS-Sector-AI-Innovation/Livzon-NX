@@ -51,12 +51,6 @@ source = "^scripts/cd/readiness\\.py$"
 tests = ["^scripts/tests/test_cd_readiness\\.py$"]
 
 [[rules]]
-id = "cd-site"
-description = "站点配置转换必须包含路由保留与拒绝重复转换测试"
-source = "^scripts/cd/stage_site\\.py$"
-tests = ["^scripts/tests/test_cd_stage_site\\.py$"]
-
-[[rules]]
 id = "cd-conversion"
 description = "转换限流必须包含并发锁测试"
 source = "^scripts/cd/conversion_limit\\.py$"
