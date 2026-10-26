@@ -107,12 +107,15 @@ Redis 容器上限 192 MiB，数据集上限 128 MiB，使用 `noeviction` 保�
    必须包含明确的 from/to revision、`backward_compatible: true` 和 `review_reference`。
    该声明须经过代码审查，不能为了部署通过而填入未经验证的兼容结论。
    首轮过渡的部门联系人表 hold（`c9d400000026 → c9d400000025`）已完成，不再沿用。
-   当前 `deployment_hold` 将源码 head `d1f2a3b4c5d6` 的部署目标固定为
-   `c8e4a2f6d9b3`：线上 `20261019-main-03d6d396` 仍引用 `energy.entry_plans`、
-   `energy.entry_tasks`、`energy.usage_adjustments`、`energy.period_locks`，直接执行
-   `d1f2a3b4c5d6` 的删表会让回滚失效；`c9d400000061 → c8e4a2f6d9b3` 只新增列和表，
-   其 `backward_compatible: true` 有代码依据。回滚窗口结束并确认数据留存后，
-   单独发布删表迁移并同步更新本策略；不得把删表声明为向后兼容。
+   2026-10-26 曾以 `deployment_hold` 把 `d1f2a3b4c5d6` 的部署目标固定为
+   `c8e4a2f6d9b3`，试图保留 `energy.entry_plans`、`energy.entry_tasks`、
+   `energy.usage_adjustments`、`energy.period_locks` 以维持回滚能力。该方案不可用：
+   后端 `app/core/schema_guard.py` 要求 `alembic_version` 与代码 head **完全相等**，
+   数据库停在非 head 版本时新旧两版应用都会拒绝启动。因此 `deployment_hold` 只适用于
+   「源码 head 与目标库版本一致」的过渡窗口，不能让数据库停留在介于两者之间的版本。
+   该 hold 已移除，`transitions` 恢复为空；`c9d400000061 → d1f2a3b4c5d6` 含删表，
+   不属向后兼容，不得预先声明。后续发布如包含新的破坏性迁移，须先在隔离库验证
+   `downgrade()`，再由 Owners 决定是否需要窗口或替代方案。
    源码新增后续迁移即拒绝沿用；验证与正式迁移均执行明确目标，不执行隐含的
    `upgrade head`。详见剩余验收执行单。
 8. 04:30 后不开始切换。提前预告默认 180 秒，期间允许保存；倒计时后再次核对切换窗口。
