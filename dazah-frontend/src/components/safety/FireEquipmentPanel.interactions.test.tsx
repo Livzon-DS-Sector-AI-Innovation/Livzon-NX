@@ -29,6 +29,16 @@ vi.mock('@/actions/safety', () => ({
   getFireEquipmentDetail: mocks.getFireEquipmentDetail,
 }))
 
+// 面板里的 message 来自 antd 的全局通知：它会创建独立 React root，并为每条提示
+// 挂一个约 3 秒的自动关闭定时器。用例若在该定时器到期前结束，定时器会在
+// happy-dom 环境销毁之后触发渲染，抛 "ReferenceError: window is not defined"，
+// 让整次测试以未处理错误失败（用例本身全部通过）。这里只替换副作用边界，
+// 保留 antd 其余组件与主题的真实实现。
+vi.mock('antd', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('antd')>()
+  return { ...actual, message: mocks.message }
+})
+
 vi.mock('@/hooks/usePagePermissions', () => ({
   usePagePermissions: () => ({
     canOperate: mocks.canOperate,
