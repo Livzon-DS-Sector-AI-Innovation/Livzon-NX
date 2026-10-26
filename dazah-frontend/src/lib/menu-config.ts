@@ -154,6 +154,11 @@ export const moduleMenus: ModuleMenu[] = [
         anyOfPageKeys: EQUIPMENT_CONSOLE_MODULE_KEYS,
       },
       { key: "feishu-config", label: "飞书配置", path: "/equipment/feishu-config" },
+      {
+        key: "workshop-admin",
+        label: "车间管理",
+        path: "/equipment/workshop-admin",
+      },
     ],
   },
   {

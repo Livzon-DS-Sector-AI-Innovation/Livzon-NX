@@ -7,6 +7,7 @@
 import asyncio
 import json
 import logging
+import re
 import ssl
 from typing import Any
 from urllib.parse import parse_qs, urlparse
@@ -234,6 +235,11 @@ async def _handle_binary_message(ws: Any, message: bytes) -> None:
             if msg_type == MessageType.EVENT:
                 event = json.loads(frame.payload.decode("utf-8"))
                 await _dispatch_event(event)
+            elif msg_type == MessageType.CARD:
+                # 派单卡片按钮回调（长连接送达，无需公网地址）
+                card_payload = json.loads(frame.payload.decode("utf-8"))
+                await _dispatch_card_action(frame, ws, card_payload, start_ms)
+                return
             else:
                 logger.info("设备机器人 DATA 帧: type=%s", msg_type)
 
@@ -249,6 +255,40 @@ async def _handle_binary_message(ws: Any, message: bytes) -> None:
         )
 
 
+async def _dispatch_card_action(
+    frame: Any, ws: Any, payload: dict[str, Any], start_ms: int
+) -> None:
+    """处理派单卡片按钮回调：执行业务后按卡片回调协议 ACK。"""
+    import time
+
+    from app.modules.equipment.service.work_order_feishu import handle_card_action
+
+    try:
+        response = await handle_card_action(payload)
+    except Exception:
+        logger.exception("卡片回调处理失败")
+        response = {"code": 0}
+    # 卡片回调的 ACK payload 即协议响应（toast/card 等）
+    end_ms = int(round(time.time() * 1000))
+    ack = _build_ack_frame_with_payload(frame, end_ms - start_ms, response)
+    await ws.send(ack)
+
+
+def _build_ack_frame_with_payload(
+    frame: Any, biz_rt: int, payload: dict[str, Any]
+) -> bytes:
+    """构建携带自定义响应 payload 的 DATA 帧 ACK（卡片回调用）。"""
+    import json as _json
+
+    from lark_oapi.ws.const import HEADER_BIZ_RT
+
+    header = frame.headers.add()
+    header.key = HEADER_BIZ_RT
+    header.value = str(biz_rt)
+    frame.payload = _json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    return bytes(frame.SerializeToString())
+
+
 async def _dispatch_event(event: dict[str, Any]) -> None:
     """解析事件并分发给设备模块事件处理器。"""
     header = event.get("header", {})
@@ -261,8 +301,32 @@ async def _dispatch_event(event: dict[str, Any]) -> None:
     if event_type == "im.message.receive_v1":
         event_data = event.get("event", event)
         await _handle_message_event(event_data)
+    elif event_type == "card.action.trigger":
+        # 卡片按钮回调走事件通道（需在事件订阅中添加卡片交互事件）
+        event_data = event.get("event", event)
+        await _handle_card_trigger_event(event_data)
     else:
         logger.info("设备机器人忽略事件: %s", event_type)
+
+
+async def _handle_card_trigger_event(event_data: dict[str, Any]) -> None:
+    """处理 card.action.trigger：派单卡片按钮点击。
+
+    事件结构映射到统一的 handle_card_action（与 CARD 帧路径共用），
+    其 ACK 由外层 EVENT 帧统一回复，按钮交互结果通过更新原卡片呈现。
+    """
+    from app.modules.equipment.service.work_order_feishu import handle_card_action
+
+    action = event_data.get("action") or {}
+    value = action.get("value") or {}
+    act = value.get("act", "")
+    if act not in ("accept", "complete"):
+        logger.info("忽略非维修卡片动作: %s", event_data.get("action", {}).get("tag"))
+        return
+    try:
+        await handle_card_action(event_data)
+    except Exception:
+        logger.exception("卡片按钮处理失败")
 
 
 async def _handle_message_event(event_data: dict[str, Any]) -> None:
@@ -322,8 +386,9 @@ async def _handle_message_event(event_data: dict[str, Any]) -> None:
         )
     elif msg_type == "text":
         await _handle_text_command(
-            user_id=user_id,
+            user_id=user_id or "",
             open_id=open_id,
+            union_id=sender_id.get("union_id", "") or "",
             chat_id=chat_id,
             chat_type=chat_type,
             content=content,
@@ -336,6 +401,7 @@ async def _handle_text_command(
     *,
     user_id: str,
     open_id: str,
+    union_id: str = "",
     chat_id: str,
     chat_type: str,
     content: str,
@@ -350,6 +416,8 @@ async def _handle_text_command(
     # 群聊中 @机器人 时，文本前缀为 @mention（如 "@_user_1" 或 "@设备助手"），需要去掉
     if text.startswith("@") and " " in text:
         text = text.split(" ", 1)[-1].strip()
+    # @ 在消息任意位置（含末尾）都会留下 @_user_N 占位符，剔除避免污染故障描述
+    text = re.sub(r"@_user_\d+", "", text).strip()
 
     # ── 0. 选择状态检查（数字输入匹配任务/工单列表）──
     from app.modules.equipment.service.inspection_session import (
@@ -488,6 +556,9 @@ async def _handle_text_command(
             title="🤖 设备助手使用说明",
             receive_id_type="open_id",
             content=(
+                "**报修功能**\n"
+                "发送「报修 车间 设备 故障情况」直接建单\n"
+                "示例：`报修 201一车间 离心泵 密封漏了 紧急`\n\n"
                 "**巡检功能**\n"
                 "发送巡检照片可直接 AI 分析。\n"
                 "发送「开始」进入逐台引导巡检。\n\n"
@@ -496,9 +567,18 @@ async def _handle_text_command(
                 "发送「完成 工单号」提交完成执行中的工单\n"
                 "发送「完成 序号 描述」也可按序号完成\n\n"
                 "**示例**\n"
+                "`报修 201一车间 离心泵 漏了`\n"
                 "`完成 WO-20260615-0001`\n"
                 "`完成 1 更换了密封圈`"
             ),
+        )
+    elif text.startswith("报修"):
+        from app.modules.equipment.service.work_order_feishu import (
+            create_repair_by_text,
+        )
+
+        await create_repair_by_text(
+            user_id=user_id, open_id=open_id, text=text, union_id=union_id
         )
     elif text in ("工单", "我的工单"):
         from app.modules.equipment.service.work_order_feishu import (

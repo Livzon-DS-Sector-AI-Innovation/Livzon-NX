@@ -12972,7 +12972,7 @@
           "workshop": {
             "anyOf": [
               {
-                "pattern": "^\\d{3}(-\\d)?$",
+                "pattern": "^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
                 "type": "string"
               },
               {
@@ -39286,8 +39286,8 @@
           },
           "workshop_code": {
             "default": "201-1",
-            "description": "归属车间代码（如 101-1 / 201-1）",
-            "pattern": "^\\d{3}(-\\d)?$",
+            "description": "归属车间代码（如 101-1 / dlz）",
+            "pattern": "^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
             "title": "Workshop Code",
             "type": "string"
           }
@@ -39302,13 +39302,20 @@
         "type": "object"
       },
       "EquipmentInspectionFeishuConfigUpdateRequest": {
-        "description": "保存设备巡检飞书镜像配置请求",
+        "description": "保存设备巡检飞书镜像配置请求\n\n凭据两选一：``feishu_app_id`` 选择已登记应用（优先）；或手输\n``app_id`` / ``app_secret``（App ID 已存在则自动关联，不存在则登记新应用）。",
         "properties": {
           "app_id": {
             "default": "",
-            "description": "飞书应用 App ID",
+            "description": "手输的飞书应用 App ID（未选择已登记应用时使用）",
             "maxLength": 100,
             "title": "App Id",
+            "type": "string"
+          },
+          "app_name": {
+            "default": "",
+            "description": "手输新建应用时的备注名（缺省取 App ID）",
+            "maxLength": 100,
+            "title": "App Name",
             "type": "string"
           },
           "app_secret": {
@@ -39320,7 +39327,7 @@
                 "type": "null"
               }
             ],
-            "description": "飞书应用 App Secret（留空保留已保存值）",
+            "description": "手输的飞书应用 App Secret（关联已登记应用时忽略；新建应用必填）",
             "title": "App Secret"
           },
           "app_token": {
@@ -39343,6 +39350,19 @@
             "maxLength": 100,
             "title": "Device Table Id",
             "type": "string"
+          },
+          "feishu_app_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "已登记的飞书自建应用 ID（下拉选择）",
+            "title": "Feishu App Id"
           },
           "history_table_id": {
             "default": "",
@@ -42733,6 +42753,71 @@
           "version"
         ],
         "title": "FeedbackUpdate",
+        "type": "object"
+      },
+      "FeishuAppCreateRequest": {
+        "description": "登记飞书自建应用请求",
+        "properties": {
+          "app_id": {
+            "description": "飞书应用 App ID",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "App Id",
+            "type": "string"
+          },
+          "app_secret": {
+            "description": "飞书应用 App Secret（加密存储，不回显）",
+            "minLength": 1,
+            "title": "App Secret",
+            "type": "string"
+          },
+          "name": {
+            "description": "应用备注名（下拉展示用）",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "app_id",
+          "app_secret"
+        ],
+        "title": "FeishuAppCreateRequest",
+        "type": "object"
+      },
+      "FeishuAppUpdateRequest": {
+        "description": "更新飞书自建应用请求（App ID 不可改）",
+        "properties": {
+          "app_secret": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "新 App Secret（留空保持已保存值）",
+            "title": "App Secret"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "应用备注名",
+            "title": "Name"
+          }
+        },
+        "title": "FeishuAppUpdateRequest",
         "type": "object"
       },
       "FeishuApprovalWebhookPayload": {
@@ -61485,8 +61570,8 @@
           },
           "workshop_code": {
             "default": "201-1",
-            "description": "归属车间代码（如 101-1 / 201-1）",
-            "pattern": "^\\d{3}(-\\d)?$",
+            "description": "归属车间代码（如 101-1 / dlz）",
+            "pattern": "^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
             "title": "Workshop Code",
             "type": "string"
           }
@@ -75976,8 +76061,8 @@
           },
           "workshop_code": {
             "default": "201-1",
-            "description": "归属车间代码（如 101-1 / 201-1）",
-            "pattern": "^\\d{3}(-\\d)?$",
+            "description": "归属车间代码（如 101-1 / dlz）",
+            "pattern": "^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
             "title": "Workshop Code",
             "type": "string"
           }
@@ -76102,14 +76187,14 @@
           "workshop_code": {
             "anyOf": [
               {
-                "pattern": "^\\d{3}(-\\d)?$",
+                "pattern": "^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
                 "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "归属车间代码（如 101-1 / 201-1）",
+            "description": "归属车间代码（如 101-1 / dlz）",
             "title": "Workshop Code"
           }
         },
@@ -93909,6 +93994,65 @@
         "title": "WorkbookReport",
         "type": "object"
       },
+      "WorkshopCreateRequest": {
+        "description": "新增车间请求",
+        "properties": {
+          "code": {
+            "description": "车间代码：2~10 位小写字母/数字，可带 -序号（如 204 / 204-1 / dlz），创建后不可改",
+            "maxLength": 10,
+            "minLength": 2,
+            "pattern": "^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
+            "title": "Code",
+            "type": "string"
+          },
+          "name": {
+            "description": "车间显示名（如 204一车间 / 动力站）",
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "name"
+        ],
+        "title": "WorkshopCreateRequest",
+        "type": "object"
+      },
+      "WorkshopUpdateRequest": {
+        "description": "更新车间请求（改名/启停；代码不可改）",
+        "properties": {
+          "is_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "启用/停用",
+            "title": "Is Enabled"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 50,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "车间显示名",
+            "title": "Name"
+          }
+        },
+        "title": "WorkshopUpdateRequest",
+        "type": "object"
+      },
       "WrittenExamExportRequest": {
         "description": "笔试试卷导出请求",
         "properties": {
@@ -107545,21 +107689,21 @@
             }
           },
           {
-            "description": "车间代码（如 101-1 / 201-1）",
+            "description": "车间代码（如 101-1 / dlz）",
             "in": "query",
             "name": "workshop",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "pattern": "^\\d{3}(-\\d)?$",
+                  "pattern": "^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
                   "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "description": "车间代码（如 101-1 / 201-1）",
+              "description": "车间代码（如 101-1 / dlz）",
               "title": "Workshop"
             }
           },
@@ -107776,21 +107920,21 @@
             }
           },
           {
-            "description": "车间代码（如 101-1 / 201-1）",
+            "description": "车间代码（如 101-1 / dlz）",
             "in": "query",
             "name": "workshop",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "pattern": "^\\d{3}(-\\d)?$",
+                  "pattern": "^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
                   "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "description": "车间代码（如 101-1 / 201-1）",
+              "description": "车间代码（如 101-1 / dlz）",
               "title": "Workshop"
             }
           },
@@ -108061,21 +108205,21 @@
         "operationId": "get_equipment_statistics_api_v1_equipment_equipments_statistics_get",
         "parameters": [
           {
-            "description": "车间代码（如 101-1 / 201-1）",
+            "description": "车间代码（如 101-1 / dlz）",
             "in": "query",
             "name": "workshop",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "pattern": "^\\d{3}(-\\d)?$",
+                  "pattern": "^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
                   "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "description": "车间代码（如 101-1 / 201-1）",
+              "description": "车间代码（如 101-1 / dlz）",
               "title": "Workshop"
             }
           },
@@ -108302,18 +108446,246 @@
         ]
       }
     },
+    "/api/v1/equipment/inspection/feishu/apps": {
+      "get": {
+        "operationId": "list_feishu_apps_api_v1_equipment_inspection_feishu_apps_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "飞书自建应用清单",
+        "tags": [
+          "设备管理"
+        ]
+      },
+      "post": {
+        "operationId": "create_feishu_app_api_v1_equipment_inspection_feishu_apps_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeishuAppCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "登记飞书自建应用",
+        "tags": [
+          "设备管理"
+        ]
+      }
+    },
+    "/api/v1/equipment/inspection/feishu/apps/{app_id}": {
+      "delete": {
+        "operationId": "delete_feishu_app_api_v1_equipment_inspection_feishu_apps__app_id__delete",
+        "parameters": [
+          {
+            "description": "应用 ID",
+            "in": "path",
+            "name": "app_id",
+            "required": true,
+            "schema": {
+              "description": "应用 ID",
+              "format": "uuid",
+              "title": "App Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "删除飞书自建应用（被车间引用时阻断）",
+        "tags": [
+          "设备管理"
+        ]
+      },
+      "put": {
+        "operationId": "update_feishu_app_api_v1_equipment_inspection_feishu_apps__app_id__put",
+        "parameters": [
+          {
+            "description": "应用 ID",
+            "in": "path",
+            "name": "app_id",
+            "required": true,
+            "schema": {
+              "description": "应用 ID",
+              "format": "uuid",
+              "title": "App Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FeishuAppUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "更新飞书自建应用（改名或轮换 Secret）",
+        "tags": [
+          "设备管理"
+        ]
+      }
+    },
     "/api/v1/equipment/inspection/feishu/config": {
       "get": {
         "operationId": "get_feishu_config_api_v1_equipment_inspection_feishu_config_get",
         "parameters": [
           {
-            "description": "车间代码（如 101-1 / 201-1）",
+            "description": "车间代码（如 101-1 / dlz）",
             "in": "query",
             "name": "workshop",
             "required": true,
             "schema": {
-              "description": "车间代码（如 101-1 / 201-1）",
-              "pattern": "^\\d{3}(-\\d)?$",
+              "description": "车间代码（如 101-1 / dlz）",
+              "pattern": "^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
               "title": "Workshop",
               "type": "string"
             }
@@ -108364,13 +108736,13 @@
         "operationId": "save_feishu_config_api_v1_equipment_inspection_feishu_config_put",
         "parameters": [
           {
-            "description": "车间代码（如 101-1 / 201-1）",
+            "description": "车间代码（如 101-1 / dlz）",
             "in": "query",
             "name": "workshop",
             "required": true,
             "schema": {
-              "description": "车间代码（如 101-1 / 201-1）",
-              "pattern": "^\\d{3}(-\\d)?$",
+              "description": "车间代码（如 101-1 / dlz）",
+              "pattern": "^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
               "title": "Workshop",
               "type": "string"
             }
@@ -108480,13 +108852,13 @@
         "operationId": "test_feishu_config_api_v1_equipment_inspection_feishu_config_test_post",
         "parameters": [
           {
-            "description": "车间代码（如 101-1 / 201-1）",
+            "description": "车间代码（如 101-1 / dlz）",
             "in": "query",
             "name": "workshop",
             "required": true,
             "schema": {
-              "description": "车间代码（如 101-1 / 201-1）",
-              "pattern": "^\\d{3}(-\\d)?$",
+              "description": "车间代码（如 101-1 / dlz）",
+              "pattern": "^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
               "title": "Workshop",
               "type": "string"
             }
@@ -108539,13 +108911,13 @@
         "operationId": "list_feishu_devices_api_v1_equipment_inspection_feishu_devices_get",
         "parameters": [
           {
-            "description": "车间代码（如 101-1 / 201-1）",
+            "description": "车间代码（如 101-1 / dlz）",
             "in": "query",
             "name": "workshop",
             "required": true,
             "schema": {
-              "description": "车间代码（如 101-1 / 201-1）",
-              "pattern": "^\\d{3}(-\\d)?$",
+              "description": "车间代码（如 101-1 / dlz）",
+              "pattern": "^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
               "title": "Workshop",
               "type": "string"
             }
@@ -108623,7 +108995,7 @@
             "schema": {
               "anyOf": [
                 {
-                  "pattern": "^\\d{3}(-\\d)?$",
+                  "pattern": "^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
                   "type": "string"
                 },
                 {
@@ -108809,13 +109181,13 @@
         "operationId": "feishu_sync_now_api_v1_equipment_inspection_feishu_sync_post",
         "parameters": [
           {
-            "description": "车间代码（如 101-1 / 201-1）",
+            "description": "车间代码（如 101-1 / dlz）",
             "in": "query",
             "name": "workshop",
             "required": true,
             "schema": {
-              "description": "车间代码（如 101-1 / 201-1）",
-              "pattern": "^\\d{3}(-\\d)?$",
+              "description": "车间代码（如 101-1 / dlz）",
+              "pattern": "^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
               "title": "Workshop",
               "type": "string"
             }
@@ -108868,13 +109240,13 @@
         "operationId": "feishu_sync_status_api_v1_equipment_inspection_feishu_sync_status_get",
         "parameters": [
           {
-            "description": "车间代码（如 101-1 / 201-1）",
+            "description": "车间代码（如 101-1 / dlz）",
             "in": "query",
             "name": "workshop",
             "required": true,
             "schema": {
-              "description": "车间代码（如 101-1 / 201-1）",
-              "pattern": "^\\d{3}(-\\d)?$",
+              "description": "车间代码（如 101-1 / dlz）",
+              "pattern": "^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
               "title": "Workshop",
               "type": "string"
             }
@@ -108974,13 +109346,13 @@
         "operationId": "feishu_today_summary_api_v1_equipment_inspection_feishu_today_summary_get",
         "parameters": [
           {
-            "description": "车间代码（如 101-1 / 201-1）",
+            "description": "车间代码（如 101-1 / dlz）",
             "in": "query",
             "name": "workshop",
             "required": true,
             "schema": {
-              "description": "车间代码（如 101-1 / 201-1）",
-              "pattern": "^\\d{3}(-\\d)?$",
+              "description": "车间代码（如 101-1 / dlz）",
+              "pattern": "^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
               "title": "Workshop",
               "type": "string"
             }
@@ -109385,21 +109757,21 @@
             }
           },
           {
-            "description": "车间代码（如 101-1 / 201-1）",
+            "description": "车间代码（如 101-1 / dlz）",
             "in": "query",
             "name": "workshop",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "pattern": "^\\d{3}(-\\d)?$",
+                  "pattern": "^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
                   "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "description": "车间代码（如 101-1 / 201-1）",
+              "description": "车间代码（如 101-1 / dlz）",
               "title": "Workshop"
             }
           },
@@ -109808,21 +110180,21 @@
             }
           },
           {
-            "description": "车间代码（如 101-1 / 201-1）",
+            "description": "车间代码（如 101-1 / dlz）",
             "in": "query",
             "name": "workshop",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "pattern": "^\\d{3}(-\\d)?$",
+                  "pattern": "^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
                   "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "description": "车间代码（如 101-1 / 201-1）",
+              "description": "车间代码（如 101-1 / dlz）",
               "title": "Workshop"
             }
           },
@@ -111074,21 +111446,21 @@
             }
           },
           {
-            "description": "车间代码（如 101-1 / 201-1）",
+            "description": "车间代码（如 101-1 / dlz）",
             "in": "query",
             "name": "workshop",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "pattern": "^\\d{3}(-\\d)?$",
+                  "pattern": "^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
                   "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "description": "车间代码（如 101-1 / 201-1）",
+              "description": "车间代码（如 101-1 / dlz）",
               "title": "Workshop"
             }
           },
@@ -111508,21 +111880,21 @@
         "operationId": "list_maintainers_api_v1_equipment_maintenance_staff_maintainers_get",
         "parameters": [
           {
-            "description": "车间代码（如 101-1 / 201-1）",
+            "description": "车间代码（如 101-1 / dlz）",
             "in": "query",
             "name": "workshop",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "pattern": "^\\d{3}(-\\d)?$",
+                  "pattern": "^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
                   "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "description": "车间代码（如 101-1 / 201-1）",
+              "description": "车间代码（如 101-1 / dlz）",
               "title": "Workshop"
             }
           },
@@ -111647,21 +112019,21 @@
             }
           },
           {
-            "description": "车间代码（如 101-1 / 201-1）",
+            "description": "车间代码（如 101-1 / dlz）",
             "in": "query",
             "name": "workshop",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "pattern": "^\\d{3}(-\\d)?$",
+                  "pattern": "^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
                   "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "description": "车间代码（如 101-1 / 201-1）",
+              "description": "车间代码（如 101-1 / dlz）",
               "title": "Workshop"
             }
           },
@@ -111795,21 +112167,21 @@
         "operationId": "get_work_order_statistics_api_v1_equipment_maintenance_work_orders_statistics_get",
         "parameters": [
           {
-            "description": "车间代码（如 101-1 / 201-1）",
+            "description": "车间代码（如 101-1 / dlz）",
             "in": "query",
             "name": "workshop",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "pattern": "^\\d{3}(-\\d)?$",
+                  "pattern": "^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
                   "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "description": "车间代码（如 101-1 / 201-1）",
+              "description": "车间代码（如 101-1 / dlz）",
               "title": "Workshop"
             }
           },
@@ -112897,21 +113269,21 @@
             }
           },
           {
-            "description": "车间代码（如 101-1 / 201-1）",
+            "description": "车间代码（如 101-1 / dlz）",
             "in": "query",
             "name": "workshop",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "pattern": "^\\d{3}(-\\d)?$",
+                  "pattern": "^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
                   "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "description": "车间代码（如 101-1 / 201-1）",
+              "description": "车间代码（如 101-1 / dlz）",
               "title": "Workshop"
             }
           },
@@ -113074,21 +113446,21 @@
             }
           },
           {
-            "description": "车间代码（如 101-1 / 201-1）",
+            "description": "车间代码（如 101-1 / dlz）",
             "in": "query",
             "name": "workshop",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "pattern": "^\\d{3}(-\\d)?$",
+                  "pattern": "^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
                   "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "description": "车间代码（如 101-1 / 201-1）",
+              "description": "车间代码（如 101-1 / dlz）",
               "title": "Workshop"
             }
           },
@@ -114020,21 +114392,21 @@
             }
           },
           {
-            "description": "车间代码（如 101-1 / 201-1）",
+            "description": "车间代码（如 101-1 / dlz）",
             "in": "query",
             "name": "workshop",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "pattern": "^\\d{3}(-\\d)?$",
+                  "pattern": "^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
                   "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "description": "车间代码（如 101-1 / 201-1）",
+              "description": "车间代码（如 101-1 / dlz）",
               "title": "Workshop"
             }
           },
@@ -114168,21 +114540,21 @@
         "operationId": "get_stock_warnings_api_v1_equipment_spare_parts_stock_warnings_get",
         "parameters": [
           {
-            "description": "车间代码（如 101-1 / 201-1）",
+            "description": "车间代码（如 101-1 / dlz）",
             "in": "query",
             "name": "workshop",
             "required": false,
             "schema": {
               "anyOf": [
                 {
-                  "pattern": "^\\d{3}(-\\d)?$",
+                  "pattern": "^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
                   "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "description": "车间代码（如 101-1 / 201-1）",
+              "description": "车间代码（如 101-1 / dlz）",
               "title": "Workshop"
             }
           },
@@ -114592,6 +114964,224 @@
           }
         },
         "summary": "入库",
+        "tags": [
+          "设备管理"
+        ]
+      }
+    },
+    "/api/v1/equipment/workshops": {
+      "get": {
+        "operationId": "list_enabled_workshops_api_v1_equipment_workshops_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "启用车间清单（工作台与飞书配置页数据源）",
+        "tags": [
+          "设备管理"
+        ]
+      },
+      "post": {
+        "operationId": "create_workshop_api_v1_equipment_workshops_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkshopCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "新增车间",
+        "tags": [
+          "设备管理"
+        ]
+      }
+    },
+    "/api/v1/equipment/workshops/all": {
+      "get": {
+        "operationId": "list_all_workshops_api_v1_equipment_workshops_all_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "车间清单（含停用，车间管理页）",
+        "tags": [
+          "设备管理"
+        ]
+      }
+    },
+    "/api/v1/equipment/workshops/{code}": {
+      "put": {
+        "operationId": "update_workshop_api_v1_equipment_workshops__code__put",
+        "parameters": [
+          {
+            "description": "车间代码（如 101-1 / dlz）",
+            "in": "path",
+            "name": "code",
+            "required": true,
+            "schema": {
+              "description": "车间代码（如 101-1 / dlz）",
+              "pattern": "^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
+              "title": "Code",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkshopUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "更新车间（改名/启停；代码不可改）",
         "tags": [
           "设备管理"
         ]

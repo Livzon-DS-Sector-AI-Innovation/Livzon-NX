@@ -19,6 +19,8 @@ from app.modules.equipment.schemas import (
 router = APIRouter()
 
 
+# 双注册（带/不带尾斜杠）：避免 FastAPI 斜杠 307 暴露容器内部地址（见 work_orders.py）
+@router.post("", summary="新增维护计划")
 @router.post("/", summary="新增维护计划")
 async def create_maintenance_plan(
     data: MaintenancePlanCreate,
@@ -29,13 +31,16 @@ async def create_maintenance_plan(
     return success_response(data=MaintenancePlanResponse.model_validate(plan))
 
 
+@router.get("", summary="维护计划列表")
 @router.get("/", summary="维护计划列表")
 async def list_maintenance_plans(
     equipment_id: uuid.UUID | None = Query(None, description="设备ID"),
     status: str | None = Query(None, description="状态"),
     keyword: str | None = Query(None, description="关键词搜索"),
     workshop: str | None = Query(
-        None, pattern=r"^\d{3}(-\d)?$", description="车间代码（如 101-1 / 201-1）"
+        None,
+            pattern=r"^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
+            description="车间代码（如 101-1 / dlz）"
     ),
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(20, ge=1, le=200, description="每页数量"),

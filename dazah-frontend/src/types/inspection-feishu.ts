@@ -98,8 +98,37 @@ export interface InspectionFeishuRecordListResponse {
   page_size: number
 }
 
+/** 飞书自建应用（登记一次、多车间复用；Secret 只存不显） */
+export interface FeishuAppSummary {
+  id: string
+  name: string
+  app_id: string
+  app_secret_masked: string
+  app_secret_configured: boolean
+  /** 引用该应用的未删除车间配置 */
+  in_use_workshops: string[]
+  created_at: string
+}
+
+export interface FeishuAppCreateRequest {
+  name: string
+  app_id: string
+  app_secret: string
+}
+
+export interface FeishuAppUpdateRequest {
+  /** 应用备注名；null 表示不改 */
+  name?: string | null
+  /** 新 App Secret；留空/ null 表示保持已保存值 */
+  app_secret?: string | null
+}
+
 export interface InspectionFeishuConfigDetail {
   workshop_code: string
+  /** 关联的飞书自建应用 ID（环境变量回退时为 null） */
+  feishu_app_id: string | null
+  /** 关联应用备注名（环境变量回退时为空） */
+  app_name: string
   app_id: string
   app_secret_masked: string
   app_secret_configured: boolean
@@ -116,9 +145,13 @@ export interface InspectionFeishuConfigDetail {
   last_tested_at: string | null
 }
 
+/** 凭据两选一：feishu_app_id 选择已登记应用（优先）；或手输 app_id/app_secret（已登记则自动关联） */
 export interface InspectionFeishuConfigUpdateRequest {
-  app_id: string
+  feishu_app_id?: string | null
+  app_id?: string
   app_secret?: string | null
+  /** 手输新建应用时的备注名（缺省取 App ID） */
+  app_name?: string
   app_token: string
   base_url?: string
   today_table_id: string

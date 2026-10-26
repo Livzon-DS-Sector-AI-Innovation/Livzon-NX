@@ -200,7 +200,8 @@ services:
     user: "0:0"
     volumes:
       - frontend_next_cache:/app/.next
-    command: ["sh", "-c", "chown -R node:node /app/.next"]
+      - frontend_node_modules:/app/node_modules
+    command: ["sh", "-c", "chown -R node:node /app/.next /app/node_modules"]
     restart: "no"
     logging: *default-logging
 
@@ -228,7 +229,7 @@ services:
       - sh
       - -c
       - >-
-        pnpm install --frozen-lockfile --prefer-offline &&
+        pnpm install --frozen-lockfile --prefer-offline --config.confirm-modules-purge=false &&
         exec pnpm dev:webpack --hostname 0.0.0.0 --port 3000
     volumes:
       - ./dazah-frontend:/app

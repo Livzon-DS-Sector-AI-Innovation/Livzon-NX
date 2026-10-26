@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from datetime import date
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Path, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,19 +15,26 @@ from app.core.exceptions import AppException
 from app.core.response import paginated_response, success_response
 from app.modules.equipment.schemas.inspection import (
     EquipmentInspectionFeishuConfigUpdateRequest,
+    FeishuAppCreateRequest,
+    FeishuAppUpdateRequest,
 )
+from app.modules.equipment.service import feishu_app as app_service
 from app.modules.equipment.service import inspection_feishu_config as config_service
 from app.modules.equipment.service import inspection_feishu_mirror as mirror
 
 router = APIRouter()
 
-# 车间代码形如 101 / 101-1 / 201-3
+# 车间代码形如 101 / 101-1 / dlz（小写字母/数字，可带 -序号）
 WORKSHOP_QUERY = Query(
-    ..., pattern=r"^\d{3}(-\d)?$", description="车间代码（如 101-1 / 201-1）"
+    ...,
+    pattern=r"^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
+    description="车间代码（如 101-1 / dlz）",
 )
 # records 支持缺省车间：设备详情抽屉按设备编号跨车间聚合
 WORKSHOP_QUERY_OPTIONAL = Query(
-    None, pattern=r"^\d{3}(-\d)?$", description="车间代码；缺省跨车间查询"
+    None,
+    pattern=r"^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
+    description="车间代码；缺省跨车间查询",
 )
 
 
@@ -203,3 +211,44 @@ async def test_feishu_config(
 ) -> JSONResponse:
     _require_user(current_user)
     return success_response(data=await config_service.test_config(db, workshop))
+
+
+@router.get("/feishu/apps", summary="飞书自建应用清单")
+async def list_feishu_apps(
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> JSONResponse:
+    _require_user(current_user)
+    return success_response(data=await app_service.list_apps(db))
+
+
+@router.post("/feishu/apps", summary="登记飞书自建应用")
+async def create_feishu_app(
+    data: FeishuAppCreateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> JSONResponse:
+    _require_user(current_user)
+    return success_response(data=await app_service.create_app(db, data))
+
+
+@router.put("/feishu/apps/{app_id}", summary="更新飞书自建应用（改名或轮换 Secret）")
+async def update_feishu_app(
+    data: FeishuAppUpdateRequest,
+    app_id: UUID = Path(description="应用 ID"),
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> JSONResponse:
+    _require_user(current_user)
+    return success_response(data=await app_service.update_app(db, app_id, data))
+
+
+@router.delete("/feishu/apps/{app_id}", summary="删除飞书自建应用（被车间引用时阻断）")
+async def delete_feishu_app(
+    app_id: UUID = Path(description="应用 ID"),
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> JSONResponse:
+    _require_user(current_user)
+    await app_service.delete_app(db, app_id)
+    return success_response(data=None)

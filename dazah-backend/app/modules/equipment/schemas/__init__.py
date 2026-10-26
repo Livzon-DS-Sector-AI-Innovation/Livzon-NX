@@ -121,8 +121,19 @@ from app.modules.equipment.schemas.work_order import (
 from app.modules.equipment.schemas.work_order_image import (
     WorkOrderImageResponse,
 )
+from app.modules.equipment.schemas.workshop import (
+    WorkshopAdminSummary,
+    WorkshopCreateRequest,
+    WorkshopSummary,
+    WorkshopUpdateRequest,
+)
 
 __all__ = [
+    # workshop
+    "WorkshopAdminSummary",
+    "WorkshopCreateRequest",
+    "WorkshopSummary",
+    "WorkshopUpdateRequest",
     # equipment
     "EquipmentStatus",
     "EquipmentCategoryCreate",

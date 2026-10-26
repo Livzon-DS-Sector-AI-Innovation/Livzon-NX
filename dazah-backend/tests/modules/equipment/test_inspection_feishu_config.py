@@ -1,5 +1,6 @@
 """设备巡检飞书镜像配置服务与 API 测试。"""
 
+import uuid
 from typing import Any
 
 import pytest
@@ -7,12 +8,15 @@ from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppException
+from app.modules.equipment.models.feishu_app import EquipmentFeishuApp
 from app.modules.equipment.models.inspection_feishu_config import (
     EquipmentInspectionFeishuConfig,
 )
 from app.modules.equipment.schemas.inspection import (
     EquipmentInspectionFeishuConfigUpdateRequest,
+    FeishuAppCreateRequest,
 )
+from app.modules.equipment.service import feishu_app as feishu_app_service
 from app.modules.equipment.service import inspection_feishu_config as config_service
 
 
@@ -21,10 +25,10 @@ async def _clean_config_table(
     db_session: AsyncSession,
     _equipment_session: AsyncSession,
 ) -> Any:
-    """前后清空配置表：update_config 会 commit，不能依赖回滚隔离。
+    """前后清空配置与应用表：update_config 会 commit，不能依赖回滚隔离。
 
     同时覆盖服务级会话（db_session）与 API 级共享会话
-    （_equipment_session）两条写入路径。
+    （_equipment_session）两条写入路径；先删配置行再删应用行（外键）。
     """
     from app.modules.equipment.models.inspection_feishu_mirror import (
         EquipmentInspectionFeishuDevice,
@@ -32,13 +36,37 @@ async def _clean_config_table(
     )
     for session in (db_session, _equipment_session):
         await session.execute(delete(EquipmentInspectionFeishuConfig))
+        await session.execute(delete(EquipmentFeishuApp))
         await session.execute(delete(EquipmentInspectionFeishuRecord))
         await session.execute(delete(EquipmentInspectionFeishuDevice))
         await session.commit()
     yield
     for session in (db_session, _equipment_session):
         await session.execute(delete(EquipmentInspectionFeishuConfig))
+        await session.execute(delete(EquipmentFeishuApp))
         await session.commit()
+
+
+async def _add_config_with_app(
+    db_session: AsyncSession,
+    *,
+    workshop_code: str = "201-1",
+    app_id: str = "cli_db",
+    app_secret: str = "db_secret",
+    **config_kwargs: Any,
+) -> EquipmentInspectionFeishuConfig:
+    """直接落库一条应用 + 车间配置引用（绕过 update_config 的解析逻辑）。"""
+    app = EquipmentFeishuApp(
+        name=app_id, app_id=app_id, app_secret=app_secret
+    )
+    db_session.add(app)
+    await db_session.flush()
+    config = EquipmentInspectionFeishuConfig(
+        workshop_code=workshop_code, feishu_app_id=app.id, **config_kwargs
+    )
+    db_session.add(config)
+    await db_session.commit()
+    return config
 
 
 def _patch_env(monkeypatch: pytest.MonkeyPatch, **overrides: str) -> None:
@@ -95,18 +123,14 @@ async def test_effective_config_prefers_database_row(
     db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _patch_env(monkeypatch)
-    db_session.add(
-        EquipmentInspectionFeishuConfig(
-            app_id="cli_db",
-            app_secret="db_secret",
-            app_token="bascn_db",
-            today_table_id="tbl_db_today",
-            history_table_id="tbl_db_history",
-            device_table_id="tbl_db_device",
-            is_enabled=True,
-        )
+    await _add_config_with_app(
+        db_session,
+        app_token="bascn_db",
+        today_table_id="tbl_db_today",
+        history_table_id="tbl_db_history",
+        device_table_id="tbl_db_device",
+        is_enabled=True,
     )
-    await db_session.commit()
 
     config = await config_service.get_effective_config(db_session, "201-1")
     assert config.source == "database"
@@ -119,15 +143,9 @@ async def test_effective_config_disabled_switch_stops_sync(
     db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _patch_env(monkeypatch)
-    db_session.add(
-        EquipmentInspectionFeishuConfig(
-            app_id="cli_db",
-            app_secret="db_secret",
-            app_token="bascn_db",
-            is_enabled=False,
-        )
+    await _add_config_with_app(
+        db_session, app_token="bascn_db", is_enabled=False
     )
-    await db_session.commit()
     assert await config_service.is_mirror_enabled(db_session, "201-1") is False
 
 
@@ -187,6 +205,7 @@ async def test_update_config_creates_row_and_returns_detail(
 async def test_update_config_blank_secret_keeps_stored_value(
     db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """同一 App ID 再次保存且 Secret 留空：沿用应用库中的已存 Secret。"""
     _patch_env_empty(monkeypatch)
     await config_service.update_config(
         db_session,
@@ -201,16 +220,137 @@ async def test_update_config_blank_secret_keeps_stored_value(
         db_session,
         "201-1",
         EquipmentInspectionFeishuConfigUpdateRequest(
-            app_id="cli_keep2",
+            app_id="cli_keep",
             app_secret=None,
             app_token="bascn_keep",
             today_table_id="tbl_today",
         ),
     )
-    assert detail.app_id == "cli_keep2"
+    assert detail.app_id == "cli_keep"
     assert detail.app_secret_configured is True
     config = await config_service.get_effective_config(db_session, "201-1")
     assert config.app_secret == "original_secret"
+
+
+async def test_update_config_new_app_id_requires_secret(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """应用库没有的手输 App ID 不带 Secret：拒绝保存（不能创建无凭据应用）。"""
+    _patch_env_empty(monkeypatch)
+    await config_service.update_config(
+        db_session,
+        "201-1",
+        EquipmentInspectionFeishuConfigUpdateRequest(
+            app_id="cli_keep",
+            app_secret="original_secret",
+            app_token="bascn_keep",
+        ),
+    )
+    with pytest.raises(AppException, match="App Secret"):
+        await config_service.update_config(
+            db_session,
+            "201-1",
+            EquipmentInspectionFeishuConfigUpdateRequest(
+                app_id="cli_other",
+                app_secret=None,
+                app_token="bascn_keep",
+            ),
+        )
+
+
+# ---------- 应用引用路径 ----------
+
+
+async def test_update_config_links_selected_app(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """下拉选择已登记应用：凭据来自应用行，详情回带应用 ID 与备注名。"""
+    _patch_env_empty(monkeypatch)
+    created = await feishu_app_service.create_app(
+        db_session,
+        FeishuAppCreateRequest(
+            name="巡检应用", app_id="cli_selected", app_secret="selected_secret"
+        ),
+    )
+    detail = await config_service.update_config(
+        db_session,
+        "101-2",
+        EquipmentInspectionFeishuConfigUpdateRequest(
+            feishu_app_id=created.id, app_token="bascn_sel"
+        ),
+    )
+    assert detail.feishu_app_id == created.id
+    assert detail.app_name == "巡检应用"
+    assert detail.app_id == "cli_selected"
+    assert detail.source == "database"
+    config = await config_service.get_effective_config(db_session, "101-2")
+    assert config.app_secret == "selected_secret"
+
+
+async def test_update_config_selected_app_missing_raises(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_env_empty(monkeypatch)
+    with pytest.raises(AppException, match="不存在"):
+        await config_service.update_config(
+            db_session,
+            "201-1",
+            EquipmentInspectionFeishuConfigUpdateRequest(
+                feishu_app_id=uuid.uuid4(), app_token="bascn_x"
+            ),
+        )
+
+
+async def test_update_config_manual_existing_app_id_links(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """手输已登记 App ID（不带 Secret）：直接关联应用库中的应用。"""
+    _patch_env_empty(monkeypatch)
+    await feishu_app_service.create_app(
+        db_session,
+        FeishuAppCreateRequest(
+            name="已有应用", app_id="cli_dup", app_secret="stored_secret"
+        ),
+    )
+    detail = await config_service.update_config(
+        db_session,
+        "101-3",
+        EquipmentInspectionFeishuConfigUpdateRequest(
+            app_id="cli_dup", app_secret=None, app_token="bascn_dup"
+        ),
+    )
+    assert detail.app_id == "cli_dup"
+    assert detail.feishu_app_id is not None
+    config = await config_service.get_effective_config(db_session, "101-3")
+    assert config.app_secret == "stored_secret"
+
+
+async def test_update_config_manual_new_app_registers_reusable(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """手输新 App ID + Secret：自动登记应用（备注名缺省取 App ID）。"""
+    _patch_env_empty(monkeypatch)
+    await config_service.update_config(
+        db_session,
+        "201-2",
+        EquipmentInspectionFeishuConfigUpdateRequest(
+            app_id="cli_fresh",
+            app_secret="fresh_secret",
+            app_token="bascn_fresh",
+        ),
+    )
+    app = await feishu_app_service.get_app_by_app_id(db_session, "cli_fresh")
+    assert app is not None
+    assert app.name == "cli_fresh"
+    # 其他车间可复用：第二个车间手输同一 App ID（不带 Secret）直接关联
+    detail = await config_service.update_config(
+        db_session,
+        "101-1",
+        EquipmentInspectionFeishuConfigUpdateRequest(
+            app_id="cli_fresh", app_secret=None, app_token="bascn_fresh2"
+        ),
+    )
+    assert detail.feishu_app_id == app.id
 
 
 async def test_update_config_masked_resend_not_treated_as_new_secret(
@@ -307,15 +447,10 @@ async def test_update_config_wiki_requires_credentials(
     db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _patch_env_empty(monkeypatch)
-    db_session.add(
-        EquipmentInspectionFeishuConfig(
-            app_id="cli_old",
-            app_secret="stored_secret",
-            app_token="bascn_old",
-        )
+    await _add_config_with_app(
+        db_session, app_token="bascn_old"
     )
-    await db_session.commit()
-    # 数据库行存在但提交的 app_id/secret 为空 → 无法解析 wiki 链接
+    # 数据库行存在但既未选择应用也未手输 App ID → 无法解析 wiki 链接
     with pytest.raises(AppException):
         await config_service.update_config(
             db_session,
@@ -415,24 +550,26 @@ async def test_update_config_unresolvable_view_id_rejected(
 async def test_update_config_view_id_requires_credentials(
     db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """凭据不完整时无法自动解析视图 ID，保存失败并说明原因。"""
+    """凭据不完整（选中应用但未填 App Token）时无法自动解析视图 ID。"""
     _patch_env_empty(monkeypatch)
-    db_session.add(
-        EquipmentInspectionFeishuConfig(
+    await config_service.update_config(
+        db_session,
+        "201-1",
+        EquipmentInspectionFeishuConfigUpdateRequest(
             app_id="cli_old",
             app_secret="stored_secret",
             app_token="bascn_old",
-        )
+        ),
     )
-    await db_session.commit()
+    app = await feishu_app_service.get_app_by_app_id(db_session, "cli_old")
+    assert app is not None
     with pytest.raises(AppException, match="自动解析"):
         await config_service.update_config(
             db_session,
             "201-1",
             EquipmentInspectionFeishuConfigUpdateRequest(
-                app_id="",
-                app_secret=None,
-                app_token="bascn_old",
+                feishu_app_id=app.id,
+                app_token="",
                 today_table_id="vew_today",
                 is_enabled=False,
             ),
@@ -743,26 +880,16 @@ async def test_config_test_endpoint_reports_unconfigured(
 # ---------- 加密与更新分支 ----------
 
 
-def test_decrypt_stored_secret_branches(monkeypatch: pytest.MonkeyPatch) -> None:
-    assert config_service._decrypt_stored_secret(None) == ""
-    assert config_service._decrypt_stored_secret("") == ""
-
-    def broken(_value: str) -> str:
-        raise config_service.LLMConfigError("no key")
-
-    monkeypatch.setattr(config_service, "decrypt_api_key", broken)
-    assert config_service._decrypt_stored_secret("bad-cipher") == ""
-
-
 def test_mask_short_identifier() -> None:
     assert config_service._mask_feishu_identifier("short") == "****"
     masked = config_service._mask_feishu_identifier("tblVeryLong123456")
     assert masked.startswith("tblV")
 
 
-async def test_update_config_replaces_secret_on_existing_row(
+async def test_update_config_rejects_secret_change_via_config_save(
     db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    """车间配置保存不再改写应用 Secret：同 App ID 带不同 Secret 时引导走应用管理。"""
     _patch_env_empty(monkeypatch)
     await config_service.update_config(
         db_session,
@@ -773,18 +900,18 @@ async def test_update_config_replaces_secret_on_existing_row(
             app_token="bascn_r",
         ),
     )
-    detail = await config_service.update_config(
-        db_session,
-        "201-1",
-        EquipmentInspectionFeishuConfigUpdateRequest(
-            app_id="cli_rotate",
-            app_secret="new_secret",
-            app_token="bascn_r",
-        ),
-    )
-    assert detail.app_secret_configured is True
+    with pytest.raises(AppException, match="已登记"):
+        await config_service.update_config(
+            db_session,
+            "201-1",
+            EquipmentInspectionFeishuConfigUpdateRequest(
+                app_id="cli_rotate",
+                app_secret="new_secret",
+                app_token="bascn_r",
+            ),
+        )
     config = await config_service.get_effective_config(db_session, "201-1")
-    assert config.app_secret == "new_secret"
+    assert config.app_secret == "old_secret"
 
 
 async def test_update_config_wraps_wiki_resolve_errors(

@@ -155,6 +155,12 @@
       "route_path": "/equipment/stats",
       "actions": {}
     },
+    "equipment:workshop-admin": {
+      "status": "active",
+      "module_code": "equipment",
+      "route_path": "/equipment/workshop-admin",
+      "actions": {}
+    },
     "equipment:workshop-101-1:assets-101-1": {
       "status": "retired",
       "module_code": "equipment",

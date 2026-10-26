@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
-  App, Button, Drawer, Form, Input, Space, Switch, Tag, Typography,
+  App, Button, Drawer, Form, Input, Select, Space, Switch, Tag, Typography,
 } from 'antd'
 import {
   SaveOutlined, SecurityScanOutlined,
@@ -10,12 +10,14 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import dayjs from 'dayjs'
 import {
+  fetchFeishuApps,
   fetchInspectionFeishuConfig,
   testInspectionFeishuConfig,
   updateInspectionFeishuConfig,
 } from '@/lib/api/inspection-feishu'
 import { parseFeishuBitableUrl } from '@/lib/feishu-url'
 import type {
+  FeishuAppSummary,
   InspectionFeishuConfigDetail,
   InspectionFeishuConfigUpdateRequest,
 } from '@/types/inspection-feishu'
@@ -27,10 +29,16 @@ const C = {
 }
 
 const CONFIG_QUERY_KEY = ['equipment', 'inspection-feishu-config'] as const
+const FEISHU_APPS_QUERY_KEY = ['equipment', 'feishu-apps'] as const
+/** 下拉里的「手动输入新应用」哨兵值 */
+const MANUAL_APP = '__manual__'
 type ConfigFormValues = {
   is_enabled: boolean
-  app_id: string
+  /** 已登记应用 ID，或 MANUAL_APP（手动输入新应用） */
+  feishu_app_id?: string
+  app_id?: string
   app_secret?: string
+  app_name?: string
   app_token: string
   base_url?: string
   today_table_id: string
@@ -88,6 +96,18 @@ function InspectionFeishuConfigDrawerInner({
   })
   const detail = configQuery.data ?? null
 
+  // 已登记应用清单：下拉选择直接复用凭据（与飞书配置页应用管理区同源）
+  const appsQuery = useQuery<FeishuAppSummary[]>({
+    queryKey: FEISHU_APPS_QUERY_KEY,
+    queryFn: () => fetchFeishuApps(),
+    enabled: open,
+  })
+  const apps = appsQuery.data ?? []
+
+  // 哨兵值联动：选中「手动输入新应用」时展开凭据输入区
+  const selectedApp = Form.useWatch('feishu_app_id', form)
+  const manualMode = selectedApp === MANUAL_APP
+
   // 每次打开时拉取最新配置（含缓存场景），随后按数据回填表单
   useEffect(() => {
     if (open) {
@@ -99,8 +119,10 @@ function InspectionFeishuConfigDrawerInner({
     if (!open || !configQuery.data) return
     form.setFieldsValue({
       is_enabled: configQuery.data.is_enabled,
-      app_id: configQuery.data.app_id,
+      feishu_app_id: configQuery.data.feishu_app_id ?? undefined,
+      app_id: '',
       app_secret: '',
+      app_name: '',
       app_token: configQuery.data.app_token,
       base_url: configQuery.data.base_url ?? '',
       today_table_id: configQuery.data.today_table_id,
@@ -136,8 +158,6 @@ function InspectionFeishuConfigDrawerInner({
     setSaving(true)
     try {
       const payload: InspectionFeishuConfigUpdateRequest = {
-        app_id: values.app_id.trim(),
-        app_secret: values.app_secret?.trim() || null,
         app_token: values.app_token.trim(),
         base_url: values.base_url?.trim() || '',
         today_table_id: values.today_table_id.trim(),
@@ -145,9 +165,18 @@ function InspectionFeishuConfigDrawerInner({
         device_table_id: values.device_table_id.trim(),
         is_enabled: values.is_enabled,
       }
+      if (values.feishu_app_id && values.feishu_app_id !== MANUAL_APP) {
+        payload.feishu_app_id = values.feishu_app_id
+      } else {
+        // 手动输入：App ID 已登记则后端直接关联；未登记则连同 Secret 登记为新应用
+        payload.app_id = values.app_id?.trim() || ''
+        payload.app_secret = values.app_secret?.trim() || null
+        payload.app_name = values.app_name?.trim() || ''
+      }
       await updateInspectionFeishuConfig(workshopCode, payload)
       form.setFieldValue('app_secret', '')
       await queryClient.invalidateQueries({ queryKey: configQueryKey })
+      await queryClient.invalidateQueries({ queryKey: FEISHU_APPS_QUERY_KEY })
       message.success('飞书配置已保存')
       onSaved()
     } catch (error) {
@@ -251,24 +280,58 @@ function InspectionFeishuConfigDrawerInner({
             <Switch />
           </Form.Item>
           <Form.Item
-            name="app_id" label="App ID"
-            rules={[{ required: true, message: '请输入飞书应用 App ID' }]}
-          >
-            <Input placeholder="cli_xxxxxxxx" autoComplete="off" />
-          </Form.Item>
-          <Form.Item
-            name="app_secret" label="App Secret"
+            name="feishu_app_id"
+            label="自建应用"
+            rules={[{ required: true, message: '请选择已登记应用，或选择「手动输入新应用」' }]}
             extra={
-              detail?.app_secret_configured
-                ? `已保存（${detail.app_secret_masked}），留空保持不变`
-                : '首次保存必填'
+              detail?.source === 'environment' && detail.app_id
+                ? `当前生效 App ID（环境变量回退）：${detail.app_id}；选择应用保存后数据库配置优先`
+                : '选择已登记应用直接复用凭据；应用库为空时选「手动输入新应用」'
             }
           >
-            <Input.Password
-              placeholder={detail?.app_secret_configured ? '留空保持当前 Secret 不变' : '请输入飞书应用 App Secret'}
-              autoComplete="new-password"
+            <Select
+              placeholder="选择已登记的自建应用"
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              loading={appsQuery.isLoading}
+              options={[
+                ...apps.map((a) => ({
+                  value: a.id,
+                  label: `${a.name}（${a.app_id}）`,
+                })),
+                { value: MANUAL_APP, label: '＋ 手动输入新应用' },
+              ]}
             />
           </Form.Item>
+          {manualMode && (
+            <>
+              <Form.Item
+                name="app_name"
+                label="应用名称（可选）"
+                extra="保存后自动登记到应用库，其他车间下次可直接选择"
+              >
+                <Input placeholder="如：设备巡检应用" maxLength={100} autoComplete="off" />
+              </Form.Item>
+              <Form.Item
+                name="app_id"
+                label="App ID"
+                rules={[{ required: true, message: '请输入飞书应用 App ID' }]}
+              >
+                <Input placeholder="cli_xxxxxxxx" autoComplete="off" />
+              </Form.Item>
+              <Form.Item
+                name="app_secret"
+                label="App Secret"
+                rules={[{ required: true, message: '请输入飞书应用 App Secret' }]}
+              >
+                <Input.Password
+                  placeholder="请输入飞书应用 App Secret"
+                  autoComplete="new-password"
+                />
+              </Form.Item>
+            </>
+          )}
           <Form.Item
             name="app_token" label="多维表格 App Token"
             rules={[{ required: true, message: '请填写 App Token 或粘贴多维表格链接' }]}

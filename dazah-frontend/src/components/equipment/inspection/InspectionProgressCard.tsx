@@ -1,5 +1,7 @@
+'use client'
+
 import { RightOutlined } from '@ant-design/icons'
-import { EQUIPMENT_WORKSHOPS } from '@/lib/menu-config'
+import { useEquipmentWorkshops } from '@/lib/equipment-workshop-registry'
 import type { InspectionFeishuWorkshopSummary } from '@/types/inspection-feishu'
 
 const C = {
@@ -24,6 +26,7 @@ export function InspectionProgressCard({
 }: {
   summaries: InspectionFeishuWorkshopSummary[]
 }) {
+  const workshops = useEquipmentWorkshops()
   const byWorkshop = new Map(summaries.map((s) => [s.workshop_code, s]))
   const date = summaries[0]?.date
   const enabledCount = summaries.length
@@ -69,7 +72,7 @@ export function InspectionProgressCard({
           <span>
             已接入{' '}
             <b style={{ color: enabledCount > 0 ? C.green : C.stone }}>{enabledCount}</b>
-            /{EQUIPMENT_WORKSHOPS.length} 车间
+            /{workshops.length} 车间
           </span>
           <span>
             总进度 <b style={{ color: C.ink }}>{inspected}</b>/{totalDevices} 台
@@ -88,7 +91,7 @@ export function InspectionProgressCard({
       </div>
 
       <div>
-        {EQUIPMENT_WORKSHOPS.map((workshop) => {
+        {workshops.map((workshop) => {
           const summary = byWorkshop.get(workshop.code)
           if (!summary) {
             return (
@@ -104,7 +107,7 @@ export function InspectionProgressCard({
                   color: C.stone,
                 }}
               >
-                <span style={{ width: NAME_COL_WIDTH }}>{workshop.label}</span>
+                <span style={{ width: NAME_COL_WIDTH }}>{workshop.name}</span>
                 <span style={{ flex: 1, fontSize: 12 }}>未接入</span>
               </div>
             )
@@ -129,7 +132,7 @@ export function InspectionProgressCard({
               }}
             >
               <span style={{ width: NAME_COL_WIDTH, fontWeight: 600 }}>
-                {workshop.label}
+                {workshop.name}
               </span>
               <div
                 style={{

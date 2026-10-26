@@ -63,6 +63,7 @@ _LEGACY_SEED_MENUS: list[dict[str, Any]] = [
             _n("spare-parts", "备件管理", "/equipment/spare-parts"),
             _n("personnel", "人员配置", "/equipment/personnel"),
             _n("feishu-config", "飞书配置", "/equipment/feishu-config"),
+            _n("workshop-admin", "车间管理", "/equipment/workshop-admin"),
         ],
     ),
     # ── 能源管理 ────────────────────────────────────────────────
