@@ -190,6 +190,27 @@ def test_restore_archive_rejects_unsafe_members(tmp_path, monkeypatch, entry):
         cd.restore_archive(archive, tmp_path / "restored")
 
 
+def test_site_checksums_and_compose_ignore_the_retired_cd_overlay(tmp_path, monkeypatch):
+    """compose.single-host.yml belonged to the retired CD flow; the manual release
+    only ships compose.yml and compose.edge.yml, so neither the verified site
+    surface nor the compose invocation may still depend on it."""
+    control, _ = deployment_control(tmp_path, monkeypatch)
+    for name in ("compose.yml", "compose.edge.yml", ".env", "compose.single-host.yml"):
+        (control.current / name).write_text("fixture")
+
+    checksums = control.site_checksums()
+    assert "compose.single-host.yml" not in checksums
+    assert set(checksums) == {"compose.yml", "compose.edge.yml", ".env"}
+
+    argv: list[list[str]] = []
+    monkeypatch.setattr(cd, "command", lambda args, **kwargs: argv.append(args) or "")
+    control.compose("ps")
+    assert ["-f", str(control.current / "compose.single-host.yml")] not in [
+        argv[0][index:index + 2] for index in range(len(argv[0]) - 1)
+    ]
+    assert any(str(control.current / "compose.edge.yml") == value for value in argv[0])
+
+
 def deployment_control(tmp_path, monkeypatch):
     current = tmp_path / "current"
     current.mkdir()

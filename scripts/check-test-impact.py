@@ -128,6 +128,16 @@ def render_pattern(pattern: str, captures: dict[str, str]) -> str:
     return pattern
 
 
+def change_surface(changed_sources: set[str], deleted_paths: set[str]) -> set[str]:
+    """Production files that still exist and therefore must carry tests.
+
+    A retired file cannot be covered by a changed test; removing it together with
+    its tests is the intended outcome, and the deletion itself is still reviewed
+    as part of the diff.
+    """
+    return changed_sources - deleted_paths
+
+
 def evaluate(
     policy: dict[str, Any],
     changed_sources: set[str],
@@ -183,7 +193,10 @@ def main() -> int:
     args = parse_args()
     policy = load_policy(args.policy)
     base, head = resolve_revisions(args.base, args.head)
-    sources = changed_paths(base, head, "ACMRD")
+    sources = change_surface(
+        changed_paths(base, head, "ACMRD"),
+        changed_paths(base, head, "D"),
+    )
     tests = changed_paths(base, head, "ACMR")
     violations, unmatched = evaluate(policy, sources, tests)
 
