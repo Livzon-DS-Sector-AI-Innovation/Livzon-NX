@@ -21,6 +21,27 @@ def preview(workbook: openpyxl.Workbook):
     return inspect_xlsx(output.getvalue(), 2026)
 
 
+def test_chilled_water_temperatures_have_independent_overview_roots() -> None:
+    book = openpyxl.Workbook()
+    source = book.active
+    assert source is not None
+    source.title = "冰水码"
+    source.append(["日期", "201一车间-5℃", "103一车间7℃"])
+    source.append(["7/1", 100, 200])
+    source.append(["7/2", 110, 220])
+    usage = book.create_sheet("冰水量")
+    usage.append(["日期", "7℃冰水总量", "-5℃冰水总量"])
+    usage.append(["7/1", "='冰水码'!C3-'冰水码'!C2", "='冰水码'!B3-'冰水码'!B2"])
+    daily = book.create_sheet("日总量")
+    daily.append(["日期", "7℃冰水日总量"])
+    daily.append(["7/1", "='冰水量'!B2"])
+    draft = extract_template(preview(book))
+    overview = [rule for rule in draft.rules if rule.report_scope == "plant"]
+    assert sorted(rule.temperature for rule in overview) == ["-5℃", "7℃"]
+    assert len({rule.code for rule in overview}) == 2
+    assert all(not rule.enabled for rule in overview)
+
+
 def test_empty_named_source_is_preserved_in_subtotal_dependencies() -> None:
     book = openpyxl.Workbook()
     source = book.active
@@ -183,7 +204,7 @@ async def test_real_preview_and_draft_routes_preserve_empty_source(
             assert uploaded.status_code == 200, uploaded.text
             batch = uploaded.json()["data"]
             drafted = await client.post(
-                f"/api/v1/energy/imports/{batch['id']}/draft-config"
+                f"/api/v1/energy/imports/{batch['id']}/prepare"
             )
             assert drafted.status_code == 200, drafted.text
             assert len(drafted.json()["data"]["meters"]) == 2

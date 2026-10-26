@@ -1,16 +1,53 @@
 .workspace { display: flex; flex-direction: column; gap: 18px; padding: 24px; color: var(--color-ink); }
 .workspace h3 { margin: 0; }
-.surface { padding: 20px; background: var(--color-canvas); border-radius: var(--rounded-lg); border: 1px solid var(--color-hairline-soft); }
+.ledgerNavigation { min-width: 0; }
+.ledgerNavigation > :global(.ant-menu) { background: transparent; }
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; }
+.overviewGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 14px; }
+.trendGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.trendCard { min-width: 0; overflow-wrap: anywhere; }
+.filterField.dashboardMetric { width: 100%; }
+.dashboardCharts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 14px; min-width: 0; }
+.trendEmpty { min-height: 300px; display: grid; place-items: center; }
+.trendValues { margin-top: 12px; }
+.trendValues dl { max-height: 240px; overflow-y: auto; margin-bottom: 0; }
+.trendValues dl > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 12px; padding-block: 6px; }
+.trendValues dt { color: var(--color-text-secondary); }
+.trendValues dd { margin: 0; font-variant-numeric: tabular-nums; }
+@media (max-width: 1100px) { .trendGrid { grid-template-columns: minmax(0, 1fr); } }
+.overviewCard { display: flex; flex-direction: column; gap: 12px; min-width: 0; overflow-wrap: anywhere; }
+.overviewCard > button:last-child { margin-top: auto; align-self: flex-start; padding-inline: 0; }
+.overviewHeading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.overviewHeading h5 { margin: 0; }
+.overviewUnit { font-size: 14px; color: var(--color-text-secondary); }
+.overviewDetails { display: grid; gap: 12px; margin: 0; padding-top: 14px; border-top: 1px solid var(--color-hairline-soft); }
+.overviewDetails > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 12px; }
+.overviewDetails dt { color: var(--color-text-secondary); }
+.overviewDetails dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
 .forms { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 20px; }
 .full { grid-column: 1 / -1; }
 .input { min-width: 150px; max-width: 210px; }
 .toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.filters { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+.filterField { display: flex; flex-direction: column; gap: 6px; width: 180px; max-width: 100%; min-width: 0; }
+.filterField > :global(.ant-select), .filterField > :global(.ant-input-number), .datePicker { width: 100%; }
+.filterFieldCompact { width: 110px; }
+.filterFieldWide { width: 250px; }
+.filterFieldFile { width: 260px; }
+.importUpload, .importUpload :global(.ant-upload) { width: 100%; }
+.importUploadButton { width: 100%; }
+.importUploadButton > span:last-child { overflow: hidden; text-overflow: ellipsis; }
+.dateShortcuts { display: flex; flex-wrap: wrap; gap: 4px; padding-block: 6px; }
+.entryDateHint { align-self: flex-end; padding-bottom: 10px; }
+.entryTable { font-variant-numeric: tabular-nums; }
+.entryTable :global(.ant-table-cell) { vertical-align: middle; }
+.entryValue { width: 100%; }
 .error { color: var(--color-error); }
 .table { overflow: auto; }
 .details { white-space: pre-wrap; overflow-wrap: anywhere; }
 .desktopTable { display: block; }
 .mobileCards { display: none; }
 .mobileEntry { padding: 14px 0; border-bottom: 1px solid var(--color-hairline); }
-@media (max-width: 700px) { .workspace { padding: 12px; gap: 12px; } .forms { grid-template-columns: 1fr; } .surface { padding: 12px; } .input { min-width: 120px; } }
+@media (max-width: 700px) { .workspace { padding: 12px; gap: 12px; } .forms { grid-template-columns: 1fr; } .input { min-width: 120px; } }
 @media (max-width: 700px) { .desktopTable { display: none; } .mobileCards { display: grid; gap: 12px; } }
+.savedHint { display: block; color: var(--color-text-secondary); font-size: 12px; }

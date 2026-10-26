@@ -18,7 +18,7 @@ RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.li
     && rm -rf /var/lib/apt/lists/* \
     && pip install --no-cache-dir \
     -i https://pypi.tuna.tsinghua.edu.cn/simple \
-    uv==0.11.32 \
+    uv==0.13.4 \
     && groupadd --system app \
     && useradd --system --gid app --create-home app \
     && mkdir -p /home/app/.config /home/app/.cache /home/app/.local/share \
@@ -60,7 +60,7 @@ EXPOSE 8000
 CMD [".venv/bin/uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app/app"]
 
 
-FROM node:20-alpine AS frontend
+FROM node:24.22.1-alpine AS frontend
 
 WORKDIR /app
 
@@ -118,7 +118,7 @@ COPY --from=hermes-upstream /opt/hermes-upstream /opt/hermes-upstream
 
 RUN python -m pip install --no-cache-dir \
     -i https://pypi.tuna.tsinghua.edu.cn/simple \
-    uv==0.11.32
+    uv==0.13.4
 
 COPY Hermes-Lite/pyproject.toml Hermes-Lite/uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \

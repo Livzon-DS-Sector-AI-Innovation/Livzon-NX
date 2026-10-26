@@ -122,6 +122,11 @@ def _category_filter(category: AuditCategory) -> ColumnElement[bool]:
     )
 
 
+def audit_retention_filter(category: AuditCategory) -> ColumnElement[bool]:
+    """Category filter for retention jobs, excluding internal conversation audit."""
+    return _category_filter(category) & AuditLog.action.not_in(_CONVERSATION_ACTIONS)
+
+
 class GeneralAuditLogService:
     async def list_logs(
         self,

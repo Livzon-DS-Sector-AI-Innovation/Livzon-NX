@@ -63,9 +63,9 @@ async def test_module_coverage_http_inventory_disabled_and_admin_boundary(
         )
         assert modules["equipment"]["registered_count"] == 0
         assert modules["equipment"]["covered_pages"] == 0
-        # Native energy replaces the legacy workspace and adds four net pages;
-        # 设备模块 45 个 workshop-叶页面退役后总量相应减少
-        assert data["total_pages"] == 270
+        # Native energy replaces the legacy workspace and retires the four
+        # history pages；设备模块 45 个 workshop-叶页面退役后总量相应减少
+        assert data["total_pages"] == 267
         assert {"/energy/entry", "/energy/reports", "/energy/analysis"} <= {
             page["route_path"] for page in modules["energy"]["pages"]
         }

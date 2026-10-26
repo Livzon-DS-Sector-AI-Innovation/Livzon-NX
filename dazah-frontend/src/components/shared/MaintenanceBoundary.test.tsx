@@ -4,7 +4,8 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, expect, it, vi } from 'vitest'
 import MaintenanceBoundary from './MaintenanceBoundary'
 
-vi.mock('./PlatformNotice', () => ({ default: ({ title, action }: { title: string; action: React.ReactNode }) => <div role="status">{title}{action}</div> }))
+vi.mock('./PlatformNotice', () => ({ default: ({ title, action, onLearnRules }: { title: string; action: React.ReactNode; onLearnRules: () => void }) =>
+  <div role="status">{title}{action}<button onClick={onLearnRules}>了解访问规则</button></div> }))
 vi.mock('antd', () => ({
   Button: ({ children, onClick }: React.PropsWithChildren<{ onClick?: () => void }>) => <button onClick={onClick}>{children}</button>,
   Modal: ({ children, footer, open, onCancel }: React.PropsWithChildren<{ footer: React.ReactNode; open: boolean; onCancel: () => void }>) => open ?
@@ -62,8 +63,12 @@ it('gives three minutes to save, cancels requests, preserves input and resumes w
     phase = 'maintenance'
     await act(async () => document.dispatchEvent(new Event('visibilitychange')))
     expect(activeSignal?.aborted).toBe(true)
+    expect(host.querySelector('[data-dazah-maintenance-screen]')).not.toBeNull()
+    expect(host.querySelector('[data-dazah-maintenance-boundary]')?.hasAttribute('inert')).toBe(true)
     expect(host.textContent).toContain('请停止操作')
+    await click('了解访问规则')
     await click('我知道了，保留当前页面')
+    expect(host.querySelector('[data-dazah-maintenance-screen]')).not.toBeNull()
     await click('保存表单')
     expect(submit).toHaveBeenCalledOnce()
     await expect(window.fetch('/api/v1/quality')).rejects.toThrow('请停止操作')
@@ -71,6 +76,8 @@ it('gives three minutes to save, cancels requests, preserves input and resumes w
     await act(async () => document.dispatchEvent(new Event('visibilitychange')))
     expect(host.textContent).not.toContain('系统更新维护')
     expect(host.querySelector('input')?.value).toBe('未提交内容')
+    expect(host.querySelector('[data-dazah-maintenance-screen]')).toBeNull()
+    expect(host.querySelector('[data-dazah-maintenance-boundary]')?.hasAttribute('inert')).toBe(false)
     await click('保存表单')
     expect(submit).toHaveBeenCalledTimes(2)
     await act(async () => { await window.fetch('/api/v1/quality') })
@@ -91,6 +98,8 @@ it('closes requests at the announced deadline even if subsequent probes fail', a
     await act(async () => root.render(<MaintenanceBoundary>原页面</MaintenanceBoundary>))
     await act(async () => vi.advanceTimersByTimeAsync(180_000))
     expect(host.textContent).toContain('系统正在更新发布')
+    expect(host.querySelector('[data-dazah-maintenance-screen]')?.textContent).toContain('系统维护中，请稍候')
+    expect(host.querySelector('[data-dazah-maintenance-boundary]')?.hasAttribute('inert')).toBe(true)
     await expect(window.fetch('/settings', { method: 'POST' })).rejects.toThrow('请停止操作')
   } finally { act(() => root.unmount()); host.remove() }
 })

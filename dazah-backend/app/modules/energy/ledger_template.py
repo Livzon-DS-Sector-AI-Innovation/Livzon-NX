@@ -251,7 +251,7 @@ def extract_template(payload: dict[str, JsonValue]) -> TemplateDraftResponse:
             if column not in populated:
                 issues.append(
                     f"{name}!{get_column_letter(column)} {label} 无原始读数；"
-                    "保留未启用计量点，不按零处理"
+                    "保留原始字段，缺项不按零处理"
                 )
             quantity = (
                 "electricity"
@@ -270,7 +270,7 @@ def extract_template(payload: dict[str, JsonValue]) -> TemplateDraftResponse:
                 else label,
                 category=CATEGORIES[name],
                 area=label,
-                department="待确认",
+                department="",
                 unit="待确认",
                 workshop=label if "车间" in label else "",
                 reading_type="direct" if name == "电量" else "counter",
@@ -474,6 +474,7 @@ def extract_template(payload: dict[str, JsonValue]) -> TemplateDraftResponse:
         report_scope = (
             "plant"
             if sheet_name == "日总量"
+            or (sheet_name == "冰水量" and "冰水总量" in label and temperature(label))
             else "detail"
             if "车间" in sheet_name
             else "source"
@@ -488,7 +489,7 @@ def extract_template(payload: dict[str, JsonValue]) -> TemplateDraftResponse:
             category=first.category,
             unit="比例" if operation == "ratio" else first.unit,
             workshop=sheet_name if "车间" in sheet_name else "",
-            department="待确认",
+            department="",
             operation=operation,
             frequency=first.frequency,
             terms=terms,

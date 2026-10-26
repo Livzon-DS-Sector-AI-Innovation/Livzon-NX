@@ -3,7 +3,9 @@ import contextlib
 import datetime as dt
 import importlib.util
 import json
+import os
 import stat
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -186,6 +188,27 @@ def test_restore_archive_rejects_unsafe_members(tmp_path, monkeypatch, entry):
     monkeypatch.setattr(cd, "command", lambda *a, **kw: pytest.fail("unsafe archive must never be extracted"))
     with pytest.raises(cd.Refused, match="unsafe"):
         cd.restore_archive(archive, tmp_path / "restored")
+
+
+def test_site_checksums_and_compose_ignore_the_retired_cd_overlay(tmp_path, monkeypatch):
+    """compose.single-host.yml belonged to the retired CD flow; the manual release
+    only ships compose.yml and compose.edge.yml, so neither the verified site
+    surface nor the compose invocation may still depend on it."""
+    control, _ = deployment_control(tmp_path, monkeypatch)
+    for name in ("compose.yml", "compose.edge.yml", ".env", "compose.single-host.yml"):
+        (control.current / name).write_text("fixture")
+
+    checksums = control.site_checksums()
+    assert "compose.single-host.yml" not in checksums
+    assert set(checksums) == {"compose.yml", "compose.edge.yml", ".env"}
+
+    argv: list[list[str]] = []
+    monkeypatch.setattr(cd, "command", lambda args, **kwargs: argv.append(args) or "")
+    control.compose("ps")
+    assert ["-f", str(control.current / "compose.single-host.yml")] not in [
+        argv[0][index:index + 2] for index in range(len(argv[0]) - 1)
+    ]
+    assert any(str(control.current / "compose.edge.yml") == value for value in argv[0])
 
 
 def deployment_control(tmp_path, monkeypatch):
@@ -508,43 +531,58 @@ def write_backup_manifest(path, *, version=None):
     cd.atomic_json(path / "manifest.json", {"kind": "daily", "files": files, "release_version": version})
 
 
-def test_online_archive_retries_changed_files_and_checks_readability(tmp_path, monkeypatch):
+def test_online_archive_accepts_changed_files_after_listing_archive(tmp_path, monkeypatch):
+    """tar exit 1 means "a file changed while reading"; the archive is still valid."""
     calls = []
     target = tmp_path / "files.tar.gz"
 
     def run(args, **kwargs):
         calls.append((args, kwargs))
         if args[1] == "-czf":
-            target.write_bytes(b"incomplete" if len(calls) == 1 else b"completed")
-            if len(calls) == 1:
-                raise cd.Refused("operation failed: tar, exit=1")
-        return ""
+            target.write_bytes(b"complete online archive")
+        return SimpleNamespace(returncode=1 if args[1] == "-czf" else 0, stdout=b"", stderr=b"")
 
-    monkeypatch.setattr(cd, "command", run)
+    monkeypatch.setattr(cd.subprocess, "run", run)
     monkeypatch.setattr(cd.time, "sleep", lambda _: None)
-    assert cd.archive_directory(tmp_path, target) == 2
-    assert target.read_bytes() == b"completed"
-    assert [args[1] for args, _ in calls] == ["-czf", "-czf", "-tzf"]
-    assert calls[-1][1]["output"] == cd.subprocess.DEVNULL
+    result = cd.archive_directory(tmp_path, target)
+    assert result == {"attempts": 1, "changed_during_read": True}
+    # Only one archiving attempt: a changing file is expected for live volumes,
+    # not something to retry until it happens to stop moving.
+    assert [args[1] for args, _ in calls] == ["-czf", "-tzf"]
     assert all(0 < options["timeout"] <= 600 for _, options in calls)
 
 
-@pytest.mark.parametrize("reason,expected_attempts", [
-    ("operation failed: tar, exit=1", 3),
-    ("operation failed: tar, exit=2", 1),
-])
-def test_archive_never_accepts_failed_tar(tmp_path, monkeypatch, reason, expected_attempts):
-    attempts = []
+def test_online_archive_retries_when_written_archive_is_unreadable(tmp_path, monkeypatch):
+    calls = []
+    target = tmp_path / "files.tar.gz"
 
     def run(args, **kwargs):
-        attempts.append(args)
-        raise cd.Refused(reason)
+        calls.append(args)
+        if args[1] == "-czf":
+            target.write_bytes(b"truncated archive")
+            return SimpleNamespace(returncode=0, stdout=b"", stderr=b"")
+        return SimpleNamespace(returncode=2 if len(calls) == 2 else 0, stdout=b"", stderr=b"")
 
-    monkeypatch.setattr(cd, "command", run)
+    monkeypatch.setattr(cd.subprocess, "run", run)
+    monkeypatch.setattr(cd.time, "sleep", lambda _: None)
+    assert cd.archive_directory(tmp_path, target) == {"attempts": 2, "changed_during_read": False}
+    assert [args[1] for args in calls] == ["-czf", "-tzf", "-czf", "-tzf"]
+
+
+@pytest.mark.parametrize("returncode,expected_archives", [(1, 3), (2, 1)])
+def test_archive_never_accepts_a_failed_or_unreadable_tar(tmp_path, monkeypatch, returncode, expected_archives):
+    archives = []
+
+    def run(args, **kwargs):
+        if args[1] == "-czf":
+            archives.append(args)
+        return SimpleNamespace(returncode=returncode, stdout=b"", stderr=b"")
+
+    monkeypatch.setattr(cd.subprocess, "run", run)
     monkeypatch.setattr(cd.time, "sleep", lambda _: None)
     with pytest.raises(cd.Refused):
         cd.archive_directory(tmp_path, tmp_path / "files.tar.gz")
-    assert len(attempts) == expected_attempts
+    assert len(archives) == expected_archives
 
 
 @pytest.mark.parametrize("archive_failure", [False, True])
@@ -576,7 +614,7 @@ def test_backup_completes_manifest_only_after_all_archives(tmp_path, monkeypatch
         if archive_failure:
             raise cd.Refused("backup archive changed during all attempts")
         target.write_bytes(b"archive")
-        return 2
+        return {"attempts": 2, "changed_during_read": False}
 
     monkeypatch.setattr(cd, "command", run)
     monkeypatch.setattr(cd, "archive_directory", archive)
@@ -588,23 +626,31 @@ def test_backup_completes_manifest_only_after_all_archives(tmp_path, monkeypatch
         backup = control.backup()
         manifest = cd.verified_backup_manifest(backup)
         assert manifest["release_version"] == "release"
-        assert manifest["archive_attempts"] == {"fixture.tar.gz": 2, "config.tar.gz": 2}
+        assert manifest["archive_attempts"] == {
+            "fixture.tar.gz": {"attempts": 2, "changed_during_read": False},
+            "config.tar.gz": {"attempts": 2, "changed_during_read": False},
+        }
         assert manifest["database_revision"] == "revision"
 
 
 def test_archive_rejects_corrupt_output_and_exhausted_time(tmp_path, monkeypatch):
     def run(args, **kwargs):
         if args[1] == "-tzf":
-            raise cd.Refused("operation failed: tar, exit=2")
-        return ""
+            return SimpleNamespace(returncode=2, stdout=b"", stderr=b"")
+        return SimpleNamespace(returncode=0, stdout=b"", stderr=b"")
 
-    monkeypatch.setattr(cd, "command", run)
-    with pytest.raises(cd.Refused, match="exit=2"):
+    monkeypatch.setattr(cd.subprocess, "run", run)
+    monkeypatch.setattr(cd.time, "sleep", lambda _: None)
+    with pytest.raises(cd.Refused):
         cd.archive_directory(tmp_path, tmp_path / "files.tar.gz")
 
     attempts = []
     monkeypatch.setattr(cd.time, "monotonic", iter([0, 1, 599]).__next__)
-    monkeypatch.setattr(cd, "command", lambda *a, **k: attempts.append(a) or (_ for _ in ()).throw(cd.Refused("operation failed: tar, exit=1")))
+    monkeypatch.setattr(
+        cd.subprocess,
+        "run",
+        lambda *a, **k: attempts.append(a) or SimpleNamespace(returncode=1, stdout=b"", stderr=b""),
+    )
     with pytest.raises(cd.Refused, match="changed during all attempts"):
         cd.archive_directory(tmp_path, tmp_path / "files.tar.gz")
     assert len(attempts) == 1
@@ -635,6 +681,81 @@ def test_retention_keeps_monthly_and_current_previous_release_points(tmp_path, m
     assert all(paths[f"2026{month:02d}01"].exists() for month in range(4, 9))
     assert paths["20260101"].exists() and paths["20260201"].exists()
     assert not paths["20260301"].exists()
+
+
+def candidate_fixture(tmp_path, monkeypatch, shas, *, ages_days, state=None):
+    """Create candidate hints with controlled ages and point CANDIDATES at them."""
+    control, _ = deployment_control(tmp_path, monkeypatch)
+    directory = tmp_path / "candidates"
+    directory.mkdir()
+    monkeypatch.setattr(cd, "CANDIDATES", directory)
+    if state is not None:
+        cd.atomic_json(control.state_file, state)
+    for sha, age in zip(shas, ages_days, strict=True):
+        path = directory / f"{sha}.json"
+        path.write_text('{"run_id": 1}')
+        os.utime(path, (time.time() - age * 86400,) * 2)
+    return control, directory
+
+
+def sha_of(index: int) -> str:
+    return f"{index:040x}"
+
+
+def test_candidate_prune_keeps_recent_newest_and_referenced(tmp_path, monkeypatch):
+    shas = [sha_of(index) for index in range(1, 9)]
+    # Newest five by mtime are always kept; 1 and 2 are stale, and 2 is still
+    # referenced by the controller state, so only 1 may disappear.
+    ages = [400, 400, 400, 300, 200, 100, 10, 1]
+    control, directory = candidate_fixture(
+        tmp_path, monkeypatch, shas, ages_days=ages, state={"sha": shas[1]}
+    )
+    removed = control.prune_candidates()
+    assert removed == [f"{shas[2]}.json", f"{shas[0]}.json"]
+    assert not (directory / f"{shas[0]}.json").exists()
+    assert not (directory / f"{shas[2]}.json").exists()
+    assert (directory / f"{shas[1]}.json").exists()
+    assert all((directory / f"{sha}.json").exists() for sha in shas[3:])
+
+
+def test_candidate_prune_minimum_floor_keeps_newest_even_when_all_are_stale(tmp_path, monkeypatch):
+    shas = [sha_of(index) for index in range(10, 18)]
+    control, directory = candidate_fixture(
+        tmp_path, monkeypatch, shas, ages_days=[400] * 8
+    )
+    control.prune_candidates(keep_days=30, keep_newest=3)
+    kept = sorted(path.stem for path in directory.glob("*.json"))
+    assert kept == sorted(shas[-3:])
+
+
+@pytest.mark.parametrize("name", ["notes.json", "not-a-sha.txt", ".hidden.json"])
+def test_candidate_prune_ignores_files_that_are_not_sha_hints(tmp_path, monkeypatch, name):
+    control, directory = candidate_fixture(tmp_path, monkeypatch, [sha_of(1)], ages_days=[400])
+    foreign = directory / name
+    foreign.write_text("keep me")
+    os.utime(foreign, (time.time() - 900 * 86400,) * 2)
+    removed = control.prune_candidates(keep_newest=0)
+    # The stale SHA hint is collectable; the foreign file must survive untouched.
+    assert removed == [f"{sha_of(1)}.json"]
+    assert foreign.exists()
+
+
+@pytest.mark.skipif(os.name == "nt", reason="creating symlinks needs a Windows privilege")
+def test_candidate_prune_skips_symlinked_candidates(tmp_path, monkeypatch):
+    control, directory = candidate_fixture(tmp_path, monkeypatch, [sha_of(2)], ages_days=[400])
+    target = tmp_path / "outside.json"
+    target.write_text("{}")
+    link = directory / f"{sha_of(3)}.json"
+    link.symlink_to(target)
+    os.utime(link, (time.time() - 900 * 86400,) * 2, follow_symlinks=False)
+    control.prune_candidates(keep_newest=0)
+    assert link.is_symlink() and target.exists()
+
+
+def test_candidate_prune_is_a_noop_when_directory_is_absent(tmp_path, monkeypatch):
+    control, _ = deployment_control(tmp_path, monkeypatch)
+    monkeypatch.setattr(cd, "CANDIDATES", tmp_path / "missing")
+    assert control.prune_candidates() == []
 
 
 @pytest.mark.parametrize("damage", ["checksum", "traversal", "missing", "invalid_json", "empty_database"])
@@ -727,7 +848,7 @@ def oci_fixture(tmp_path, architecture="amd64", manifest_digest=None):
     manifest["platform"] = {"os": "linux", "architecture": architecture}
     index = blob({"schemaVersion": 2, "manifests": [manifest]})
     cd.atomic_json(layout / "oci-layout", {"imageLayoutVersion": "1.0.0"})
-    ref = "node:20-alpine@" + index["digest"]
+    ref = "node:24.22.1-alpine@" + index["digest"]
     return root, {"images": {ref: "node"}}, ref, blobs / layer["digest"][7:]
 
 

@@ -7,9 +7,9 @@ import zhCN from 'antd/locale/zh_CN'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@tanstack/react-query', () => ({ useQuery: () => ({ data: [], isLoading: false }) }))
-vi.mock('@/actions/energy-ledger', () => ({ previewLedgerImport: vi.fn(), confirmLedgerImport: vi.fn(), createLedgerTemplateDraft: vi.fn(), previewLedgerSnapshots: vi.fn() }))
+vi.mock('@/actions/energy-ledger', () => ({ previewLedgerImport: vi.fn(), confirmLedgerImport: vi.fn(), prepareLedgerImport: vi.fn() }))
 
-import { previewLedgerImport, confirmLedgerImport, createLedgerTemplateDraft } from '@/actions/energy-ledger'
+import { previewLedgerImport, confirmLedgerImport, prepareLedgerImport } from '@/actions/energy-ledger'
 import type { Meter, ImportPreview } from '@/lib/api/energy-ledger'
 import { EnergyImportClient } from './EnergyImportClient'
 
@@ -17,23 +17,27 @@ let root: Root | undefined
 afterEach(async () => { await act(async () => root?.unmount()); root = undefined; document.body.innerHTML = ''; vi.clearAllMocks() })
 
 function input(label: string): HTMLInputElement {
-  const element = document.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)
+  const element = document.querySelector<HTMLInputElement>(label === '选择能源 Excel' ? '.ant-upload input[type="file"]' : `input[aria-label="${label}"]`)
   if (!element) throw new Error(`Missing input: ${label}`)
   return element
 }
-function setDate(label: string, value: string) {
+async function setDate(label: string, value: string) {
   const field = input(label)
-  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(field, value)
-  field.dispatchEvent(new Event('input', { bubbles: true }))
-  field.dispatchEvent(new Event('change', { bubbles: true }))
+  await act(async () => { field.focus(); field.click() })
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(field, value)
+    field.dispatchEvent(new Event('input', { bubbles: true }))
+    field.dispatchEvent(new Event('change', { bubbles: true }))
+  })
+  await act(async () => field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true })))
 }
 const changed = vi.fn(async () => undefined)
 async function render(dark: boolean, meters: Meter[] = []) {
   const node = document.createElement('div'); document.body.append(node)
   root = createRoot(node)
-  await act(async () => root?.render(<ConfigProvider locale={zhCN} theme={{ algorithm: dark ? theme.darkAlgorithm : theme.defaultAlgorithm }}><App><EnergyImportClient meters={meters} rules={[]} onChanged={changed} /></App></ConfigProvider>))
+  await act(async () => root?.render(<ConfigProvider locale={zhCN} theme={{ algorithm: dark ? theme.darkAlgorithm : theme.defaultAlgorithm }}><App><EnergyImportClient initialYear={2026} meters={meters} onChanged={changed} /></App></ConfigProvider>))
   const picker = input('选择能源 Excel')
-  Object.defineProperty(picker, 'files', { value: [new File(['data'], 'energy.xlsx')] })
+  Object.defineProperty(picker, 'files', { configurable: true, value: [new File(['data'], 'energy.xlsx')] })
   await act(async () => picker.dispatchEvent(new Event('change', { bubbles: true })))
 }
 
@@ -41,7 +45,7 @@ describe('energy import preview flow', () => {
   it.each([false, true])('keeps the selected period explicit and invalidates stale previews (dark=%s)', async dark => {
     vi.mocked(previewLedgerImport).mockResolvedValue({ ok: true, data: { id: 'batch', status: 'preview', payload: { start_date: '2026-06-27', end_date: '2026-07-19', sheets: [], formulas: [] } } })
     await render(dark)
-    await act(async () => { setDate('有效开始日期', '2026-06-27'); setDate('有效结束日期', '2026-07-19') })
+    await setDate('有效开始日期', '2026-06-27'); await setDate('有效结束日期', '2026-07-19')
     const button = Array.from(document.querySelectorAll('button')).find(item => item.textContent === '预览文件')
     await act(async () => button?.click())
     const data = vi.mocked(previewLedgerImport).mock.calls[0]?.[0]
@@ -49,8 +53,15 @@ describe('energy import preview flow', () => {
     expect(data?.get('end_date')).toBe('2026-07-19')
     expect(document.body.textContent).toContain('有效范围 2026-06-27 至 2026-07-19')
     expect(document.querySelector<HTMLElement>('[data-platform-notice]')?.style.background).toBeTruthy()
-    await act(async () => setDate('有效结束日期', '2026-07-18'))
-    expect(document.body.textContent).not.toContain('生成计量与计算配置草案')
+    await setDate('有效结束日期', '2026-07-18')
+    expect(document.body.textContent).not.toContain('识别原表字段与公式')
+  })
+  it('rejects reversed dates without submitting a preview', async () => {
+    await render(false)
+    await setDate('有效开始日期', '2026-07-19'); await setDate('有效结束日期', '2026-06-27')
+    await clickImport('预览文件')
+    expect(document.body.textContent).toContain('有效结束日期不能早于开始日期')
+    expect(previewLedgerImport).not.toHaveBeenCalled()
   })
   it('preserves the selected file and shows a failed preview without offering confirmation', async () => {
     vi.mocked(previewLedgerImport).mockResolvedValue({ ok: false, message: '文件不是有效工作簿' })
@@ -58,7 +69,9 @@ describe('energy import preview flow', () => {
     const button = Array.from(document.querySelectorAll('button')).find(item => item.textContent === '预览文件')
     await act(async () => button?.click())
     expect(document.body.textContent).toContain('文件不是有效工作簿')
-    expect(input('选择能源 Excel').files?.[0]?.name).toBe('energy.xlsx')
+    expect(document.querySelector('button[aria-label="选择能源 Excel"]')?.textContent).toContain('energy.xlsx')
+    await act(async () => button?.click())
+    expect(vi.mocked(previewLedgerImport).mock.calls.at(-1)?.[0].get('file')).toHaveProperty('name', 'energy.xlsx')
     expect(document.body.textContent).not.toContain('确认导入已映射数据')
   })
 })
@@ -71,13 +84,29 @@ const mappedMeter: Meter = { id: 'meter-1', version: 1, definition: {
 const importedPreview: ImportPreview = { id: 'batch-1', status: 'preview', payload: { sheets: [
   { name: '饮用水码', category: 'drinking_water', headers: ['日期', '101车间'], input_columns: [2], cells: [{ column: 2, date: '2026-07-01', value: '12' }] },
 ], formulas: [], notes: ['请核对单位与倍率'] } }
+it.each([false, true])('imports source Excel values from the ledger without snapshot or adjustment controls (dark=%s)', async dark => {
+  vi.mocked(previewLedgerImport).mockResolvedValue({ ok: true, data: { ...importedPreview, payload: { ...importedPreview.payload, formulas: [{ sheet: '日总量', cell: 'B2', formula: '=1+1' }], sheets: [
+    ...(Array.isArray(importedPreview.payload.sheets) ? importedPreview.payload.sheets : []),
+    { name: '日总量', headers: ['日期', '合计'], cells: [{ column: 2, date: '2026-07-01', value: '2' }] },
+  ] } } })
+  vi.mocked(confirmLedgerImport).mockResolvedValue({ ok: true, data: { ...importedPreview, status: 'imported' } })
+  await render(dark, [mappedMeter])
+  expect(input('导入年份').value).toBe('2026')
+  await clickImport('预览文件'); await importReason()
+  expect(document.body.textContent).not.toContain('人工覆盖值候选')
+  await clickImport('确认导入已映射数据')
+  expect(confirmLedgerImport).not.toHaveBeenCalled()
+  await clickImport('确定', document.querySelector('[role=dialog]')!)
+  expect(confirmLedgerImport).toHaveBeenCalledWith('batch-1', { mappings: [{ sheet: '饮用水码', column: 2, point_id: 'meter-1' }], reason: '原表人工复核' })
+  expect(changed).toHaveBeenCalledOnce()
+})
 async function clickImport(label: string, scope: ParentNode = document) {
   const button = [...scope.querySelectorAll<HTMLButtonElement>('button')].find(node => node.textContent?.replace(/\s/g, '') === label)
   expect(button, label).toBeDefined()
   await act(async () => button!.click())
 }
 async function importReason() {
-  const field = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="历史导入原因"]')!
+  const field = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="导入原因"]')!
   await act(async () => {
     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')?.set?.call(field, '原表人工复核')
     field.dispatchEvent(new Event('input', { bubbles: true })); field.dispatchEvent(new Event('change', { bubbles: true }))
@@ -99,7 +128,7 @@ it('retains a mapped import after a conflict and refreshes only after a successf
   await render(false, [mappedMeter]); await clickImport('预览文件'); await importReason()
   expect(document.body.textContent).toContain('已核对水表')
   await clickImport('确认导入已映射数据'); await clickImport('确定', document.querySelector('[role=dialog]')!)
-  expect(confirmLedgerImport).toHaveBeenCalledWith('batch-1', { mappings: [{ sheet: '饮用水码', column: 2, point_id: 'meter-1' }], reason: '原表人工复核', adjustments: [] })
+  expect(confirmLedgerImport).toHaveBeenCalledWith('batch-1', { mappings: [{ sheet: '饮用水码', column: 2, point_id: 'meter-1' }], reason: '原表人工复核' })
   expect(document.body.textContent).toContain('已有新填报数据，整批停止')
   expect(changed).not.toHaveBeenCalled()
   await clickImport('确认导入已映射数据')
@@ -109,20 +138,38 @@ it('retains a mapped import after a conflict and refreshes only after a successf
 })
 it('generates disabled configuration drafts only after confirmation and exposes review issues', async () => {
   vi.mocked(previewLedgerImport).mockResolvedValue({ ok: true, data: importedPreview })
-  vi.mocked(createLedgerTemplateDraft).mockResolvedValue({ ok: true, data: { meters: [], rules: [], issues: ['需要确认共享倍率'] } })
-  await render(false); await clickImport('预览文件'); await clickImport('生成计量与计算配置草案')
-  expect(createLedgerTemplateDraft).not.toHaveBeenCalled()
+  vi.mocked(prepareLedgerImport).mockResolvedValue({ ok: true, data: { meters: [], rules: [], issues: ['需要确认共享倍率'] } })
+  await render(false); await clickImport('预览文件'); await clickImport('识别原表字段与公式')
+  expect(prepareLedgerImport).not.toHaveBeenCalled()
   await clickImport('确定', document.querySelector('[role=dialog]')!)
-  expect(createLedgerTemplateDraft).toHaveBeenCalledWith('batch-1')
+  expect(prepareLedgerImport).toHaveBeenCalledWith('batch-1')
   expect(changed).toHaveBeenCalledOnce()
   expect(document.body.textContent).toContain('需要确认共享倍率')
 })
 it('leaves the source file intact when draft configuration generation fails', async () => {
   vi.mocked(previewLedgerImport).mockResolvedValue({ ok: true, data: importedPreview })
-  vi.mocked(createLedgerTemplateDraft).mockResolvedValue({ ok: false, message: '模板公式尚未核对' })
-  await render(false); await clickImport('预览文件'); await clickImport('生成计量与计算配置草案')
+  vi.mocked(prepareLedgerImport).mockResolvedValue({ ok: false, message: '模板公式尚未核对' })
+  await render(false); await clickImport('预览文件'); await clickImport('识别原表字段与公式')
   await clickImport('确定', document.querySelector('[role=dialog]')!)
   expect(document.body.textContent).toContain('模板公式尚未核对')
-  expect(input('选择能源 Excel').files?.[0]?.name).toBe('energy.xlsx')
+  expect(document.querySelector('button[aria-label="选择能源 Excel"]')?.textContent).toContain('energy.xlsx')
+  await clickImport('预览文件')
+  expect(vi.mocked(previewLedgerImport).mock.calls.at(-1)?.[0].get('file')).toHaveProperty('name', 'energy.xlsx')
   expect(changed).not.toHaveBeenCalled()
+})
+it.each([false, true])('uses a manual Ant Design upload and clears an old preview when replacing the file (dark=%s)', async dark => {
+  vi.mocked(previewLedgerImport).mockResolvedValue({ ok: true, data: importedPreview })
+  await render(dark)
+  expect(document.querySelector('button[aria-label="选择能源 Excel"]')?.textContent).toContain('energy.xlsx')
+  expect(previewLedgerImport).not.toHaveBeenCalled()
+  await clickImport('预览文件')
+  expect(document.body.textContent).toContain('识别原表字段与公式')
+  const picker = input('选择能源 Excel')
+  Object.defineProperty(picker, 'files', { configurable: true, value: [new File(['new data'], 'replacement.xlsx')] })
+  await act(async () => picker.dispatchEvent(new Event('change', { bubbles: true })))
+  expect(document.querySelector('button[aria-label="选择能源 Excel"]')?.textContent).toContain('replacement.xlsx')
+  expect(document.body.textContent).not.toContain('识别原表字段与公式')
+  expect(previewLedgerImport).toHaveBeenCalledOnce()
+  await clickImport('预览文件')
+  expect(vi.mocked(previewLedgerImport).mock.calls[1][0].get('file')).toHaveProperty('name', 'replacement.xlsx')
 })

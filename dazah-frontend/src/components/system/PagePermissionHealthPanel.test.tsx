@@ -117,7 +117,7 @@ it('shows health findings and opens the matching role or user editor', async () 
   await act(async () => {
     rowFor('与角色基线相同').querySelector<HTMLButtonElement>('button')!.click()
   })
-  expect(mocks.users).toHaveBeenCalledWith({ status: 'active' })
+  expect(mocks.users).toHaveBeenCalledWith({ keyword: '张三', status: 'active', limit: 50 })
   expect(document.querySelector('[data-testid="user-editor"]')).toBeTruthy()
 })
 

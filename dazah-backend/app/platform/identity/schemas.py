@@ -160,6 +160,12 @@ class UserResponse(BaseModel):
 class UserManagementItem(UserResponse):
     last_login_at: str | None = None
 
+    @field_validator("status", mode="before")
+    @classmethod
+    def normalize_legacy_status(cls: Any, v: object) -> str:
+        """Legacy rows may still carry non-active/disabled status values."""
+        return "active" if v == "active" else "disabled"
+
     @field_validator("last_login_at", mode="before")
     @classmethod
     def datetime_to_str(cls: Any, v: object) -> str | None:
@@ -199,6 +205,9 @@ class UserManagementUpdate(BaseModel):
     position: str | None = Field(None, max_length=200)
     role: UserRole | None = None
     status: UserStatus | None = None
+    reason: str | None = Field(
+        None, max_length=500, description="角色变更原因；变更账号角色时必填"
+    )
 
 
 class PasswordResetRequest(BaseModel):

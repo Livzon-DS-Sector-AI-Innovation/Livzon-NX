@@ -40,24 +40,6 @@ class EnergyCalculationRule(LedgerBase):
     definition: Mapped[dict[str, JsonValue]] = mapped_column(JSONB)
 
 
-class EnergyEntryPlan(LedgerBase):
-    __tablename__ = "entry_plans"
-    __table_args__ = ({"schema": "energy"},)
-    version: Mapped[int] = mapped_column(Integer, default=1)
-    definition: Mapped[dict[str, JsonValue]] = mapped_column(JSONB)
-
-
-class EnergyEntryTask(LedgerBase):
-    __tablename__ = "entry_tasks"
-    __table_args__ = (
-        Index("uq_energy_task_plan_day", "plan_id", "task_date", unique=True),
-        {"schema": "energy"},
-    )
-    plan_id: Mapped[UUID] = mapped_column(Uuid)
-    task_date: Mapped[date] = mapped_column(Date, index=True)
-    definition: Mapped[dict[str, JsonValue]] = mapped_column(JSONB)
-
-
 class EnergyReading(LedgerBase):
     __tablename__ = "readings"
     __table_args__ = (
@@ -96,16 +78,6 @@ class EnergyUsageFact(LedgerBase):
     provenance: Mapped[dict[str, JsonValue]] = mapped_column(JSONB)
 
 
-class EnergyAdjustment(LedgerBase):
-    __tablename__ = "usage_adjustments"
-    __table_args__ = ({"schema": "energy"},)
-    metric_key: Mapped[str] = mapped_column(String(100), index=True)
-    usage_date: Mapped[date] = mapped_column(Date, index=True)
-    mode: Mapped[str] = mapped_column(String(16))
-    value: Mapped[Decimal] = mapped_column(Numeric(28, 8))
-    reason: Mapped[str] = mapped_column(Text)
-
-
 class EnergyLedgerRevision(LedgerBase):
     __tablename__ = "ledger_revisions"
     __table_args__ = ({"schema": "energy"},)
@@ -114,18 +86,6 @@ class EnergyLedgerRevision(LedgerBase):
     version: Mapped[int] = mapped_column(Integer)
     payload: Mapped[dict[str, JsonValue]] = mapped_column(JSONB)
     reason: Mapped[str] = mapped_column(Text, default="")
-
-
-class EnergyPeriodLock(LedgerBase):
-    __tablename__ = "period_locks"
-    __table_args__ = (
-        Index("uq_energy_lock_month", "month", unique=True),
-        {"schema": "energy"},
-    )
-    month: Mapped[str] = mapped_column(String(7))
-    version: Mapped[int] = mapped_column(Integer, default=0)
-    locked: Mapped[bool] = mapped_column(default=False)
-    snapshot: Mapped[list[JsonValue]] = mapped_column(JSONB, default=list)
 
 
 class EnergyImportBatch(LedgerBase):
@@ -173,13 +133,9 @@ LEDGER_TABLES = tuple(
     for model in (
         EnergyMeterPoint,
         EnergyCalculationRule,
-        EnergyEntryPlan,
-        EnergyEntryTask,
         EnergyReading,
         EnergyUsageFact,
-        EnergyAdjustment,
         EnergyLedgerRevision,
-        EnergyPeriodLock,
         EnergyImportBatch,
         EnergyBotConfig,
         EnergyNotificationRun,

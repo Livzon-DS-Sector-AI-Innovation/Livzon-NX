@@ -33,7 +33,9 @@ class MeterDefinition(LedgerSchema):
     category: EnergyCategory
     area: str = Field(min_length=1, max_length=100)
     workshop: str = Field(default="", max_length=100)
-    department: str = Field(min_length=1, max_length=100)
+    # Retained as descriptive metadata for historical rows. Energy no longer
+    # applies department data scopes; new imports leave this blank.
+    department: str = Field(default="", max_length=100)
     unit: str = Field(min_length=1, max_length=24)
     reading_type: Literal["counter", "direct"] = "counter"
     frequency: Literal["daily", "monthly"] = "daily"
@@ -52,8 +54,6 @@ class MeterDefinition(LedgerSchema):
 
     @model_validator(mode="after")
     def validate_period(self) -> "MeterDefinition":
-        if self.enabled and (self.unit == "待确认" or self.department == "待确认"):
-            raise ValueError("启用前须确认计量单位和归属部门")
         if self.active_to is not None and self.active_to < self.active_from:
             raise ValueError("结束日期不能早于启用日期")
         if self.category == "electricity" and self.reading_type != "direct":
@@ -101,7 +101,7 @@ class RuleDefinition(LedgerSchema):
     category: EnergyCategory
     unit: str = Field(min_length=1, max_length=24)
     workshop: str = Field(default="", max_length=100)
-    department: str = Field(min_length=1, max_length=100)
+    department: str = Field(default="", max_length=100)
     report_scope: ReportScope = "detail"
     quantity_kind: Literal["volume", "heat", "mass", "electricity", "ratio"] = "volume"
     temperature: str = Field(default="", max_length=40)
@@ -123,8 +123,6 @@ class RuleDefinition(LedgerSchema):
             "差值",
         }:
             self.report_scope = "check"
-        if self.enabled and (self.unit == "待确认" or self.department == "待确认"):
-            raise ValueError("启用前须确认计量单位和归属部门")
         if self.operation == "ratio" and (
             len(self.terms) != 2 or self.quantity_kind != "ratio"
         ):
@@ -148,41 +146,12 @@ class RuleResponse(LedgerSchema):
     definition: RuleDefinition
 
 
-class EntryPlanDefinition(LedgerSchema):
-    name: str = Field(min_length=1, max_length=120)
-    point_ids: list[UUID] = Field(min_length=1, max_length=200)
-    owner_ids: list[UUID] = Field(min_length=1, max_length=30)
-    publish_time: Clock = "08:00"
-    deadline_time: Clock = "10:00"
-    reminder_time: Clock = "10:30"
-    group_chat_id: str = Field(default="", max_length=160)
-    enabled: bool = True
-
-    @model_validator(mode="after")
-    def validate_times(self) -> "EntryPlanDefinition":
-        if not self.publish_time <= self.deadline_time <= self.reminder_time:
-            raise ValueError("发布时间、截止时间、提醒时间须依次递增")
-        if len(set(self.point_ids)) != len(self.point_ids) or len(
-            set(self.owner_ids)
-        ) != len(self.owner_ids):
-            raise ValueError("计量点和责任人不能重复")
-        return self
 
 
-class PlanWrite(LedgerSchema):
-    definition: EntryPlanDefinition
-    version: int = Field(default=0, ge=0)
-    reason: str = Field(default="", max_length=1000)
 
 
-class PlanResponse(LedgerSchema):
-    id: UUID
-    version: int
-    definition: EntryPlanDefinition
 
 
-class GenerateTasks(LedgerSchema):
-    task_date: date
 
 
 class ReadingException(LedgerSchema):
@@ -192,56 +161,12 @@ class ReadingException(LedgerSchema):
     reason: str = Field(min_length=1, max_length=1000)
 
 
-class EntryValue(LedgerSchema):
-    reading_id: UUID
-    version: int = Field(ge=0)
-    value: PositiveAmount
-    exception: ReadingException | None = None
 
 
-class EntrySubmission(LedgerSchema):
-    values: list[EntryValue] = Field(min_length=1, max_length=200)
-    draft: bool = False
-    reason: str = Field(default="", max_length=1000)
-    source: Literal["platform", "feishu"] = "platform"
-
-    @model_validator(mode="after")
-    def unique_values(self) -> "EntrySubmission":
-        if len({item.reading_id for item in self.values}) != len(self.values):
-            raise ValueError("同一计量点不能重复提交")
-        return self
 
 
-class EntryItemResponse(LedgerSchema):
-    id: UUID
-    point_id: UUID
-    name: str
-    category: EnergyCategory
-    unit: str
-    precision: int
-    multiplier: Decimal = Decimal(1)
-    reading_type: str
-    frequency: str = "daily"
-    reading_date: date
-    value: Decimal | None
-    draft_value: Decimal | None
-    previous_value: Decimal | None
-    previous_date: date | None
-    version: int
-    submitted_at: datetime | None
-    estimated_usage: Decimal | None = None
-    exception: ReadingException | None = None
 
 
-class TaskResponse(LedgerSchema):
-    id: UUID
-    task_date: date
-    name: str
-    owner_ids: list[UUID]
-    deadline_time: str
-    total_count: int
-    completed_count: int
-    items: list[EntryItemResponse]
 
 
 class UsageRow(LedgerSchema):
@@ -262,6 +187,86 @@ class UsageRow(LedgerSchema):
     provenance: dict[str, JsonValue]
 
 
+class UsageReviewPeriod(LedgerSchema):
+    start_date: date
+    end_date: date
+    reason: str = Field(min_length=1, max_length=2000)
+    source: str = Field(min_length=1, max_length=2000)
+    reported_values: dict[date, Decimal] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def valid_period(self) -> "UsageReviewPeriod":
+        if (
+            self.end_date < self.start_date
+            or (self.end_date - self.start_date).days > 365
+        ):
+            raise ValueError("待确认区间须按先后顺序且最多覆盖一年")
+        if any(
+            not self.start_date <= day <= self.end_date for day in self.reported_values
+        ):
+            raise ValueError("原表结果日期必须在待确认区间内")
+        if any(
+            not value.is_finite() or abs(value) >= Decimal("1e20")
+            for value in self.reported_values.values()
+        ):
+            raise ValueError("原表结果超出计量范围")
+        return self
+
+
+class UsageReview(LedgerSchema):
+    dataset: str = Field(min_length=1, max_length=100)
+    column: int = Field(ge=2, le=16384)
+    periods: list[UsageReviewPeriod] = Field(default_factory=list, max_length=100)
+
+    def evidence_on(self, day: date) -> list[dict[str, JsonValue]]:
+        return [
+            {
+                "reason": period.reason,
+                "source": period.source,
+                "dataset": self.dataset,
+                "column": self.column,
+                "reported_value": str(period.reported_values[day])
+                if day in period.reported_values
+                else None,
+            }
+            for period in self.periods
+            if period.start_date <= day <= period.end_date
+        ]
+
+
+class UsageReviewUpdate(LedgerSchema):
+    reviews: list[UsageReview] = Field(min_length=1, max_length=100)
+    reason: str = Field(default="Web 复核", max_length=1000)
+
+
+class UsageReviewResponse(UsageReview):
+    updated_at: datetime | None = None
+    updated_by: UUID | None = None
+
+
+class ReportBasisNode(LedgerSchema):
+    node_id: str
+    parent_id: str | None = None
+    name: str
+    source_sheet: str = ""
+    source_column: str = ""
+    reading_type: str = ""
+    operation: str = ""
+    coefficient: Decimal = Decimal(1)
+    value: Decimal | None = None
+    calculated_value: Decimal | None = None
+    status: str
+    reading_dates: list[str] = Field(default_factory=list)
+    reading_values: list[str | None] = Field(default_factory=list)
+    multiplier: str = "1"
+    note: str = ""
+
+
+class ReportBasis(LedgerSchema):
+    usage_date: date
+    nodes: list[ReportBasisNode]
+
+
 class ReportTotal(LedgerSchema):
     category: EnergyCategory
     unit: str
@@ -270,6 +275,7 @@ class ReportTotal(LedgerSchema):
     value: Decimal | None
     expected_count: int
     available_count: int
+    basis: ReportBasis | None = None
 
 
 class ReportTrend(ReportTotal):
@@ -308,6 +314,43 @@ class ReportResponse(LedgerSchema):
 class WorkbookDataset(LedgerSchema):
     name: str
     kind: Literal["reading", "usage", "mixed"]
+
+
+class DirectReadingItem(LedgerSchema):
+    point_id: UUID
+    reading_id: UUID | None = None
+    name: str
+    unit: str
+    precision: int
+    value: Decimal | None = None
+    draft_value: Decimal | None = None
+    version: int = 0
+
+
+class DirectReadingResponse(LedgerSchema):
+    reading_date: date
+    dataset: str
+    items: list[DirectReadingItem]
+
+
+class DirectReadingValue(LedgerSchema):
+    point_id: UUID
+    value: PositiveAmount
+    version: int = Field(ge=0)
+
+
+class DirectReadingWrite(LedgerSchema):
+    reading_date: date
+    dataset: str = Field(min_length=1, max_length=100)
+    values: list[DirectReadingValue] = Field(min_length=1, max_length=200)
+    draft: bool = False
+    reason: str = Field(default="", max_length=1000)
+
+    @model_validator(mode="after")
+    def unique_fields(self) -> "DirectReadingWrite":
+        if len({item.point_id for item in self.values}) != len(self.values):
+            raise ValueError("同一原始字段不能重复提交")
+        return self
 
 
 class EnergyMetricOption(LedgerSchema):
@@ -349,24 +392,10 @@ class WorkbookReport(LedgerSchema):
     expected_count: int
 
 
-class AdjustmentWrite(LedgerSchema):
-    metric_key: str = Field(min_length=1, max_length=100)
-    usage_date: date
-    mode: Literal["override", "delta"]
-    value: Amount
-    reason: str = Field(min_length=1, max_length=1000)
 
 
-class LockWrite(LedgerSchema):
-    locked: bool
-    version: int = Field(default=0, ge=0)
-    reason: str = Field(min_length=1, max_length=1000)
 
 
-class LockResponse(LedgerSchema):
-    month: str
-    locked: bool
-    version: int
 
 
 class RevisionResponse(LedgerSchema):
@@ -418,7 +447,6 @@ class BotResponse(LedgerSchema):
 
 class NotificationResponse(LedgerSchema):
     id: UUID
-    task_id: UUID
     status: str
     attempts: int
     message_id: str | None
@@ -435,39 +463,12 @@ class ImportMapping(LedgerSchema):
 class ImportConfirm(LedgerSchema):
     mappings: list[ImportMapping] = Field(min_length=1, max_length=200)
     reason: str = Field(min_length=1, max_length=1000)
-    adjustments: list[AdjustmentWrite] = Field(default_factory=list, max_length=500)
-
-    @model_validator(mode="after")
-    def unique_adjustments(self) -> "ImportConfirm":
-        if len(
-            {(item.metric_key, item.usage_date) for item in self.adjustments}
-        ) != len(self.adjustments):
-            raise ValueError("同一日期同一指标不能重复导入人工修正")
-        return self
 
 
 class ImportResponse(LedgerSchema):
     id: UUID
     status: str
     payload: dict[str, JsonValue]
-
-
-class SnapshotImportRequest(LedgerSchema):
-    snapshot_ids: list[UUID] = Field(min_length=1, max_length=6)
-    year: int = Field(ge=2000, le=2100)
-    start_date: date | None = None
-    end_date: date | None = None
-
-
-class SnapshotImportOption(LedgerSchema):
-    id: UUID
-    sheet_title: str
-    captured_at: datetime
-    snapshot_number: int
-
-
-class TrialRequest(LedgerSchema):
-    usage_date: date
 
 
 class LedgerOptions(LedgerSchema):

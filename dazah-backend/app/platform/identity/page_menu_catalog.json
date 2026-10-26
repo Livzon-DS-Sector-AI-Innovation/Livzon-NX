@@ -323,7 +323,7 @@
     "children": [
       {
         "key": "ledger-overview",
-        "name": "能源总览",
+        "name": "能源仪表盘",
         "path": "/energy",
         "icon": null,
         "permission_code": null,
@@ -332,7 +332,7 @@
       },
       {
         "key": "entry",
-        "name": "数据填报",
+        "name": "原始数据填写",
         "path": "/energy/entry",
         "icon": null,
         "permission_code": null,
@@ -341,7 +341,7 @@
       },
       {
         "key": "reports",
-        "name": "能源报表",
+        "name": "能源台账",
         "path": "/energy/reports",
         "icon": null,
         "permission_code": null,
@@ -374,52 +374,6 @@
         "permission_code": null,
         "disabled": false,
         "children": null
-      },
-      {
-        "key": "history",
-        "name": "历史来源",
-        "path": "",
-        "icon": null,
-        "permission_code": null,
-        "disabled": false,
-        "children": [
-          {
-            "key": "sources",
-            "name": "历史来源与映射",
-            "path": "/energy/sources",
-            "icon": null,
-            "permission_code": null,
-            "disabled": false,
-            "children": null
-          },
-          {
-            "key": "data",
-            "name": "历史快照",
-            "path": "/energy/data",
-            "icon": null,
-            "permission_code": null,
-            "disabled": false,
-            "children": null
-          },
-          {
-            "key": "sync-runs",
-            "name": "历史同步记录",
-            "path": "/energy/sync-runs",
-            "icon": null,
-            "permission_code": null,
-            "disabled": false,
-            "children": null
-          },
-          {
-            "key": "feishu-config",
-            "name": "历史飞书配置",
-            "path": "/energy/feishu-config",
-            "icon": null,
-            "permission_code": null,
-            "disabled": false,
-            "children": null
-          }
-        ]
       }
     ]
   },

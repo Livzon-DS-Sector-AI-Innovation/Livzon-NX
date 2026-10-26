@@ -7,6 +7,7 @@ export interface SubMenuItem {
   key: string
   label: string
   path: string
+  activePaths?: string[]       // 同一工作区的兼容操作路径，仅用于导航高亮
   children?: SubMenuItem[]   // 嵌套子菜单 → Ant Design SubMenu
   dashboard?: boolean         // 当前菜单路径直接打开仪表盘
   disabled?: boolean         // 灰显占位，功能未开发
@@ -168,18 +169,11 @@ export const moduleMenus: ModuleMenu[] = [
     icon: "bolt",
     path: "/energy",
     children: [
-      { key: "ledger-overview", label: "能源总览", path: "/energy", feishuPageKey: "" },
-      { key: "entry", label: "数据填报", path: "/energy/entry", feishuPageKey: "" },
-      { key: "reports", label: "能源报表", path: "/energy/reports", feishuPageKey: "" },
+      { key: "ledger-overview", label: "能源仪表盘", path: "/energy", feishuPageKey: "" },
+      { key: "reports", label: "能源台账", path: "/energy/reports", activePaths: ["/energy/entry"], feishuPageKey: "" },
       { key: "analysis", label: "用量分析", path: "/energy/analysis", feishuPageKey: "" },
       { key: "data-quality", label: "数据质量", path: "/energy/data-quality", feishuPageKey: "" },
       { key: "settings", label: "配置管理", path: "/energy/settings", placement: "bottom", feishuPageKey: "" },
-      { key: "history", label: "历史来源", path: "", children: [
-        { key: "sources", label: "历史来源与映射", path: "/energy/sources", feishuPageKey: "" },
-        { key: "data", label: "历史快照", path: "/energy/data", feishuPageKey: "" },
-        { key: "sync-runs", label: "历史同步记录", path: "/energy/sync-runs", feishuPageKey: "" },
-        { key: "feishu-config", label: "历史飞书配置", path: "/energy/feishu-config", feishuPageKey: "" },
-      ] },
     ],
   },
 
@@ -974,7 +968,11 @@ function filterPageChildren(
   parentKey: string,
   allowedPageKeys: Set<string>,
 ): SubMenuItem[] {
-  return items.flatMap((item) => {
+  return items.flatMap((item): SubMenuItem[] => {
+    // Keep existing entry-only grants usable without granting report access.
+    if (parentKey === 'energy' && item.key === 'reports' && !allowedPageKeys.has('energy:reports') && allowedPageKeys.has('energy:entry')) {
+      return [{ ...item, key: 'entry', path: '/energy/entry', activePaths: [] }]
+    }
     const pageKey = `${parentKey}:${item.key}`
     const children = item.children
       ? filterPageChildren(item.children, pageKey, allowedPageKeys)
@@ -1078,6 +1076,7 @@ function collectPageRoutes(
 // aliases. Directory nodes are not permission pages, so their entry route
 // must explicitly inherit a stable leaf page identity.
 const pageRouteAliases: Record<string, string> = {
+  "/energy/entry": "energy:entry",
   // 设备模块统一工作台（/equipment）按任一功能模块授权放行（见
   // anyOfPageKeys 与 getPostLoginPath），旧功能页路径由前缀别名解析。
   "/quality/deviations": "quality:deviations:deviation-ledger",
@@ -1130,7 +1129,10 @@ const pageRoutePrefixAliases: Record<string, string> = {
 
 export function getPageKeyByPath(pathname: string): string | undefined {
   const normalized = pathname.replace(/\/$/, "") || "/"
-  if (['/production/process', '/production/records', '/production/balance'].some(
+  if ([
+    '/production/process', '/production/records', '/production/balance',
+    '/energy/sources', '/energy/data', '/energy/sync-runs', '/energy/feishu-config',
+  ].some(
     (path) => normalized === path || normalized.startsWith(`${path}/`),
   )) return undefined
   // Only reviewed auxiliary forms inherit the ledger page; sibling pages do not.

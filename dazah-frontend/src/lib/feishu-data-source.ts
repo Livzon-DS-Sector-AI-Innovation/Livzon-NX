@@ -1,6 +1,4 @@
 import { moduleMenus, type SubMenuItem } from '@/lib/menu-config'
-import { ENERGY_DATA_PAGES } from '@/lib/energy-data-pages'
-import type { components } from '@/types/generated/schema'
 
 export type FeishuModuleCode = 'production' | 'energy' | 'warehouse'
 
@@ -64,8 +62,12 @@ export type FeishuMappedMenuTarget = FeishuPageOption & {
   path: string
 }
 
-export type FeishuResourceDeleteResult = components['schemas']['EnergySourceDeleteResult']
-type EnergySourceBatchRequest = components['schemas']['EnergySourceBatchRequest']
+export type FeishuResourceDeleteResult = {
+  deleted_count: number
+  snapshot_count: number
+  snapshot_row_count: number
+}
+type EnergySourceBatchRequest = { sheet_ids: string[] }
 
 type ApiEnvelope<T> = {
   code?: number
@@ -124,7 +126,7 @@ function mappedMenuTargets(moduleCode: FeishuModuleCode): FeishuMappedMenuTarget
 
 function pageOptions(moduleCode: FeishuModuleCode): FeishuPageOption[] {
   if (moduleCode === 'energy') {
-    return ENERGY_DATA_PAGES.map(page => ({ label: `历史来源 / ${page.label}`, value: page.pageKey }))
+    return []
   }
   return mappedMenuTargets(moduleCode).map(({ label, value }) => ({ label, value }))
 }

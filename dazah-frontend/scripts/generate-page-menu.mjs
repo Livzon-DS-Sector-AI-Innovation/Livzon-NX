@@ -29,6 +29,14 @@ function node(item) {
 const { moduleMenus } = load(path.join(root, 'src/lib/menu-config.ts'))
 const reviewedModules = new Set(['production', 'hr', 'warehouse', 'quality', 'procurement', 'equipment', 'energy'])
 const output = moduleMenus.filter((menuModule) => reviewedModules.has(menuModule.moduleCode)).map(node)
+// The merged ledger has one navigation entry but two independently granted
+// pages. Export the input page too, so regenerating names cannot remove its ACL.
+const energy = output.find(item => item.key === 'energy')
+const ledger = moduleMenus.find(item => item.moduleCode === 'energy')?.children.find(item => item.key === 'reports')
+if (energy && ledger?.activePaths?.includes('/energy/entry')) {
+  const index = energy.children.findIndex(item => item.key === 'reports')
+  energy.children.splice(index, 0, node({ key: 'entry', label: '原始数据填写', path: '/energy/entry' }))
+}
 const target = path.resolve(root, '../dazah-backend/app/platform/identity/page_menu_catalog.json')
 const content = `${JSON.stringify(output, null, 2)}\n`
 if (process.argv.includes('--check')) {

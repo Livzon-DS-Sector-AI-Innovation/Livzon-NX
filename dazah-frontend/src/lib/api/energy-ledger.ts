@@ -10,32 +10,22 @@ export async function resolveLedgerAction<T>(promise: Promise<LedgerActionResult
   if (!result.ok) throw new Error(result.message)
   return result.data
 }
-export type MeterWrite = Schema['MeterWrite']
 export type Meter = Schema['MeterResponse']
-export type RuleWrite = Schema['RuleWrite']
-export type Rule = Schema['RuleResponse']
-export type PlanWrite = Schema['PlanWrite']
-export type Plan = Schema['PlanResponse']
-export type Task = Schema['TaskResponse']
-export type EntryItem = Schema['EntryItemResponse']
-export type EntrySubmission = Schema['EntrySubmission']
 export type Report = Schema['ReportResponse']
 export type UsageRow = Schema['UsageRow']
 export type Options = Schema['LedgerOptions']
-export type TaskList = Schema['TaskListResponse']
-export type Lock = Schema['LockResponse']
-export type LockWrite = Schema['LockWrite']
 export type Bot = Schema['BotResponse']
 export type BotWrite = Schema['BotWrite']
 export type Notification = Schema['NotificationResponse']
 export type ImportPreview = Schema['ImportResponse']
 export type ImportConfirm = Schema['ImportConfirm']
-export type AdjustmentWrite = Schema['AdjustmentWrite']
 export type Revision = Schema['RevisionResponse']
-export type Trial = Schema['TrialResponse']
 export type TemplateDraft = Schema['TemplateDraftResponse']
-export type SnapshotOption = Schema['SnapshotImportOption']
-export type SnapshotImportRequest = Schema['SnapshotImportRequest']
+export type DirectReading = Schema['DirectReadingResponse']
+export type DirectReadingWrite = Schema['DirectReadingWrite']
+export type UsageReview = Schema['UsageReview']
+export type UsageReviewResponse = Schema['UsageReviewResponse']
+export type UsageReviewUpdate = Schema['UsageReviewUpdate']
 export type WorkbookDataset = Schema['WorkbookDataset']
 export type WorkbookReport = Schema['WorkbookReport']
 export type WorkbookCell = Schema['WorkbookCell']
@@ -48,11 +38,17 @@ export async function ledgerRequest<T>(path: string, init?: RequestInit, auth?: 
   if (typeof window !== 'undefined') headers.set('X-Dazah-Page-Path', window.location.pathname)
   new Headers(init?.headers).forEach((value, key) => headers.set(key, value))
   const response = await fetch(typeof window === 'undefined' ? serverApiUrl(url) : url, { ...init, headers, cache: 'no-store' })
-  const body: unknown = await response.json()
+  const fallback = response.status >= 500
+    ? `能源服务暂不可用（${response.status}），请稍后重试`
+    : `请求未完成（${response.status}），请检查输入或权限`
+  let body: unknown
+  try { body = await response.json() }
+  catch { throw new EnergyLedgerRequestError(response.ok ? '能源服务返回格式异常，请稍后重试' : fallback) }
   if (!response.ok) {
-    const message = body && typeof body === 'object' && 'message' in body && typeof body.message === 'string' ? body.message : `请求未完成（${response.status}），请检查输入或权限`
+    const message = body && typeof body === 'object' && 'message' in body && typeof body.message === 'string' ? body.message : fallback
     throw new EnergyLedgerRequestError(message)
   }
+  if (!body || typeof body !== 'object' || !('data' in body)) throw new EnergyLedgerRequestError('能源服务返回格式异常，请稍后重试')
   // All callers use generated endpoint response types; the HTTP envelope is shared.
   return (body as { data: T }).data
 }
@@ -69,6 +65,7 @@ export const CATEGORY_LABELS = {
 } as const
 
 export const QUALITY_LABELS: Record<string, string> = {
+  pending_review: '待确认',
   complete: '完整', partial: '部分数据', pending: '待计算', adjusted: '已调整',
   missing_reading: '缺少读数', missing_dependency: '计算缺项', reading_rollback: '读数回退',
   invalid_meter_event: '换表记录无效', zero_denominator: '分母为零',
@@ -77,12 +74,6 @@ export const QUALITY_LABELS: Record<string, string> = {
   unconfigured: '待确认配置', not_applicable: '不适用', configuration_conflict: '配置冲突',
 }
 
-export function taskChanges(task: Task, values: Record<string, string | undefined>): EntrySubmission['values'] {
-  return task.items.flatMap(item => {
-    const value = values[item.id] ?? item.draft_value
-    return value !== undefined && value !== null && value !== '' ? [{ reading_id: item.id, version: item.version, value }] : []
-  })
-}
 
 export function formatAmount(value: string | number | null | undefined) {
   if (value === null || value === undefined) return '—'

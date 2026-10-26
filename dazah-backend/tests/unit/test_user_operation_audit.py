@@ -8,6 +8,7 @@ from fastapi import FastAPI, Request
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 from sqlalchemy.dialects import postgresql
+from starlette.background import BackgroundTask
 from starlette.responses import JSONResponse
 
 from app.platform.audit import middleware as audit_middleware
@@ -123,6 +124,31 @@ async def test_user_api_requests_record_one_safe_row_each(monkeypatch: Any) -> N
     assert session.records[2].extra["request"]["body_omitted"] == "sensitive_route"
     assert session.records[2].resource_type == "identity"
     assert "secret" not in str([row.__dict__ for row in session.records])
+
+
+@pytest.mark.asyncio
+async def test_audit_write_preserves_endpoint_background_task(monkeypatch: Any) -> None:
+    session = FakeSession()
+    monkeypatch.setattr(audit_middleware, "async_session_factory", lambda: session)
+    observed: list[str] = []
+    app = FastAPI()
+
+    @app.get("/api/v1/quality/export", summary="导出质量记录")
+    async def export(request: Request) -> JSONResponse:
+        request.state.audit_user_id = uuid.uuid4()
+        response = JSONResponse({"ok": True})
+        response.background = BackgroundTask(observed.append, "cleanup")
+        return response
+
+    app.add_middleware(AuditMiddleware)
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.get("/api/v1/quality/export")
+
+    assert response.status_code == 200
+    assert observed == ["cleanup"]
+    assert len(session.records) == 1
 
 
 @pytest.mark.asyncio
