@@ -8,6 +8,10 @@
 
 - `dazah-runner` 仅在 `/var/lib/dazah-candidates/<SHA>.json` 写候选，不 checkout
   或执行仓库脚本，不拥有 sudo、生产 Docker socket 或 `/opt/dazah` 访问权限。
+- 候选提示由 `dazah-candidates.timer` 每周日 03:30 清理一次（`prune-candidates`）：
+  保留最新 5 个、控制器状态仍引用的 SHA，以及最近 30 天内的候选；
+  只删除文件名是完整 40 位 commit SHA 的普通文件，符号链接与其他文件一律不动。
+  控制器关闭时候选只增不减，因此这项清理是必要的常态运维，不是一次性操作。
 - GitHub `single-host-cd` Environment 限制 main；controller 再通过 GitHub API
   独立验证仓库、protected main、SHA、push 事件和对应 CI Gate。
 - 候选不是授权。正式控制程序在 `/opt/dazah/control`，配置在
@@ -76,7 +80,12 @@ Runner 的 `proxy-isolation.conf` 依赖 `dazah-runner-loopback.service`，规�
 人工部署版本由 `last-success` 及其部署备份的 `current-version` 元数据识别。
 只对逐文件 SHA-256 验证通过的完整备份执行保留清理；损坏或未完成目录保留供诊断，
 不作为可恢复备份计数，也不自动删除。持续失败或这些目录持续增长需人工处理。
-在线文件归档遇到 tar 返回 1 时，在原超时预算内最多尝试 3 次；其他错误直接失败。
+在线文件归档把 tar 退出码 1 视为「读取期间有文件变化」并接受：这是 minio、redis 等
+在线卷在备份过程中的常态，归档本身仍然完整。接受前必须用 `tar -tzf` 完整列出归档，
+清单里的 `archive_attempts.<文件>.changed_during_read` 记录该次归档是否发生过变化。
+tar 退出码 2 是致命错误（参数错误、路径不可读），立即失败不重试；归档不可读时在
+原超时预算内最多尝试 3 次。2026-10-26 之前把退出码 1 当作失败，导致每日备份在
+10-23 至 10-25 连续报 `backup archive changed during all attempts`，而产物其实完整。
 只有 tar 成功且归档可读才写入完成清单，不接受部分归档。
 在线备份标记 `online_independent_copies`，不保证数据库和对象文件同一时间点；
 发布前停止应用写入后标记 `writers_stopped`。
@@ -193,6 +202,8 @@ Runner 与备份、发布、巡检服务统一加入 `dazah-control.slice`，总
 1. 将 controller/readiness 及 Nginx guard 文件安装到 `/opt/dazah/control`；
    控制程序 root-owned，runner 不可写。
 2. 安装提供的 systemd units；`dazah-build` 按需启动，不设开机常驻。
+   候选清理使用 `dazah-candidates.service` 与 `dazah-candidates.timer`，
+   与 CD timer 相互独立，可在控制器保持关闭时先启用。
 3. 使用 `stage_site.py` 从当前 Nginx 文件生成候选，不覆盖当前文件。
    `nginx-capacity.conf` 在 http 上下文加载；普通 API 加限流，MCP 限制连接数。
    当前目录须安装 `nginx-maintenance.conf`、`nginx-capacity.conf`、
