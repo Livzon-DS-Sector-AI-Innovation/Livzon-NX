@@ -26,11 +26,15 @@ router = APIRouter()
 
 # 车间代码形如 101 / 101-1 / 201-3
 WORKSHOP_QUERY = Query(
-    ..., pattern=r"^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$", description="车间代码（如 101-1 / dlz）"
+    ...,
+        pattern=r"^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
+        description="车间代码（如 101-1 / dlz）"
 )
 # records 支持缺省车间：设备详情抽屉按设备编号跨车间聚合
 WORKSHOP_QUERY_OPTIONAL = Query(
-    None, pattern=r"^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$", description="车间代码；缺省跨车间查询"
+    None,
+        pattern=r"^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
+        description="车间代码；缺省跨车间查询"
 )
 
 

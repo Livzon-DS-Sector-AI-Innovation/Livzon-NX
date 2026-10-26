@@ -100,7 +100,9 @@ async def list_personnel(
     is_active: bool | None = Query(None, description="在岗状态筛选"),
     keyword: str | None = Query(None, description="姓名搜索"),
     workshop: str | None = Query(
-        None, pattern=r"^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$", description="车间代码（如 101-1 / dlz）"
+        None,
+            pattern=r"^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
+            description="车间代码（如 101-1 / dlz）"
     ),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=200),
@@ -133,7 +135,9 @@ async def get_candidates(
     ),
     category_id: uuid.UUID | None = Query(None, description="设备分类ID（可选）"),
     workshop: str | None = Query(
-        None, pattern=r"^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$", description="车间代码（如 101-1 / dlz）"
+        None,
+            pattern=r"^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
+            description="车间代码（如 101-1 / dlz）"
     ),
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:

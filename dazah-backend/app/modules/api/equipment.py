@@ -36,7 +36,9 @@ router = APIRouter()
 
 # 车间代码形如 101 / 101-1 / 201-3；列表缺省 = 跨车间查询
 WORKSHOP_QUERY = Query(
-    None, pattern=r"^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$", description="车间代码（如 101-1 / dlz）"
+    None,
+        pattern=r"^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
+        description="车间代码（如 101-1 / dlz）"
 )
 
 

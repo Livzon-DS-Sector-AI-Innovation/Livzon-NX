@@ -35,7 +35,9 @@ async def list_maintenance_plans(
     status: str | None = Query(None, description="状态"),
     keyword: str | None = Query(None, description="关键词搜索"),
     workshop: str | None = Query(
-        None, pattern=r"^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$", description="车间代码（如 101-1 / dlz）"
+        None,
+            pattern=r"^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
+            description="车间代码（如 101-1 / dlz）"
     ),
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(20, ge=1, le=200, description="每页数量"),
