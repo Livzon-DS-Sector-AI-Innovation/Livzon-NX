@@ -1,8 +1,0 @@
-[Unit]
-Description=Dazah weekly CD candidate hint prune
-[Timer]
-OnCalendar=Sun *-*-* 03:30:00 Asia/Shanghai
-Persistent=false
-Unit=dazah-candidates.service
-[Install]
-WantedBy=timers.target

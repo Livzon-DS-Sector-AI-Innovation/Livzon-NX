@@ -133,3 +133,18 @@ def test_non_production_change_needs_no_test() -> None:
 
     assert violations == []
     assert unmatched == []
+
+
+def test_deleted_production_file_is_not_expected_to_gain_a_test() -> None:
+    surface = checker.change_surface(
+        {"product/quality/retired.py", "product/quality/service.py"},
+        {"product/quality/retired.py"},
+    )
+
+    assert surface == {"product/quality/service.py"}
+    violations, unmatched = checker.evaluate(policy(), surface, set())
+    # The surviving file still needs its test; the retired one must not be
+    # reported as an unclassified production change.
+    assert unmatched == []
+    assert [requirement.rule_id for requirement, _ in violations] == ["module"]
+
