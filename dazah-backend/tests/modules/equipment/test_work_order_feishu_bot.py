@@ -307,7 +307,8 @@ async def test_card_action_accept_commits_and_schedules_patch(monkeypatch):
 
     assert result["code"] == 0
     db.commit.assert_awaited()
-    wof._patch_card_reliably.assert_not_awaited()  # 后台任务异步调度，不阻塞回调  # type: ignore[attr-defined]
+    # 后台补丁任务异步调度，不阻塞回调返回
+    wof._patch_card_reliably.assert_not_awaited()
 
 
 @pytest.mark.asyncio
@@ -346,7 +347,8 @@ async def test_patch_reliably_retries_until_confirmed(monkeypatch):
     import app.modules.equipment.feishu.repair_card as rc
 
     titles = iter(["旧标题", "✅ 已接单 WO-1"])
-    monkeypatch.setattr(rc, "get_card_title", AsyncMock(side_effect=lambda mid: next(titles)))
+    get_title = AsyncMock(side_effect=lambda mid: next(titles))
+    monkeypatch.setattr(rc, "get_card_title", get_title)
     patched = AsyncMock()
     monkeypatch.setattr(rc, "patch_card_message", patched)
     await _patch_card_reliably(

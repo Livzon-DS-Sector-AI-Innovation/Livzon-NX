@@ -69,7 +69,8 @@ async def test_tenant_token_cached_within_window():
     with patch.object(repair_card.httpx, "AsyncClient") as client_cls:
         resp = Mock()
         resp.json.return_value = {"tenant_access_token": "t-1", "expire": 1800}
-        client_cls.return_value.__aenter__ = AsyncMock(return_value=Mock(post=AsyncMock(return_value=resp)))
+        inner = Mock(post=AsyncMock(return_value=resp))
+        client_cls.return_value.__aenter__ = AsyncMock(return_value=inner)
         client_cls.return_value.__aexit__ = AsyncMock(return_value=False)
         token1 = await repair_card._tenant_token()
     assert token1 == "t-1"
