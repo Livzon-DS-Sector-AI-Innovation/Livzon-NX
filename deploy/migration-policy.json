@@ -1,17 +1,3 @@
 {
-  "transitions": [
-    {
-      "from_revision": "c9d400000061",
-      "to_revision": "c8e4a2f6d9b3",
-      "backward_compatible": true,
-      "review_reference": "docs/runbooks/single-host-cd.md"
-    }
-  ],
-  "deployment_hold": {
-    "source_head": "d1f2a3b4c5d6",
-    "target_revision": "c8e4a2f6d9b3",
-    "allowed_from_revisions": ["c9d400000061"],
-    "review_reference": "docs/runbooks/single-host-cd.md",
-    "reason": "Defer dropping energy.entry_plans, entry_tasks, usage_adjustments and period_locks. The deployed release 20261019-main-03d6d396 still models these tables, so dropping them would break rollback. The remaining migrations c9d400000062 through c8e4a2f6d9b3 only add columns/tables and stay backward compatible."
-  }
+  "transitions": []
 }
