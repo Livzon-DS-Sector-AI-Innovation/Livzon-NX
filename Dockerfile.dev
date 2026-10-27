@@ -10,8 +10,7 @@ WORKDIR /app
 
 # libreoffice-writer/draw：.doc/.wps 转 docx 及 wmf/emf 图片转 png 依赖；
 # fonts-noto-cjk 中文字体；catdoc/antiword 文本级兜底
-RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources \
-    && apt-get update \
+RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         libreoffice-writer libreoffice-draw \
         fonts-noto-cjk catdoc antiword \
@@ -39,7 +38,6 @@ COPY dazah-backend/pyproject.toml dazah-backend/uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv uv sync --frozen --group dev
 
 # Playwright Chromium：法规雷达与法规跟踪（CDE）的 JS 渲染站点抓取依赖
-ENV PLAYWRIGHT_DOWNLOAD_HOST=https://cdn.npmmirror.com/binaries/playwright
 RUN .venv/bin/playwright install --with-deps chromium \
     && chown -R app:app /home/app/.cache/ms-playwright
 
@@ -109,16 +107,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     LARK_CLI_PATH=/usr/local/bin/lark-cli \
     HERMES_FEISHU_TMPFS=/run/hermes-feishu \
     HERMES_GATEWAY_LOCK_DIR=/run/hermes-feishu/gateway-locks \
-    UV_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple \
-    UV_EXTRA_INDEX_URL=https://mirrors.aliyun.com/pypi/simple/ \
     WATCHFILES_FORCE_POLLING=true
 
 COPY --from=hermes-lark-cli /usr/local/bin/lark-cli /usr/local/bin/lark-cli
 COPY --from=hermes-upstream /opt/hermes-upstream /opt/hermes-upstream
 
-RUN python -m pip install --no-cache-dir \
-    -i https://pypi.tuna.tsinghua.edu.cn/simple \
-    uv==0.13.4
+RUN python -m pip install --no-cache-dir uv==0.13.4
 
 COPY Hermes-Lite/pyproject.toml Hermes-Lite/uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \
