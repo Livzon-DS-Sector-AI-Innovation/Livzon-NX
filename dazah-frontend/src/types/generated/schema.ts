@@ -2180,6 +2180,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/equipment/inspection/feishu/apps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 飞书自建应用清单 */
+        get: operations["list_feishu_apps_api_v1_equipment_inspection_feishu_apps_get"];
+        put?: never;
+        /** 登记飞书自建应用 */
+        post: operations["create_feishu_app_api_v1_equipment_inspection_feishu_apps_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/inspection/feishu/apps/{app_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 更新飞书自建应用（改名或轮换 Secret） */
+        put: operations["update_feishu_app_api_v1_equipment_inspection_feishu_apps__app_id__put"];
+        post?: never;
+        /** 删除飞书自建应用（被车间引用时阻断） */
+        delete: operations["delete_feishu_app_api_v1_equipment_inspection_feishu_apps__app_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/equipment/inspection/feishu/config": {
         parameters: {
             query?: never;
@@ -2621,6 +2657,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/equipment/maintenance/plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 维护计划列表 */
+        get: operations["list_maintenance_plans_api_v1_equipment_maintenance_plans_get"];
+        put?: never;
+        /** 新增维护计划 */
+        post: operations["create_maintenance_plan_api_v1_equipment_maintenance_plans_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/equipment/maintenance/plans/": {
         parameters: {
             query?: never;
@@ -2709,6 +2763,24 @@ export interface paths {
         get: operations["list_maintainers_api_v1_equipment_maintenance_staff_maintainers_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/maintenance/work-orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 工单列表 */
+        get: operations["list_work_orders_api_v1_equipment_maintenance_work_orders_get"];
+        put?: never;
+        /** 创建工单（报修） */
+        post: operations["create_work_order_api_v1_equipment_maintenance_work_orders_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3101,6 +3173,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/equipment/spare-parts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 备件列表 */
+        get: operations["list_spare_parts_api_v1_equipment_spare_parts_get"];
+        put?: never;
+        /** 创建备件 */
+        post: operations["create_spare_part_api_v1_equipment_spare_parts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/equipment/spare-parts/": {
         parameters: {
             query?: never;
@@ -3200,6 +3290,58 @@ export interface paths {
         put?: never;
         /** 入库 */
         post: operations["inbound_stock_api_v1_equipment_spare_parts__spare_part_id__stock_inbound_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/workshops": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 启用车间清单（工作台与飞书配置页数据源） */
+        get: operations["list_enabled_workshops_api_v1_equipment_workshops_get"];
+        put?: never;
+        /** 新增车间 */
+        post: operations["create_workshop_api_v1_equipment_workshops_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/workshops/all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 车间清单（含停用，车间管理页） */
+        get: operations["list_all_workshops_api_v1_equipment_workshops_all_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/workshops/{code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 更新车间（改名/启停；代码不可改） */
+        put: operations["update_workshop_api_v1_equipment_workshops__code__put"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -41552,7 +41694,7 @@ export interface components {
             warranty_expire_date?: string | null;
             /**
              * Workshop Code
-             * @description 归属车间代码（如 101-1 / 201-1）
+             * @description 归属车间代码（如 101-1 / dlz）
              * @default 201-1
              */
             workshop_code: string;
@@ -41560,17 +41702,26 @@ export interface components {
         /**
          * EquipmentInspectionFeishuConfigUpdateRequest
          * @description 保存设备巡检飞书镜像配置请求
+         *
+         *     凭据两选一：``feishu_app_id`` 选择已登记应用（优先）；或手输
+         *     ``app_id`` / ``app_secret``（App ID 已存在则自动关联，不存在则登记新应用）。
          */
         EquipmentInspectionFeishuConfigUpdateRequest: {
             /**
              * App Id
-             * @description 飞书应用 App ID
+             * @description 手输的飞书应用 App ID（未选择已登记应用时使用）
              * @default
              */
             app_id: string;
             /**
+             * App Name
+             * @description 手输新建应用时的备注名（缺省取 App ID）
+             * @default
+             */
+            app_name: string;
+            /**
              * App Secret
-             * @description 飞书应用 App Secret（留空保留已保存值）
+             * @description 手输的飞书应用 App Secret（关联已登记应用时忽略；新建应用必填）
              */
             app_secret?: string | null;
             /**
@@ -41591,6 +41742,11 @@ export interface components {
              * @default
              */
             device_table_id: string;
+            /**
+             * Feishu App Id
+             * @description 已登记的飞书自建应用 ID（下拉选择）
+             */
+            feishu_app_id?: string | null;
             /**
              * History Table Id
              * @description 设备历史巡检记录表 ID
@@ -43012,6 +43168,43 @@ export interface components {
             status: "pending" | "processing" | "resolved";
             /** Version */
             version: number;
+        };
+        /**
+         * FeishuAppCreateRequest
+         * @description 登记飞书自建应用请求
+         */
+        FeishuAppCreateRequest: {
+            /**
+             * App Id
+             * @description 飞书应用 App ID
+             */
+            app_id: string;
+            /**
+             * App Secret
+             * @description 飞书应用 App Secret（加密存储，不回显）
+             */
+            app_secret: string;
+            /**
+             * Name
+             * @description 应用备注名（下拉展示用）
+             */
+            name: string;
+        };
+        /**
+         * FeishuAppUpdateRequest
+         * @description 更新飞书自建应用请求（App ID 不可改）
+         */
+        FeishuAppUpdateRequest: {
+            /**
+             * App Secret
+             * @description 新 App Secret（留空保持已保存值）
+             */
+            app_secret?: string | null;
+            /**
+             * Name
+             * @description 应用备注名
+             */
+            name?: string | null;
         };
         /**
          * FeishuApprovalWebhookPayload
@@ -50677,7 +50870,7 @@ export interface components {
             user_ids: string[];
             /**
              * Workshop Code
-             * @description 归属车间代码（如 101-1 / 201-1）
+             * @description 归属车间代码（如 101-1 / dlz）
              * @default 201-1
              */
             workshop_code: string;
@@ -56934,7 +57127,7 @@ export interface components {
             unit_price?: number | null;
             /**
              * Workshop Code
-             * @description 归属车间代码（如 101-1 / 201-1）
+             * @description 归属车间代码（如 101-1 / dlz）
              * @default 201-1
              */
             workshop_code: string;
@@ -56986,7 +57179,7 @@ export interface components {
             unit_price?: number | null;
             /**
              * Workshop Code
-             * @description 归属车间代码（如 101-1 / 201-1）
+             * @description 归属车间代码（如 101-1 / dlz）
              */
             workshop_code?: string | null;
         };
@@ -63281,6 +63474,38 @@ export interface components {
             year: number;
         };
         /**
+         * WorkshopCreateRequest
+         * @description 新增车间请求
+         */
+        WorkshopCreateRequest: {
+            /**
+             * Code
+             * @description 车间代码：2~10 位小写字母/数字，可带 -序号（如 204 / 204-1 / dlz），创建后不可改
+             */
+            code: string;
+            /**
+             * Name
+             * @description 车间显示名（如 204一车间 / 动力站）
+             */
+            name: string;
+        };
+        /**
+         * WorkshopUpdateRequest
+         * @description 更新车间请求（改名/启停；代码不可改）
+         */
+        WorkshopUpdateRequest: {
+            /**
+             * Is Enabled
+             * @description 启用/停用
+             */
+            is_enabled?: boolean | null;
+            /**
+             * Name
+             * @description 车间显示名
+             */
+            name?: string | null;
+        };
+        /**
          * WrittenExamExportRequest
          * @description 笔试试卷导出请求
          */
@@ -68460,7 +68685,7 @@ export interface operations {
                 status?: string | null;
                 /** @description 关键词搜索 */
                 keyword?: string | null;
-                /** @description 车间代码（如 101-1 / 201-1） */
+                /** @description 车间代码（如 101-1 / dlz） */
                 workshop?: string | null;
                 /** @description 页码 */
                 page?: number;
@@ -68570,7 +68795,7 @@ export interface operations {
             query?: {
                 page?: number;
                 page_size?: number;
-                /** @description 车间代码（如 101-1 / 201-1） */
+                /** @description 车间代码（如 101-1 / dlz） */
                 workshop?: string | null;
             };
             header?: never;
@@ -68734,7 +68959,7 @@ export interface operations {
     get_equipment_statistics_api_v1_equipment_equipments_statistics_get: {
         parameters: {
             query?: {
-                /** @description 车间代码（如 101-1 / 201-1） */
+                /** @description 车间代码（如 101-1 / dlz） */
                 workshop?: string | null;
             };
             header?: never;
@@ -68868,10 +69093,148 @@ export interface operations {
             };
         };
     };
+    list_feishu_apps_api_v1_equipment_inspection_feishu_apps_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_feishu_app_api_v1_equipment_inspection_feishu_apps_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeishuAppCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_feishu_app_api_v1_equipment_inspection_feishu_apps__app_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 应用 ID */
+                app_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FeishuAppUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_feishu_app_api_v1_equipment_inspection_feishu_apps__app_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 应用 ID */
+                app_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_feishu_config_api_v1_equipment_inspection_feishu_config_get: {
         parameters: {
             query: {
-                /** @description 车间代码（如 101-1 / 201-1） */
+                /** @description 车间代码（如 101-1 / dlz） */
                 workshop: string;
             };
             header?: never;
@@ -68905,7 +69268,7 @@ export interface operations {
     save_feishu_config_api_v1_equipment_inspection_feishu_config_put: {
         parameters: {
             query: {
-                /** @description 车间代码（如 101-1 / 201-1） */
+                /** @description 车间代码（如 101-1 / dlz） */
                 workshop: string;
             };
             header?: never;
@@ -68974,7 +69337,7 @@ export interface operations {
     test_feishu_config_api_v1_equipment_inspection_feishu_config_test_post: {
         parameters: {
             query: {
-                /** @description 车间代码（如 101-1 / 201-1） */
+                /** @description 车间代码（如 101-1 / dlz） */
                 workshop: string;
             };
             header?: never;
@@ -69008,7 +69371,7 @@ export interface operations {
     list_feishu_devices_api_v1_equipment_inspection_feishu_devices_get: {
         parameters: {
             query: {
-                /** @description 车间代码（如 101-1 / 201-1） */
+                /** @description 车间代码（如 101-1 / dlz） */
                 workshop: string;
                 /** @description 设备名称/编号搜索 */
                 keyword?: string | null;
@@ -69092,7 +69455,7 @@ export interface operations {
     feishu_sync_now_api_v1_equipment_inspection_feishu_sync_post: {
         parameters: {
             query: {
-                /** @description 车间代码（如 101-1 / 201-1） */
+                /** @description 车间代码（如 101-1 / dlz） */
                 workshop: string;
             };
             header?: never;
@@ -69126,7 +69489,7 @@ export interface operations {
     feishu_sync_status_api_v1_equipment_inspection_feishu_sync_status_get: {
         parameters: {
             query: {
-                /** @description 车间代码（如 101-1 / 201-1） */
+                /** @description 车间代码（如 101-1 / dlz） */
                 workshop: string;
             };
             header?: never;
@@ -69191,7 +69554,7 @@ export interface operations {
     feishu_today_summary_api_v1_equipment_inspection_feishu_today_summary_get: {
         parameters: {
             query: {
-                /** @description 车间代码（如 101-1 / 201-1） */
+                /** @description 车间代码（如 101-1 / dlz） */
                 workshop: string;
             };
             header?: never;
@@ -69403,7 +69766,7 @@ export interface operations {
                 equipment_id?: string | null;
                 /** @description 状态 */
                 status?: string | null;
-                /** @description 车间代码（如 101-1 / 201-1） */
+                /** @description 车间代码（如 101-1 / dlz） */
                 workshop?: string | null;
                 /** @description 页码 */
                 page?: number;
@@ -69617,7 +69980,7 @@ export interface operations {
                 equipment_id?: string | null;
                 /** @description 计划ID */
                 plan_id?: string | null;
-                /** @description 车间代码（如 101-1 / 201-1） */
+                /** @description 车间代码（如 101-1 / dlz） */
                 workshop?: string | null;
                 /** @description 页码 */
                 page?: number;
@@ -70330,6 +70693,85 @@ export interface operations {
             };
         };
     };
+    list_maintenance_plans_api_v1_equipment_maintenance_plans_get: {
+        parameters: {
+            query?: {
+                /** @description 设备ID */
+                equipment_id?: string | null;
+                /** @description 状态 */
+                status?: string | null;
+                /** @description 关键词搜索 */
+                keyword?: string | null;
+                /** @description 车间代码（如 101-1 / dlz） */
+                workshop?: string | null;
+                /** @description 页码 */
+                page?: number;
+                /** @description 每页数量 */
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_maintenance_plan_api_v1_equipment_maintenance_plans_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MaintenancePlanCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_maintenance_plans_api_v1_equipment_maintenance_plans__get: {
         parameters: {
             query?: {
@@ -70339,7 +70781,7 @@ export interface operations {
                 status?: string | null;
                 /** @description 关键词搜索 */
                 keyword?: string | null;
-                /** @description 车间代码（如 101-1 / 201-1） */
+                /** @description 车间代码（如 101-1 / dlz） */
                 workshop?: string | null;
                 /** @description 页码 */
                 page?: number;
@@ -70580,7 +71022,7 @@ export interface operations {
     list_maintainers_api_v1_equipment_maintenance_staff_maintainers_get: {
         parameters: {
             query?: {
-                /** @description 车间代码（如 101-1 / 201-1） */
+                /** @description 车间代码（如 101-1 / dlz） */
                 workshop?: string | null;
             };
             header?: never;
@@ -70590,6 +71032,87 @@ export interface operations {
             };
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_work_orders_api_v1_equipment_maintenance_work_orders_get: {
+        parameters: {
+            query?: {
+                /** @description 工单状态 */
+                status?: string | null;
+                /** @description 设备ID */
+                equipment_id?: string | null;
+                /** @description 优先级 */
+                priority?: string | null;
+                /** @description 工单类型 */
+                order_type?: string | null;
+                /** @description 车间代码（如 101-1 / dlz） */
+                workshop?: string | null;
+                /** @description 页码 */
+                page?: number;
+                /** @description 每页数量 */
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_work_order_api_v1_equipment_maintenance_work_orders_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkOrderCreate"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -70622,7 +71145,7 @@ export interface operations {
                 priority?: string | null;
                 /** @description 工单类型 */
                 order_type?: string | null;
-                /** @description 车间代码（如 101-1 / 201-1） */
+                /** @description 车间代码（如 101-1 / dlz） */
                 workshop?: string | null;
                 /** @description 页码 */
                 page?: number;
@@ -70695,7 +71218,7 @@ export interface operations {
     get_work_order_statistics_api_v1_equipment_maintenance_work_orders_statistics_get: {
         parameters: {
             query?: {
-                /** @description 车间代码（如 101-1 / 201-1） */
+                /** @description 车间代码（如 101-1 / dlz） */
                 workshop?: string | null;
             };
             header?: never;
@@ -71260,7 +71783,7 @@ export interface operations {
                 is_active?: boolean | null;
                 /** @description 姓名搜索 */
                 keyword?: string | null;
-                /** @description 车间代码（如 101-1 / 201-1） */
+                /** @description 车间代码（如 101-1 / dlz） */
                 workshop?: string | null;
                 page?: number;
                 page_size?: number;
@@ -71335,7 +71858,7 @@ export interface operations {
                 role_codes: string[];
                 /** @description 设备分类ID（可选） */
                 category_id?: string | null;
-                /** @description 车间代码（如 101-1 / 201-1） */
+                /** @description 车间代码（如 101-1 / dlz） */
                 workshop?: string | null;
             };
             header?: never;
@@ -71824,6 +72347,85 @@ export interface operations {
             };
         };
     };
+    list_spare_parts_api_v1_equipment_spare_parts_get: {
+        parameters: {
+            query?: {
+                /** @description 备件分类 */
+                category?: string | null;
+                /** @description 关键词搜索 */
+                keyword?: string | null;
+                /** @description 是否启用 */
+                is_active?: boolean | null;
+                /** @description 车间代码（如 101-1 / dlz） */
+                workshop?: string | null;
+                /** @description 页码 */
+                page?: number;
+                /** @description 每页数量 */
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_spare_part_api_v1_equipment_spare_parts_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SparePartCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_spare_parts_api_v1_equipment_spare_parts__get: {
         parameters: {
             query?: {
@@ -71833,7 +72435,7 @@ export interface operations {
                 keyword?: string | null;
                 /** @description 是否启用 */
                 is_active?: boolean | null;
-                /** @description 车间代码（如 101-1 / 201-1） */
+                /** @description 车间代码（如 101-1 / dlz） */
                 workshop?: string | null;
                 /** @description 页码 */
                 page?: number;
@@ -71906,7 +72508,7 @@ export interface operations {
     get_stock_warnings_api_v1_equipment_spare_parts_stock_warnings_get: {
         parameters: {
             query?: {
-                /** @description 车间代码（如 101-1 / 201-1） */
+                /** @description 车间代码（如 101-1 / dlz） */
                 workshop?: string | null;
             };
             header?: never;
@@ -72124,6 +72726,141 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["StockInboundRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_enabled_workshops_api_v1_equipment_workshops_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_workshop_api_v1_equipment_workshops_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkshopCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_all_workshops_api_v1_equipment_workshops_all_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_workshop_api_v1_equipment_workshops__code__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 车间代码（如 101-1 / dlz） */
+                code: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkshopUpdateRequest"];
             };
         };
         responses: {

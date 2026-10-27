@@ -1,6 +1,9 @@
 'use client'
 
 import type {
+  FeishuAppCreateRequest,
+  FeishuAppSummary,
+  FeishuAppUpdateRequest,
   InspectionFeishuConfigDetail,
   InspectionFeishuConfigTestResult,
   InspectionFeishuConfigUpdateRequest,
@@ -152,4 +155,54 @@ export async function testInspectionFeishuConfig(
     throw new Error(json?.message || '连接测试失败')
   }
   return json.data
+}
+
+/** 飞书自建应用清单（下拉数据源与应用管理区共用） */
+export async function fetchFeishuApps(): Promise<FeishuAppSummary[]> {
+  const json = await getJson<FeishuAppSummary[]>(`${BASE}/apps`)
+  return json.data ?? []
+}
+
+/** 登记飞书自建应用（App ID 重复时后端返回 4xx） */
+export async function createFeishuApp(
+  values: FeishuAppCreateRequest,
+): Promise<FeishuAppSummary> {
+  const response = await fetch(`${BASE}/apps`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(values),
+  })
+  const json = await response.json()
+  if (!response.ok || json.code !== 200) {
+    throw new Error(json?.message || '登记应用失败')
+  }
+  return json.data
+}
+
+/** 更新飞书自建应用（改名或轮换 Secret；Secret 留空保持不变） */
+export async function updateFeishuApp(
+  appId: string,
+  values: FeishuAppUpdateRequest,
+): Promise<FeishuAppSummary> {
+  const response = await fetch(`${BASE}/apps/${encodeURIComponent(appId)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(values),
+  })
+  const json = await response.json()
+  if (!response.ok || json.code !== 200) {
+    throw new Error(json?.message || '更新应用失败')
+  }
+  return json.data
+}
+
+/** 删除飞书自建应用（仍被车间引用时后端阻断并返回使用车间） */
+export async function deleteFeishuApp(appId: string): Promise<void> {
+  const response = await fetch(`${BASE}/apps/${encodeURIComponent(appId)}`, {
+    method: 'DELETE',
+  })
+  const json = await response.json()
+  if (!response.ok || json.code !== 200) {
+    throw new Error(json?.message || '删除应用失败')
+  }
 }

@@ -165,13 +165,70 @@ class InspectionTaskDetailResponse(InspectionTaskResponse):
     photos: list[InspectionPhotoResponse] = Field(default_factory=list)
 
 
+# ═══════════ 飞书自建应用 ═══════════
+class FeishuAppCreateRequest(BaseModel):
+    """登记飞书自建应用请求"""
+
+    name: str = Field(
+        ..., min_length=1, max_length=100, description="应用备注名（下拉展示用）"
+    )
+    app_id: str = Field(
+        ..., min_length=1, max_length=100, description="飞书应用 App ID"
+    )
+    app_secret: str = Field(
+        ..., min_length=1, description="飞书应用 App Secret（加密存储，不回显）"
+    )
+
+
+class FeishuAppUpdateRequest(BaseModel):
+    """更新飞书自建应用请求（App ID 不可改）"""
+
+    name: str | None = Field(
+        default=None, min_length=1, max_length=100, description="应用备注名"
+    )
+    app_secret: str | None = Field(
+        default=None, description="新 App Secret（留空保持已保存值）"
+    )
+
+
+class FeishuAppSummary(BaseModel):
+    """飞书自建应用摘要（Secret 掩码返回）"""
+
+    id: uuid.UUID = Field(description="应用 ID")
+    name: str = Field(description="应用备注名")
+    app_id: str = Field(description="飞书应用 App ID")
+    app_secret_masked: str = Field(description="App Secret 掩码")
+    app_secret_configured: bool = Field(description="是否已配置 App Secret")
+    in_use_workshops: list[str] = Field(
+        default_factory=list, description="引用该应用的未删除车间配置"
+    )
+    created_at: datetime = Field(description="登记时间")
+
+
 # ═══════════ 飞书镜像配置 ═══════════
 class EquipmentInspectionFeishuConfigUpdateRequest(BaseModel):
-    """保存设备巡检飞书镜像配置请求"""
+    """保存设备巡检飞书镜像配置请求
 
-    app_id: str = Field(default="", max_length=100, description="飞书应用 App ID")
+    凭据两选一：``feishu_app_id`` 选择已登记应用（优先）；或手输
+    ``app_id`` / ``app_secret``（App ID 已存在则自动关联，不存在则登记新应用）。
+    """
+
+    feishu_app_id: uuid.UUID | None = Field(
+        default=None, description="已登记的飞书自建应用 ID（下拉选择）"
+    )
+    app_id: str = Field(
+        default="",
+        max_length=100,
+        description="手输的飞书应用 App ID（未选择已登记应用时使用）",
+    )
     app_secret: str | None = Field(
-        default=None, description="飞书应用 App Secret（留空保留已保存值）"
+        default=None,
+        description="手输的飞书应用 App Secret（关联已登记应用时忽略；新建应用必填）",
+    )
+    app_name: str = Field(
+        default="",
+        max_length=100,
+        description="手输新建应用时的备注名（缺省取 App ID）",
     )
     app_token: str = Field(
         default="",
@@ -197,6 +254,12 @@ class EquipmentInspectionFeishuConfigDetail(BaseModel):
     """设备巡检飞书镜像配置详情（Secret 掩码返回）"""
 
     workshop_code: str = Field(description="车间代码（配置归属车间）")
+    feishu_app_id: uuid.UUID | None = Field(
+        default=None, description="关联的飞书自建应用 ID（环境变量回退时为空）"
+    )
+    app_name: str = Field(
+        default="", description="关联应用备注名（环境变量回退时为空）"
+    )
     app_id: str = Field(description="飞书应用 App ID")
     app_secret_masked: str = Field(description="App Secret 掩码")
     app_secret_configured: bool = Field(description="是否已配置 App Secret")

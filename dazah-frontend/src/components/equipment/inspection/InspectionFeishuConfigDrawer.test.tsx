@@ -18,6 +18,7 @@ const api = vi.hoisted(() => ({
   fetchInspectionFeishuConfig: vi.fn(),
   updateInspectionFeishuConfig: vi.fn(),
   testInspectionFeishuConfig: vi.fn(),
+  fetchFeishuApps: vi.fn(),
 }))
 
 const messages = vi.hoisted(() => ({
@@ -126,6 +127,32 @@ vi.mock('antd', async () => {
   const Password = (props: Parameters<typeof MockInput>[0]) => (
     <MockInput {...props} />
   )
+  const MockSelect = ({
+    options, placeholder,
+  }: {
+    options?: { value: string | number; label: string }[]
+    placeholder?: string
+  }) => {
+    const binding = useContext(FieldContext)
+    useSyncExternalStore(binding.subscribe, binding.getVersion, binding.getVersion)
+    const current = binding.name ? binding.store[binding.name] : undefined
+    return (
+      <select
+        aria-label={placeholder}
+        value={current === undefined || current === null ? '' : String(current)}
+        onChange={(event) => {
+          if (binding.name) binding.setValue(binding.name, event.target.value)
+        }}
+      >
+        <option value="">{placeholder ?? ''}</option>
+        {(options ?? []).map((option) => (
+          <option key={String(option.value)} value={String(option.value)}>
+            {String(option.label)}
+          </option>
+        ))}
+      </select>
+    )
+  }
   return {
     App: { useApp: () => ({ message: messages }) },
     Button,
@@ -178,9 +205,16 @@ vi.mock('antd', async () => {
           const [form] = useState(() => makeMockForm())
           return [form]
         },
+        useWatch: (name: string, form?: { __fieldApi?: FieldApi }) => {
+          const fieldApi = form?.__fieldApi
+          const subscribe = fieldApi?.subscribe ?? (() => () => undefined)
+          const getSnapshot = () => fieldApi?.store[name]
+          return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+        },
       },
     ),
     Input: Object.assign(MockInput, { Password }),
+    Select: MockSelect,
     Space: ({
       children, orientation,
     }: { children?: ReactNode; orientation?: string }) => (
@@ -214,7 +248,20 @@ vi.mock('antd', async () => {
 
 import { InspectionFeishuConfigDrawer } from './InspectionFeishuConfigDrawer'
 
+const appFixture = {
+  id: 'app-uuid-1',
+  name: '设备巡检应用',
+  app_id: 'cli_fixture',
+  app_secret_masked: 'cli_fixtur****',
+  app_secret_configured: true,
+  in_use_workshops: ['201-1'],
+  created_at: '2026-10-01T00:00:00Z',
+} as const
+
 const detailFixture = {
+  workshop_code: '201-1',
+  feishu_app_id: 'app-uuid-1',
+  app_name: '设备巡检应用',
   app_id: 'cli_fixture',
   app_secret_masked: 'cli_fixtur****',
   app_secret_configured: true,
@@ -266,6 +313,7 @@ describe('InspectionFeishuConfigDrawer', () => {
       true
     vi.clearAllMocks()
     api.fetchInspectionFeishuConfig.mockResolvedValue(detailFixture)
+    api.fetchFeishuApps.mockResolvedValue([appFixture])
     container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
@@ -296,22 +344,24 @@ describe('InspectionFeishuConfigDrawer', () => {
     }
   }
 
-  it('renders summary and prefills fields from loaded config', async () => {
+  it('renders summary and prefills the linked app from loaded config', async () => {
     await renderDrawer()
 
     expect(document.body.textContent).toContain('飞书同步配置 · 201一车间')
     expect(api.fetchInspectionFeishuConfig).toHaveBeenCalledWith('201-1')
     expect(document.body.textContent).toContain('数据库配置')
     expect(document.body.textContent).toContain('同步已启用')
-    const appIdInput = findInputByPlaceholder('cli_xxxxxxxx')
-    expect(appIdInput.value).toBe('cli_fixture')
+    // 已关联应用：下拉回填该应用，不出现手输 App ID / Secret 输入框
+    const appSelect = document.querySelector('select') as HTMLSelectElement
+    expect(appSelect).toBeTruthy()
+    expect(appSelect.value).toBe('app-uuid-1')
+    expect(() => findInputByPlaceholder('cli_xxxxxxxx')).toThrow()
+    expect(() => findInputByPlaceholder('请输入飞书应用 App Secret')).toThrow()
     const tokenInput = findInputByPlaceholder('bascnxxxxxxxx 或多维表格链接')
     expect(tokenInput.value).toBe('bascn_fixture')
-    // Secret 一律留空，由掩码提示表达已保存状态
-    expect(document.body.textContent).toContain('留空保持不变')
   })
 
-  it('saves config without resending the secret and notifies parent', async () => {
+  it('saves config with selected app id and no credential fields', async () => {
     api.updateInspectionFeishuConfig.mockResolvedValue(detailFixture)
     await renderDrawer()
 
@@ -320,8 +370,7 @@ describe('InspectionFeishuConfigDrawer', () => {
     })
 
     expect(api.updateInspectionFeishuConfig).toHaveBeenCalledWith('201-1', {
-      app_id: 'cli_fixture',
-      app_secret: null,
+      feishu_app_id: 'app-uuid-1',
       app_token: 'bascn_fixture',
       base_url: 'https://example.feishu.cn/base/bascn_fixture',
       today_table_id: 'tbl_today',
@@ -331,6 +380,43 @@ describe('InspectionFeishuConfigDrawer', () => {
     })
     expect(messages.success).toHaveBeenCalledWith('飞书配置已保存')
     expect(onSaved).toHaveBeenCalled()
+  })
+
+  it('manual mode submits app credentials for a new app', async () => {
+    api.updateInspectionFeishuConfig.mockResolvedValue(detailFixture)
+    await renderDrawer()
+
+    // 切到「手动输入新应用」展开凭据输入区
+    const appSelect = document.querySelector('select') as HTMLSelectElement
+    await act(async () => {
+      appSelect.value = '__manual__'
+      appSelect.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    const appIdInput = findInputByPlaceholder('cli_xxxxxxxx')
+    const secretInput = findInputByPlaceholder('请输入飞书应用 App Secret')
+    await act(async () => {
+      setInputValue(appIdInput, 'cli_brand_new')
+      setInputValue(secretInput, 'brand_new_secret')
+      setInputValue(
+        findInputByPlaceholder('如：设备巡检应用'),
+        '新巡检应用',
+      )
+    })
+    await act(async () => {
+      findButton('保存配置').click()
+    })
+
+    expect(api.updateInspectionFeishuConfig).toHaveBeenCalledWith('201-1', {
+      app_id: 'cli_brand_new',
+      app_secret: 'brand_new_secret',
+      app_name: '新巡检应用',
+      app_token: 'bascn_fixture',
+      base_url: 'https://example.feishu.cn/base/bascn_fixture',
+      today_table_id: 'tbl_today',
+      history_table_id: 'tbl_history',
+      device_table_id: 'tbl_devices',
+      is_enabled: true,
+    })
   })
 
   it('keeps the drawer open and shows error when save fails', async () => {

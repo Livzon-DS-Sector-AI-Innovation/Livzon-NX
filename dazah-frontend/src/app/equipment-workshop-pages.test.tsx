@@ -140,13 +140,18 @@ describe('equipment unified console with workshop + module queries', () => {
     expect(actions.fetchSpareParts).not.toHaveBeenCalled()
   })
 
-  it('falls back to the default workshop when the query is missing or invalid', async () => {
+  it('falls back to the default workshop when the query is missing or malformed', async () => {
     const children = await renderConsole('assets')
     const view = await renderView(children[2])
     expect(view.props.workshopCode).toBe('201-1')
-    const invalid = await renderConsole('assets', '999')
+    // 格式非法回落默认车间
+    const invalid = await renderConsole('assets', 'ABC!')
     const invalidView = await renderView(invalid[2])
     expect(invalidView.props.workshopCode).toBe('201-1')
+    // 格式合法的未知代码放行：车间清单由注册表动态提供，服务端不枚举
+    const unknown = await renderConsole('assets', 'dlz')
+    const unknownView = await renderView(unknown[2])
+    expect(unknownView.props.workshopCode).toBe('dlz')
   })
 
   it('renders no module content when ?module= is absent or unknown', async () => {
@@ -297,8 +302,9 @@ describe('equipment legacy workshop redirects', () => {
     SparePartsWorkshopRedirect,
     PersonnelWorkshopRedirect,
     InspectionWorkshopRedirect,
-  ])('未知车间代码走 notFound', async (Page) => {
-    await expect(Page(legacyParams('bad'))).rejects.toThrow('NOT_FOUND')
+  ])('格式非法的车间代码走 notFound', async (Page) => {
+    // bad 在新规则（小写字母合法）下是合法代码会重定向，用大写+符号构造非法格式
+    await expect(Page(legacyParams('BAD!'))).rejects.toThrow('NOT_FOUND')
     expect(navigation.notFound).toHaveBeenCalled()
   })
 })

@@ -127,7 +127,8 @@ def test_single_head_retains_the_safety_reminder_history() -> None:
     cfg.set_main_option("script_location", str(_VERSIONS.parent))
     script = ScriptDirectory.from_config(cfg)
     heads = script.get_heads()
-    assert heads == ["d1f2a3b4c5d6"]
+    # c797740130e1：设备 feishu_apps/workshops 链与主线的合并点（单 head）
+    assert heads == ["c797740130e1"]
     history = {
         revision.revision for revision in script.walk_revisions(head=heads[0])
     }

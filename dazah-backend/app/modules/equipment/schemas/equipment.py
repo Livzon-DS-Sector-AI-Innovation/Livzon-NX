@@ -110,8 +110,8 @@ class EquipmentCreate(BaseModel):
     )
     workshop_code: str = Field(
         default="201-1",
-        pattern=r"^\d{3}(-\d)?$",
-        description="归属车间代码（如 101-1 / 201-1）",
+        pattern=r"^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
+        description="归属车间代码（如 101-1 / dlz）",
     )
     category_ids: list[uuid.UUID] = Field(
         ..., min_length=1, description="设备分类ID列表（支持多分类）"

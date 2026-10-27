@@ -71,6 +71,9 @@ def _to_response(wo: WorkOrder) -> WorkOrderResponse:
 router = APIRouter()
 
 
+# 双注册（带/不带尾斜杠）：经前端代理访问时，FastAPI 的斜杠 307 会把
+# Location 写成容器内部地址（http://app:8000），浏览器无法跟随导致页面取数失败
+@router.post("", summary="创建工单（报修）")
 @router.post("/", summary="创建工单（报修）")
 async def create_work_order(
     data: WorkOrderCreate,
@@ -92,6 +95,7 @@ async def update_work_order(
     return success_response(data=_to_response(wo))
 
 
+@router.get("", summary="工单列表")
 @router.get("/", summary="工单列表")
 async def list_work_orders(
     status: str | None = Query(None, description="工单状态"),
@@ -99,7 +103,9 @@ async def list_work_orders(
     priority: str | None = Query(None, description="优先级"),
     order_type: str | None = Query(None, description="工单类型"),
     workshop: str | None = Query(
-        None, pattern=r"^\d{3}(-\d)?$", description="车间代码（如 101-1 / 201-1）"
+        None,
+            pattern=r"^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
+            description="车间代码（如 101-1 / dlz）"
     ),
     page: int = Query(1, ge=1, description="页码"),
     page_size: int = Query(20, ge=1, le=200, description="每页数量"),
@@ -126,7 +132,9 @@ async def list_work_orders(
 @router.get("/statistics", summary="工单统计")
 async def get_work_order_statistics(
     workshop: str | None = Query(
-        None, pattern=r"^\d{3}(-\d)?$", description="车间代码（如 101-1 / 201-1）"
+        None,
+            pattern=r"^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
+            description="车间代码（如 101-1 / dlz）"
     ),
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:

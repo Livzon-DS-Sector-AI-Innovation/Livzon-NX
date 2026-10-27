@@ -34,9 +34,11 @@ from app.modules.equipment.service import equipment_import, equipment_ledger_arc
 
 router = APIRouter()
 
-# 车间代码形如 101 / 101-1 / 201-3；列表缺省 = 跨车间查询
+# 车间代码形如 101 / 101-1 / dlz；列表缺省 = 跨车间查询
 WORKSHOP_QUERY = Query(
-    None, pattern=r"^\d{3}(-\d)?$", description="车间代码（如 101-1 / 201-1）"
+    None,
+    pattern=r"^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
+    description="车间代码（如 101-1 / dlz）",
 )
 
 
@@ -312,7 +314,7 @@ async def import_equipments(
         None, description="默认安装地点（台账安装地点无法匹配时使用）"
     ),
     workshop: str | None = Form(
-        "201-1", pattern=r"^\d{3}(-\d)?$", description="归属车间代码"
+        "201-1", pattern=r"^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$", description="归属车间代码"
     ),
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = None,

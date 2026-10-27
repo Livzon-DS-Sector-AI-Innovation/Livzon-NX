@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  createFeishuApp,
+  deleteFeishuApp,
+  fetchFeishuApps,
   fetchInspectionFeishuConfig,
   fetchInspectionFeishuConfigList,
   fetchInspectionFeishuDevices,
@@ -7,6 +10,7 @@ import {
   fetchInspectionFeishuSyncStatus,
   fetchInspectionFeishuTodaySummary,
   testInspectionFeishuConfig,
+  updateFeishuApp,
   triggerInspectionFeishuSync,
   updateInspectionFeishuConfig,
 } from './inspection-feishu'
@@ -234,5 +238,66 @@ describe('fetchInspectionFeishuConfigList', () => {
     vi.stubGlobal('fetch', vi.fn(() => jsonResponse({ code: 200, data: null })))
     const details = await fetchInspectionFeishuConfigList()
     expect(details).toEqual([])
+  })
+})
+
+describe('inspection-feishu app library api', () => {
+  const appSummary = {
+    id: 'e0f1a2b3-0000-4000-8000-000000000001',
+    name: '设备机器人',
+    app_id: 'cli_demo',
+    secret_masked: 'bUGs****DDa',
+    in_use_workshops: ['201一车间'],
+  }
+
+  it('lists registered apps for the workshop dropdown', async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: [appSummary] }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const apps = await fetchFeishuApps()
+
+    expect(apps).toHaveLength(1)
+    expect(apps[0].in_use_workshops).toEqual(['201一车间'])
+    expect(fetchMock).toHaveBeenCalledWith(`${BASE}/apps`)
+  })
+
+  it('creates, updates and deletes apps through the library endpoints', async () => {
+    const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: appSummary }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await createFeishuApp({
+      name: '设备机器人',
+      app_id: 'cli_demo',
+      app_secret: 'secret-value',
+    })
+    await updateFeishuApp(appSummary.id, { name: '设备机器人2', app_secret: '' })
+    await deleteFeishuApp(appSummary.id)
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      `${BASE}/apps`,
+      expect.objectContaining({ method: 'POST' }),
+    )
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      `${BASE}/apps/${appSummary.id}`,
+      expect.objectContaining({ method: 'PUT' }),
+    )
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      `${BASE}/apps/${appSummary.id}`,
+      expect.objectContaining({ method: 'DELETE' }),
+    )
+  })
+
+  it('surfaces backend errors when deletion is blocked by workshop references', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => jsonResponse({ code: 400, message: '应用仍被车间使用：201一车间' })),
+    )
+
+    await expect(deleteFeishuApp(appSummary.id)).rejects.toThrow(
+      '应用仍被车间使用：201一车间',
+    )
   })
 })

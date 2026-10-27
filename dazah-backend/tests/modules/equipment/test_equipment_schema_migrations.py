@@ -255,3 +255,62 @@ def test_inspection_feishu_config_base_url_migration(monkeypatch):
         "inspection_feishu_config",
         "base_url",
     )
+
+
+def test_extract_equipment_feishu_apps_migration(monkeypatch):
+    """飞书自建应用独立化：凭据抽到 feishu_apps 表，配置改外键关联。"""
+    from types import SimpleNamespace
+
+    module = _load("b5e9f2a7c8d1_extract_equipment_feishu_apps.py")
+    mocks = _mock_ops(monkeypatch, module)
+    # 共享 _mock_ops 不含 create_foreign_key；且 alembic op 是进程级代理，
+    # 属性级 mock 拦不住它 —— 整体替换 module.op 为普通命名空间
+    fk_mock = Mock()
+    mocks["create_foreign_key"] = fk_mock
+    monkeypatch.setattr(
+        module, "op", SimpleNamespace(**mocks)
+    )
+
+    module.upgrade()
+    # 应用表：未删除行内 app_id 部分唯一索引
+    assert mocks["create_table"].call_args.args[0] == "feishu_apps"
+    assert mocks["create_index"].call_count == 1
+    index_call = mocks["create_index"].call_args
+    assert index_call.args[1] == "feishu_apps"
+    assert index_call.kwargs["postgresql_where"].text == "is_deleted = false"
+    # 配置表：加关联列 + 外键，旧凭据两列移除
+    assert mocks["add_column"].call_count == 1
+    assert mocks["add_column"].call_args.args[0] == "inspection_feishu_config"
+    assert mocks["create_foreign_key"].call_count == 1
+    drop_cols = [c.args[1] for c in mocks["drop_column"].call_args_list]
+    assert drop_cols == ["app_secret", "app_id"]
+    # 存量凭据回填应用表并回写关联
+    executed = "".join(str(c.args[0]) for c in mocks["execute"].call_args_list)
+    assert "feishu_apps" in executed
+    assert "feishu_app_id" in executed
+
+    module.downgrade()
+    # 回滚：加回凭据列、按关联拷回、删关联列与应用表
+    restore_cols = [c.args[1].name for c in mocks["add_column"].call_args_list]
+    assert "app_id" in restore_cols and "app_secret" in restore_cols
+    assert mocks["drop_table"].call_args.args[0] == "feishu_apps"
+
+
+def test_equipment_workshop_registry_migration(monkeypatch):
+    """车间注册表迁移：建 workshops 表 + code 部分唯一索引 + 种子车间。"""
+    module = _load("a3d8c1f6e2b7_add_equipment_workshop_registry.py")
+    mocks = _mock_ops(monkeypatch, module)
+
+    module.upgrade()
+    assert mocks["create_table"].call_args.args[0] == "workshops"
+    index_call = mocks["create_index"].call_args
+    assert index_call.args[0] == "uq_equipment_workshops_code"
+    assert index_call.args[1] == "workshops"
+    assert index_call.kwargs["unique"] is True
+    # 9 个种子车间（101-1 … 901）一次性插入
+    seed_sql = str(mocks["execute"].call_args.args[0])
+    assert "'201-1'" in seed_sql
+    assert seed_sql.count("gen_random_uuid()") == 9
+
+    module.downgrade()
+    mocks["drop_table"].assert_called_once_with("workshops", schema="equipment")

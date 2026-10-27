@@ -18,6 +18,7 @@ from app.modules.equipment.models.failure_code import (
     FailureCause,
     FailureSymptom,
 )
+from app.modules.equipment.models.feishu_app import EquipmentFeishuApp
 from app.modules.equipment.models.inspection import (
     InspectionPhoto,
     InspectionTask,
@@ -51,6 +52,7 @@ from app.modules.equipment.models.spare_part import (
 )
 from app.modules.equipment.models.work_order import WorkOrder
 from app.modules.equipment.models.work_order_image import WorkOrderImage
+from app.modules.equipment.models.workshop import EquipmentWorkshop
 
 __all__ = [
     "CalibrationPlan",
@@ -58,6 +60,7 @@ __all__ = [
     "Equipment",
     "EquipmentCategory",
     "EquipmentCategoryLink",
+    "EquipmentFeishuApp",
     "EquipmentLedgerArchive",
     "EquipmentPersonnel",
     "EquipmentPersonnelCategory",
@@ -78,6 +81,7 @@ __all__ = [
     "Location",
     "MaintenancePlan",
     "EquipmentSparePart",
+    "EquipmentWorkshop",
     "SparePart",
     "SparePartStock",
     "SparePartTransaction",
