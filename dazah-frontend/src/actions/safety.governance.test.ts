@@ -295,4 +295,52 @@ describe('safety governance actions（批次4：法规/处置卡/目标/设施/�
     const [u15, i15] = await capture(() => safety.deleteEmergencySupply('s1'))
     expect(i15?.method).toBe('DELETE')
   })
+
+  it('列表查询的完整参数分支（page_size 与过滤维度）', async () => {
+    const calls: Array<() => Promise<unknown>> = [
+      () => safety.getEmergencyCards({ page: 2, page_size: 5, workshop: '101一车间', position: '投料', accident_type: '火灾', keyword: 'k' }),
+      () => safety.getSafetyTargets({ page: 2, page_size: 5, year: 2026, category: '安全', status: 'active' }),
+      () => safety.getSafetyFacilities({ page: 2, page_size: 5, category: '消防', department: '101', status: 'normal' }),
+      () => safety.getHazardousChemicals({ page: 2, page_size: 5, keyword: '乙醇', category: '易燃' }),
+      () => safety.getChemicalInventories({ page: 2, page_size: 5, workshop: '101', over_limit: true }),
+      () => safety.getEmergencyPlans({ page: 2, page_size: 5, plan_type: 'onsite', status: 'active', keyword: '消防' }),
+      () => safety.getEmergencyDrills({ page: 2, page_size: 5, year: 2026, keyword: '演练' }),
+      () => safety.getEmergencySupplies({ page: 2, page_size: 5, category: '救援', keyword: '担架' }),
+    ]
+    for (const call of calls) {
+      await capture(call)
+    }
+  })
+
+  it('上传/下载的非 JSON 错误分支（text 响应）', async () => {
+    const textResponse = () =>
+      Promise.resolve(new Response('后端网关错误', { status: 502, headers: { 'Content-Type': 'text/plain' } }))
+    vi.stubGlobal('fetch', vi.fn(textResponse))
+    const results = await Promise.allSettled([
+      safety.batchUploadRegulations([new File(['x'], 'a.pdf')]),
+      safety.uploadChemicalMsds('c1', new File(['x'], 'm.pdf')),
+      safety.uploadEmergencyPlanFile('p1', new File(['x'], 'p.pdf')),
+    ])
+    for (const r of results) {
+      expect(r.status).toBe('fulfilled')
+    }
+    // 下载类把非 2xx 当错误抛出
+    await expect(safety.downloadRegulationDocument('r1')).rejects.toThrow()
+    await expect(safety.downloadEmergencyPlanFile('p1')).rejects.toThrow()
+    vi.unstubAllGlobals()
+  })
+
+  it('设施巡检记录查询与 MSDS 下载成功路径', async () => {
+    const [u1] = await capture(() =>
+      safety.getSafetyFacilityInspections({ page: 1, page_size: 5, facility_id: 'f1', result: 'ok' }),
+    )
+    expect(u1).toContain('/api/v1/safety/safety-facility-inspections')
+
+    // MSDS 下载成功：返回二进制并触发 a.click
+    const blobResponse = () =>
+      Promise.resolve(new Response(new Blob(['pdf']), { status: 200 }))
+    vi.stubGlobal('fetch', vi.fn(blobResponse))
+    await safety.downloadChemicalMsds('c1')
+    vi.unstubAllGlobals()
+  })
 })

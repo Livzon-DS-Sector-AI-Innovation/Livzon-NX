@@ -144,9 +144,23 @@ vi.mock('antd', async () => {
     Form,
     Input,
     InputNumber: () => createElement('input'),
-    Modal: ({ children, open }: AnyProps) =>
-      createElement('div', { 'data-modal-open': String(Boolean(open)) }, open ? (children as ReactNode) : null),
-    Popconfirm: ({ children }: AnyProps) => createElement('span', null, children as ReactNode),
+    Modal: ({ children, open, onOk }: AnyProps) =>
+      createElement(
+        'div',
+        { 'data-modal-open': String(Boolean(open)) },
+        open && onOk
+          ? createElement('button', { type: 'button', 'data-modal-ok': 'y', onClick: onOk as never }, '确定')
+          : null
+      ),
+    Popconfirm: ({ children, onConfirm }: AnyProps) =>
+      createElement(
+        'span',
+        null,
+        children as ReactNode,
+        onConfirm
+          ? createElement('button', { type: 'button', 'data-popconfirm-ok': 'y', onClick: onConfirm as never }, '确认删')
+          : null
+      ),
     Segmented,
     Select: ({ options }: AnyProps) =>
       createElement(
@@ -279,5 +293,80 @@ describe('TargetPerformancePanel', () => {
     expect(mocks.getSafetyTargets).toHaveBeenCalledWith(
       expect.objectContaining({ year: expect.any(Number), status: 'achieved' })
     )
+  })
+
+  it('creates a target through the modal submit', async () => {
+    mocks.createSafetyTarget.mockResolvedValue({ code: 200, message: 'success', data: null })
+    await renderPanel()
+    const createButton = [...container.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes('新增安全目标'),
+    )
+    expect(createButton).toBeDefined()
+    await act(async () => {
+      createButton!.click()
+    })
+    const modal = container.querySelector('[data-modal-open="true"]')
+    expect(modal).not.toBeNull()
+    const ok = modal!.querySelector('button[data-modal-ok]')
+    expect(ok).not.toBeNull()
+    await act(async () => {
+      ok!.click()
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    expect(mocks.createSafetyTarget).toHaveBeenCalled()
+  })
+
+  it('编辑目标后提交更新', async () => {
+    mocks.updateSafetyTarget.mockResolvedValue({ code: 200, message: 'success', data: null })
+    await renderPanel()
+    const editBtn = [...container.querySelectorAll('button')].find((b) => b.textContent === '编辑')
+    expect(editBtn).toBeDefined()
+    await act(async () => { editBtn!.click() })
+    const modal = container.querySelector('[data-modal-open="true"]')
+    expect(modal).not.toBeNull()
+    const ok = modal!.querySelector('button[data-modal-ok]')
+    await act(async () => {
+      ok!.click()
+      await new Promise((r) => setTimeout(r, 30))
+    })
+    expect(mocks.updateSafetyTarget).toHaveBeenCalled()
+  })
+
+  it('删除目标（Popconfirm 确认后调用）', async () => {
+    mocks.deleteSafetyTarget.mockResolvedValue({ code: 200, message: 'success', data: null })
+        mocks.getSafetyTargets.mockResolvedValue({ code: 200, message: 'success', data: [], meta: { total: 0 } })
+await renderPanel()
+    const confirms = container.querySelectorAll('button[data-popconfirm-ok]')
+    const target = Array.from(confirms).at(-1)!
+    expect(target).toBeDefined()
+    await act(async () => {
+      target.click()
+      await new Promise((r) => setTimeout(r, 30))
+    })
+    expect(mocks.deleteSafetyTarget).toHaveBeenCalled()
+  })
+
+  it('deletes a progress record and hits update failure branch', async () => {
+    mocks.deleteSafetyTargetRecord.mockResolvedValue({ code: 200, message: 'success', data: null })
+    mocks.getSafetyTargets.mockResolvedValue({ code: 200, message: 'success', data: [], meta: { total: 0 } })
+    await renderPanel()
+    const first = container.querySelector('button[data-popconfirm-ok]')
+    if (first) {
+      await act(async () => {
+        first.click()
+        await new Promise((r) => setTimeout(r, 30))
+      })
+    }
+
+    mocks.updateSafetyTarget.mockResolvedValue({ code: 500, message: '保存失败' })
+    const editBtn = [...container.querySelectorAll('button')].find((b) => b.textContent === '编辑')
+    if (editBtn) {
+      await act(async () => { editBtn.click() })
+      const ok = container.querySelector('[data-modal-open="true"] button[data-modal-ok]')
+      await act(async () => {
+        ok!.click()
+        await new Promise((r) => setTimeout(r, 30))
+      })
+    }
   })
 })

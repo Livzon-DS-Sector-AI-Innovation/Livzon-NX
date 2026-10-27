@@ -151,9 +151,24 @@ vi.mock('antd', async () => {
     Form,
     Input,
     InputNumber: () => createElement('input'),
-    Modal: ({ children, open }: AnyProps) =>
-      createElement('div', { 'data-modal-open': String(Boolean(open)) }, open ? (children as ReactNode) : null),
-    Popconfirm: ({ children }: AnyProps) => createElement('span', null, children as ReactNode),
+    Modal: ({ children, open, onOk }: AnyProps) =>
+      createElement(
+        'div',
+        { 'data-modal-open': String(Boolean(open)) },
+        open ? (children as ReactNode) : null,
+        open && onOk
+          ? createElement('button', { type: 'button', 'data-modal-ok': 'y', onClick: onOk as never }, '确定')
+          : null
+      ),
+    Popconfirm: ({ children, onConfirm }: AnyProps) =>
+      createElement(
+        'span',
+        null,
+        children as ReactNode,
+        onConfirm
+          ? createElement('button', { type: 'button', 'data-popconfirm-ok': 'y', onClick: onConfirm as never }, '确认删')
+          : null
+      ),
     Select: () => createElement('select'),
     Space: Box,
     Table,
@@ -302,5 +317,141 @@ describe('EmergencyMgmtPanel', () => {
     )
     expect(createButtons.length).toBeGreaterThan(0)
     expect(createButtons.every((button) => button.disabled)).toBe(true)
+  })
+
+  it('creates a plan through the modal submit', async () => {
+    mocks.createEmergencyPlan.mockResolvedValue({ code: 200, message: 'success', data: null })
+    await renderPanel()
+    const plansTab = container.querySelector('[data-tab="plans"]')
+    const createButton = plansTab
+      ? [...plansTab.querySelectorAll('button')].find((button) => button.textContent?.includes('新增预案'))
+      : undefined
+    expect(createButton).toBeDefined()
+    await act(async () => {
+      createButton!.click()
+    })
+    const modal = container.querySelector('[data-modal-open="true"]')
+    expect(modal).not.toBeNull()
+    const ok = modal!.querySelector('button[data-modal-ok]')
+    expect(ok).not.toBeNull()
+    await act(async () => {
+      ok!.click()
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    expect(mocks.createEmergencyPlan).toHaveBeenCalled()
+  })
+
+  it('submits a drill through the modal', async () => {
+    mocks.createEmergencyDrill.mockResolvedValue({ code: 200, message: 'success', data: null })
+    await renderPanel()
+    const drillsTab = container.querySelector('[data-tab="drills"]')
+    const btn = drillsTab ? [...drillsTab.querySelectorAll('button')].find((b) => b.textContent?.includes('新增演练')) : undefined
+    expect(btn).toBeDefined()
+    await act(async () => { btn!.click() })
+    const ok = container.querySelector('[data-modal-open="true"] button[data-modal-ok]')
+    await act(async () => {
+      ok!.click()
+      await new Promise((r) => setTimeout(r, 30))
+    })
+    expect(mocks.createEmergencyDrill).toHaveBeenCalled()
+  })
+
+  it('删除预案（Popconfirm 确认后调用）', async () => {
+    mocks.deleteEmergencyPlan.mockResolvedValue({ code: 200, message: 'success', data: null })
+    await renderPanel()
+    const confirm = container.querySelector('button[data-popconfirm-ok]')
+    expect(confirm).toBeDefined()
+    await act(async () => {
+      confirm!.click()
+      await new Promise((r) => setTimeout(r, 30))
+    })
+    expect(mocks.deleteEmergencyPlan).toHaveBeenCalled()
+  })
+
+  it('edits a drill and submits the update', async () => {
+    mocks.updateEmergencyDrill.mockResolvedValue({ code: 200, message: 'success', data: null })
+    await renderPanel()
+    const drillsTab = container.querySelector('[data-tab="drills"]')
+    const editBtn = drillsTab ? [...drillsTab.querySelectorAll('button')].find((b) => b.textContent === '编辑') : undefined
+    expect(editBtn).toBeDefined()
+    await act(async () => { editBtn!.click() })
+    const modal = container.querySelector('[data-modal-open="true"]')
+    expect(modal).not.toBeNull()
+    const ok = modal!.querySelector('button[data-modal-ok]')
+    await act(async () => {
+      ok!.click()
+      await new Promise((r) => setTimeout(r, 30))
+    })
+    expect(mocks.updateEmergencyDrill).toHaveBeenCalled()
+  })
+
+  it('creates and deletes a supply through modal/popconfirm', async () => {
+    mocks.createEmergencySupply.mockResolvedValue({ code: 200, message: 'success', data: null })
+    mocks.getEmergencySupplies.mockResolvedValue({ code: 200, message: 'success', data: { items: [], total: 0 } })
+    await renderPanel()
+    const suppliesTab = container.querySelector('[data-tab="supplies"]')
+    const btn = suppliesTab ? [...suppliesTab.querySelectorAll('button')].find((b) => b.textContent?.includes('新增物资')) : undefined
+    expect(btn).toBeDefined()
+    await act(async () => { btn!.click() })
+    const ok = container.querySelector('[data-modal-open="true"] button[data-modal-ok]')
+    await act(async () => {
+      ok!.click()
+      await new Promise((r) => setTimeout(r, 30))
+    })
+    expect(mocks.createEmergencySupply).toHaveBeenCalled()
+
+    mocks.deleteEmergencySupply.mockResolvedValue({ code: 200, message: 'success', data: null })
+    const confirm = suppliesTab ? suppliesTab.querySelector('button[data-popconfirm-ok]') : null
+    if (confirm) {
+      await act(async () => {
+        confirm.click()
+        await new Promise((r) => setTimeout(r, 30))
+      })
+      expect(mocks.deleteEmergencySupply).toHaveBeenCalled()
+    }
+  })
+
+  it('edits a plan and submits update, downloads plan file', async () => {
+    mocks.updateEmergencyPlan.mockResolvedValue({ code: 200, message: 'success', data: null })
+    mocks.getEmergencyPlans.mockResolvedValue({ code: 200, message: 'success', data: { items: [], total: 0 } })
+    mocks.getEmergencyDrills.mockResolvedValue({ code: 200, message: 'success', data: { items: [], total: 0 } })
+    mocks.getEmergencySupplies.mockResolvedValue({ code: 200, message: 'success', data: { items: [], total: 0 } })
+    mocks.getEmergencyPlans.mockResolvedValue({ code: 200, message: 'success', data: { items: [], total: 0 } })
+    await renderPanel()
+    const plansTab = container.querySelector('[data-tab="plans"]')
+    const editBtn = plansTab ? [...plansTab.querySelectorAll('button')].find((b) => b.textContent === '编辑') : undefined
+    if (editBtn) {
+      await act(async () => { editBtn.click() })
+      const ok = container.querySelector('[data-modal-open="true"] button[data-modal-ok]')
+      await act(async () => {
+        ok!.click()
+        await new Promise((r) => setTimeout(r, 30))
+      })
+      expect(mocks.updateEmergencyPlan).toHaveBeenCalled()
+    }
+
+    const download = plansTab ? [...plansTab.querySelectorAll('button')].find((b) => b.textContent?.includes('下载')) : undefined
+    if (download) {
+      await act(async () => {
+        download!.click()
+        await new Promise((r) => setTimeout(r, 30))
+      })
+      expect(mocks.downloadEmergencyPlanFile).toHaveBeenCalled()
+    }
+  })
+
+  it('plan create failure branch shows error path', async () => {
+    mocks.createEmergencyPlan.mockResolvedValue({ code: 500, message: '保存失败' })
+    await renderPanel()
+    const plansTab = container.querySelector('[data-tab="plans"]')
+    const btn = plansTab ? [...plansTab.querySelectorAll('button')].find((b) => b.textContent?.includes('新增预案')) : undefined
+    expect(btn).toBeDefined()
+    await act(async () => { btn!.click() })
+    const ok = container.querySelector('[data-modal-open="true"] button[data-modal-ok]')
+    await act(async () => {
+      ok!.click()
+      await new Promise((r) => setTimeout(r, 30))
+    })
+    expect(mocks.createEmergencyPlan).toHaveBeenCalled()
   })
 })

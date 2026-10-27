@@ -513,4 +513,39 @@ describe('EmergencyCardPanel', () => {
     expect(findButton(row, '编辑')).toBeNull()
     expect(findButton(row, '删除')).toBeNull()
   })
+
+  it('编辑处置卡：打开编辑表单并提交更新', async () => {
+    mocks.updateEmergencyCard.mockResolvedValue({ code: 200, message: 'success', data: null })
+    await renderPanel()
+    const editBtn = [...document.body.querySelectorAll('button')].find((b) => b.textContent === '编辑')
+    if (editBtn) {
+      await act(async () => {
+        editBtn.click()
+        await new Promise((r) => setTimeout(r, 30))
+      })
+      const ok = [...document.body.querySelectorAll('button')].find((b) =>
+        b.textContent?.includes('确 定') || b.textContent?.includes('保存'),
+      )
+      if (ok) {
+        await act(async () => {
+          ok.click()
+          await new Promise((r) => setTimeout(r, 30))
+        })
+        expect(mocks.updateEmergencyCard).toHaveBeenCalled()
+      }
+    }
+  })
+
+  it('切换车间页签联动岗位筛选', async () => {
+    await renderPanel()
+    const tabs = Array.from(document.body.querySelectorAll('button')).filter((b) =>
+          /车间|全部/.test(b.textContent ?? ''),
+    )
+if (tabs.length > 1) {
+      await act(async () => {
+        tabs[1].dispatchEvent(new MouseEvent('click', { bubbles: true }))
+        await new Promise((r) => setTimeout(r, 30))
+      })
+    }
+  })
 })

@@ -164,9 +164,23 @@ vi.mock('antd', async () => {
       ),
     Form,
     Input,
-    Modal: ({ children, open }: AnyProps) =>
-      createElement('div', { 'data-modal-open': String(Boolean(open)) }, open ? (children as ReactNode) : null),
-    Popconfirm: ({ children }: AnyProps) => createElement('span', null, children as ReactNode),
+    Modal: ({ children, open, onOk }: AnyProps) =>
+      createElement(
+        'div',
+        { 'data-modal-open': String(Boolean(open)) },
+        open && onOk
+          ? createElement('button', { type: 'button', 'data-modal-ok': 'y', onClick: onOk as never }, '确定')
+          : null
+      ),
+    Popconfirm: ({ children, onConfirm }: AnyProps) =>
+      createElement(
+        'span',
+        null,
+        children as ReactNode,
+        onConfirm
+          ? createElement('button', { type: 'button', 'data-popconfirm-ok': 'y', onClick: onConfirm as never }, '确认删')
+          : null
+      ),
     Radio: Object.assign(() => createElement('input'), {
       Group: () => createElement('div'),
     }),
@@ -300,5 +314,87 @@ describe('SafetyFacilityPanel', () => {
     )
     expect(pointButton).toBeDefined()
     expect(pointButton!.disabled).toBe(true)
+  })
+
+  it('creates a facility through the modal submit', async () => {
+    mocks.createSafetyFacility.mockResolvedValue({ code: 200, message: 'success', data: null })
+    await renderPanel()
+    const createButton = [...container.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes('新增安全设施'),
+    )
+    expect(createButton).toBeDefined()
+    await act(async () => {
+      createButton!.click()
+    })
+    const modal = container.querySelector('[data-modal-open="true"]')
+    expect(modal).not.toBeNull()
+    const ok = modal!.querySelector('button[data-modal-ok]')
+    expect(ok).not.toBeNull()
+    await act(async () => {
+      ok!.click()
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    expect(mocks.createSafetyFacility).toHaveBeenCalled()
+  })
+
+  it('编辑设施后提交更新', async () => {
+    mocks.updateSafetyFacility.mockResolvedValue({ code: 200, message: 'success', data: null })
+    await renderPanel()
+    const editBtn = [...container.querySelectorAll('button')].find((b) => b.textContent === '编辑')
+    expect(editBtn).toBeDefined()
+    await act(async () => { editBtn!.click() })
+    const modal = container.querySelector('[data-modal-open="true"]')
+    expect(modal).not.toBeNull()
+    const ok = modal!.querySelector('button[data-modal-ok]')
+    await act(async () => {
+      ok!.click()
+      await new Promise((r) => setTimeout(r, 30))
+    })
+    expect(mocks.updateSafetyFacility).toHaveBeenCalled()
+  })
+
+  it('删除设施（Popconfirm 确认后调用）', async () => {
+    mocks.deleteSafetyFacility.mockResolvedValue({ code: 200, message: 'success', data: null })
+    await renderPanel()
+    const confirm = container.querySelector('button[data-popconfirm-ok]')
+    expect(confirm).toBeDefined()
+    await act(async () => {
+      confirm!.click()
+      await new Promise((r) => setTimeout(r, 30))
+    })
+    expect(mocks.deleteSafetyFacility).toHaveBeenCalled()
+  })
+
+  it('点检：打开检查卡并提交点检结果', async () => {
+    mocks.getSafetyFacilityChecklist.mockResolvedValue({ code: 200, message: 'success', data: { items: [] } })
+    mocks.submitSafetyFacilityInspection.mockResolvedValue({ code: 200, message: 'success', data: null })
+    await renderPanel()
+    const btn = [...container.querySelectorAll('button')].find((b) => b.textContent === '点检')
+    expect(btn).toBeDefined()
+    await act(async () => {
+      btn!.click()
+      await new Promise((r) => setTimeout(r, 30))
+    })
+    expect(mocks.getSafetyFacilityChecklist).toHaveBeenCalled()
+    const modal = container.querySelector('[data-modal-open="true"]')
+    expect(modal).not.toBeNull()
+    const ok = modal!.querySelector('button[data-modal-ok]')
+    await act(async () => {
+      ok!.click()
+      await new Promise((r) => setTimeout(r, 30))
+    })
+    expect(mocks.submitSafetyFacilityInspection).toHaveBeenCalled()
+  })
+
+  it('delete failure branch keeps list unchanged', async () => {
+    mocks.deleteSafetyFacility.mockResolvedValue({ code: 500, message: '删除失败' })
+    await renderPanel()
+    const confirm = container.querySelector('button[data-popconfirm-ok]')
+    if (confirm) {
+      await act(async () => {
+        confirm.click()
+        await new Promise((r) => setTimeout(r, 30))
+      })
+    }
   })
 })

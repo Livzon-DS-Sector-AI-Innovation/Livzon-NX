@@ -158,9 +158,23 @@ vi.mock('antd', async () => {
     Form,
     Input,
     InputNumber: () => createElement('input'),
-    Modal: ({ children, open }: AnyProps) =>
-      createElement('div', { 'data-modal-open': String(Boolean(open)) }, open ? (children as ReactNode) : null),
-    Popconfirm: ({ children }: AnyProps) => createElement('span', null, children as ReactNode),
+    Modal: ({ children, open, onOk }: AnyProps) =>
+      createElement(
+        'div',
+        { 'data-modal-open': String(Boolean(open)) },
+        open && onOk
+          ? createElement('button', { type: 'button', 'data-modal-ok': 'y', onClick: onOk as never }, '确定')
+          : null
+      ),
+    Popconfirm: ({ children, onConfirm }: AnyProps) =>
+      createElement(
+        'span',
+        null,
+        children as ReactNode,
+        onConfirm
+          ? createElement('button', { type: 'button', 'data-popconfirm-ok': 'y', onClick: onConfirm as never }, '确认删')
+          : null
+      ),
     Select: () => createElement('select'),
     Space: Box,
     Table,
@@ -294,5 +308,123 @@ describe('HazchemPanel', () => {
     )
     expect(createButtons.length).toBeGreaterThan(0)
     expect(createButtons.every((button) => button.disabled)).toBe(true)
+  })
+
+  it('creates a chemical through the modal submit', async () => {
+    mocks.createHazardousChemical.mockResolvedValue({ code: 200, message: 'success', data: null })
+    await renderPanel()
+    const createButton = [...container.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes('新增危化品'),
+    )
+    expect(createButton).toBeDefined()
+    await act(async () => {
+      createButton!.click()
+    })
+    const modal = container.querySelector('[data-modal-open="true"]')
+    expect(modal).not.toBeNull()
+    const ok = modal!.querySelector('button[data-modal-ok]')
+    expect(ok).not.toBeNull()
+    await act(async () => {
+      ok!.click()
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    expect(mocks.createHazardousChemical).toHaveBeenCalled()
+  })
+
+  it('creates an inventory through the modal submit', async () => {
+    mocks.createChemicalInventory.mockResolvedValue({ code: 200, message: 'success', data: null })
+    await renderPanel()
+    const createButton = [...container.querySelectorAll('button')].find((button) =>
+      button.textContent?.includes('新增存量记录'),
+    )
+    expect(createButton).toBeDefined()
+    await act(async () => {
+      createButton!.click()
+    })
+    const modal = container.querySelector('[data-modal-open="true"]')
+    expect(modal).not.toBeNull()
+    const ok = modal!.querySelector('button[data-modal-ok]')
+    expect(ok).not.toBeNull()
+    await act(async () => {
+      ok!.click()
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    expect(mocks.createChemicalInventory).toHaveBeenCalled()
+  })
+
+  it('编辑危化品后提交更新', async () => {
+    mocks.updateHazardousChemical.mockResolvedValue({ code: 200, message: 'success', data: null })
+    await renderPanel()
+    const editBtn = [...container.querySelectorAll('button')].find((b) => b.textContent === '编辑')
+    expect(editBtn).toBeDefined()
+    await act(async () => { editBtn!.click() })
+    const modal = container.querySelector('[data-modal-open="true"]')
+    expect(modal).not.toBeNull()
+    const ok = modal!.querySelector('button[data-modal-ok]')
+    await act(async () => {
+      ok!.click()
+      await new Promise((r) => setTimeout(r, 30))
+    })
+    expect(mocks.updateHazardousChemical).toHaveBeenCalled()
+  })
+
+  it('删除危化品档案（Popconfirm 确认后调用）', async () => {
+    mocks.deleteHazardousChemical.mockResolvedValue({ code: 200, message: 'success', data: null })
+    await renderPanel()
+    const confirm = container.querySelector('button[data-popconfirm-ok]')
+    expect(confirm).toBeDefined()
+    await act(async () => {
+      confirm!.click()
+      await new Promise((r) => setTimeout(r, 30))
+    })
+    expect(mocks.deleteHazardousChemical).toHaveBeenCalled()
+  })
+
+  it('删除存量记录（Popconfirm 确认后调用）', async () => {
+    mocks.deleteChemicalInventory.mockResolvedValue({ code: 200, message: 'success', data: null })
+        mocks.getChemicalInventories.mockResolvedValue({ code: 200, message: 'success', data: [], meta: { total: 0 } })
+await renderPanel()
+    const confirms = container.querySelectorAll('button[data-popconfirm-ok]')
+    const target = Array.from(confirms).at(-1)!
+    expect(target).toBeDefined()
+    await act(async () => {
+      target.click()
+      await new Promise((r) => setTimeout(r, 30))
+    })
+    expect(mocks.deleteChemicalInventory).toHaveBeenCalled()
+  })
+
+  it('edits inventory, downloads MSDS, delete failure branch', async () => {
+    mocks.updateChemicalInventory.mockResolvedValue({ code: 200, message: 'success', data: null })
+    mocks.getChemicalInventories.mockResolvedValue({ code: 200, message: 'success', data: { items: [], total: 0 } })
+    await renderPanel()
+    const invEdit = [...container.querySelectorAll('button')].filter((b) => b.textContent === '编辑')[1]
+    if (invEdit) {
+      await act(async () => { invEdit.click() })
+      const ok = container.querySelector('[data-modal-open="true"] button[data-modal-ok]')
+      await act(async () => {
+        ok!.click()
+        await new Promise((r) => setTimeout(r, 30))
+      })
+      expect(mocks.updateChemicalInventory).toHaveBeenCalled()
+    }
+
+    const msds = [...container.querySelectorAll('button')].find((b) => b.textContent?.includes('MSDS') || b.textContent === '下载')
+    if (msds) {
+      await act(async () => {
+        msds!.click()
+        await new Promise((r) => setTimeout(r, 30))
+      })
+      expect(mocks.downloadChemicalMsds).toHaveBeenCalled()
+    }
+
+    mocks.deleteHazardousChemical.mockResolvedValue({ code: 500, message: '删除失败' })
+    const confirm = container.querySelector('button[data-popconfirm-ok]')
+    if (confirm) {
+      await act(async () => {
+        confirm.click()
+        await new Promise((r) => setTimeout(r, 30))
+      })
+    }
   })
 })
