@@ -23,6 +23,7 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy import ColumnElement, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import InstrumentedAttribute
 
 from app.core.exceptions import AppException
 from app.modules.safety.feishu.bitable_client import SafetyBitableClient
@@ -241,6 +242,10 @@ async def sync_fire_equipment_ledger(db: AsyncSession) -> dict[str, int]:
             tab_names.setdefault(primary_table, "主表")
 
     now = datetime.now(UTC)
+    # 点检记录回写表不是器材来源：即使被误勾进页签子表也不投影
+    writeback_table = (
+        (config.writeback_table_id or "").strip() if config else ""
+    )
     mirror_rows = (
         (
             await db.execute(
@@ -272,6 +277,8 @@ async def sync_fire_equipment_ledger(db: AsyncSession) -> dict[str, int]:
     for mirror in mirror_rows:
         key = (mirror.table_id, mirror.record_id)
         if not mirror.table_id or key in seen:
+            continue
+        if writeback_table and mirror.table_id == writeback_table:
             continue
         seen.add(key)
         fields = mirror.fields if isinstance(mirror.fields, dict) else {}
@@ -361,6 +368,42 @@ async def maybe_project_after_sync(db: AsyncSession, page_key: str) -> None:
 
 
 # ── 器材与点检查询 ──
+
+EXPIRING_WINDOW_DAYS = 30
+
+
+def _expiry_condition(
+    column: InstrumentedAttribute[date | None], expiry_status: str
+) -> ColumnElement[bool] | None:
+    """有效期筛选项 → SQL 条件；未知取值返回 None。
+
+    - expired: 已过期（< 今天）
+    - expiring_7/15/30（expiring 等同 30）: 今天起 N 天内到期（不含过期）
+    - due_7/15/30: 有效日期 ≤ 今天+N（含已过期，供仪表盘穿透筛选）
+    """
+    today = date.today()
+    if expiry_status == "expired":
+        return column.isnot(None) & (column < today)
+    window: int | None = None
+    include_expired = False
+    if expiry_status == "expiring":
+        window, include_expired = 30, False
+    elif expiry_status.startswith("expiring_"):
+        try:
+            window, include_expired = int(expiry_status.split("_", 1)[1]), False
+        except ValueError:
+            return None
+    elif expiry_status.startswith("due_"):
+        try:
+            window, include_expired = int(expiry_status.split("_", 1)[1]), True
+        except ValueError:
+            return None
+    if window is None:
+        return None
+    upper = today + timedelta(days=window)
+    if include_expired:
+        return column.isnot(None) & (column <= upper)
+    return column.isnot(None) & (column >= today) & (column <= upper)
 
 
 def month_start_utc() -> datetime:
@@ -497,13 +540,13 @@ async def list_fire_equipment(
                 FireEquipment.last_inspected_at < month_start_utc(),
             )
         )
-    if expiry_status == "expired":
-        conditions.append(FireEquipment.expiry_date.isnot(None))
-        conditions.append(FireEquipment.expiry_date < date.today())
-    elif expiry_status == "expiring":
-        today = date.today()
-        conditions.append(FireEquipment.expiry_date >= today)
-        conditions.append(FireEquipment.expiry_date <= today + timedelta(days=30))
+    expiry_condition = (
+        _expiry_condition(FireEquipment.expiry_date, expiry_status)
+        if expiry_status
+        else None
+    )
+    if expiry_condition is not None:
+        conditions.append(expiry_condition)
     keyword_text = (keyword or "").strip()
     if keyword_text:
         escaped = keyword_text.replace("\\", "\\\\").replace("%", "\\%").replace(
@@ -647,6 +690,124 @@ async def get_fire_equipment_stats(db: AsyncSession) -> dict[str, Any]:
         "last_synced_at": config.last_synced_at if config else None,
         "last_sync_status": config.last_sync_status if config else None,
         "last_sync_error": config.last_sync_error if config else None,
+    }
+
+
+# ── 仪表盘聚合 ──
+
+TREND_MONTHS = 6
+
+
+def _recent_month_keys(months: int) -> list[str]:
+    """近 N 个月（含当月）的 YYYY-MM 列表，按东八区，升序。"""
+    tz = ZoneInfo("Asia/Shanghai")
+    now_local = datetime.now(tz)
+    keys: list[str] = []
+    year, month = now_local.year, now_local.month
+    for _ in range(months):
+        keys.append(f"{year:04d}-{month:02d}")
+        month -= 1
+        if month == 0:
+            year, month = year - 1, 12
+    return list(reversed(keys))
+
+
+async def get_fire_equipment_dashboard(db: AsyncSession) -> dict[str, Any]:
+    """仪表盘聚合：有效期到期分布 + 近 6 个月点检趋势 + 各车间本月覆盖。
+
+    到期分布口径与仪表盘卡片一致：overdue = 已过期；within_N = 有效日期
+    在今天起 N 天内（累计，含更近的窗口）。
+    """
+    today = date.today()
+    active = FireEquipment.is_deleted.is_(False)
+    expired, within_7, within_15, within_30 = (
+        await db.execute(
+            select(
+                func.count()
+                .filter(FireEquipment.expiry_date < today)
+                .label("overdue"),
+                func.count()
+                .filter(
+                    FireEquipment.expiry_date >= today,
+                    FireEquipment.expiry_date <= today + timedelta(days=7),
+                )
+                .label("within_7"),
+                func.count()
+                .filter(
+                    FireEquipment.expiry_date >= today,
+                    FireEquipment.expiry_date <= today + timedelta(days=15),
+                )
+                .label("within_15"),
+                func.count()
+                .filter(
+                    FireEquipment.expiry_date >= today,
+                    FireEquipment.expiry_date <= today + timedelta(days=30),
+                )
+                .label("within_30"),
+            )
+            .select_from(FireEquipment)
+            .where(active)
+        )
+    ).one()
+
+    # 近 6 个月点检趋势（点检时间按东八区归月，缺月补零）
+    month_keys = _recent_month_keys(TREND_MONTHS)
+    earliest = datetime.strptime(f"{month_keys[0]}-01", "%Y-%m-%d").replace(
+        tzinfo=ZoneInfo("Asia/Shanghai")
+    )
+    month_label = func.to_char(
+        func.timezone("Asia/Shanghai", FireInspectionRecord.inspected_at),
+        "YYYY-MM",
+    ).label("month")
+    trend_rows = (
+        await db.execute(
+            select(month_label, func.count())
+            .where(
+                FireInspectionRecord.is_deleted.is_(False),
+                FireInspectionRecord.inspected_at >= earliest,
+            )
+            .group_by(month_label)
+        )
+    ).all()
+    counts = {str(row[0]): int(row[1]) for row in trend_rows}
+    trend = [
+        {"month": key, "count": counts.get(key, 0)} for key in month_keys
+    ]
+
+    # 各车间本月点检覆盖（已检/总数）
+    month_start = month_start_utc()
+    coverage_rows = (
+        await db.execute(
+            select(
+                FireEquipment.tab_name,
+                func.count(),
+                func.count().filter(
+                    FireEquipment.last_inspected_at >= month_start
+                ),
+            )
+            .where(active)
+            .group_by(FireEquipment.tab_name)
+            .order_by(FireEquipment.tab_name)
+        )
+    ).all()
+    coverage = [
+        {
+            "tab_name": str(row[0]),
+            "total": int(row[1] or 0),
+            "inspected": int(row[2] or 0),
+        }
+        for row in coverage_rows
+    ]
+
+    return {
+        "expiry_summary": {
+            "overdue": int(expired or 0),
+            "within_7": int(within_7 or 0),
+            "within_15": int(within_15 or 0),
+            "within_30": int(within_30 or 0),
+        },
+        "trend": trend,
+        "workshop_coverage": coverage,
     }
 
 

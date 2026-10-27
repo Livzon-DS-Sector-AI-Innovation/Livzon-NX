@@ -188,17 +188,8 @@ export const moduleMenus: ModuleMenu[] = [
     icon: "shield",
     path: "/safety",
     children: [
-      // ── 系统配置 ──
-      {
-        key: "system-config",
-        label: "系统配置",
-        path: "",
-        children: [
-          { key: "ai-workflow", label: "AI工作流配置", path: "/safety/ai-workflow-config" },
-          { key: "scheduled-tasks", label: "定时任务", path: "/safety/scheduled-tasks" },
-          { key: "safety-feishu-settings", label: "飞书设置", path: "/safety/settings/feishu" },
-        ],
-      },
+      // ── 安全总览（首页驾驶舱） ──
+      { key: "overview", label: "安全总览", path: "/safety" },
       // ── 作业安全 ──
       {
         key: "ops-safety",
@@ -265,8 +256,28 @@ export const moduleMenus: ModuleMenu[] = [
         path: "",
         children: [
           { key: "accident-ledger", label: "事故台账", path: "/safety/accident" },
-          { key: "emergency-plan", label: "应急预案", path: "", disabled: true },
+          { key: "emergency-card", label: "应急处置卡", path: "/safety/emergency-card" },
           { key: "fire-equipment-inspection", label: "灭火器及消防栓点检", path: "/safety/fire-inspection" },
+          { key: "emergency-mgmt", label: "应急管理", path: "/safety/emergency-mgmt" },
+        ],
+      },
+      // ── 体系治理 ──
+      {
+        key: "governance",
+        label: "体系治理",
+        path: "",
+        children: [
+          { key: "target-performance", label: "目标责任与绩效", path: "/safety/target-performance" },
+        ],
+      },
+      // ── 现场管理 ──
+      {
+        key: "site-mgmt",
+        label: "现场管理",
+        path: "",
+        children: [
+          { key: "safety-facilities", label: "安全设施台账", path: "/safety/facilities" },
+          { key: "hazchem-msds", label: "危化品与MSDS管理", path: "/safety/hazchem" },
         ],
       },
       // ── 安全培训与检查 ──
@@ -296,6 +307,17 @@ export const moduleMenus: ModuleMenu[] = [
         path: "",
         children: [
           { key: "knowledge-base", label: "安全知识库", path: "/safety/knowledge-base" },
+        ],
+      },
+      // ── 系统配置 ──
+      {
+        key: "system-config",
+        label: "系统配置",
+        path: "",
+        children: [
+          { key: "ai-workflow", label: "AI工作流配置", path: "/safety/ai-workflow-config" },
+          { key: "scheduled-tasks", label: "定时任务", path: "/safety/scheduled-tasks" },
+          { key: "safety-feishu-settings", label: "飞书设置", path: "/safety/settings/feishu" },
         ],
       },
     ],

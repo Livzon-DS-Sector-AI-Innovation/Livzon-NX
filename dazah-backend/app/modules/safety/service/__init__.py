@@ -8,11 +8,13 @@ from app.modules.safety.service.attachment import AttachmentService
 from app.modules.safety.service.config import ConfigService, create_ai_service
 from app.modules.safety.service.daily_risk_report import DailyRiskReportService
 from app.modules.safety.service.ehs_change import EhsChangeService
+from app.modules.safety.service.emergency_card import EmergencyCardService
 from app.modules.safety.service.hazard_ledger_import import HazardLedgerImportService
 from app.modules.safety.service.knowledge import KnowledgeService
 from app.modules.safety.service.oh_hazard_monitor import OhHazardMonitorService
 from app.modules.safety.service.oh_health_exam import OhHealthExamService
 from app.modules.safety.service.regulation import RegulationService
+from app.modules.safety.service.regulation_compliance import RegulationComplianceService
 from app.modules.safety.service.safety import SafetyService
 from app.modules.safety.service.scheduled_task import ScheduledTaskService
 from app.modules.safety.service.sop_generator import SopGeneratorService
@@ -23,9 +25,11 @@ from app.modules.safety.service.special_operation_report import (
 
 __all__ = [
     "SafetyService",
+    "EmergencyCardService",
     "feishu_settings",
     "knowledge_feishu",
     "RegulationService",
+    "RegulationComplianceService",
     "SopGeneratorService",
     "ConfigService",
     "create_ai_service",

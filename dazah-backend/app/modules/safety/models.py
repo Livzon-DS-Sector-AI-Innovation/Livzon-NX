@@ -14,6 +14,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -1250,8 +1251,8 @@ class OperationRegulation(BaseModel):
         {"schema": "safety"},
     )
 
-    regulation_no: Mapped[str] = mapped_column(
-        String(64), nullable=False, comment="操规编号"
+    regulation_no: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, comment="操规编号（可为空，由文控/车间编号时填写）"
     )
     regulation_name: Mapped[str] = mapped_column(
         String(255), nullable=False, comment="操规名称"
@@ -1264,6 +1265,12 @@ class OperationRegulation(BaseModel):
     )
     position: Mapped[str | None] = mapped_column(
         String(100), nullable=True, comment="岗位（达托/达巴，逗号分隔）"
+    )
+    workshop: Mapped[str | None] = mapped_column(
+        String(60),
+        nullable=True,
+        server_default="",
+        comment="车间/部门（如 103车间、201二车间、动力部）",
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True, comment="备注")
 
@@ -1362,6 +1369,76 @@ class RegulationRevision(BaseModel):
     # 关系
     regulation: Mapped["OperationRegulation"] = relationship(
         "OperationRegulation", back_populates="revisions"
+    )
+
+
+# ==================== 操规合规审核 ====================
+
+
+class RegulationReview(BaseModel):
+    """操规合规审核记录 —— 按安全法规要求对安全操作规程做 AI 合规审核。
+
+    审核依据为内置法规基线（安全生产法、危化品管理条例、GB 30871 特殊作业、
+    个体防护与应急管理等要求拆解为审核要点），审核结论与明细供车间整改参考；
+    AI 结论仅作辅助分析，整改与放行仍由人工确认。
+    """
+
+    __tablename__ = "regulation_reviews"
+    __table_args__ = (
+        Index(
+            "ix_safety_regulation_reviews_regulation",
+            "regulation_id",
+            "is_deleted",
+        ),
+        {"schema": "safety"},
+    )
+
+    regulation_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("safety.operation_regulations.id"),
+        nullable=False,
+        comment="关联操规ID",
+    )
+    regulation_name: Mapped[str] = mapped_column(
+        String(255), nullable=False, comment="操规名称（冗余，便于追溯）"
+    )
+    result: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="fail",
+        server_default="fail",
+        comment="审核结论: pass/conditional_pass/fail",
+    )
+    score: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+        comment="合规评分（0-100）",
+    )
+    summary: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default="", comment="总体评价"
+    )
+    missing_items: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=list,
+        comment="缺失项 [{item, requirement, basis, severity, suggestion}]",
+    )
+    non_compliant_items: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=list,
+        comment="不合规项 [{item, requirement, basis, severity, suggestion}]",
+    )
+    suggestions: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list, comment="改进建议列表"
+    )
+    reviewed_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("identity.users.id"),
+        nullable=True,
+        comment="发起审核的用户",
     )
 
 
@@ -3342,4 +3419,844 @@ class FireInspectionRecord(BaseModel):
         String(64),
         nullable=True,
         comment="回写飞书点检记录表的 record_id（NULL=待回写）",
+    )
+
+
+# ==================== 应急处置卡 ====================
+
+
+class EmergencyCard(BaseModel):
+    """应急处置卡：车间/岗位级事故现场处置卡。
+
+    初始数据来自各车间应急资料（101-102、103、201 一车间、203 车间、
+    动力部及公司级），由种子迁移导入；后续可在「应急处置卡」页面维护。
+    """
+
+    __tablename__ = "emergency_cards"
+    __table_args__ = (
+        Index(
+            "uq_safety_emergency_cards_title",
+            "workshop",
+            "position",
+            "title",
+            unique=True,
+            postgresql_where=text("is_deleted = false"),
+        ),
+        Index("ix_safety_emergency_cards_workshop", "workshop", "is_deleted"),
+        {"schema": "safety"},
+    )
+
+    workshop: Mapped[str] = mapped_column(
+        String(60), nullable=False, comment="车间/部门（如 103车间、公司级、动力部）"
+    )
+    position: Mapped[str] = mapped_column(
+        String(60),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="岗位（如 配料、化测；车间级/公司级卡为空）",
+    )
+    title: Mapped[str] = mapped_column(
+        String(200), nullable=False, comment="卡片标题（如 103车间液氨泄漏应急处置卡）"
+    )
+    subject: Mapped[str] = mapped_column(
+        String(120),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="处置主题（标题去除车间/岗位前缀与「应急处置卡」后缀）",
+    )
+    accident_type: Mapped[str] = mapped_column(
+        String(40),
+        nullable=False,
+        default="综合",
+        server_default="综合",
+        comment="事故类型（泄漏/火灾/中毒/触电等）",
+    )
+    steps: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=list,
+        comment="处置步骤 [{order, step, action, person}]",
+    )
+    extras: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=list,
+        comment="其他段落 [{label, content}]（如 次生、衍生事故）",
+    )
+    phones: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default="", comment="应急电话"
+    )
+    risks: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="",
+        server_default="",
+        comment="主要导致风险及导致的后果",
+    )
+    precautions: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default="", comment="应急注意事项"
+    )
+    source_file: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="来源文件名（种子导入溯源）",
+    )
+    search_text: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="",
+        server_default="",
+        comment="关键字搜索文本（标题/主题/类型/步骤/电话拼接）",
+    )
+    sort_order: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+        comment="展示排序（同车间内升序）",
+    )
+
+
+# ==================== 厂区建筑底册（总览驾驶舱地图） ====================
+
+
+class CampusBuilding(BaseModel):
+    """厂区建筑/分区底册：平面图落点与地点文本归一的目标清单。
+
+    坐标为平面图底图（public/safety/campus-map.png）上的百分比位置；
+    aliases 用于把作业票/报备/隐患等自由文本地点归一到建筑，
+    由种子迁移导入，后续可在数据库中维护。
+    """
+
+    __tablename__ = "campus_buildings"
+    __table_args__ = (
+        Index(
+            "uq_safety_campus_buildings_name",
+            "name",
+            unique=True,
+            postgresql_where=text("is_deleted = false"),
+        ),
+        Index("ix_safety_campus_buildings_category", "category", "is_deleted"),
+        {"schema": "safety"},
+    )
+
+    code: Mapped[str] = mapped_column(
+        String(40),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="建筑编号（图纸编号，如 101、802）",
+    )
+    name: Mapped[str] = mapped_column(
+        String(120),
+        nullable=False,
+        comment="建筑名称（重名建筑带方位/编号后缀）"
+    )
+    category: Mapped[str] = mapped_column(
+        String(30),
+        nullable=False,
+        default="workshop",
+        server_default="workshop",
+        comment="类别: workshop/warehouse/utility/env/tank/office/logistics/sports",
+    )
+    x_pct: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+        default=0.0,
+        server_default="0",
+        comment="平面图横向百分比坐标（0-100）",
+    )
+    y_pct: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+        default=0.0,
+        server_default="0",
+        comment="平面图纵向百分比坐标（0-100）",
+    )
+    aliases: Mapped[list[Any]] = mapped_column(
+        JSONB, nullable=False, default=list, comment="地点别名列表（自由文本归一用）"
+    )
+    sort_order: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0", comment="展示排序"
+    )
+
+
+# ==================== 体系治理：目标责任与绩效 ====================
+
+
+class SafetyTarget(BaseModel):
+    """年度安全目标：公司/部门级安全生产目标指标。"""
+
+    __tablename__ = "safety_targets"
+    __table_args__ = (
+        Index(
+            "uq_safety_targets_year_title",
+            "year",
+            "title",
+            "owner_department",
+            unique=True,
+            postgresql_where=text("is_deleted = false"),
+        ),
+        Index("ix_safety_targets_year", "year", "is_deleted"),
+        {"schema": "safety"},
+    )
+
+    year: Mapped[int] = mapped_column(Integer, nullable=False, comment="目标年度")
+    title: Mapped[str] = mapped_column(
+        String(200),
+        nullable=False,
+        comment="目标名称（如 杜绝重伤及以上事故）"
+    )
+    category: Mapped[str] = mapped_column(
+        String(40),
+        nullable=False,
+        default="事故控制",
+        server_default="事故控制",
+        comment="目标类别（事故控制/隐患治理/培训教育/职业健康/消防应急等）",
+    )
+    metric: Mapped[str] = mapped_column(
+        String(200),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="考核指标说明（如何量化）",
+    )
+    target_value: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="目标值（如 0 起、100%、≤3 项）",
+    )
+    unit: Mapped[str] = mapped_column(
+        String(30),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="计量单位（起/次/%/项）",
+    )
+    owner_department: Mapped[str] = mapped_column(
+        String(100), nullable=False, default="", server_default="", comment="责任部门"
+    )
+    owner_name: Mapped[str] = mapped_column(
+        String(60), nullable=False, default="", server_default="", comment="责任人"
+    )
+    deadline: Mapped[date | None] = mapped_column(
+        Date,
+        nullable=True,
+        comment="完成时限",
+    )
+    status: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="in_progress",
+        server_default="in_progress",
+        comment="状态: in_progress=进行中 / achieved=已达成 / not_achieved=未达成",
+    )
+    remark: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="",
+        server_default="",
+        comment="备注"
+    )
+    search_text: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default="", comment="关键字搜索文本"
+    )
+
+    records: Mapped[list["SafetyTargetRecord"]] = relationship(
+        primaryjoin="and_(SafetyTarget.id == foreign(SafetyTargetRecord.target_id), "
+        "SafetyTargetRecord.is_deleted.is_(False))",
+        viewonly=True,
+        lazy="selectin",
+        order_by="SafetyTargetRecord.period",
+    )
+
+
+class SafetyTargetRecord(BaseModel):
+    """安全目标进度记录：按月/季度录入实际完成值。"""
+
+    __tablename__ = "safety_target_records"
+    __table_args__ = (
+        Index(
+            "uq_safety_target_records_target_period",
+            "target_id",
+            "period",
+            unique=True,
+            postgresql_where=text("is_deleted = false"),
+        ),
+        Index("ix_safety_target_records_target", "target_id", "is_deleted"),
+        {"schema": "safety"},
+    )
+
+    target_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("safety.safety_targets.id"),
+        nullable=False,
+        comment="所属目标",
+    )
+    period: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        comment="考核期（如 2026-Q1、2026-03）"
+    )
+    actual_value: Mapped[str] = mapped_column(
+        String(100), nullable=False, default="", server_default="", comment="实际完成值"
+    )
+    completion_pct: Mapped[float | None] = mapped_column(
+        Float,
+        nullable=True,
+        comment="完成率（%，可空）"
+    )
+    note: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="",
+        server_default="",
+        comment="情况说明"
+    )
+
+
+# ==================== 现场管理：安全设施台账 ====================
+
+
+class SafetyFacility(BaseModel):
+    """安全设施台账：洗眼器、气体检测仪、防护设施等安全设备设施。"""
+
+    __tablename__ = "safety_facilities"
+    __table_args__ = (
+        Index(
+            "uq_safety_facilities_no",
+            "facility_no",
+            unique=True,
+            postgresql_where=text("is_deleted = false and facility_no <> ''"),
+        ),
+        Index("ix_safety_facilities_category", "category", "is_deleted"),
+        Index("ix_safety_facilities_department", "department", "is_deleted"),
+        {"schema": "safety"},
+    )
+
+    category: Mapped[str] = mapped_column(
+        String(30),
+        nullable=False,
+        default="other",
+        server_default="other",
+        comment="类别: eyewash=洗眼器 / gas_detector=气体检测仪 / "
+        "protective=防护设施 / other=其他",
+    )
+    facility_no: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="设施编号（唯一）",
+    )
+    name: Mapped[str] = mapped_column(String(200), nullable=False, comment="设施名称")
+    model_spec: Mapped[str] = mapped_column(
+        String(200), nullable=False, default="", server_default="", comment="型号规格"
+    )
+    department: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="所属部门/车间",
+    )
+    location: Mapped[str] = mapped_column(
+        String(255), nullable=False, default="", server_default="", comment="安装位置"
+    )
+    installed_at: Mapped[date | None] = mapped_column(
+        Date,
+        nullable=True,
+        comment="投用日期"
+    )
+    expiry_date: Mapped[date | None] = mapped_column(
+        Date, nullable=True, comment="校准/检定/报废到期日（气体检测仪为校准有效期）"
+    )
+    status: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="normal",
+        server_default="normal",
+        comment="状态: normal=完好 / damaged=损坏 / scrapped=报废",
+    )
+    last_inspected_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        comment="最近点检时间"
+    )
+    last_inspection_result: Mapped[str | None] = mapped_column(
+        String(20), nullable=True, comment="最近点检结论: pass/fail"
+    )
+    remark: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="",
+        server_default="",
+        comment="备注"
+    )
+    search_text: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default="", comment="关键字搜索文本"
+    )
+
+
+class SafetyFacilityInspection(BaseModel):
+    """安全设施点检记录（快照式，与消防器材点检同构）。"""
+
+    __tablename__ = "safety_facility_inspections"
+    __table_args__ = (
+        Index("ix_safety_facility_inspections_facility", "facility_id", "inspected_at"),
+        Index("ix_safety_facility_inspections_inspected_at", "inspected_at"),
+        {"schema": "safety"},
+    )
+
+    facility_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("safety.safety_facilities.id"),
+        nullable=False,
+        comment="设施",
+    )
+    facility_category: Mapped[str] = mapped_column(
+        String(30),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="设施类别快照",
+    )
+    facility_no: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="设施编号快照",
+    )
+    facility_name: Mapped[str] = mapped_column(
+        String(200),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="设施名称快照",
+    )
+    items: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=list,
+        comment="点检项 [{key, label, result: ok/fail, remark}]",
+    )
+    result: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        comment="结论: pass/fail"
+    )
+    abnormal_action: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="",
+        server_default="",
+        comment="异常处理措施"
+    )
+    inspector_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        nullable=True,
+        comment="点检人用户ID"
+    )
+    inspector_name: Mapped[str] = mapped_column(
+        String(100), nullable=False, default="", server_default="", comment="点检人姓名"
+    )
+    inspected_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        comment="点检时间"
+    )
+    source: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="web",
+        server_default="web",
+        comment="提交来源: web=网页端",
+    )
+
+
+# ==================== 现场管理：危化品与 MSDS ====================
+
+
+class HazardousChemical(BaseModel):
+    """危化品档案：品名/CAS/类别 + MSDS 附件。"""
+
+    __tablename__ = "hazardous_chemicals"
+    __table_args__ = (
+        Index(
+            "uq_safety_hazardous_chemicals_name",
+            "name",
+            unique=True,
+            postgresql_where=text("is_deleted = false"),
+        ),
+        Index("ix_safety_hazardous_chemicals_category", "category", "is_deleted"),
+        {"schema": "safety"},
+    )
+
+    name: Mapped[str] = mapped_column(String(200), nullable=False, comment="化学品名称")
+    alias: Mapped[str] = mapped_column(
+        String(200),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="别名/商品名",
+    )
+    cas_no: Mapped[str] = mapped_column(
+        String(60), nullable=False, default="", server_default="", comment="CAS 号"
+    )
+    category: Mapped[str] = mapped_column(
+        String(40),
+        nullable=False,
+        default="other",
+        server_default="other",
+        comment="危险性类别: explosive/flammable_gas/oxidizing_gas/flammable_liquid/"
+        "flammable_solid/self_reactive/oxidizing_liquid/organic_peroxide/toxic/corrosive/other",
+    )
+    hazard_statements: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="",
+        server_default="",
+        comment="危险性概述（理化/健康/环境危害）",
+    )
+    storage_requirements: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="",
+        server_default="",
+        comment="储存要求（温度/禁配/防爆等）",
+    )
+    msds_file_path: Mapped[str] = mapped_column(
+        String(500),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="MSDS 文件路径（uploads/safety/hazchem/）",
+    )
+    msds_file_name: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="MSDS 原始文件名",
+    )
+    remark: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="",
+        server_default="",
+        comment="备注"
+    )
+    search_text: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default="", comment="关键字搜索文本"
+    )
+
+
+class ChemicalInventory(BaseModel):
+    """危化品车间存量：当前存量与上限，超储预警数据源。"""
+
+    __tablename__ = "chemical_inventories"
+    __table_args__ = (
+        Index(
+            "uq_safety_chemical_inventories_chem_ws",
+            "chemical_id",
+            "workshop",
+            unique=True,
+            postgresql_where=text("is_deleted = false"),
+        ),
+        Index("ix_safety_chemical_inventories_workshop", "workshop", "is_deleted"),
+        {"schema": "safety"},
+    )
+
+    chemical_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("safety.hazardous_chemicals.id"),
+        nullable=False,
+        comment="危化品",
+    )
+    workshop: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        comment="车间/库房",
+    )
+    quantity: Mapped[float] = mapped_column(
+        Numeric(14, 4),
+        nullable=False,
+        default=0.0,
+        server_default="0",
+        comment="当前存量",
+    )
+    upper_limit: Mapped[float | None] = mapped_column(
+        Numeric(14, 4),
+        nullable=True,
+        comment="存量上限（空=不设限）"
+    )
+    unit: Mapped[str] = mapped_column(
+        String(30),
+        nullable=False,
+        default="kg",
+        server_default="kg",
+        comment="单位"
+    )
+    remark: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="",
+        server_default="",
+        comment="备注"
+    )
+
+
+# ==================== 应急处置：应急管理 ====================
+
+
+class EmergencyPlan(BaseModel):
+    """应急预案台账：综合预案/专项预案/现场处置方案。"""
+
+    __tablename__ = "emergency_plans"
+    __table_args__ = (
+        Index(
+            "uq_safety_emergency_plans_name_version",
+            "name",
+            "version",
+            unique=True,
+            postgresql_where=text("is_deleted = false"),
+        ),
+        Index("ix_safety_emergency_plans_status", "status", "is_deleted"),
+        {"schema": "safety"},
+    )
+
+    name: Mapped[str] = mapped_column(String(255), nullable=False, comment="预案名称")
+    plan_type: Mapped[str] = mapped_column(
+        String(30),
+        nullable=False,
+        default="onsite",
+        server_default="onsite",
+        comment="类型: comprehensive=综合预案 / special=专项预案 / onsite=现场处置方案",
+    )
+    version: Mapped[str] = mapped_column(
+        String(60),
+        nullable=False,
+        default="V1.0",
+        server_default="V1.0",
+        comment="版本号",
+    )
+    issued_at: Mapped[date | None] = mapped_column(
+        Date,
+        nullable=True,
+        comment="发布日期",
+    )
+    review_due_date: Mapped[date | None] = mapped_column(
+        Date,
+        nullable=True,
+        comment="下次评审/修订到期日"
+    )
+    status: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="active",
+        server_default="active",
+        comment="状态: active=现行 / revising=修订中 / obsolete=废止",
+    )
+    department: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="编制/归口部门",
+    )
+    file_path: Mapped[str] = mapped_column(
+        String(500),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="预案文件路径（uploads/safety/emergency/）",
+    )
+    file_name: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="预案原始文件名",
+    )
+    remark: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="",
+        server_default="",
+        comment="备注"
+    )
+    search_text: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default="", comment="关键字搜索文本"
+    )
+
+
+class EmergencyDrill(BaseModel):
+    """应急演练计划与记录。"""
+
+    __tablename__ = "emergency_drills"
+    __table_args__ = (
+        Index("ix_safety_emergency_drills_planned_date", "planned_date", "is_deleted"),
+        Index("ix_safety_emergency_drills_status", "status", "is_deleted"),
+        {"schema": "safety"},
+    )
+
+    name: Mapped[str] = mapped_column(String(255), nullable=False, comment="演练名称")
+    drill_type: Mapped[str] = mapped_column(
+        String(30),
+        nullable=False,
+        default="practical",
+        server_default="practical",
+        comment="类型: tabletop=桌面推演 / practical=实战演练 / comprehensive=综合演练",
+    )
+    scenario: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="演练情景（如 液氨泄漏、火灾疏散）",
+    )
+    plan_name: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="对应预案名称",
+    )
+    planned_date: Mapped[date | None] = mapped_column(
+        Date,
+        nullable=True,
+        comment="计划日期"
+    )
+    actual_date: Mapped[date | None] = mapped_column(
+        Date,
+        nullable=True,
+        comment="实际执行日期"
+    )
+    location: Mapped[str] = mapped_column(
+        String(255), nullable=False, default="", server_default="", comment="演练地点"
+    )
+    departments: Mapped[str] = mapped_column(
+        String(500),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="参演部门（顿号分隔）",
+    )
+    participants_count: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        comment="参演人数"
+    )
+    summary: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="",
+        server_default="",
+        comment="演练过程与评估总结"
+    )
+    issues: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="",
+        server_default="",
+        comment="发现问题与改进措施"
+    )
+    status: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="planned",
+        server_default="planned",
+        comment="状态: planned=计划 / done=完成 / cancelled=取消",
+    )
+    search_text: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default="", comment="关键字搜索文本"
+    )
+
+
+class EmergencySupply(BaseModel):
+    """应急物资台账。"""
+
+    __tablename__ = "emergency_supplies"
+    __table_args__ = (
+        Index("ix_safety_emergency_supplies_category", "category", "is_deleted"),
+        Index("ix_safety_emergency_supplies_department", "department", "is_deleted"),
+        {"schema": "safety"},
+    )
+
+    name: Mapped[str] = mapped_column(String(200), nullable=False, comment="物资名称")
+    category: Mapped[str] = mapped_column(
+        String(30),
+        nullable=False,
+        default="other",
+        server_default="other",
+        comment="类别: firefighting=消防 / protective=防护 / medical=医疗 / "
+        "communication=通讯 / leak_sealing=堵漏 / other=其他",
+    )
+    spec: Mapped[str] = mapped_column(
+        String(200),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="规格型号"
+    )
+    location: Mapped[str] = mapped_column(
+        String(255), nullable=False, default="", server_default="", comment="存放位置"
+    )
+    department: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="管理部门/车间",
+    )
+    quantity: Mapped[float] = mapped_column(
+        Numeric(14, 2), nullable=False, default=0.0, server_default="0", comment="数量"
+    )
+    unit: Mapped[str] = mapped_column(
+        String(30),
+        nullable=False,
+        default="件",
+        server_default="件",
+        comment="单位"
+    )
+    status: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="good",
+        server_default="good",
+        comment="状态: good=完好 / repair=待修 / scrapped=报废",
+    )
+    expiry_date: Mapped[date | None] = mapped_column(
+        Date,
+        nullable=True,
+        comment="有效期至（如药剂/呼吸器）"
+    )
+    last_checked_at: Mapped[date | None] = mapped_column(
+        Date,
+        nullable=True,
+        comment="最近检查日期"
+    )
+    last_check_result: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="最近检查结论（完好/异常描述）",
+    )
+    remark: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="",
+        server_default="",
+        comment="备注"
+    )
+    search_text: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default="", comment="关键字搜索文本"
     )

@@ -133,6 +133,38 @@ class FireInspectionWritebackInitResponse(BaseModel):
     created: bool
 
 
+class FireExpirySummary(BaseModel):
+    """有效期到期分布（within_N 为累计口径，含更近窗口）。"""
+
+    overdue: int
+    within_7: int
+    within_15: int
+    within_30: int
+
+
+class FireTrendPoint(BaseModel):
+    """近 6 个月点检趋势的一个月（东八区归月）。"""
+
+    month: str
+    count: int
+
+
+class FireWorkshopCoverage(BaseModel):
+    """车间/子表的本月点检覆盖。"""
+
+    tab_name: str
+    total: int
+    inspected: int
+
+
+class FireEquipmentDashboardResponse(BaseModel):
+    """点检仪表盘聚合数据。"""
+
+    expiry_summary: FireExpirySummary
+    trend: list[FireTrendPoint] = Field(default_factory=list)
+    workshop_coverage: list[FireWorkshopCoverage] = Field(default_factory=list)
+
+
 class FireEquipmentDetailResponse(BaseModel):
     """扫码页 / 详情抽屉的一次性数据：器材 + 检查卡 + 最近记录。"""
 
