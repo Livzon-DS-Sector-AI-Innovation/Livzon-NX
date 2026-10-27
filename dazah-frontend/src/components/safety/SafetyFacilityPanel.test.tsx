@@ -309,7 +309,7 @@ describe('SafetyFacilityPanel', () => {
   it('disables edit actions without operate permission', async () => {
     mocks.canOperate = false
     await renderPanel()
-    const pointButton = [...container.querySelectorAll('button')].find((button) =>
+    const pointButton = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
       button.textContent?.includes('点检')
     )
     expect(pointButton).toBeDefined()
@@ -319,7 +319,7 @@ describe('SafetyFacilityPanel', () => {
   it('creates a facility through the modal submit', async () => {
     mocks.createSafetyFacility.mockResolvedValue({ code: 200, message: 'success', data: null })
     await renderPanel()
-    const createButton = [...container.querySelectorAll('button')].find((button) =>
+    const createButton = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
       button.textContent?.includes('新增安全设施'),
     )
     expect(createButton).toBeDefined()
@@ -328,7 +328,7 @@ describe('SafetyFacilityPanel', () => {
     })
     const modal = container.querySelector('[data-modal-open="true"]')
     expect(modal).not.toBeNull()
-    const ok = modal!.querySelector('button[data-modal-ok]')
+    const ok = modal!.querySelector<HTMLButtonElement>('button[data-modal-ok]')
     expect(ok).not.toBeNull()
     await act(async () => {
       ok!.click()
@@ -340,12 +340,12 @@ describe('SafetyFacilityPanel', () => {
   it('编辑设施后提交更新', async () => {
     mocks.updateSafetyFacility.mockResolvedValue({ code: 200, message: 'success', data: null })
     await renderPanel()
-    const editBtn = [...container.querySelectorAll('button')].find((b) => b.textContent === '编辑')
+    const editBtn = [...container.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === '编辑')
     expect(editBtn).toBeDefined()
     await act(async () => { editBtn!.click() })
     const modal = container.querySelector('[data-modal-open="true"]')
     expect(modal).not.toBeNull()
-    const ok = modal!.querySelector('button[data-modal-ok]')
+    const ok = modal!.querySelector<HTMLButtonElement>('button[data-modal-ok]')
     await act(async () => {
       ok!.click()
       await new Promise((r) => setTimeout(r, 30))
@@ -356,7 +356,7 @@ describe('SafetyFacilityPanel', () => {
   it('删除设施（Popconfirm 确认后调用）', async () => {
     mocks.deleteSafetyFacility.mockResolvedValue({ code: 200, message: 'success', data: null })
     await renderPanel()
-    const confirm = container.querySelector('button[data-popconfirm-ok]')
+    const confirm = container.querySelector<HTMLButtonElement>('button[data-popconfirm-ok]')
     expect(confirm).toBeDefined()
     await act(async () => {
       confirm!.click()
@@ -369,7 +369,7 @@ describe('SafetyFacilityPanel', () => {
     mocks.getSafetyFacilityChecklist.mockResolvedValue({ code: 200, message: 'success', data: { items: [] } })
     mocks.submitSafetyFacilityInspection.mockResolvedValue({ code: 200, message: 'success', data: null })
     await renderPanel()
-    const btn = [...container.querySelectorAll('button')].find((b) => b.textContent === '点检')
+    const btn = [...container.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === '点检')
     expect(btn).toBeDefined()
     await act(async () => {
       btn!.click()
@@ -378,7 +378,7 @@ describe('SafetyFacilityPanel', () => {
     expect(mocks.getSafetyFacilityChecklist).toHaveBeenCalled()
     const modal = container.querySelector('[data-modal-open="true"]')
     expect(modal).not.toBeNull()
-    const ok = modal!.querySelector('button[data-modal-ok]')
+    const ok = modal!.querySelector<HTMLButtonElement>('button[data-modal-ok]')
     await act(async () => {
       ok!.click()
       await new Promise((r) => setTimeout(r, 30))
@@ -389,7 +389,7 @@ describe('SafetyFacilityPanel', () => {
   it('delete failure branch keeps list unchanged', async () => {
     mocks.deleteSafetyFacility.mockResolvedValue({ code: 500, message: '删除失败' })
     await renderPanel()
-    const confirm = container.querySelector('button[data-popconfirm-ok]')
+    const confirm = container.querySelector<HTMLButtonElement>('button[data-popconfirm-ok]')
     if (confirm) {
       await act(async () => {
         confirm.click()

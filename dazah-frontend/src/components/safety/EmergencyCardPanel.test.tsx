@@ -321,7 +321,7 @@ async function renderPanel(props?: {
 
 function findButton(el: HTMLElement, text: string): HTMLButtonElement | null {
   return (
-    (Array.from(el.querySelectorAll('button')).find((button) =>
+    (Array.from(el.querySelectorAll<HTMLButtonElement>('button')).find((button) =>
       button.textContent?.includes(text)
     ) as HTMLButtonElement | undefined) ?? null
   )
@@ -517,13 +517,13 @@ describe('EmergencyCardPanel', () => {
   it('编辑处置卡：打开编辑表单并提交更新', async () => {
     mocks.updateEmergencyCard.mockResolvedValue({ code: 200, message: 'success', data: null })
     await renderPanel()
-    const editBtn = [...document.body.querySelectorAll('button')].find((b) => b.textContent === '编辑')
+    const editBtn = [...document.body.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === '编辑')
     if (editBtn) {
       await act(async () => {
         editBtn.click()
         await new Promise((r) => setTimeout(r, 30))
       })
-      const ok = [...document.body.querySelectorAll('button')].find((b) =>
+      const ok = [...document.body.querySelectorAll<HTMLButtonElement>('button')].find((b) =>
         b.textContent?.includes('确 定') || b.textContent?.includes('保存'),
       )
       if (ok) {
@@ -538,7 +538,7 @@ describe('EmergencyCardPanel', () => {
 
   it('切换车间页签联动岗位筛选', async () => {
     await renderPanel()
-    const tabs = Array.from(document.body.querySelectorAll('button')).filter((b) =>
+    const tabs = Array.from(document.body.querySelectorAll<HTMLButtonElement>('button')).filter((b) =>
           /车间|全部/.test(b.textContent ?? ''),
     )
 if (tabs.length > 1) {

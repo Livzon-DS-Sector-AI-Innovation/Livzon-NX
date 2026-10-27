@@ -12,8 +12,6 @@ vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }))
 
 import * as safety from './safety'
 
-const API_BASE = process.env.API_BASE_URL || 'http://localhost:8000'
-
 function jsonResponse(body: unknown, status = 200) {
   return Promise.resolve(
     new Response(JSON.stringify(body), {
@@ -29,7 +27,7 @@ async function capture(
   const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: null }))
   vi.stubGlobal('fetch', fetchMock)
   await fn()
-  const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+  const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
   return [url, init]
 }
 
@@ -67,7 +65,7 @@ describe('safety governance actions（批次4：法规/处置卡/目标/设施/�
     const [u5] = await capture(() => safety.getRegulationDocumentPreview('r1'))
     expect(u5).toContain('/api/v1/safety/regulations/r1/document-content')
 
-    const [u6, i6] = await capture(() => safety.downloadRegulationDocument('r1'))
+    const [u6] = await capture(() => safety.downloadRegulationDocument('r1'))
     expect(u6).toContain('/api/v1/safety/regulations/r1/document')
   })
 
@@ -101,7 +99,7 @@ describe('safety governance actions（批次4：法规/处置卡/目标/设施/�
     expect(u5).toContain('/api/v1/safety/emergency-cards/e1')
     expect(i5?.method).toBe('PUT')
 
-    const [u6, i6] = await capture(() => safety.deleteEmergencyCard('e1'))
+    const [, i6] = await capture(() => safety.deleteEmergencyCard('e1'))
     expect(i6?.method).toBe('DELETE')
 
     const [u7, i7] = await capture(() => safety.reviewEmergencyCard('e1'))
@@ -125,17 +123,17 @@ describe('safety governance actions（批次4：法规/处置卡/目标/设施/�
     const [u5] = await capture(() => safety.getSafetyTarget('t1'))
     expect(u5).toContain('/api/v1/safety/safety-targets/t1')
 
-    const [u6, i6] = await capture(() =>
+    const [, i6] = await capture(() =>
       safety.createSafetyTarget({ year: 2026 } as never),
     )
     expect(i6?.method).toBe('POST')
 
-    const [u7, i7] = await capture(() =>
+    const [, i7] = await capture(() =>
       safety.updateSafetyTarget('t1', { year: 2026 } as never),
     )
     expect(i7?.method).toBe('PUT')
 
-    const [u8, i8] = await capture(() => safety.deleteSafetyTarget('t1'))
+    const [, i8] = await capture(() => safety.deleteSafetyTarget('t1'))
     expect(i8?.method).toBe('DELETE')
 
     const [u9, i9] = await capture(() =>
@@ -144,7 +142,7 @@ describe('safety governance actions（批次4：法规/处置卡/目标/设施/�
     expect(u9).toContain('/api/v1/safety/safety-targets/t1/records/2026-Q1')
     expect(i9?.method).toBe('PUT')
 
-    const [u10, i10] = await capture(() =>
+    const [, i10] = await capture(() =>
       safety.deleteSafetyTargetRecord('t1', '2026-Q1'),
     )
     expect(i10?.method).toBe('DELETE')
@@ -167,17 +165,17 @@ describe('safety governance actions（批次4：法规/处置卡/目标/设施/�
     const [u4] = await capture(() => safety.getSafetyFacility('f1'))
     expect(u4).toContain('/api/v1/safety/safety-facilities/f1')
 
-    const [u5, i5] = await capture(() =>
+    const [, i5] = await capture(() =>
       safety.createSafetyFacility({ name: 'n' } as never),
     )
     expect(i5?.method).toBe('POST')
 
-    const [u6, i6] = await capture(() =>
+    const [, i6] = await capture(() =>
       safety.updateSafetyFacility('f1', { name: 'n' } as never),
     )
     expect(i6?.method).toBe('PUT')
 
-    const [u7, i7] = await capture(() => safety.deleteSafetyFacility('f1'))
+    const [, i7] = await capture(() => safety.deleteSafetyFacility('f1'))
     expect(i7?.method).toBe('DELETE')
 
     const [u8, i8] = await capture(() =>
@@ -200,17 +198,17 @@ describe('safety governance actions（批次4：法规/处置卡/目标/设施/�
     const [u4] = await capture(() => safety.getChemicalInventories({}))
     expect(u4).toContain('/api/v1/safety/chemical-inventories')
 
-    const [u5, i5] = await capture(() =>
+    const [, i5] = await capture(() =>
       safety.createHazardousChemical({ name: 'n' } as never),
     )
     expect(i5?.method).toBe('POST')
 
-    const [u6, i6] = await capture(() =>
+    const [, i6] = await capture(() =>
       safety.updateHazardousChemical('c1', { name: 'n' } as never),
     )
     expect(i6?.method).toBe('PUT')
 
-    const [u7, i7] = await capture(() => safety.deleteHazardousChemical('c1'))
+    const [, i7] = await capture(() => safety.deleteHazardousChemical('c1'))
     expect(i7?.method).toBe('DELETE')
 
     const [u8, i8] = await capture(() =>
@@ -219,17 +217,17 @@ describe('safety governance actions（批次4：法规/处置卡/目标/设施/�
     expect(u8).toContain('/api/v1/safety/')
     expect(i8?.method).toBe('POST')
 
-    const [u9, i9] = await capture(() =>
+    const [, i9] = await capture(() =>
       safety.createChemicalInventory({ chemical_id: 'c1' } as never),
     )
     expect(i9?.method).toBe('POST')
 
-    const [u10, i10] = await capture(() =>
+    const [, i10] = await capture(() =>
       safety.updateChemicalInventory('i1', { quantity: 1 } as never),
     )
     expect(i10?.method).toBe('PUT')
 
-    const [u11, i11] = await capture(() => safety.deleteChemicalInventory('i1'))
+    const [, i11] = await capture(() => safety.deleteChemicalInventory('i1'))
     expect(i11?.method).toBe('DELETE')
   })
 
@@ -240,25 +238,25 @@ describe('safety governance actions（批次4：法规/处置卡/目标/设施/�
     const [u2] = await capture(() => safety.getEmergencyMgmtStats())
     expect(u2).toContain('/api/v1/safety/emergency-mgmt/stats')
 
-    const [u3, i3] = await capture(() =>
+    const [, i3] = await capture(() =>
       safety.createEmergencyPlan({ name: 'n' } as never),
     )
     expect(i3?.method).toBe('POST')
 
-    const [u4, i4] = await capture(() =>
+    const [, i4] = await capture(() =>
       safety.updateEmergencyPlan('p1', { name: 'n' } as never),
     )
     expect(i4?.method).toBe('PUT')
 
-    const [u5, i5] = await capture(() => safety.deleteEmergencyPlan('p1'))
+    const [, i5] = await capture(() => safety.deleteEmergencyPlan('p1'))
     expect(i5?.method).toBe('DELETE')
 
-    const [u6, i6] = await capture(() =>
+    const [, i6] = await capture(() =>
       safety.uploadEmergencyPlanFile('p1', new File(['x'], 'plan.pdf')),
     )
     expect(i6?.method).toBe('POST')
 
-    const [u7, i7] = await capture(() =>
+    const [u7] = await capture(() =>
       safety.downloadEmergencyPlanFile('p1'),
     )
     expect(u7).toContain('/api/v1/safety/')
@@ -266,33 +264,33 @@ describe('safety governance actions（批次4：法规/处置卡/目标/设施/�
     const [u8] = await capture(() => safety.getEmergencyDrills({}))
     expect(u8).toContain('/api/v1/safety/emergency-drills')
 
-    const [u9, i9] = await capture(() =>
+    const [, i9] = await capture(() =>
       safety.createEmergencyDrill({ title: 't' } as never),
     )
     expect(i9?.method).toBe('POST')
 
-    const [u10, i10] = await capture(() =>
+    const [, i10] = await capture(() =>
       safety.updateEmergencyDrill('d1', { title: 't' } as never),
     )
     expect(i10?.method).toBe('PUT')
 
-    const [u11, i11] = await capture(() => safety.deleteEmergencyDrill('d1'))
+    const [, i11] = await capture(() => safety.deleteEmergencyDrill('d1'))
     expect(i11?.method).toBe('DELETE')
 
     const [u12] = await capture(() => safety.getEmergencySupplies({}))
     expect(u12).toContain('/api/v1/safety/emergency-supplies')
 
-    const [u13, i13] = await capture(() =>
+    const [, i13] = await capture(() =>
       safety.createEmergencySupply({ name: 'n' } as never),
     )
     expect(i13?.method).toBe('POST')
 
-    const [u14, i14] = await capture(() =>
+    const [, i14] = await capture(() =>
       safety.updateEmergencySupply('s1', { name: 'n' } as never),
     )
     expect(i14?.method).toBe('PUT')
 
-    const [u15, i15] = await capture(() => safety.deleteEmergencySupply('s1'))
+    const [, i15] = await capture(() => safety.deleteEmergencySupply('s1'))
     expect(i15?.method).toBe('DELETE')
   })
 
@@ -302,7 +300,7 @@ describe('safety governance actions（批次4：法规/处置卡/目标/设施/�
       () => safety.getSafetyTargets({ page: 2, page_size: 5, year: 2026, category: '安全', status: 'active' }),
       () => safety.getSafetyFacilities({ page: 2, page_size: 5, category: '消防', department: '101', status: 'normal' }),
       () => safety.getHazardousChemicals({ page: 2, page_size: 5, keyword: '乙醇', category: '易燃' }),
-      () => safety.getChemicalInventories({ page: 2, page_size: 5, workshop: '101', over_limit: true }),
+      () => safety.getChemicalInventories({ page: 2, page_size: 5, workshop: '101', over_limit_only: true }),
       () => safety.getEmergencyPlans({ page: 2, page_size: 5, plan_type: 'onsite', status: 'active', keyword: '消防' }),
       () => safety.getEmergencyDrills({ page: 2, page_size: 5, year: 2026, keyword: '演练' }),
       () => safety.getEmergencySupplies({ page: 2, page_size: 5, category: '救援', keyword: '担架' }),

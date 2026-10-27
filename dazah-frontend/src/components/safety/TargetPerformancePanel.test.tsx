@@ -271,7 +271,7 @@ describe('TargetPerformancePanel', () => {
   it('disables create button without operate permission', async () => {
     mocks.canOperate = false
     await renderPanel()
-    const createButton = [...container.querySelectorAll('button')].find((button) =>
+    const createButton = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
       button.textContent?.includes('新增安全目标')
     )
     expect(createButton).toBeDefined()
@@ -298,7 +298,7 @@ describe('TargetPerformancePanel', () => {
   it('creates a target through the modal submit', async () => {
     mocks.createSafetyTarget.mockResolvedValue({ code: 200, message: 'success', data: null })
     await renderPanel()
-    const createButton = [...container.querySelectorAll('button')].find((button) =>
+    const createButton = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
       button.textContent?.includes('新增安全目标'),
     )
     expect(createButton).toBeDefined()
@@ -307,7 +307,7 @@ describe('TargetPerformancePanel', () => {
     })
     const modal = container.querySelector('[data-modal-open="true"]')
     expect(modal).not.toBeNull()
-    const ok = modal!.querySelector('button[data-modal-ok]')
+    const ok = modal!.querySelector<HTMLButtonElement>('button[data-modal-ok]')
     expect(ok).not.toBeNull()
     await act(async () => {
       ok!.click()
@@ -319,12 +319,12 @@ describe('TargetPerformancePanel', () => {
   it('编辑目标后提交更新', async () => {
     mocks.updateSafetyTarget.mockResolvedValue({ code: 200, message: 'success', data: null })
     await renderPanel()
-    const editBtn = [...container.querySelectorAll('button')].find((b) => b.textContent === '编辑')
+    const editBtn = [...container.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === '编辑')
     expect(editBtn).toBeDefined()
     await act(async () => { editBtn!.click() })
     const modal = container.querySelector('[data-modal-open="true"]')
     expect(modal).not.toBeNull()
-    const ok = modal!.querySelector('button[data-modal-ok]')
+    const ok = modal!.querySelector<HTMLButtonElement>('button[data-modal-ok]')
     await act(async () => {
       ok!.click()
       await new Promise((r) => setTimeout(r, 30))
@@ -336,7 +336,7 @@ describe('TargetPerformancePanel', () => {
     mocks.deleteSafetyTarget.mockResolvedValue({ code: 200, message: 'success', data: null })
         mocks.getSafetyTargets.mockResolvedValue({ code: 200, message: 'success', data: [], meta: { total: 0 } })
 await renderPanel()
-    const confirms = container.querySelectorAll('button[data-popconfirm-ok]')
+    const confirms = container.querySelectorAll<HTMLButtonElement>('button[data-popconfirm-ok]')
     const target = Array.from(confirms).at(-1)!
     expect(target).toBeDefined()
     await act(async () => {
@@ -350,7 +350,7 @@ await renderPanel()
     mocks.deleteSafetyTargetRecord.mockResolvedValue({ code: 200, message: 'success', data: null })
     mocks.getSafetyTargets.mockResolvedValue({ code: 200, message: 'success', data: [], meta: { total: 0 } })
     await renderPanel()
-    const first = container.querySelector('button[data-popconfirm-ok]')
+    const first = container.querySelector<HTMLButtonElement>('button[data-popconfirm-ok]')
     if (first) {
       await act(async () => {
         first.click()
@@ -359,10 +359,10 @@ await renderPanel()
     }
 
     mocks.updateSafetyTarget.mockResolvedValue({ code: 500, message: '保存失败' })
-    const editBtn = [...container.querySelectorAll('button')].find((b) => b.textContent === '编辑')
+    const editBtn = [...container.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === '编辑')
     if (editBtn) {
       await act(async () => { editBtn.click() })
-      const ok = container.querySelector('[data-modal-open="true"] button[data-modal-ok]')
+      const ok = container.querySelector<HTMLButtonElement>('[data-modal-open="true"] button[data-modal-ok]')
       await act(async () => {
         ok!.click()
         await new Promise((r) => setTimeout(r, 30))

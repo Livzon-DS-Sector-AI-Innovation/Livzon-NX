@@ -56,7 +56,6 @@ const ROW = {
   status: 'active',
   has_document: true,
   version: 'V2',
-  has_document: false,
   updated_at: '2026-10-20T08:00:00',
 }
 
@@ -65,7 +64,7 @@ function flush() {
 }
 
 function buttons(text: string) {
-  return Array.from(document.body.querySelectorAll('button')).filter((b) =>
+  return Array.from(document.body.querySelectorAll<HTMLButtonElement>('button')).filter((b) =>
     b.textContent?.includes(text),
   )
 }
@@ -146,7 +145,7 @@ describe('RegulationPage（安全操规台账）', () => {
         delBtn.click()
         await flush()
       })
-      const confirm = Array.from(document.body.querySelectorAll('.ant-modal button')).find(
+      const confirm = Array.from(document.body.querySelectorAll<HTMLElement>('.ant-modal button')).find(
         (b) => b.textContent?.includes('确 定') || b.textContent?.includes('确定'),
       )
       if (confirm) {
@@ -185,7 +184,7 @@ describe('RegulationPage（安全操规台账）', () => {
       await flush()
     })
     // 空清单提交走警告分支（message.warning 不抛错，只验证不崩）
-    const okBtn = Array.from(document.body.querySelectorAll('.ant-modal-footer button, button'))
+    const okBtn = Array.from(document.body.querySelectorAll<HTMLButtonElement>('.ant-modal-footer button, button'))
       .filter((b) => b.textContent?.includes('开始导入') || b.textContent?.includes('确 定'))
       .at(-1)
     if (okBtn && !okBtn.disabled) {
@@ -210,7 +209,7 @@ describe('RegulationPage（安全操规台账）', () => {
     renderPage()
     await act(flush)
 
-    const badge = Array.from(document.body.querySelectorAll('span[role="button"]')).find((el) =>
+    const badge = Array.from(document.body.querySelectorAll<HTMLElement>('span[role="button"]')).find((el) =>
       el.textContent?.includes('合规') || el.textContent?.includes('审核'),
     )
     if (badge) {
@@ -218,7 +217,7 @@ describe('RegulationPage（安全操规台账）', () => {
         badge.dispatchEvent(new MouseEvent('click', { bubbles: true }))
         await flush()
       })
-      const run = Array.from(document.body.querySelectorAll('button')).find((b) =>
+      const run = Array.from(document.body.querySelectorAll<HTMLButtonElement>('button')).find((b) =>
         b.textContent?.includes('开始审核'),
       )
       expect(run).toBeTruthy()
@@ -253,7 +252,7 @@ describe('RegulationPage（安全操规台账）', () => {
     renderPage()
     await act(flush)
 
-    const tab = Array.from(document.body.querySelectorAll('.ant-tabs-tab')).find((t) =>
+    const tab = Array.from(document.body.querySelectorAll<HTMLElement>('.ant-tabs-tab')).find((t) =>
       t.textContent?.includes('修订记录'),
     )
     if (tab) {
@@ -279,7 +278,7 @@ describe('RegulationPage（安全操规台账）', () => {
     })
 
     // 向 Upload.Dragger 的原生 input 注入文件并触发 change
-    const input = document.body.querySelector('.ant-modal input[type="file"]') as HTMLInputElement | null
+    const input = document.body.querySelector<HTMLInputElement>('.ant-modal input[type="file"]') as HTMLInputElement | null
     expect(input).toBeTruthy()
     const file = new File(['x'], 'sop.docx')
     Object.defineProperty(input!, 'files', { value: [file] })
@@ -288,7 +287,7 @@ describe('RegulationPage（安全操规台账）', () => {
       await flush()
     })
 
-    const startBtn = Array.from(document.body.querySelectorAll('.ant-modal button')).find((b) =>
+    const startBtn = Array.from(document.body.querySelectorAll<HTMLElement>('.ant-modal button')).find((b) =>
       b.textContent?.includes('开始导入'),
     )
     expect(startBtn).toBeTruthy()
@@ -315,9 +314,9 @@ describe('RegulationPage（安全操规台账）', () => {
         preview.click()
         await flush()
       })
-      const download = Array.from(document.body.querySelectorAll('button')).find((b) =>
+      const download = Array.from(document.body.querySelectorAll<HTMLButtonElement>('button')).find((b) =>
         b.textContent?.includes('下载') && b.closest('.ant-drawer, [class*=drawer]'),
-      ) ?? Array.from(document.body.querySelectorAll('.ant-drawer button, .ant-modal button')).find((b) => b.textContent?.includes('下载'))
+      ) ?? Array.from(document.body.querySelectorAll<HTMLButtonElement>('.ant-drawer button, .ant-modal button')).find((b) => b.textContent?.includes('下载'))
       if (download) {
         await act(async () => {
           download.click()

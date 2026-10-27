@@ -288,7 +288,7 @@ describe('HazchemPanel', () => {
       data: { items: INVENTORIES.slice(0, 1), total: 1 },
     })
     await renderPanel()
-    const toggle = [...container.querySelectorAll('button')].find((button) =>
+    const toggle = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
       button.textContent?.includes('只看超储')
     )
     expect(toggle).toBeDefined()
@@ -303,7 +303,7 @@ describe('HazchemPanel', () => {
   it('disables create buttons without operate permission', async () => {
     mocks.canOperate = false
     await renderPanel()
-    const createButtons = [...container.querySelectorAll('button')].filter((button) =>
+    const createButtons = [...container.querySelectorAll<HTMLButtonElement>('button')].filter((button) =>
       button.textContent?.includes('新增危化品')
     )
     expect(createButtons.length).toBeGreaterThan(0)
@@ -313,7 +313,7 @@ describe('HazchemPanel', () => {
   it('creates a chemical through the modal submit', async () => {
     mocks.createHazardousChemical.mockResolvedValue({ code: 200, message: 'success', data: null })
     await renderPanel()
-    const createButton = [...container.querySelectorAll('button')].find((button) =>
+    const createButton = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
       button.textContent?.includes('新增危化品'),
     )
     expect(createButton).toBeDefined()
@@ -322,7 +322,7 @@ describe('HazchemPanel', () => {
     })
     const modal = container.querySelector('[data-modal-open="true"]')
     expect(modal).not.toBeNull()
-    const ok = modal!.querySelector('button[data-modal-ok]')
+    const ok = modal!.querySelector<HTMLButtonElement>('button[data-modal-ok]')
     expect(ok).not.toBeNull()
     await act(async () => {
       ok!.click()
@@ -334,7 +334,7 @@ describe('HazchemPanel', () => {
   it('creates an inventory through the modal submit', async () => {
     mocks.createChemicalInventory.mockResolvedValue({ code: 200, message: 'success', data: null })
     await renderPanel()
-    const createButton = [...container.querySelectorAll('button')].find((button) =>
+    const createButton = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
       button.textContent?.includes('新增存量记录'),
     )
     expect(createButton).toBeDefined()
@@ -343,7 +343,7 @@ describe('HazchemPanel', () => {
     })
     const modal = container.querySelector('[data-modal-open="true"]')
     expect(modal).not.toBeNull()
-    const ok = modal!.querySelector('button[data-modal-ok]')
+    const ok = modal!.querySelector<HTMLButtonElement>('button[data-modal-ok]')
     expect(ok).not.toBeNull()
     await act(async () => {
       ok!.click()
@@ -355,12 +355,12 @@ describe('HazchemPanel', () => {
   it('编辑危化品后提交更新', async () => {
     mocks.updateHazardousChemical.mockResolvedValue({ code: 200, message: 'success', data: null })
     await renderPanel()
-    const editBtn = [...container.querySelectorAll('button')].find((b) => b.textContent === '编辑')
+    const editBtn = [...container.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === '编辑')
     expect(editBtn).toBeDefined()
     await act(async () => { editBtn!.click() })
     const modal = container.querySelector('[data-modal-open="true"]')
     expect(modal).not.toBeNull()
-    const ok = modal!.querySelector('button[data-modal-ok]')
+    const ok = modal!.querySelector<HTMLButtonElement>('button[data-modal-ok]')
     await act(async () => {
       ok!.click()
       await new Promise((r) => setTimeout(r, 30))
@@ -371,7 +371,7 @@ describe('HazchemPanel', () => {
   it('删除危化品档案（Popconfirm 确认后调用）', async () => {
     mocks.deleteHazardousChemical.mockResolvedValue({ code: 200, message: 'success', data: null })
     await renderPanel()
-    const confirm = container.querySelector('button[data-popconfirm-ok]')
+    const confirm = container.querySelector<HTMLButtonElement>('button[data-popconfirm-ok]')
     expect(confirm).toBeDefined()
     await act(async () => {
       confirm!.click()
@@ -384,7 +384,7 @@ describe('HazchemPanel', () => {
     mocks.deleteChemicalInventory.mockResolvedValue({ code: 200, message: 'success', data: null })
         mocks.getChemicalInventories.mockResolvedValue({ code: 200, message: 'success', data: [], meta: { total: 0 } })
 await renderPanel()
-    const confirms = container.querySelectorAll('button[data-popconfirm-ok]')
+    const confirms = container.querySelectorAll<HTMLButtonElement>('button[data-popconfirm-ok]')
     const target = Array.from(confirms).at(-1)!
     expect(target).toBeDefined()
     await act(async () => {
@@ -398,10 +398,10 @@ await renderPanel()
     mocks.updateChemicalInventory.mockResolvedValue({ code: 200, message: 'success', data: null })
     mocks.getChemicalInventories.mockResolvedValue({ code: 200, message: 'success', data: { items: [], total: 0 } })
     await renderPanel()
-    const invEdit = [...container.querySelectorAll('button')].filter((b) => b.textContent === '编辑')[1]
+    const invEdit = [...container.querySelectorAll<HTMLButtonElement>('button')].filter((b) => b.textContent === '编辑')[1]
     if (invEdit) {
       await act(async () => { invEdit.click() })
-      const ok = container.querySelector('[data-modal-open="true"] button[data-modal-ok]')
+      const ok = container.querySelector<HTMLButtonElement>('[data-modal-open="true"] button[data-modal-ok]')
       await act(async () => {
         ok!.click()
         await new Promise((r) => setTimeout(r, 30))
@@ -409,7 +409,7 @@ await renderPanel()
       expect(mocks.updateChemicalInventory).toHaveBeenCalled()
     }
 
-    const msds = [...container.querySelectorAll('button')].find((b) => b.textContent?.includes('MSDS') || b.textContent === '下载')
+    const msds = [...container.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.includes('MSDS') || b.textContent === '下载')
     if (msds) {
       await act(async () => {
         msds!.click()
@@ -419,7 +419,7 @@ await renderPanel()
     }
 
     mocks.deleteHazardousChemical.mockResolvedValue({ code: 500, message: '删除失败' })
-    const confirm = container.querySelector('button[data-popconfirm-ok]')
+    const confirm = container.querySelector<HTMLButtonElement>('button[data-popconfirm-ok]')
     if (confirm) {
       await act(async () => {
         confirm.click()
