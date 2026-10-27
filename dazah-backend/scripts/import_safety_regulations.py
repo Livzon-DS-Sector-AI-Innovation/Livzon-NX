@@ -61,7 +61,6 @@ def collect_files(root: Path) -> dict[Path, list[Path]]:
             for token in ("操作规程", "操规")
         ):
             continue
-        hint = resolve_hint(folder)
         files: list[Path] = []
         for filename in sorted(filenames):
             if any(token in filename for token in SKIP_NAME_TOKENS):
