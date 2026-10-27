@@ -32,6 +32,7 @@ import dayjs from 'dayjs'
 
 import PlatformNotice from '@/components/shared/PlatformNotice'
 import {
+  getFireEquipmentDashboard,
   getFireEquipmentList,
   getFireEquipmentStats,
   getFireInspectionRecords,
@@ -43,6 +44,7 @@ import { downloadZip } from '@/lib/download'
 import { usePagePermissions } from '@/hooks/usePagePermissions'
 import type { components } from '@/types/generated/schema'
 
+import FireEquipmentDashboard from './FireEquipmentDashboard'
 import FireEquipmentDetailDrawer from './FireEquipmentDetailDrawer'
 import FireEquipmentQrSheet, {
   fireEquipmentScanUrl,
@@ -53,6 +55,8 @@ const { Text } = Typography
 
 type FireEquipmentItem = components['schemas']['FireEquipmentItem']
 type FireEquipmentStats = components['schemas']['FireEquipmentStats']
+type FireEquipmentDashboardResponse =
+  components['schemas']['FireEquipmentDashboardResponse']
 type FireEquipmentListResponse =
   components['schemas']['FireEquipmentListResponse']
 type FireInspectionRecordItem =
@@ -63,6 +67,7 @@ type FireInspectionListResponse =
 interface Props {
   pageKey: string
   initialStats: FireEquipmentStats | null
+  initialDashboard?: FireEquipmentDashboardResponse | null
   initialEquipment: FireEquipmentListResponse | null
   initialRecords: FireInspectionListResponse | null
   initialError: string | null
@@ -122,16 +127,18 @@ function dataUrlToBytes(dataUrl: string): ArrayBuffer {
   return bytes.buffer
 }
 
-/** 灭火器/消防栓点检主面板：台账概览 + 器材台账 + 二维码打印 + 点检记录。 */
+/** 灭火器/消防栓点检主面板：仪表盘 + 器材台账 + 二维码打印 + 点检记录。 */
 export default function FireEquipmentPanel({
   pageKey,
   initialStats,
+  initialDashboard = null,
   initialEquipment,
   initialRecords,
   initialError,
 }: Props) {
   const { canOperate } = usePagePermissions(pageKey)
   const [stats, setStats] = useState<FireEquipmentStats | null>(initialStats)
+  const [dashboard, setDashboard] = useState(initialDashboard)
   const [equipmentPage, setEquipmentPage] = useState(initialEquipment)
   const [recordsPage, setRecordsPage] = useState(initialRecords)
   const [loadError, setLoadError] = useState<string | null>(initialError)
@@ -160,6 +167,7 @@ export default function FireEquipmentPanel({
   const [detailOpen, setDetailOpen] = useState(false)
 
   const configured = stats?.is_configured ?? false
+  const drilling = expiryStatus.startsWith('due_') ? expiryStatus : null
 
   const refreshStats = useCallback(async () => {
     const res = await getFireEquipmentStats({ pageKey })
@@ -170,18 +178,37 @@ export default function FireEquipmentPanel({
     return null
   }, [pageKey])
 
+  const refreshDashboard = useCallback(async () => {
+    const res = await getFireEquipmentDashboard({ pageKey })
+    if (res.code === 200 && res.data) {
+      setDashboard(res.data)
+    }
+  }, [pageKey])
+
   const loadEquipment = useCallback(
-    async (page = equipmentPageNo) => {
+    async (
+      page = equipmentPageNo,
+      overrides?: {
+        equipmentType?: string
+        monthStatus?: string
+        expiryStatus?: string
+        keyword?: string
+      }
+    ) => {
+      const effectiveType = overrides?.equipmentType ?? equipmentType
+      const effectiveMonth = overrides?.monthStatus ?? monthStatus
+      const effectiveExpiry = overrides?.expiryStatus ?? expiryStatus
+      const effectiveKeyword = overrides?.keyword ?? equipmentKeyword
       setEquipmentLoading(true)
       try {
         const res = await getFireEquipmentList({
           pageKey,
           page,
           pageSize: 20,
-          equipmentType: equipmentType === 'all' ? null : equipmentType,
-          monthStatus: monthStatus === 'all' ? null : monthStatus,
-          expiryStatus: expiryStatus === 'all' ? null : expiryStatus,
-          keyword: equipmentKeyword.trim() || null,
+          equipmentType: effectiveType === 'all' ? null : effectiveType,
+          monthStatus: effectiveMonth === 'all' ? null : effectiveMonth,
+          expiryStatus: effectiveExpiry === 'all' ? null : effectiveExpiry,
+          keyword: effectiveKeyword.trim() || null,
         })
         if (res.code === 200 && res.data) {
           setEquipmentPage(res.data)
@@ -224,7 +251,11 @@ export default function FireEquipmentPanel({
       const res = await syncFireEquipment({ pageKey })
       if (res.code === 200 && res.data) {
         setStats(res.data)
-        await Promise.all([loadEquipment(1), loadRecords(1)])
+        await Promise.all([
+          loadEquipment(1),
+          loadRecords(1),
+          refreshDashboard(),
+        ])
         setEquipmentPageNo(1)
         setRecordPageNo(1)
         message.success(
@@ -564,33 +595,18 @@ export default function FireEquipmentPanel({
     },
   ]
 
-  const statItems = useMemo(
-    () => [
-      { title: '器材总数', value: stats?.total ?? 0 },
-      { title: '灭火器', value: stats?.extinguisher_count ?? 0 },
-      { title: '消防栓', value: stats?.hydrant_count ?? 0 },
-      { title: '本月已检', value: stats?.inspected_this_month ?? 0 },
-      { title: '本月未检', value: stats?.uninspected_this_month ?? 0 },
-      {
-        title: '本月不合格',
-        value: stats?.failed_this_month ?? 0,
-        valueStyle: { color: (stats?.failed_this_month ?? 0) > 0 ? '#cf1322' : undefined },
-      },
-      {
-        title: '30天内到期',
-        value: stats?.expiring_in_30_count ?? 0,
-        valueStyle: {
-          color: (stats?.expiring_in_30_count ?? 0) > 0 ? '#d46b08' : undefined,
-        },
-      },
-      {
-        title: '已过期',
-        value: stats?.expired_count ?? 0,
-        valueStyle: { color: (stats?.expired_count ?? 0) > 0 ? '#cf1322' : undefined },
-      },
-    ],
-    [stats]
-  )
+  const handleDrill = (status: string | null) => {
+    const next = status ?? 'all'
+    setExpiryStatus(next)
+    setEquipmentPageNo(1)
+    void loadEquipment(1, { expiryStatus: next })
+  }
+
+  const handleFilterUninspected = () => {
+    setMonthStatus('uninspected')
+    setEquipmentPageNo(1)
+    void loadEquipment(1, { monthStatus: 'uninspected' })
+  }
 
   const renderEquipmentTab = () => (
     <>
@@ -599,16 +615,20 @@ export default function FireEquipmentPanel({
           options={[{ value: 'all', label: '全部' }, ...TYPE_OPTIONS]}
           value={equipmentType}
           onChange={(value) => {
-            setEquipmentType(String(value))
+            const next = String(value)
+            setEquipmentType(next)
             setEquipmentPageNo(1)
+            void loadEquipment(1, { equipmentType: next })
           }}
         />
         <Segmented
           options={[{ value: 'all', label: '全部状态' }, ...MONTH_STATUS_OPTIONS]}
           value={monthStatus}
           onChange={(value) => {
-            setMonthStatus(String(value))
+            const next = String(value)
+            setMonthStatus(next)
             setEquipmentPageNo(1)
+            void loadEquipment(1, { monthStatus: next })
           }}
         />
         <Segmented
@@ -619,8 +639,10 @@ export default function FireEquipmentPanel({
           ]}
           value={expiryStatus}
           onChange={(value) => {
-            setExpiryStatus(String(value))
+            const next = String(value)
+            setExpiryStatus(next)
             setEquipmentPageNo(1)
+            void loadEquipment(1, { expiryStatus: next })
           }}
         />
         <Input.Search
@@ -787,15 +809,15 @@ export default function FireEquipmentPanel({
           showRulesLink={false}
         />
       ) : null}
-      <Card size="small">
-        <Row gutter={[16, 16]}>
-          {statItems.map((item) => (
-            <Col key={item.title} xs={12} sm={8} md={4}>
-              <Statistic title={item.title} value={item.value} {...(item.valueStyle ? { valueStyle: item.valueStyle } : {})} />
-            </Col>
-          ))}
-        </Row>
-        <div style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+      <FireEquipmentDashboard
+        stats={stats}
+        dashboard={dashboard}
+        drilling={drilling}
+        onDrill={handleDrill}
+        onFilterUninspected={handleFilterUninspected}
+      />
+      <Card size="small" styles={{ body: { paddingBlock: 8 } }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <Text type="secondary">
             {stats?.last_synced_at
               ? `最近同步：${formatDateTime(stats.last_synced_at)}${

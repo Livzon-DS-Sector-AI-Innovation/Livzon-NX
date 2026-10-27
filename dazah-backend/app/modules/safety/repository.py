@@ -1054,6 +1054,7 @@ class SafetyRepository:
         position: str | None = None,
         keyword: str | None = None,
         status: str | None = None,
+        workshop: str | None = None,
     ) -> tuple[list[OperationRegulation], int]:
         """获取安全操作规程列表"""
         query = select(OperationRegulation).where(
@@ -1067,6 +1068,11 @@ class SafetyRepository:
             query = query.where(OperationRegulation.position.ilike(f"%{position}%"))
             count_query = count_query.where(
                 OperationRegulation.position.ilike(f"%{position}%")
+            )
+        if workshop:
+            query = query.where(OperationRegulation.workshop == workshop)
+            count_query = count_query.where(
+                OperationRegulation.workshop == workshop
             )
         if keyword:
             like = f"%{keyword}%"

@@ -4257,13 +4257,31 @@
       "status": "active",
       "module_code": "safety",
       "route_path": "/safety/regulation/generator",
-      "actions": {}
+      "actions": {
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        }
+      }
     },
     "safety:risk-hazard:regulation:regulation-list": {
       "status": "active",
       "module_code": "safety",
       "route_path": "/safety/regulation",
-      "actions": {}
+      "actions": {
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        },
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        }
+      }
     },
     "safety:risk-hazard:risk-grading:hazard-identification": {
       "status": "active",
@@ -5125,6 +5143,67 @@
           "status": "active",
           "category": "integration_admin"
         },
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        }
+      }
+    },
+    "safety:emergency-accident:emergency-card": {
+      "status": "active",
+      "module_code": "safety",
+      "route_path": "/safety/emergency-card",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        }
+      }
+    },
+    "safety:governance:target-performance": {
+      "status": "active",
+      "module_code": "safety",
+      "route_path": "/safety/target-performance",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        }
+      }
+    },
+    "safety:overview": {
+      "status": "active",
+      "module_code": "safety",
+      "route_path": "/safety",
+      "actions": {}
+    },
+    "safety:site-mgmt:safety-facilities": {
+      "status": "active",
+      "module_code": "safety",
+      "route_path": "/safety/facilities",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        }
+      }
+    },
+    "safety:site-mgmt:hazchem-msds": {
+      "status": "active",
+      "module_code": "safety",
+      "route_path": "/safety/hazchem",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        }
+      }
+    },
+    "safety:emergency-accident:emergency-mgmt": {
+      "status": "active",
+      "module_code": "safety",
+      "route_path": "/safety/emergency-mgmt",
+      "actions": {
         "delete": {
           "status": "active",
           "category": "destructive"

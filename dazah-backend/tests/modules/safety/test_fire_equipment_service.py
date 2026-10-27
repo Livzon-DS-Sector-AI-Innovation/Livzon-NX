@@ -542,3 +542,149 @@ async def test_projection_prefers_sub_table_name_for_primary(
     finally:
         await _cleanup(db_session)
         await _cleanup_config(db_session)
+
+
+@pytest.mark.asyncio
+async def test_projection_skips_writeback_table_rows(
+    db_session: AsyncSession,
+) -> None:
+    """回写表被误勾进页签子表时，其记录不会投影成器材。"""
+    await _seed(db_session)
+    try:
+        # 把器材来源表 tblExt 同时当作回写表 → 该表全部记录应被跳过，
+        # 其它来源表（tblHyd）不受影响
+        await _seed_writeback_config(db_session, writeback_table_id="tblExt")
+        result = await fire_equipment_module.sync_fire_equipment_ledger(db_session)
+        assert result["created"] == 1
+        assert await _equipment_by_record(db_session, "recE1") is None
+        assert await _equipment_by_record(db_session, "recE2") is None
+        assert await _equipment_by_record(db_session, "recH1") is not None
+    finally:
+        await _cleanup(db_session)
+        await _cleanup_config(db_session)
+
+
+# ── 仪表盘聚合 ──
+
+
+_DASHBOARD_RECORD_IDS = ["recD1", "recD2", "recD3"]
+
+
+async def _cleanup_dashboard(db: AsyncSession) -> None:
+    await db.execute(
+        delete(FireInspectionRecord).where(
+            FireInspectionRecord.equipment_id.in_(
+                select(FireEquipment.id).where(
+                    FireEquipment.record_id.in_(_DASHBOARD_RECORD_IDS)
+                )
+            )
+        )
+    )
+    await db.execute(
+        delete(FireEquipment).where(
+            FireEquipment.record_id.in_(_DASHBOARD_RECORD_IDS)
+        )
+    )
+    await db.execute(
+        delete(SafetyPageTableMirrorRecord).where(
+            SafetyPageTableMirrorRecord.record_id.in_(_DASHBOARD_RECORD_IDS)
+        )
+    )
+    await db.commit()
+
+
+async def _seed_dashboard_fixtures(db: AsyncSession) -> None:
+    from datetime import date, timedelta
+
+    # 先清掉此前失败运行可能留下的残行（recD0 只作占位，播种后即删）
+    await _cleanup(db)
+    await _cleanup_dashboard(db)
+    today = date.today()
+    db.add(_mirror("recD0", "tblExt", {"灭火器编号": "MQC-D0"}))
+    await db.execute(
+        delete(SafetyPageTableMirrorRecord).where(
+            SafetyPageTableMirrorRecord.record_id == "recD0"
+        )
+    )
+    await db.flush()
+    # 追加带有效日期的记录：-3 天（过期）/ +5 天（7 天内）/ +20 天（30 天内）
+    db.add(
+        _mirror(
+            "recD1",
+            "tblExt",
+            {
+                "灭火器编号": "MQC-D1",
+                "有效日期": (today - timedelta(days=3)).isoformat(),
+            },
+        )
+    )
+    db.add(
+        _mirror(
+            "recD2",
+            "tblExt",
+            {
+                "灭火器编号": "MQC-D2",
+                "有效日期": (today + timedelta(days=5)).isoformat(),
+            },
+        )
+    )
+    db.add(
+        _mirror(
+            "recD3",
+            "tblExt",
+            {
+                "灭火器编号": "MQC-D3",
+                "有效日期": (today + timedelta(days=20)).isoformat(),
+            },
+        )
+    )
+    await db.flush()
+    await fire_equipment_module.sync_fire_equipment_ledger(db)
+
+
+@pytest.mark.asyncio
+async def test_dashboard_aggregates_expiry_trend_coverage(
+    db_session: AsyncSession,
+) -> None:
+    await _seed_dashboard_fixtures(db_session)
+    try:
+        # 给 MQC-D2 提交一次点检（当月），撑起趋势与覆盖
+        equipment = await _equipment_by_record(db_session, "recD2")
+        assert equipment is not None
+        items = [
+            {"key": key, "result": "ok"}
+            for key, _ in CHECK_ITEMS_BY_TYPE[EQUIPMENT_TYPE_EXTINGUISHER]
+        ]
+        await create_fire_inspection(
+            db_session,
+            equipment.id,
+            items=items,
+            abnormal_action=None,
+            inspected_at=None,
+            inspector_id=None,
+            inspector_name="张三",
+            source="scan",
+        )
+
+        dashboard = await fire_equipment_module.get_fire_equipment_dashboard(
+            db_session
+        )
+        summary = dashboard["expiry_summary"]
+        assert summary["overdue"] == 1
+        assert summary["within_7"] == 1
+        assert summary["within_15"] == 1
+        assert summary["within_30"] == 2
+
+        # 趋势：当月至少 1 条（历史月份可能为 0，长度固定 6）
+        assert len(dashboard["trend"]) == 6
+        assert dashboard["trend"][-1]["count"] >= 1
+
+        # 覆盖：tblExt 一张表 3 台（recD1-3）、本月已检 1
+        coverage = {
+            row["tab_name"]: row for row in dashboard["workshop_coverage"]
+        }
+        assert coverage["tblExt"]["total"] == 3
+        assert coverage["tblExt"]["inspected"] == 1
+    finally:
+        await _cleanup(db_session)
+        await _cleanup_dashboard(db_session)

@@ -1210,6 +1210,7 @@ export interface OperationRegulation {
   document_path?: string
   document_original_name?: string
   position?: string
+  workshop?: string      // 车间/部门（如 103车间、201二车间、动力部）
   notes?: string
   content?: string        // SOP standardized markdown content
   status?: string         // draft | generated | reviewed | exported
@@ -1219,9 +1220,10 @@ export interface OperationRegulation {
 }
 
 export interface OperationRegulationFormData {
-  regulation_no: string
+  regulation_no?: string
   regulation_name: string
   position?: string
+  workshop?: string
   notes?: string
 }
 
@@ -1229,8 +1231,65 @@ export interface OperationRegulationQueryParams {
   page?: number
   page_size?: number
   position?: string
+  workshop?: string
   keyword?: string
   status?: string
+}
+
+// ============ Regulation Batch Upload & Compliance Review Types ============
+
+export interface RegulationBatchUploadItem {
+  file_name: string
+  ok: boolean
+  regulation_id?: string
+  regulation_no: string
+  regulation_name: string
+  workshop: string
+  position: string
+  recognized_by: string   // heuristic | ai
+  message: string
+}
+
+export interface RegulationBatchUploadResponse {
+  items: RegulationBatchUploadItem[]
+  success_count: number
+  fail_count: number
+}
+
+export interface RegulationReviewItem {
+  item: string
+  requirement: string
+  basis: string
+  severity: string        // 严重 | 一般 | 建议
+  suggestion: string
+}
+
+export interface RegulationReview {
+  id: string
+  regulation_id: string
+  regulation_name: string
+  result: string          // pass | conditional_pass | fail
+  score: number
+  summary: string
+  missing_items: RegulationReviewItem[]
+  non_compliant_items: RegulationReviewItem[]
+  suggestions: string[]
+  reviewed_by?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface RegulationLatestReviewEntry {
+  regulation_id: string
+  result: string
+  score: number
+  reviewed_at: string
+}
+
+export interface RegulationDocumentPreview {
+  file_name: string
+  content: string
+  note: string
 }
 
 // ============ RegulationRevision Types ============
