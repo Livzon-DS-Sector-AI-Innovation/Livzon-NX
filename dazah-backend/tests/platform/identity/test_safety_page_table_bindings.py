@@ -286,3 +286,18 @@ def test_every_page_table_api_route_has_a_binding() -> None:
         if api_binding_for_route(method, path) is None
     ]
     assert missing == []
+
+
+def test_governance_pages_registered_in_policy_and_lifecycle() -> None:
+    """安全治理批次新页：page_policy 与生命周期目录都已登记。"""
+    from app.platform.identity.page_lifecycle import load_ledger
+
+    pages = load_ledger()["pages"]
+    for page_key in (
+        "safety:emergency-accident:emergency-card",
+        "safety:emergency-accident:emergency-mgmt",
+        "safety:site-mgmt:safety-facilities",
+        "safety:site-mgmt:hazchem-msds",
+        "safety:governance:target-performance",
+    ):
+        assert pages[page_key]["status"] == "active", page_key
