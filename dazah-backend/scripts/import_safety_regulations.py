@@ -97,7 +97,8 @@ async def main_async(root: Path) -> int:
         service = RegulationComplianceService(session)
         for folder, files in sorted(groups.items()):
             hint = resolve_hint(folder)
-            print(f"\n📁 {folder.name}（兜底车间：{hint or '按文件名'}）— {len(files)} 个文件")
+            label = hint or "按文件名"
+            print(f"\n📁 {folder.name}（兜底车间：{label}）— {len(files)} 个文件")
             payloads = [
                 (path.name, path.read_bytes()) for path in files
             ]
