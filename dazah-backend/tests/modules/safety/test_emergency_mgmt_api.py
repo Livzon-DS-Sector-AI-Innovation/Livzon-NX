@@ -51,9 +51,15 @@ async def client(
 
 
 async def _cleanup(db: AsyncSession) -> None:
-    await db.execute(delete(EmergencySupply).where(EmergencySupply.name.like(f"{_PREFIX}%")))
-    await db.execute(delete(EmergencyDrill).where(EmergencyDrill.name.like(f"{_PREFIX}%")))
-    await db.execute(delete(EmergencyPlan).where(EmergencyPlan.name.like(f"{_PREFIX}%")))
+    await db.execute(
+        delete(EmergencySupply).where(EmergencySupply.name.like(f"{_PREFIX}%"))
+    )
+    await db.execute(
+        delete(EmergencyDrill).where(EmergencyDrill.name.like(f"{_PREFIX}%"))
+    )
+    await db.execute(
+        delete(EmergencyPlan).where(EmergencyPlan.name.like(f"{_PREFIX}%"))
+    )
     await db.commit()
 
 
@@ -69,7 +75,9 @@ async def test_plan_list_create_update_delete_roundtrip(
     assert created.status_code == 200, created.text
     plan_id = created.json()["data"]["id"]
 
-    listed = await client.get("/api/v1/safety/emergency-plans", params={"keyword": name})
+    listed = await client.get(
+        "/api/v1/safety/emergency-plans", params={"keyword": name}
+    )
     assert listed.status_code == 200
     assert listed.json()["data"]["total"] >= 1
 

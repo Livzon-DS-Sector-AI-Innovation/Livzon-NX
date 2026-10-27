@@ -62,9 +62,9 @@ async def _cleanup(db: AsyncSession) -> None:
     await db.execute(
         delete(ChemicalInventory).where(
             ChemicalInventory.chemical_id.in_(
-                __import__("sqlalchemy").select(HazardousChemical.id).where(
-                    HazardousChemical.name.like(f"{_CHEM_PREFIX}%")
-                )
+                __import__("sqlalchemy")
+                .select(HazardousChemical.id)
+                .where(HazardousChemical.name.like(f"{_CHEM_PREFIX}%"))
             )
         )
     )
@@ -74,9 +74,9 @@ async def _cleanup(db: AsyncSession) -> None:
     await db.execute(
         delete(SafetyFacilityInspection).where(
             SafetyFacilityInspection.facility_id.in_(
-                __import__("sqlalchemy").select(SafetyFacility.id).where(
-                    SafetyFacility.name.like(f"{_FAC_PREFIX}%")
-                )
+                __import__("sqlalchemy")
+                .select(SafetyFacility.id)
+                .where(SafetyFacility.name.like(f"{_FAC_PREFIX}%"))
             )
         )
     )
