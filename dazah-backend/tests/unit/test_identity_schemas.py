@@ -1,7 +1,13 @@
+import uuid
+
 import pytest
 from pydantic import ValidationError
 
-from app.platform.identity.schemas import PersonnelItem, UserResponse
+from app.platform.identity.schemas import (
+    PersonnelItem,
+    UserManagementItem,
+    UserResponse,
+)
 
 
 def test_personnel_department_ids_accept_string_json_list() -> None:
@@ -33,3 +39,15 @@ def test_current_user_response_exposes_resolved_rbac_context() -> None:
 
     assert user.roles == ["quality_manager"]
     assert user.permissions == ["quality:read", "quality:write"]
+
+
+def test_user_management_item_normalizes_legacy_status() -> None:
+    item = UserManagementItem(
+        id=uuid.uuid4(), name="历史账号", status="inactive"
+    )
+    assert item.status == "disabled"
+
+    active = UserManagementItem(
+        id=uuid.uuid4(), name="正常账号", status="active"
+    )
+    assert active.status == "active"

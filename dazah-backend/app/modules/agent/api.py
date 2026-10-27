@@ -17,7 +17,7 @@ from app.core.redaction import redact_sensitive
 from app.core.response import error_response, success_response
 from app.platform.audit.middleware import current_audit_request_id
 from app.platform.audit.models import AuditLog
-from app.platform.identity.deps import AdminUser, RequiredUser
+from app.platform.identity.deps import AdminUser, RequiredUser, SystemAdminUser
 from app.platform.identity.models import User
 from app.shared.schemas import ApiResponseEnvelope
 
@@ -141,10 +141,8 @@ async def list_agent_audit_sessions(
     started_at: datetime | None = None,
     ended_at: datetime | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: RequiredUser = None,
+    current_user: SystemAdminUser = None,
 ):
-    if current_user.role != "admin":
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin required")
     result = await AgentAuditService().list_sessions(
         db,
         page=max(1, page),
@@ -177,10 +175,8 @@ async def list_agent_audit_sessions(
 async def get_agent_audit_session(
     session_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: RequiredUser = None,
+    current_user: SystemAdminUser = None,
 ):
-    if current_user.role != "admin":
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin required")
     result = await AgentAuditService().get_session_detail(db, session_id=session_id)
     if result is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Livzon session not found")

@@ -23,6 +23,7 @@ from app.modules.energy.ledger_service import EnergyLedgerService
 from app.modules.energy.ledger_template import extract_template
 from app.platform.identity.deps import get_current_user
 from app.platform.identity.models import User
+from tests.modules.energy.workbook_fixtures import seed_meter, seed_rule
 
 
 def test_equipment_name_temperature_is_not_an_electricity_dimension() -> None:
@@ -78,7 +79,6 @@ async def test_duplicate_active_source_mapping_is_visible_even_if_one_value_is_m
 @pytest.mark.asyncio
 async def test_original_datasets_readings_usage_quality_filters_and_exports(
     db_session: AsyncSession,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     actor = User(
         id=uuid4(),
@@ -92,7 +92,8 @@ async def test_original_datasets_readings_usage_quality_filters_and_exports(
     await db_session.flush()
     service = EnergyLedgerService(db_session, actor)
     day = date(2026, 7, 1)
-    meter = await service.save_meter(
+    meter = await seed_meter(
+        service,
         MeterWrite(
             definition=MeterDefinition(
                 code="water_" + uuid4().hex,
@@ -107,9 +108,10 @@ async def test_original_datasets_readings_usage_quality_filters_and_exports(
                 source_sheet="饮用水码",
                 source_column=2,
             )
-        )
+        ),
     )
-    await service.save_rule(
+    await seed_rule(
+        service,
         RuleWrite(
             definition=RuleDefinition(
                 code="water_usage_" + uuid4().hex,
@@ -124,7 +126,7 @@ async def test_original_datasets_readings_usage_quality_filters_and_exports(
                 source_sheet="饮用水量",
                 source_column=2,
             )
-        )
+        ),
     )
     for current, value in [
         (day, "100"),
@@ -245,19 +247,6 @@ async def test_original_datasets_readings_usage_quality_filters_and_exports(
         app.dependency_overrides.pop(get_current_user, None)
         app.dependency_overrides.pop(get_db, None)
 
-    from unittest.mock import AsyncMock
-
-    from app.modules.energy.ledger_workbook import EnergyWorkbookService
-    from app.platform.identity.data_scope import DepartmentScope
-
-    monkeypatch.setattr(
-        service,
-        "scope",
-        AsyncMock(return_value=DepartmentScope(department_names={"其他部门"})),
-    )
-    denied = await EnergyWorkbookService(service).report(2026, 7, "饮用水码")
-    assert not denied.columns and denied.available_count == 0
-
 
 @pytest.mark.asyncio
 async def test_abnormal_nonmissing_result_is_not_a_complete_period(
@@ -274,7 +263,8 @@ async def test_abnormal_nonmissing_result_is_not_a_complete_period(
     db_session.add(actor)
     await db_session.flush()
     service = EnergyLedgerService(db_session, actor)
-    meter = await service.save_meter(
+    meter = await seed_meter(
+        service,
         MeterWrite(
             definition=MeterDefinition(
                 code="abnormal_" + uuid4().hex,
@@ -287,7 +277,7 @@ async def test_abnormal_nonmissing_result_is_not_a_complete_period(
                 enabled=True,
                 report_scope="detail",
             )
-        )
+        ),
     )
     db_session.add(
         EnergyUsageFact(

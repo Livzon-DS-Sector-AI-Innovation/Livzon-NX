@@ -1,116 +1,125 @@
 /* @vitest-environment happy-dom */
-
 import { act } from 'react'
-import { createRoot } from 'react-dom/client'
-import { App, ConfigProvider } from 'antd'
+import { createRoot, type Root } from 'react-dom/client'
+import { App, ConfigProvider, theme } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-
-const state = vi.hoisted(() => ({ data: undefined as unknown, error: undefined as Error | undefined, params: 'task=t1', invalidate: vi.fn(), refetch: vi.fn() }))
-vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: vi.fn() }), useSearchParams: () => new URLSearchParams(state.params) }))
-vi.mock('@tanstack/react-query', () => ({ useQueryClient: () => ({ invalidateQueries: state.invalidate }), useQuery: (options: { queryKey: string[] }) => options.queryKey[1] === 'task' ? { data: state.data, error: state.error, refetch: state.refetch } : { data: { items: [] }, refetch: state.refetch } }))
-vi.mock('@/actions/energy-ledger', () => ({ generateLedgerTasks: vi.fn(), submitLedgerTask: vi.fn() }))
-vi.mock('@/stores/auth', () => ({ useAuthStore: (selector: (state: { hasPagePermission: () => boolean }) => boolean) => selector({ hasPagePermission: () => true }) }))
-
+import { afterEach, expect, it, vi } from 'vitest'
+import type { DirectReading } from '@/lib/api/energy-ledger'
+const state = vi.hoisted(() => ({ data: undefined as DirectReading | undefined, params: 'date=2026-10-20&dataset=电量', error: undefined as Error | undefined, canOperate: true, invalidate: vi.fn(), refetch: vi.fn() }))
+vi.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams(state.params) }))
+vi.mock('@tanstack/react-query', () => ({ useQueryClient: () => ({ invalidateQueries: state.invalidate }), useQuery: ({ queryKey }: { queryKey: string[] }) => queryKey[1] === 'input-readings' ? { data: state.data, error: state.error, refetch: state.refetch } : {} }))
+vi.mock('@/actions/energy-ledger', () => ({ saveDirectReadings: vi.fn() }))
+vi.mock('@/stores/auth', () => ({ useAuthStore: (selector: (value: { hasPagePermission: () => boolean }) => boolean) => selector({ hasPagePermission: () => state.canOperate }) }))
+import { saveDirectReadings } from '@/actions/energy-ledger'
 import { EnergyEntryClient } from './EnergyEntryClient'
-import { submitLedgerTask, generateLedgerTasks } from '@/actions/energy-ledger'
-import type { Task } from '@/lib/api/energy-ledger'
-
-afterEach(() => { state.data = undefined; state.error = undefined; state.params = 'task=t1'; document.body.innerHTML = ''; vi.clearAllMocks() })
-
-describe('energy entry user-visible states', () => {
-  it('includes a persisted zero draft in the submission confirmation', async () => {
-    state.data = { id: 't1', name: '电表组', task_date: '2026-07-02', deadline_time: '10:00', total_count: 1, completed_count: 0, items: [{ id: 'r1', point_id: 'p1', name: '草稿电量', category: 'electricity', reading_date: '2026-07-01', unit: 'kWh', precision: 3, reading_type: 'direct', value: null, draft_value: '0', previous_value: null, previous_date: null, version: 2, submitted_at: null }] }
-    const node = document.createElement('div'); document.body.append(node)
-    const root = createRoot(node)
-    await act(async () => root.render(<App><EnergyEntryClient manager={false} /></App>))
-    const submit = Array.from(node.querySelectorAll('button')).find(button => button.textContent === '提交生效')
-    await act(async () => submit?.click())
-    const dialog = document.querySelector('[role="dialog"]')
-    expect(dialog?.textContent).toContain('本次填写 1 项')
-    expect(dialog?.textContent).toContain('草稿电量（2026-07-01）：— → 0 kWh')
-    await act(async () => root.unmount())
-  })
-  it('shows a permission failure as a failure, not as empty tasks', async () => {
-    state.error = new Error('当前任务未分配给您')
-    const node = document.createElement('div'); document.body.append(node)
-    const root = createRoot(node)
-    await act(async () => root.render(<App><EnergyEntryClient manager={false} /></App>))
-    expect(node.textContent).toContain('当前任务未分配给您')
-    expect(node.textContent).toContain('提交即生效')
-    await act(async () => root.unmount())
-  })
-  it('renders true zero readings without filling the next input automatically', async () => {
-    state.data = { id: 't1', name: '水表组', task_date: '2026-07-02', deadline_time: '10:00', total_count: 1, completed_count: 1, items: [{ id: 'r1', point_id: 'p1', name: '101车间水表', category: 'drinking_water', reading_date: '2026-07-02', unit: 'm3', precision: 3, reading_type: 'counter', multiplier: '1', value: '0', draft_value: null, previous_value: '0', previous_date: '2026-07-01', version: 1, submitted_at: null }] }
-    const node = document.createElement('div'); document.body.append(node)
-    const root = createRoot(node)
-    await act(async () => root.render(<App><EnergyEntryClient manager={false} /></App>))
-    expect(node.textContent).toContain('已生效')
-    expect(node.querySelector('input[aria-label="101车间水表本次填写"]')?.getAttribute('value')).not.toBe('0')
-    expect(node.textContent).not.toContain('大罐数量')
-    await act(async () => root.unmount())
-  })
-})
-
-const entryTask: Task = {
-  id: 't1', name: '水表填报组', task_date: '2026-07-02', owner_ids: [], deadline_time: '10:00', total_count: 2, completed_count: 0,
-  items: ['水表一', '水表二'].map((name, index) => ({ id: `r${index + 1}`, point_id: `p${index + 1}`, name,
-    category: 'drinking_water', reading_date: '2026-07-02', unit: 'm3', precision: 3, reading_type: 'counter', frequency: 'daily',
-    multiplier: '1', value: null, draft_value: null, previous_value: '0', previous_date: '2026-07-01', version: 2, submitted_at: null })),
+let root: Root | undefined
+const data: DirectReading = { reading_date: '2026-10-20', dataset: '电量', items: [{ point_id: 'p1', name: '101车间电量', unit: 'kWh', precision: 3, value: null, draft_value: null, version: 0 }] }
+afterEach(async () => { await act(async () => root?.unmount()); root = undefined; state.data = undefined; state.error = undefined; state.canOperate = true; vi.clearAllMocks(); vi.unstubAllGlobals(); document.body.replaceChildren() })
+async function render(dark = false) {
+  const host = document.createElement('div'); document.body.append(host); root = createRoot(host)
+  await act(async () => root?.render(<ConfigProvider locale={zhCN} theme={{ algorithm: dark ? theme.darkAlgorithm : theme.defaultAlgorithm }}><App><EnergyEntryClient /></App></ConfigProvider>))
 }
-async function entryRender() {
-  const host = document.createElement('div'); document.body.append(host); const root = createRoot(host)
-  await act(async () => root.render(<ConfigProvider locale={zhCN} theme={{ token: { motion: false } }}><App><EnergyEntryClient manager /></App></ConfigProvider>))
-  return root
-}
-async function entryClick(label: string, scope: ParentNode = document) {
-  const button = [...scope.querySelectorAll<HTMLButtonElement>('button')].find(node => node.textContent?.replace(/\s/g, '') === label)
-  expect(button, label).toBeDefined()
+async function click(label: string, scope: ParentNode = document) {
+  const button = [...scope.querySelectorAll<HTMLButtonElement>('button')].find(item => item.textContent?.replace(/\s/g, '') === label)
+  expect(button).toBeDefined()
   await act(async () => button!.click())
 }
-async function pasteColumn(text: string) {
-  const event = new Event('paste', { bubbles: true, cancelable: true })
-  Object.defineProperty(event, 'clipboardData', { value: { getData: () => text } })
-  await act(async () => document.querySelector('input[aria-label="水表一本次填写"]')!.dispatchEvent(event))
+async function fill(value: string) {
+  const input = document.querySelector<HTMLInputElement>('[aria-label="101车间电量本次填写"]')!
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(input, value)
+    input.dispatchEvent(new Event('input', { bubbles: true })); input.dispatchEvent(new Event('change', { bubbles: true }))
+  })
 }
-it('saves pasted values as a draft, preserves them on failure and submits the same versioned data after confirmation', async () => {
-  state.data = entryTask; state.params = 'task=t1&source=feishu'
-  vi.mocked(submitLedgerTask).mockResolvedValueOnce({ ok: false, message: '月份已封账，输入已保留' })
-    .mockResolvedValueOnce({ ok: true, data: entryTask }).mockResolvedValueOnce({ ok: true, data: entryTask })
-  const root = await entryRender()
-  await pasteColumn('10.5\n20')
-  const unload = new Event('beforeunload', { cancelable: true }); window.dispatchEvent(unload)
-  expect(unload.defaultPrevented).toBe(true)
-  await entryClick('保存草稿')
-  expect(submitLedgerTask).toHaveBeenLastCalledWith('t1', { values: [
-    { reading_id: 'r1', version: 2, value: '10.5', exception: undefined },
-    { reading_id: 'r2', version: 2, value: '20', exception: undefined },
-  ], draft: true, reason: '', source: 'feishu' })
-  expect(document.body.textContent).toContain('月份已封账，输入已保留')
-  expect(document.querySelector<HTMLInputElement>('input[aria-label="水表一本次填写"]')?.value).toMatch(/^10\.50*$/)
+it.each([false, true])('allows direct date-based filling without plans or task generation (dark=%s)', async dark => {
+  state.data = data
+  await render(dark)
+  expect(document.body.textContent).toContain('101车间电量')
+  expect(document.querySelector<HTMLInputElement>('[aria-label="数据日期"]')?.value).toBe('2026年10月20日')
+  expect(document.body.textContent).not.toContain('生成该日清单')
+  expect(document.body.textContent).not.toContain('我的待填清单')
+  vi.mocked(saveDirectReadings).mockResolvedValue({ ok: true, data })
+  await fill('12.5'); await click('提交生效')
+  expect(saveDirectReadings).not.toHaveBeenCalled()
+  await click('确定', document.querySelector('[role=dialog]')!)
+  expect(saveDirectReadings).toHaveBeenCalledWith({ reading_date: '2026-10-20', dataset: '电量', values: [{ point_id: 'p1', version: 0, value: '12.5' }], draft: false, reason: '' })
+  expect(state.invalidate).toHaveBeenCalledWith({ queryKey: ['energy-ledger'] })
+})
+it('submits an existing zero draft without copying an earlier reading', async () => {
+  state.data = { ...data, items: [{ ...data.items[0], draft_value: '0', version: 2 }] }
+  vi.mocked(saveDirectReadings).mockResolvedValue({ ok: true, data })
+  await render(); await click('提交生效'); await click('确定', document.querySelector('[role=dialog]')!)
+  expect(saveDirectReadings).toHaveBeenCalledWith(expect.objectContaining({ values: [{ point_id: 'p1', version: 2, value: '0' }] }))
+})
+it.each([false, true])('shows original field names without the development prefix and retains point identity (dark=%s)', async dark => {
+  state.data = { ...data, items: [
+    { ...data.items[0], name: '开发验证 · 201一车间（-5°）', draft_value: '12.5' },
+    { ...data.items[0], point_id: 'p2', name: '103车间开发验证管道', value: '0' },
+  ] }
+  vi.mocked(saveDirectReadings).mockResolvedValue({ ok: true, data })
+  await render(dark)
+  const rows = document.querySelectorAll('tbody tr[data-row-key]')
+  expect(rows[0].querySelector('td')?.textContent).toContain('201一车间（-5°）')
+  expect(rows[1].querySelector('td')?.textContent).toContain('103车间开发验证管道')
+  expect(rows[1].querySelectorAll('td')[2].textContent).toBe('0')
+  expect(document.querySelector('[aria-label="201一车间（-5°）本次填写"]')).not.toBeNull()
+  expect(document.querySelector('label[for="energy-entry-date"]')?.textContent).toBe('数据日期')
+  expect(document.querySelector('label[for="energy-entry-dataset"]')?.textContent).toBe('原始数据表')
+  await click('保存草稿')
+  expect(saveDirectReadings).toHaveBeenCalledWith(expect.objectContaining({ values: [{ point_id: 'p1', version: 0, value: '12.5' }], draft: true }))
+  expect(state.data.items[0].name).toBe('开发验证 · 201一车间（-5°）')
+})
+it('preserves input when a concurrent save fails', async () => {
+  state.data = data
+  vi.mocked(saveDirectReadings).mockResolvedValue({ ok: false, message: '数据已被修改，请刷新后核对最新版本' })
+  await render(); await fill('20'); await click('保存草稿')
+  expect(document.body.textContent).toContain('数据已被修改')
+  expect(Number(document.querySelector<HTMLInputElement>('[aria-label="101车间电量本次填写"]')?.value)).toBe(20)
   expect(state.invalidate).not.toHaveBeenCalled()
-  await entryClick('保存草稿'); expect(state.invalidate).toHaveBeenCalledWith({ queryKey: ['energy-ledger'] })
-  await pasteColumn('11\n21'); await entryClick('提交生效')
-  expect(submitLedgerTask).toHaveBeenCalledTimes(2)
-  await entryClick('确定', document.querySelector('[role=dialog]')!)
-  expect(submitLedgerTask).toHaveBeenLastCalledWith('t1', expect.objectContaining({ draft: false, source: 'feishu', values: [
-    { reading_id: 'r1', version: 2, value: '11', exception: undefined }, { reading_id: 'r2', version: 2, value: '21', exception: undefined },
-  ] }))
-  await act(async () => root.unmount())
 })
-it('rejects an empty draft and invalid pasted values before calling the server', async () => {
-  state.data = entryTask; const root = await entryRender()
-  await entryClick('保存草稿'); expect(document.body.textContent).toContain('请填写至少一个计量点')
-  await pasteColumn('1\n-2'); expect(document.body.textContent).toContain('粘贴内容须为一列非负数值')
-  expect(submitLedgerTask).not.toHaveBeenCalled()
-  await act(async () => root.unmount())
+it('keeps read-only users from editing or submitting', async () => {
+  state.data = data; state.canOperate = false
+  await render()
+  expect(document.querySelector<HTMLInputElement>('[aria-label="101车间电量本次填写"]')?.disabled).toBe(true)
+  expect([...document.querySelectorAll('button')].find(button => button.textContent?.replace(/\s/g, '') === '提交生效')?.disabled).toBe(true)
 })
-it('refreshes generated task lists on success and exposes a generation error for retry', async () => {
-  vi.mocked(generateLedgerTasks).mockResolvedValueOnce({ ok: true, data: { items: [], total: 0 } })
-    .mockResolvedValueOnce({ ok: false, message: '责任分组尚未启用' })
-  const root = await entryRender()
-  await entryClick('生成该日清单'); expect(state.refetch).toHaveBeenCalled()
-  await entryClick('生成该日清单'); expect(document.body.textContent).toContain('责任分组尚未启用')
-  await entryClick('重试'); expect(state.refetch).toHaveBeenCalledTimes(3)
-  await act(async () => root.unmount())
+it('distinguishes denied access from an empty original table', async () => {
+  state.error = new Error('无权查看当前能源数据')
+  await render()
+  expect(document.body.textContent).toContain('无权查看当前能源数据')
+  expect(document.body.textContent).not.toContain('暂无当前权限内的字段')
+})
+it('retains unsaved readings when a calendar shortcut change is cancelled', async () => {
+  state.data = data
+  await render(); await fill('20')
+  await act(async () => document.querySelector<HTMLInputElement>('[aria-label="数据日期"]')!.click())
+  await click('本月初')
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain('有未保存的输入，切换将放弃这些输入。')
+  await click('继续填写', document.querySelector('[role="dialog"]')!)
+  expect(document.querySelector<HTMLInputElement>('[aria-label="数据日期"]')?.value).toBe('2026年10月20日')
+  expect(Number(document.querySelector<HTMLInputElement>('[aria-label="101车间电量本次填写"]')?.value)).toBe(20)
+})
+it('discards inputs only after confirming a date change in the Ant Design modal', async () => {
+  state.data = data
+  await render(); await fill('20')
+  await act(async () => document.querySelector<HTMLInputElement>('[aria-label="数据日期"]')!.click())
+  await click('本月初')
+  await click('放弃并切换', document.querySelector('[role="dialog"]')!)
+  expect(document.querySelector<HTMLInputElement>('[aria-label="数据日期"]')?.value).toBe('2026年10月01日')
+  expect(document.querySelector<HTMLInputElement>('[aria-label="101车间电量本次填写"]')?.value).toBe('')
+})
+it('guards link navigation with a themed confirmation and continues only after approval', async () => {
+  state.data = data
+  await render(true); await fill('20')
+  const link = document.createElement('a'); link.href = '/energy/reports'; document.body.append(link)
+  const navigate = vi.fn((event: MouseEvent) => event.preventDefault())
+  link.addEventListener('click', navigate)
+  await act(async () => link.click())
+  expect(navigate).not.toHaveBeenCalled()
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain('有未保存的能源填写')
+  await click('继续填写', document.querySelector('[role="dialog"]')!)
+  expect(document.querySelector<HTMLInputElement>('[aria-label="101车间电量本次填写"]')?.value).not.toBe('')
+  await act(async () => link.click())
+  await click('放弃并离开', document.querySelector('[role="dialog"]')!)
+  expect(navigate).toHaveBeenCalledOnce()
 })

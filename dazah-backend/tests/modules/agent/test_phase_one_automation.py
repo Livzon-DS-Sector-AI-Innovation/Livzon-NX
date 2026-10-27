@@ -5,13 +5,14 @@ from typing import Any
 
 import pytest
 from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.redaction import REDACTED_VALUE
 from app.modules.agent.automation_service import AgentAutomationService
 from app.modules.agent.models import AgentWorkflow
 from app.modules.agent.schemas import AgentAutomationDraftCreate
-from app.platform.identity.models import User, UserPageGrant
+from app.platform.identity.models import Role, User, UserPageGrant, UserRole
 from app.platform.identity.page_permission_repository import PagePermissionRepository
 from app.platform.identity.permissions import IdentityPermissionService
 from app.platform.identity.rbac import seed_menus
@@ -273,3 +274,71 @@ async def test_legacy_workflow_is_exposed_as_read_only_automation(
     assert versions[0].schema_version == "legacy-agent-workflow-v1"
     assert versions[0].definition["steps"][0]["api_token"] == REDACTED_VALUE
     assert platform_item.payload_redacted is True
+
+
+@pytest.mark.anyio
+async def test_ordinary_admin_cannot_read_platform_automation_audit(
+    db_session: AsyncSession,
+) -> None:
+    ordinary = _user(role="admin")
+    system_admin = _user(role="admin")
+    owner = _user()
+    role = await db_session.scalar(
+        select(Role).where(Role.code == "ordinary_admin")
+    )
+    if role is None:
+        role = Role(code="ordinary_admin", name="普通管理员", is_system=True)
+        db_session.add(role)
+    db_session.add_all([ordinary, system_admin, owner])
+    await db_session.flush()
+    db_session.add(UserRole(user_id=ordinary.id, role_id=role.id))
+    await db_session.flush()
+    await _grant_quality_automation(db_session, admin=system_admin, user=ordinary)
+    await _grant_quality_automation(db_session, admin=system_admin, user=owner)
+
+    service = AgentAutomationService()
+    owned = await service.create_draft(
+        db_session,
+        user=ordinary,
+        request=AgentAutomationDraftCreate.model_validate(
+            {"definition": _definition("普通管理员自有任务"), "scope_type": "mine"}
+        ),
+    )
+    other = await service.create_draft(
+        db_session,
+        user=owner,
+        request=AgentAutomationDraftCreate.model_validate(
+            {"definition": _definition("他人平台任务"), "scope_type": "mine"}
+        ),
+    )
+
+    with pytest.raises(HTTPException) as platform_error:
+        await service.list_automations(
+            db_session,
+            user=ordinary,
+            scope="platform",
+            status_value=None,
+            page=1,
+            page_size=20,
+        )
+    assert platform_error.value.status_code == 403
+
+    own_page = await service.list_automations(
+        db_session,
+        user=ordinary,
+        scope="mine",
+        status_value=None,
+        page=1,
+        page_size=20,
+    )
+    assert [item.id for item in own_page.items] == [owned.id]
+    own_detail = await service.get_automation_out(
+        db_session, user=ordinary, automation_id=owned.id
+    )
+    assert own_detail.id == owned.id
+
+    with pytest.raises(HTTPException) as detail_error:
+        await service.get_automation_out(
+            db_session, user=ordinary, automation_id=other.id
+        )
+    assert detail_error.value.status_code == 404

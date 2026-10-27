@@ -8,7 +8,6 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from app.modules.energy import scheduler as energy_scheduler
 from app.modules.equipment import scheduler as equipment_scheduler
 from app.modules.production.repository import ProductionRepository
 from app.modules.warehouse import scheduler as warehouse_scheduler
@@ -16,28 +15,6 @@ from app.platform.identity import scheduler as identity_scheduler
 from app.platform.integrations.feishu import read_scheduler
 
 SimpleNamespace: Any = _SimpleNamespace
-
-
-@pytest.mark.asyncio
-async def test_energy_scheduler_handles_inactive_and_active_configs(
-    monkeypatch: Any,
-) -> None:
-    config_id = uuid4()
-    repo: Any = SimpleNamespace(get_config=AsyncMock(return_value=None))
-    service: Any = SimpleNamespace(
-        repo=repo,
-        run_scheduled_sync_if_due=AsyncMock(),
-    )
-    monkeypatch.setattr(energy_scheduler, "EnergyWikiService", lambda _session: service)
-    generator = energy_scheduler.EnergyWikiSyncGenerator()
-
-    assert await generator.find_due(object()) == []
-    repo.get_config.return_value = SimpleNamespace(id=config_id, is_active=False)
-    assert await generator.find_due(object()) == []
-    repo.get_config.return_value = SimpleNamespace(id=config_id, is_active=True)
-    assert await generator.find_due(object()) == [str(config_id)]
-    await generator.execute_one(object(), str(config_id))
-    service.run_scheduled_sync_if_due.assert_awaited_once()
 
 
 @pytest.mark.asyncio

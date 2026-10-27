@@ -342,6 +342,51 @@ def test_automation_paged_audit_result_preserves_total(monkeypatch) -> None:
     assert result["data"]["items"][0]["id"] == "automation-501"
 
 
+def test_platform_automation_scope_denial_returns_repair_hint(monkeypatch) -> None:
+    """Platform automation scope now requires a Dazah system administrator."""
+
+    class ForbiddenResponse:
+        status_code = 403
+        text = '{"detail": "仅系统管理员可查询平台自动化"}'
+
+        def json(self) -> dict[str, object]:
+            return {"detail": "仅系统管理员可查询平台自动化"}
+
+    class FakeAsyncClient:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args) -> None:
+            pass
+
+        async def post(self, url, json, headers):
+            return ForbiddenResponse()
+
+    monkeypatch.setenv("DAZAH_AGENT_TOOL_TOKEN", "contract-token")
+    monkeypatch.setattr(dazah_platform.httpx, "AsyncClient", FakeAsyncClient)
+    token = _bind_context()
+    try:
+        payload = asyncio.run(
+            dazah_platform.dazah_tool(
+                "execute",
+                operation="agent.list_automations",
+                params={"scope": "platform"},
+            )
+        )
+    finally:
+        dazah_platform.dazah_request_context.reset(token)
+
+    result = json.loads(payload)
+    assert result["ok"] is False
+    assert result["status_code"] == 403
+    assert result["operation"] == "agent.list_automations"
+    assert "系统管理员" in result["error"]
+    assert "repair_hint" in result
+
+
 def test_timeout_and_unavailable_backend_are_typed_errors(monkeypatch) -> None:
     class FailingAsyncClient:
         failure: type[httpx.HTTPError] = httpx.ReadTimeout

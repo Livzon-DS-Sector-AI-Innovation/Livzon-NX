@@ -4,12 +4,15 @@ import { act } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { AgentEntryButton } from "./AgentEntryButton"
+import { useAgentEntryPreferencesStore } from "@/stores/agent-entry-preferences"
 
 describe("AgentEntryButton", () => {
   let host: HTMLDivElement
   let root: Root
 
   beforeEach(() => {
+    localStorage.clear()
+    useAgentEntryPreferencesStore.setState({ visible: true, hydrated: false })
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true)
     host = document.createElement("div")
     document.body.append(host)
@@ -42,5 +45,13 @@ describe("AgentEntryButton", () => {
     await act(async () => root.render(<AgentEntryButton loading />))
     expect(host.querySelector("button")?.getAttribute("aria-label")).toBe("正在加载中枢助手")
     expect(host.querySelector("button")?.disabled).toBe(true)
+  })
+
+  it.each([{}, { minimized: true }, { loading: true }])("hides every entry variant when the saved preference is hidden: %j", async (props) => {
+    localStorage.setItem('dazah.agent.floating-entry-visible', 'false')
+    await act(async () => root.render(<AgentEntryButton {...props} />))
+    expect(host.querySelector('button')).toBeNull()
+    await act(async () => useAgentEntryPreferencesStore.getState().setVisible(true))
+    expect(host.querySelector('button')).not.toBeNull()
   })
 })

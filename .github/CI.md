@@ -153,11 +153,11 @@ GitHub Step Summary。Quarantine 不在 Gate 的 `needs` 中。
 6. 新 Gate 稳定后，移除旧的 `Frontend Test`、`Backend Test`、
    `Backend Docker Build`、`Hermes Test` 等 Required Checks。
 
-`Register CD Candidate` 显式依赖 `ci-gate`，仅在 main 的 push 事件执行。
-它在受限 self-hosted runner 上登记候选 SHA/run ID，不执行发布、不 checkout 代码。
-本机 root-owned controller 再验证 protected main 和 CI 来源，并在维护窗口处理候选。
-首次演练及容量验收完成前保持 controller 的 `enabled=false`，详见
-`docs/runbooks/single-host-cd.md`。
+生产发布由运维手工执行（`scripts/deploy-production.ps1`），CI 不接触生产环境，
+也不登记候选、不调度自动发布。2026-10-26 起单机 CD 控制器与自托管 runner 已退役：
+`Register CD Candidate` 任务与 `dazah-production-cd-nx` runner 一并移除。
+备份、恢复演练与维护闸门仍然保留，操作见
+`docs/runbooks/single-host-operations.md`。
 
 ## Nightly
 

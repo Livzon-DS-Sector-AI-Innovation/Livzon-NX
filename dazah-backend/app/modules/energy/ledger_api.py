@@ -1,4 +1,4 @@
-"""Native entry API. Archived Wiki routes retain their existing semantics."""
+"""Native ledger API for entry, reporting, imports and reviews."""
 
 from datetime import date, datetime
 from decimal import Decimal
@@ -7,58 +7,50 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Query, UploadFile
 from fastapi.responses import JSONResponse, Response
-from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.exceptions import AppException
 from app.core.response import success_response
-from app.modules.energy.ledger_imports import (
-    confirm_import,
-    preview_import,
-    preview_snapshot_import,
+from app.modules.energy.ledger_imports import confirm_import, preview_import
+from app.modules.energy.ledger_models import (
+    EnergyLedgerRevision,
+    EnergyNotificationRun,
 )
-from app.modules.energy.ledger_models import EnergyNotificationRun
 from app.modules.energy.ledger_notifications import read_bot, save_bot
+from app.modules.energy.ledger_reviews import (
+    load_usage_review_records,
+    save_usage_reviews,
+)
 from app.modules.energy.ledger_schemas import (
-    AdjustmentWrite,
     BotResponse,
     BotWrite,
+    DirectReadingResponse,
+    DirectReadingWrite,
     EnergyMetricOption,
-    EntrySubmission,
-    GenerateTasks,
     ImportConfirm,
     ImportResponse,
     LedgerOptions,
-    LockResponse,
-    LockWrite,
     MeterDefinition,
     MeterResponse,
-    MeterWrite,
     NotificationResponse,
-    PlanResponse,
-    PlanWrite,
     ReportResponse,
     ReportScope,
     RevisionResponse,
     RuleDefinition,
-    RuleResponse,
-    RuleWrite,
-    SnapshotImportOption,
-    SnapshotImportRequest,
-    TaskResponse,
-    TrialRequest,
+    UsageReview,
+    UsageReviewResponse,
+    UsageReviewUpdate,
     UsageRow,
     WorkbookDataset,
     WorkbookReport,
 )
 from app.modules.energy.ledger_service import EnergyLedgerService
-from app.modules.energy.ledger_template import TemplateDraftResponse, extract_template
+from app.modules.energy.ledger_template import TemplateDraftResponse
 from app.modules.energy.ledger_workbook import DATASETS, EnergyWorkbookService
 from app.modules.energy.schemas import EnergyApiResponse
 from app.platform.identity.deps import RequiredUser
-from app.platform.identity.public_api import list_active_user_options
 
 router = APIRouter()
 
@@ -69,200 +61,41 @@ def ledger_service(
     return EnergyLedgerService(db, user)
 
 
-class TaskListResponse(BaseModel):
-    items: list[TaskResponse]
-    total: int
-
-
-class TrialValue(BaseModel):
-    metric_key: str
-    name: str
-    value: str | None
-    status: str
-
-
-class TrialResponse(BaseModel):
-    usage_date: date
-    values: list[TrialValue]
-
-
-class RebuildRequest(BaseModel):
-    start_date: date
-    end_date: date
+def _review_responses(
+    records: list[EnergyLedgerRevision],
+) -> list[UsageReviewResponse]:
+    responses: list[UsageReviewResponse] = []
+    for record in records:
+        review = UsageReview.model_validate(record.payload)
+        if not review.periods:
+            continue
+        responses.append(
+            UsageReviewResponse(
+                **review.model_dump(),
+                updated_at=record.created_at,
+                updated_by=record.created_by,
+            )
+        )
+    return responses
 
 
 @router.get("/ledger-options", response_model=EnergyApiResponse[LedgerOptions])
 async def options(
     service: EnergyLedgerService = Depends(ledger_service),
 ) -> JSONResponse:
-    manager = await service.is_manager()
-    people = await list_active_user_options(service.db) if manager else []
     return success_response(
-        LedgerOptions(
-            is_manager=manager,
-            people=[
-                {
-                    "id": str(person.id),
-                    "name": person.name,
-                    "department": person.department,
-                }
-                for person in people
-            ],
-        ).model_dump(mode="json")
+        LedgerOptions(is_manager=await service.is_manager(), people=[]).model_dump(
+            mode="json"
+        )
     )
 
 
-@router.get("/meter-points", response_model=EnergyApiResponse[list[MeterResponse]])
+@router.get("/input-fields", response_model=EnergyApiResponse[list[MeterResponse]])
 async def meters(
     service: EnergyLedgerService = Depends(ledger_service),
 ) -> JSONResponse:
     return success_response(
         [item.model_dump(mode="json") for item in await service.meters()]
-    )
-
-
-@router.post("/meter-points", response_model=EnergyApiResponse[MeterResponse])
-async def create_meter(
-    payload: MeterWrite, service: EnergyLedgerService = Depends(ledger_service)
-) -> JSONResponse:
-    return success_response((await service.save_meter(payload)).model_dump(mode="json"))
-
-
-@router.put(
-    "/meter-points/{record_id}", response_model=EnergyApiResponse[MeterResponse]
-)
-async def update_meter(
-    record_id: UUID,
-    payload: MeterWrite,
-    service: EnergyLedgerService = Depends(ledger_service),
-) -> JSONResponse:
-    return success_response(
-        (await service.save_meter(payload, record_id)).model_dump(mode="json")
-    )
-
-
-@router.get("/calculation-rules", response_model=EnergyApiResponse[list[RuleResponse]])
-async def rules(service: EnergyLedgerService = Depends(ledger_service)) -> JSONResponse:
-    return success_response(
-        [item.model_dump(mode="json") for item in await service.rules()]
-    )
-
-
-@router.post("/calculation-rules", response_model=EnergyApiResponse[RuleResponse])
-async def create_rule(
-    payload: RuleWrite, service: EnergyLedgerService = Depends(ledger_service)
-) -> JSONResponse:
-    return success_response((await service.save_rule(payload)).model_dump(mode="json"))
-
-
-@router.put(
-    "/calculation-rules/{record_id}", response_model=EnergyApiResponse[RuleResponse]
-)
-async def update_rule(
-    record_id: UUID,
-    payload: RuleWrite,
-    service: EnergyLedgerService = Depends(ledger_service),
-) -> JSONResponse:
-    return success_response(
-        (await service.save_rule(payload, record_id)).model_dump(mode="json")
-    )
-
-
-@router.post(
-    "/calculation-rules/trial", response_model=EnergyApiResponse[TrialResponse]
-)
-async def trial(
-    payload: TrialRequest, service: EnergyLedgerService = Depends(ledger_service)
-) -> JSONResponse:
-    await service.require_manager()
-    result = await service.evaluate(payload.usage_date)
-    return success_response(
-        TrialResponse(
-            usage_date=payload.usage_date,
-            values=[
-                TrialValue(
-                    metric_key=key,
-                    name=definition.name,
-                    value=str(value.value) if value.value is not None else None,
-                    status=value.status,
-                )
-                for key, definition, value in result
-            ],
-        ).model_dump(mode="json")
-    )
-
-
-@router.get("/entry-plans", response_model=EnergyApiResponse[list[PlanResponse]])
-async def plans(service: EnergyLedgerService = Depends(ledger_service)) -> JSONResponse:
-    return success_response(
-        [item.model_dump(mode="json") for item in await service.plans()]
-    )
-
-
-@router.post("/entry-plans", response_model=EnergyApiResponse[PlanResponse])
-async def create_plan(
-    payload: PlanWrite, service: EnergyLedgerService = Depends(ledger_service)
-) -> JSONResponse:
-    return success_response((await service.save_plan(payload)).model_dump(mode="json"))
-
-
-@router.put("/entry-plans/{record_id}", response_model=EnergyApiResponse[PlanResponse])
-async def update_plan(
-    record_id: UUID,
-    payload: PlanWrite,
-    service: EnergyLedgerService = Depends(ledger_service),
-) -> JSONResponse:
-    return success_response(
-        (await service.save_plan(payload, record_id)).model_dump(mode="json")
-    )
-
-
-@router.post(
-    "/entry-tasks/generate", response_model=EnergyApiResponse[TaskListResponse]
-)
-async def generate_tasks(
-    payload: GenerateTasks, service: EnergyLedgerService = Depends(ledger_service)
-) -> JSONResponse:
-    items = await service.generate_tasks(payload.task_date)
-    return success_response(
-        TaskListResponse(
-            items=[await service.task(item.id) for item in items], total=len(items)
-        ).model_dump(mode="json")
-    )
-
-
-@router.get("/entry-tasks", response_model=EnergyApiResponse[TaskListResponse])
-async def tasks(
-    start_date: date,
-    end_date: date,
-    page: int = Query(1, ge=1),
-    page_size: int = Query(30, ge=1, le=100),
-    mine: bool = True,
-    service: EnergyLedgerService = Depends(ledger_service),
-) -> JSONResponse:
-    items, total = await service.tasks(start_date, end_date, page, page_size, mine)
-    return success_response(
-        TaskListResponse(items=items, total=total).model_dump(mode="json")
-    )
-
-
-@router.get("/entry-tasks/{task_id}", response_model=EnergyApiResponse[TaskResponse])
-async def task(
-    task_id: UUID, service: EnergyLedgerService = Depends(ledger_service)
-) -> JSONResponse:
-    return success_response((await service.task(task_id)).model_dump(mode="json"))
-
-
-@router.post(
-    "/entry-tasks/{task_id}/submit", response_model=EnergyApiResponse[TaskResponse]
-)
-async def submit(
-    task_id: UUID,
-    payload: EntrySubmission,
-    service: EnergyLedgerService = Depends(ledger_service),
-) -> JSONResponse:
-    return success_response(
-        (await service.submit(task_id, payload)).model_dump(mode="json")
     )
 
 
@@ -276,6 +109,7 @@ async def report(
     metric_key: str | None = Query(None, max_length=100),
     page: int = Query(1, ge=1),
     page_size: int = Query(100, ge=1, le=500),
+    include_basis: bool = False,
     service: EnergyLedgerService = Depends(ledger_service),
 ) -> JSONResponse:
     return success_response(
@@ -289,6 +123,7 @@ async def report(
                 metric_key=metric_key,
                 page=page,
                 page_size=page_size,
+                include_basis=include_basis,
             )
         ).model_dump(mode="json")
     )
@@ -496,31 +331,6 @@ async def quality(
     return success_response(data.model_dump(mode="json"))
 
 
-@router.post("/adjustments", response_model=EnergyApiResponse[UsageRow])
-async def adjust(
-    payload: AdjustmentWrite, service: EnergyLedgerService = Depends(ledger_service)
-) -> JSONResponse:
-    return success_response((await service.adjust(payload)).model_dump(mode="json"))
-
-
-@router.get("/period-locks", response_model=EnergyApiResponse[list[LockResponse]])
-async def locks(service: EnergyLedgerService = Depends(ledger_service)) -> JSONResponse:
-    return success_response(
-        [item.model_dump(mode="json") for item in await service.locks()]
-    )
-
-
-@router.put("/period-locks/{month}", response_model=EnergyApiResponse[LockResponse])
-async def set_lock(
-    month: str,
-    payload: LockWrite,
-    service: EnergyLedgerService = Depends(ledger_service),
-) -> JSONResponse:
-    return success_response(
-        (await service.set_lock(month, payload)).model_dump(mode="json")
-    )
-
-
 @router.get(
     "/ledger-history/{kind}/{entity_id}",
     response_model=EnergyApiResponse[list[RevisionResponse]],
@@ -611,52 +421,29 @@ async def retry_notification(
 
 
 @router.get(
-    "/imports/snapshot-options",
-    response_model=EnergyApiResponse[list[SnapshotImportOption]],
+    "/usage-reviews", response_model=EnergyApiResponse[list[UsageReviewResponse]]
 )
-async def snapshot_options(
+async def list_usage_reviews(
     service: EnergyLedgerService = Depends(ledger_service),
 ) -> JSONResponse:
-    from app.modules.energy.ledger_imports import SOURCE_CATEGORIES
-    from app.modules.energy.models import EnergySheetSnapshot, EnergyWorkbookSheet
-
     await service.require_manager()
-    rows = (
-        await service.db.execute(
-            select(EnergySheetSnapshot, EnergyWorkbookSheet.title)
-            .join(
-                EnergyWorkbookSheet,
-                EnergyWorkbookSheet.id == EnergySheetSnapshot.sheet_id,
-            )
-            .where(
-                EnergySheetSnapshot.is_deleted.is_(False),
-                EnergyWorkbookSheet.is_deleted.is_(False),
-                EnergyWorkbookSheet.title.in_(SOURCE_CATEGORIES),
-            )
-            .order_by(EnergySheetSnapshot.captured_at.desc())
-            .limit(500)
-        )
-    ).all()
+    records = await load_usage_review_records(service)
     return success_response(
-        [
-            SnapshotImportOption(
-                id=snapshot.id,
-                sheet_title=title,
-                captured_at=snapshot.captured_at,
-                snapshot_number=snapshot.snapshot_number,
-            ).model_dump(mode="json")
-            for snapshot, title in rows
-        ]
+        [item.model_dump(mode="json") for item in _review_responses(records)]
     )
 
 
-@router.post("/imports/from-snapshot", response_model=EnergyApiResponse[ImportResponse])
-async def from_snapshot(
-    payload: SnapshotImportRequest,
+@router.put(
+    "/usage-reviews", response_model=EnergyApiResponse[list[UsageReviewResponse]]
+)
+async def update_usage_reviews(
+    payload: UsageReviewUpdate,
     service: EnergyLedgerService = Depends(ledger_service),
 ) -> JSONResponse:
+    await save_usage_reviews(service, payload.reviews, payload.reason)
+    records = await load_usage_review_records(service)
     return success_response(
-        (await preview_snapshot_import(service, payload)).model_dump(mode="json")
+        [item.model_dump(mode="json") for item in _review_responses(records)]
     )
 
 
@@ -700,56 +487,39 @@ async def import_confirm(
     )
 
 
+@router.get("/input-readings", response_model=EnergyApiResponse[DirectReadingResponse])
+async def input_readings(
+    reading_date: date,
+    dataset: str = Query(..., max_length=100),
+    service: EnergyLedgerService = Depends(ledger_service),
+) -> JSONResponse:
+    from app.modules.energy.ledger_entry import read_entries
+
+    return success_response(
+        (await read_entries(service, reading_date, dataset)).model_dump(mode="json")
+    )
+
+
+@router.put("/input-readings", response_model=EnergyApiResponse[DirectReadingResponse])
+async def save_input_readings(
+    payload: DirectReadingWrite, service: EnergyLedgerService = Depends(ledger_service)
+) -> JSONResponse:
+    from app.modules.energy.ledger_entry import write_entries
+
+    return success_response(
+        (await write_entries(service, payload)).model_dump(mode="json")
+    )
+
+
 @router.post(
-    "/imports/{batch_id}/draft-config",
+    "/imports/{batch_id}/prepare",
     response_model=EnergyApiResponse[TemplateDraftResponse],
 )
-async def draft_config(
+async def prepare_workbook(
     batch_id: UUID, service: EnergyLedgerService = Depends(ledger_service)
 ) -> JSONResponse:
-    from app.modules.energy.ledger_models import (
-        EnergyCalculationRule,
-        EnergyImportBatch,
-        EnergyMeterPoint,
-    )
+    from app.modules.energy.ledger_imports import prepare_import
 
-    await service.require_manager()
-    await service.repo.serialize_write()
-    batch = await service.repo.get(EnergyImportBatch, batch_id)
-    try:
-        draft = extract_template(batch.payload)
-    except ValueError as exc:
-        raise AppException(422, "无法提取计算关系，请检查工作簿结构") from exc
-    existing_points = {item.code for item in await service.repo.all(EnergyMeterPoint)}
-    existing_rules = {
-        item.code for item in await service.repo.all(EnergyCalculationRule)
-    }
-    for point in draft.meters:
-        if point.code not in existing_points:
-            await service.save_meter(MeterWrite(definition=point))
-    for rule in draft.rules:
-        if rule.code not in existing_rules:
-            await service.save_rule(RuleWrite(definition=rule))
-    return success_response(draft.model_dump(mode="json"))
-
-
-@router.post("/reporting/rebuild", response_model=EnergyApiResponse[ReportResponse])
-async def rebuild(
-    payload: RebuildRequest, service: EnergyLedgerService = Depends(ledger_service)
-) -> JSONResponse:
-    from datetime import timedelta
-
-    await service.require_manager()
-    service.validate_range(payload.start_date, payload.end_date)
-    await service.repo.serialize_write()
-    await service.rebuild(
-        {
-            payload.start_date + timedelta(days=index)
-            for index in range((payload.end_date - payload.start_date).days + 1)
-        }
-    )
     return success_response(
-        (await service.report(payload.start_date, payload.end_date)).model_dump(
-            mode="json"
-        )
+        (await prepare_import(service, batch_id)).model_dump(mode="json")
     )

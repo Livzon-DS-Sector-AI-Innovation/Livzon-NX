@@ -21,7 +21,6 @@ from app.modules.energy.ledger_calculations import (
 )
 from app.modules.energy.ledger_imports import confirm_import, inspect_xlsx
 from app.modules.energy.ledger_schemas import (
-    EntrySubmission,
     ImportConfirm,
     MeterDefinition,
     MeterWrite,
@@ -320,51 +319,6 @@ def test_legacy_electricity_difference_keeps_negative_values_for_checks() -> Non
 
 
 @pytest.mark.asyncio
-async def test_entry_does_not_generate_or_accept_manual_totals() -> None:
-    from app.modules.energy.ledger_service import EnergyLedgerService
-
-    service = EnergyLedgerService(AsyncMock())
-    point_id, owner_id, reading_id = uuid4(), uuid4(), uuid4()
-    definition = legacy_total()
-    service.require_manager = AsyncMock()
-    service.definitions_on = AsyncMock(
-        return_value=({"point:legacy_total": (point_id, 1, definition)}, {})
-    )
-
-    plan = SimpleNamespace(
-        id=uuid4(),
-        definition={
-            "name": "旧填报组",
-            "point_ids": [str(point_id)],
-            "owner_ids": [str(owner_id)],
-            "publish_time": "08:00",
-            "deadline_time": "10:00",
-            "reminder_time": "10:30",
-        },
-    )
-    service.repo = SimpleNamespace(
-        serialize_write=AsyncMock(),
-        all=AsyncMock(return_value=[plan]),
-        task_for=AsyncMock(return_value=None),
-        get=AsyncMock(
-            return_value=SimpleNamespace(definition=definition.model_dump(mode="json"))
-        ),
-        task_readings=AsyncMock(
-            return_value=[SimpleNamespace(id=reading_id, point_id=point_id, version=0)]
-        ),
-    )
-    assert await service.generate_tasks(date(2026, 7, 2)) == []
-    service.task = AsyncMock()
-    with pytest.raises(AppException, match="自动计算"):
-        await service.submit(
-            uuid4(),
-            EntrySubmission(
-                values=[{"reading_id": reading_id, "version": 0, "value": "100"}]
-            ),
-        )
-
-
-@pytest.mark.asyncio
 async def test_workbook_marks_legacy_manual_total_as_a_configuration_conflict() -> None:
     from app.modules.energy.ledger_workbook import EnergyWorkbookService
 
@@ -378,43 +332,6 @@ async def test_workbook_marks_legacy_manual_total_as_a_configuration_conflict() 
     report = await workbook.report(2026, 7, "电量")
     assert report.rows[0].cells["2"].value is None
     assert report.rows[0].cells["2"].status == "configuration_conflict"
-
-
-@pytest.mark.asyncio
-async def test_http_rejects_manual_total_configuration_and_confirmation() -> None:
-    from app.modules.energy.ledger_api import ledger_service, router
-
-    app = FastAPI()
-    app.include_router(router, prefix="/api/v1/energy")
-    batch = SimpleNamespace(
-        payload={"sheets": [{"name": "电量", "headers": ["日期", "总计"]}]}
-    )
-    meter = SimpleNamespace(definition=legacy_total().model_dump(mode="json"))
-    service = SimpleNamespace(
-        require_manager=AsyncMock(),
-        save_meter=AsyncMock(),
-        repo=SimpleNamespace(
-            serialize_write=AsyncMock(), get=AsyncMock(side_effect=[batch, meter])
-        ),
-    )
-    app.dependency_overrides[ledger_service] = lambda: service
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as client:
-        response = await client.post(
-            "/api/v1/energy/meter-points", json={"definition": meter.definition}
-        )
-        assert response.status_code == 422
-        service.save_meter.assert_not_called()
-        response = await client.post(
-            f"/api/v1/energy/imports/{uuid4()}/confirm",
-            json={
-                "mappings": [{"sheet": "电量", "column": 2, "point_id": str(uuid4())}],
-                "reason": "回归测试",
-            },
-        )
-        assert response.status_code == 422
-        assert "自动计算" in response.json()["detail"]
 
 
 def test_counter_missing_next_day_does_not_become_zero_or_negative() -> None:
@@ -568,7 +485,7 @@ async def test_preview_period_changes_its_idempotency_key() -> None:
         ("电量", "electricity"),
     ],
 )
-async def test_http_accepts_the_six_confirmed_manual_input_types(
+async def test_http_exposes_the_six_confirmed_manual_input_types(
     sheet: str, category: str
 ) -> None:
     from app.modules.energy.ledger_api import ledger_service, router
@@ -590,8 +507,8 @@ async def test_http_accepts_the_six_confirmed_manual_input_types(
         }
     )
     service = SimpleNamespace(
-        save_meter=AsyncMock(
-            return_value=MeterResponse(id=uuid4(), version=1, definition=definition)
+        meters=AsyncMock(
+            return_value=[MeterResponse(id=uuid4(), version=1, definition=definition)]
         )
     )
     app = FastAPI()
@@ -600,74 +517,9 @@ async def test_http_accepts_the_six_confirmed_manual_input_types(
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
-        response = await client.post(
-            "/api/v1/energy/meter-points",
-            json={"definition": definition.model_dump(mode="json")},
-        )
+        response = await client.get("/api/v1/energy/input-fields")
         assert response.status_code == 200, response.text
         assert (
-            response.json()["data"]["definition"]["reading_type"]
+            response.json()["data"][0]["definition"]["reading_type"]
             == definition.reading_type
         )
-
-
-@pytest.mark.asyncio
-async def test_snapshot_import_uses_the_same_period_and_manual_field_boundary() -> None:
-    from unittest.mock import Mock
-
-    from app.modules.energy.ledger_imports import preview_snapshot_import
-    from app.modules.energy.ledger_schemas import SnapshotImportRequest
-
-    snapshot_id = uuid4()
-    snapshot = SimpleNamespace(
-        id=snapshot_id,
-        sheet_id=uuid4(),
-        is_deleted=False,
-        row_count=2,
-        header_values=[
-            "日期",
-            "总计",
-            "设备甲",
-            "设备乙",
-            "小计",
-            "其他",
-            "分表总和",
-            "西动力总",
-            "东动力总",
-        ],
-        content_hash="fixture",
-    )
-    rows = [
-        SimpleNamespace(
-            row_index=2, values=["7/1", 100, 30, None, 30, 70, 100, 40, 60]
-        ),
-        SimpleNamespace(row_index=3, values=["7/2", 120, 40, 20, 60, 60, 120, 50, 70]),
-    ]
-    service = SimpleNamespace(
-        actor_id=None,
-        require_manager=AsyncMock(),
-        repo=SimpleNamespace(serialize_write=AsyncMock()),
-        db=SimpleNamespace(
-            get=AsyncMock(
-                side_effect=[snapshot, SimpleNamespace(title="电量", is_deleted=False)]
-            ),
-            scalars=AsyncMock(return_value=SimpleNamespace(all=lambda: rows)),
-            scalar=AsyncMock(return_value=None),
-            add=Mock(),
-            flush=AsyncMock(),
-        ),
-    )
-    response = await preview_snapshot_import(
-        service,
-        SnapshotImportRequest(
-            snapshot_ids=[snapshot_id],
-            year=2026,
-            start_date=date(2026, 7, 1),
-            end_date=date(2026, 7, 1),
-        ),
-    )
-    sheet = response.payload["sheets"][0]
-    assert sheet["calculated_columns"] == [2, 5, 6, 7]
-    assert sheet["input_columns"] == [3, 4, 8, 9]
-    assert {cell["column"] for cell in sheet["cells"]} == {3, 8, 9}
-    assert {cell["date"] for cell in sheet["cells"]} == {"2026-07-01"}

@@ -57,15 +57,19 @@ async def test_module_coverage_http_inventory_disabled_and_admin_boundary(
             "equipment:inspection",
             "equipment:spare-parts",
             "equipment:personnel",
+            # 车间管理（/equipment/workshop-admin）：车间注册表的管理页，
+            # 与已退役的 workshop-叶页面无关
+            "equipment:workshop-admin",
         }
         assert not any(
-            key.startswith("equipment:workshop-") for key in equipment_page_keys
+            key.startswith("equipment:workshop-") and key != "equipment:workshop-admin"
+            for key in equipment_page_keys
         )
         assert modules["equipment"]["registered_count"] == 0
         assert modules["equipment"]["covered_pages"] == 0
-        # Native energy replaces the legacy workspace and adds four net pages;
-        # 设备模块 45 个 workshop-叶页面退役后总量相应减少
-        assert data["total_pages"] == 270
+        # Native energy replaces the legacy workspace and retires the four
+        # history pages；设备模块 45 个 workshop-叶页面退役后总量相应减少
+        assert data["total_pages"] == 274
         assert {"/energy/entry", "/energy/reports", "/energy/analysis"} <= {
             page["route_path"] for page in modules["energy"]["pages"]
         }

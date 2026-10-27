@@ -21,6 +21,8 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from tests.modules.energy.workbook_fixtures import seed_meter, seed_rule
+
 
 def source_expectations(directory: Path) -> None:
     """Independent numeric expectations from the value-only original file."""
@@ -125,7 +127,8 @@ async def prepare(directory: Path) -> None:
         # Explicit synthetic dimensions allow calculation validation without
         # approving unknown real units, departments, or excluded ownership rules.
         for definition in draft.meters:
-            await service.save_meter(
+            await seed_meter(
+                service,
                 MeterWrite(
                     definition=definition.model_copy(
                         update={
@@ -134,10 +137,11 @@ async def prepare(directory: Path) -> None:
                             "department": "独立测试场景",
                         }
                     )
-                )
+                ),
             )
         for rule in draft.rules:
-            await service.save_rule(
+            await seed_rule(
+                service,
                 RuleWrite(
                     definition=rule.model_copy(
                         update={
@@ -146,7 +150,7 @@ async def prepare(directory: Path) -> None:
                             "department": "独立测试场景",
                         }
                     )
-                )
+                ),
             )
         await session.commit()
         token = jwt.encode(
@@ -196,9 +200,7 @@ async def cleanup(directory: Path) -> None:
     """Remove only records owned by this temporary test fixture."""
     from app.core.database import engine
     from app.modules.energy.ledger_models import (
-        EnergyEntryTask,
         EnergyMeterPoint,
-        EnergyNotificationRun,
         EnergyReading,
         LedgerBase,
     )
@@ -220,14 +222,6 @@ async def cleanup(directory: Path) -> None:
         ids = select(EnergyMeterPoint.id).where(EnergyMeterPoint.created_by == actor_id)
         await session.execute(
             delete(EnergyReading).where(EnergyReading.point_id.in_(ids))
-        )
-        task_ids = select(EnergyEntryTask.id).where(
-            EnergyEntryTask.created_by == actor_id
-        )
-        await session.execute(
-            delete(EnergyNotificationRun).where(
-                EnergyNotificationRun.task_id.in_(task_ids)
-            )
         )
         for mapper in list(LedgerBase.registry.mappers):
             model = mapper.class_

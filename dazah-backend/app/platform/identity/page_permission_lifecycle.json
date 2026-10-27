@@ -38,30 +38,30 @@
       "actions": {}
     },
     "energy:history:data": {
-      "status": "active",
+      "status": "retired",
       "module_code": "energy",
       "route_path": "/energy/data",
       "actions": {}
     },
     "energy:history:feishu-config": {
-      "status": "active",
+      "status": "retired",
       "module_code": "energy",
       "route_path": "/energy/feishu-config",
       "actions": {
         "sync_config": {
-          "status": "active",
+          "status": "retired",
           "category": "integration_admin"
         }
       }
     },
     "energy:history:sources": {
-      "status": "active",
+      "status": "retired",
       "module_code": "energy",
       "route_path": "/energy/sources",
       "actions": {}
     },
     "energy:history:sync-runs": {
-      "status": "active",
+      "status": "retired",
       "module_code": "energy",
       "route_path": "/energy/sync-runs",
       "actions": {}
@@ -153,6 +153,12 @@
       "status": "active",
       "module_code": "equipment",
       "route_path": "/equipment/stats",
+      "actions": {}
+    },
+    "equipment:workshop-admin": {
+      "status": "active",
+      "module_code": "equipment",
+      "route_path": "/equipment/workshop-admin",
       "actions": {}
     },
     "equipment:workshop-101-1:assets-101-1": {
@@ -4251,13 +4257,31 @@
       "status": "active",
       "module_code": "safety",
       "route_path": "/safety/regulation/generator",
-      "actions": {}
+      "actions": {
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        }
+      }
     },
     "safety:risk-hazard:regulation:regulation-list": {
       "status": "active",
       "module_code": "safety",
       "route_path": "/safety/regulation",
-      "actions": {}
+      "actions": {
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        },
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        }
+      }
     },
     "safety:risk-hazard:risk-grading:hazard-identification": {
       "status": "active",

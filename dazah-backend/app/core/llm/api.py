@@ -9,7 +9,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.platform.identity.deps import AdminUser
+from app.platform.identity.deps import SystemAdminUser, require_system_admin
 
 from .capabilities import (
     LLMCapabilities,
@@ -21,7 +21,11 @@ from .config import LLMConfigModel
 from .encryption import decrypt_api_key, encrypt_api_key, mask_api_key
 from .exceptions import LLMConfigError
 
-router = APIRouter(prefix="/llm/configs", tags=["LLM Configuration"])
+router = APIRouter(
+    prefix="/llm/configs",
+    tags=["LLM Configuration"],
+    dependencies=[Depends(require_system_admin)],
+)
 
 
 class LLMConfigCreate(BaseModel):
@@ -211,7 +215,7 @@ async def _deactivate_other_configs(
 async def list_configs(
     config_type: str | None = Query(None, pattern="^(text|vision)$"),
     db: AsyncSession = Depends(get_db),
-    current_user: AdminUser = None,
+    current_user: SystemAdminUser = None,
 ) -> Any:
     """List all LLM configurations."""
     query = select(LLMConfigModel).where(LLMConfigModel.is_deleted.is_(False))
@@ -231,9 +235,9 @@ async def list_configs(
 async def create_config(
     data: LLMConfigCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: AdminUser = None,
+    current_user: SystemAdminUser = None,
 ) -> Any:
-    """Create a new LLM configuration (admin only)."""
+    """Create a new LLM configuration (system administrator only)."""
     if data.is_active:
         await _deactivate_other_configs(db)
 
@@ -265,7 +269,7 @@ async def create_config(
 async def get_config(
     config_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: AdminUser = None,
+    current_user: SystemAdminUser = None,
 ) -> Any:
     """Get a specific LLM configuration."""
     result = await db.execute(
@@ -287,9 +291,9 @@ async def update_config(
     config_id: str,
     data: LLMConfigUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: AdminUser = None,
+    current_user: SystemAdminUser = None,
 ) -> Any:
-    """Update an LLM configuration (admin only)."""
+    """Update an LLM configuration (system administrator only)."""
     result = await db.execute(
         select(LLMConfigModel).where(
             LLMConfigModel.id == uuid.UUID(config_id),
@@ -345,9 +349,9 @@ async def update_config(
 async def delete_config(
     config_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: AdminUser = None,
+    current_user: SystemAdminUser = None,
 ) -> None:
-    """Soft delete an LLM configuration (admin only)."""
+    """Soft delete an LLM configuration (system administrator only)."""
     result = await db.execute(
         select(LLMConfigModel).where(
             LLMConfigModel.id == uuid.UUID(config_id),
@@ -383,7 +387,7 @@ async def _detect_saved_config(
 async def test_saved_config(
     config_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: AdminUser = None,
+    current_user: SystemAdminUser = None,
 ) -> Any:
     result = await db.execute(
         select(LLMConfigModel).where(
@@ -400,7 +404,7 @@ async def test_saved_config(
 @router.post("/probe", response_model=LLMConfigProbeResponse)
 async def probe_config(
     data: LLMConfigProbeRequest,
-    current_user: AdminUser = None,
+    current_user: SystemAdminUser = None,
 ) -> Any:
     """Test an unsaved API URL or model without persisting its credential."""
     if data.probe_type == "url":
@@ -432,7 +436,7 @@ async def probe_config(
 @router.post("/test", response_model=LLMCapabilityDetectionResponse)
 async def test_connection(
     db: AsyncSession = Depends(get_db),
-    current_user: AdminUser = None,
+    current_user: SystemAdminUser = None,
 ) -> Any:
     """Verify the active model responds without running vision detection."""
     result = await db.execute(

@@ -12,6 +12,33 @@ import {
 } from './menu-config'
 
 describe('page permission menu boundary', () => {
+  it('names the energy landing page consistently without changing its permission key', () => {
+    expect(moduleMenus.find(menu => menu.moduleCode === 'energy')?.children.find(item => item.path === '/energy')?.label).toBe('能源仪表盘')
+    expect(getPageKeyByPath('/energy')).toBe('energy:ledger-overview')
+  })
+  it('removes energy historical pages even when a user still has their old grants', () => {
+    const paths = ['/energy/sources', '/energy/data', '/energy/sync-runs', '/energy/feishu-config', '/energy/sources/sheet-1']
+    const grants = ['sources', 'data', 'sync-runs', 'feishu-config'].map(key => ({
+      page_key: `energy:history:${key}`, module_code: 'energy', permissions: ['access' as const, 'query' as const],
+    }))
+    expect(getAuthorizedPageMenus(['energy'], grants)).toEqual([])
+    for (const path of paths) expect(getPageKeyByPath(path)).toBeUndefined()
+    expect(moduleMenus.find(menu => menu.moduleCode === 'energy')?.children.map(item => item.key)).toEqual([
+      'ledger-overview', 'reports', 'analysis', 'data-quality', 'settings',
+    ])
+  })
+  it('merges energy entry and reports into one ledger while preserving separate grants', () => {
+    const grant = (key: string) => ({ page_key: `energy:${key}`, module_code: 'energy', permissions: ['access' as const, 'query' as const] })
+    const both = getAuthorizedPageMenus(['energy'], [grant('entry'), grant('reports')])[0].children
+    expect(both).toHaveLength(1)
+    expect(both[0]).toMatchObject({ label: '能源台账', path: '/energy/reports', activePaths: ['/energy/entry'] })
+    const entryOnly = getAuthorizedPageMenus(['energy'], [grant('entry')])[0].children
+    expect(entryOnly).toHaveLength(1)
+    expect(entryOnly[0]).toMatchObject({ key: 'entry', label: '能源台账', path: '/energy/entry', activePaths: [] })
+    expect(getPageKeyByPath('/energy/entry')).toBe('energy:entry')
+    expect(getPageKeyByPath('/energy/reports')).toBe('energy:reports')
+    expect(getAuthorizedPageMenus(['energy'], [grant('reports')])[0].children).toHaveLength(1)
+  })
   it('resolves every enabled directory entry to a grantable leaf identity', () => {
     const leaves = new Set<string>()
     const directories: string[] = []
@@ -346,11 +373,13 @@ describe('equipment menu structure', () => {
       'stats',
       'console',
       'feishu-config',
+      'workshop-admin',
     ])
     expect(equipment?.children.map((item) => item.path)).toEqual([
       '/equipment/stats',
       '/equipment',
       '/equipment/feishu-config',
+      '/equipment/workshop-admin',
     ])
     const console = equipment?.children.find((item) => item.key === 'console')
     expect(console?.anyOfPageKeys).toEqual([

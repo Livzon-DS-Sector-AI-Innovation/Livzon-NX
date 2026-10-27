@@ -1,8 +1,9 @@
 """Energy-owned bot configuration and durable, bounded message delivery."""
 
-from datetime import UTC, datetime, timedelta
+import hashlib
+from datetime import datetime, timedelta
+from urllib.parse import urlencode
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
-from zoneinfo import ZoneInfo
 
 import httpx
 from sqlalchemy import select
@@ -12,11 +13,8 @@ from app.core.exceptions import AppException
 from app.core.secrets import decrypt_secret, encrypt_secret
 from app.modules.energy.ledger_models import (
     EnergyBotConfig,
-    EnergyEntryPlan,
-    EnergyEntryTask,
     EnergyLedgerRevision,
     EnergyNotificationRun,
-    EnergyReading,
 )
 from app.modules.energy.ledger_schemas import BotDefinition, BotResponse, BotWrite
 from app.platform.identity.public_api import notification_recipient_for_user
@@ -24,7 +22,6 @@ from app.platform.integrations.feishu.auth import FeishuAuth
 from app.platform.integrations.feishu.im import (
     build_simple_card_content,
     send_feishu_message,
-    update_feishu_message,
 )
 
 
@@ -100,44 +97,48 @@ async def save_bot(
     return await read_bot(db)
 
 
-async def enqueue_task_notifications(
-    db: AsyncSession, task: EnergyEntryTask, kind: str
+async def enqueue_reading_notification(
+    db: AsyncSession,
+    actor_id: UUID | None,
+    dataset: str,
+    reading_date: str,
+    versions: str,
+    count: int,
 ) -> None:
     config = await bot_config(db)
-    if config is None or not BotDefinition.model_validate(config.definition).enabled:
+    if (
+        actor_id is None
+        or config is None
+        or not BotDefinition.model_validate(config.definition).enabled
+    ):
         return
-    plan = await db.get(EnergyEntryPlan, task.plan_id)
-    if plan is None or not plan.definition.get("enabled"):
-        return
-    owners = plan.definition.get("owner_ids", []) if plan else []
-    targets = (
-        [(str(owner), "user") for owner in owners] if isinstance(owners, list) else []
+    key = (
+        "direct:"
+        + hashlib.sha256(
+            f"{dataset}:{reading_date}:{actor_id}:{versions}".encode()
+        ).hexdigest()
     )
-    chat = task.definition.get("group_chat_id")
-    if chat:
-        targets.append((str(chat), "chat"))
-    for target, target_type in targets:
-        key = f"{task.id}:{kind}:{target_type}:{target}"
-        existing = await db.scalar(
-            select(EnergyNotificationRun.id).where(
-                EnergyNotificationRun.delivery_key == key
-            )
+    if await db.scalar(
+        select(EnergyNotificationRun.id).where(
+            EnergyNotificationRun.delivery_key == key
         )
-        if existing is None:
-            db.add(
-                EnergyNotificationRun(
-                    id=uuid4(),
-                    task_id=task.id,
-                    delivery_key=key,
-                    definition={
-                        "kind": kind,
-                        "target": target,
-                        "target_type": target_type,
-                    },
-                    attempts=0,
-                    status="pending",
-                )
-            )
+    ):
+        return
+    db.add(
+        EnergyNotificationRun(
+            id=uuid4(),
+            task_id=uuid5(NAMESPACE_URL, key),
+            delivery_key=key,
+            definition={
+                "target": str(actor_id),
+                "dataset": dataset,
+                "reading_date": reading_date,
+                "count": count,
+            },
+            attempts=0,
+            status="pending",
+        )
+    )
     await db.flush()
 
 
@@ -163,89 +164,52 @@ async def deliver_notifications(db: AsyncSession, now: datetime) -> None:
         )
     ).all()
     for run in rows:
-        task = await db.get(EnergyEntryTask, run.task_id)
-        if task is None:
-            run.status, run.error = "failed", "任务不存在"
-            continue
-        current_plan = await db.get(EnergyEntryPlan, task.plan_id)
-        if current_plan is None or not current_plan.definition.get("enabled"):
-            run.status = "skipped"
-            continue
-        readings = list(
-            (
-                await db.scalars(
-                    select(EnergyReading).where(EnergyReading.task_id == task.id)
-                )
-            ).all()
-        )
-        completed = sum(item.value is not None for item in readings)
-        kind = str(run.definition["kind"])
-        if kind == "reminder" and completed == len(readings):
-            run.status = "skipped"
+        if not run.definition.get("dataset") or not run.definition.get("reading_date"):
+            run.status, run.error = "skipped", "旧责任分组消息已停用"
             continue
         target = str(run.definition["target"])
-        if run.definition["target_type"] == "user":
-            plan = await db.get(EnergyEntryPlan, task.plan_id)
-            if plan is None or not plan.definition.get("enabled"):
-                run.status = "skipped"
-                continue
-            current_owners = plan.definition.get("owner_ids") if plan else None
-            if not isinstance(current_owners, list) or target not in current_owners:
-                run.status = "skipped"
-                continue
-            recipient = await notification_recipient_for_user(db, UUID(target))
-        else:
-            recipient = (target, "chat_id")
+        recipient = await notification_recipient_for_user(db, UUID(target))
         if recipient is None:
             run.status, run.error = (
                 "failed",
-                "责任人缺少可用于当前应用的企业身份，请联系管理员完善人员映射",
+                "提交人缺少可用于当前应用的企业身份，请联系管理员完善人员映射",
             )
             continue
         run.attempts += 1
         run.status = "sending"
         run.next_attempt_at = now + timedelta(minutes=5)
         await db.flush()
-        title = "能源填报提醒" if kind == "reminder" else "能源填报清单"
         content = build_simple_card_content(
-            title=title,
+            title="能源原始数据已更新",
             markdown=(
-                f"**{task.definition['name']}**\n抄表日期：{task.task_date}\n"
-                f"电量归属：{task.task_date - timedelta(days=1)}\n"
-                f"完成：{completed}/{len(readings)}\n"
-                f"截止：{task.definition['deadline_time']}（上海时间）"
+                f"**{run.definition['dataset']}**\n"
+                f"数据日期：{run.definition['reading_date']}\n"
+                f"本次提交：{run.definition['count']} 项"
             ),
-            button_text="查看清单" if completed == len(readings) else "填写清单",
-            button_url=f"{definition.base_url.rstrip('/')}/energy/entry?task={task.id}&source=feishu",
+            button_text="查看原始数据",
+            button_url=definition.base_url.rstrip("/")
+            + "/energy/entry?"
+            + urlencode(
+                {
+                    "date": str(run.definition["reading_date"]),
+                    "dataset": str(run.definition["dataset"]),
+                    "source": "feishu",
+                }
+            ),
         )
         try:
             token = await FeishuAuth.get_tenant_access_token(
                 definition.app_id, decrypt_secret(config.encrypted_secret or "")
             )
-            initial_key = f"{task.id}:initial:{run.definition['target_type']}:{target}"
-            initial = await db.scalar(
-                select(EnergyNotificationRun).where(
-                    EnergyNotificationRun.delivery_key == initial_key
-                )
+            result = await send_feishu_message(
+                receive_id=recipient[0],
+                receive_id_type=recipient[1],
+                tenant_access_token=token,
+                msg_type="interactive",
+                content=content,
+                uuid=str(uuid5(NAMESPACE_URL, run.delivery_key)),
             )
-            message_id: str | None
-            if kind.startswith("progress:") and initial and initial.message_id:
-                result = await update_feishu_message(
-                    tenant_access_token=token,
-                    message_id=initial.message_id,
-                    content=content,
-                )
-                message_id = initial.message_id
-            else:
-                result = await send_feishu_message(
-                    tenant_access_token=token,
-                    receive_id=recipient[0],
-                    receive_id_type=recipient[1],
-                    msg_type="interactive",
-                    content=content,
-                    uuid=str(uuid5(NAMESPACE_URL, run.delivery_key)),
-                )
-                message_id = result.message_id
+            message_id = result.message_id
             if result.ok:
                 run.status, run.message_id, run.error = "sent", message_id, None
             else:
@@ -267,51 +231,3 @@ async def deliver_notifications(db: AsyncSession, now: datetime) -> None:
             now + timedelta(minutes=2**run.attempts) if run.status == "retry" else None
         )
         await db.flush()
-
-
-async def run_native_schedule(db: AsyncSession, now: datetime | None = None) -> None:
-    from app.modules.energy.ledger_models import EnergyEntryPlan
-    from app.modules.energy.ledger_schemas import EntryPlanDefinition
-    from app.modules.energy.ledger_service import EnergyLedgerService
-
-    local = (now or datetime.now(UTC)).astimezone(ZoneInfo("Asia/Shanghai"))
-    service = EnergyLedgerService(db)
-    await service.repo.serialize_write()
-    plans = await service.repo.all(EnergyEntryPlan)
-    days = set()
-    for plan in plans:
-        definition = EntryPlanDefinition.model_validate(plan.definition)
-        if not definition.enabled or definition.publish_time > local.strftime("%H:%M"):
-            continue
-        latest = await db.scalar(
-            select(EnergyEntryTask.task_date)
-            .where(EnergyEntryTask.plan_id == plan.id)
-            .order_by(EnergyEntryTask.task_date.desc())
-            .limit(1)
-        )
-        begin = (
-            latest
-            if latest == local.date()
-            else latest + timedelta(days=1)
-            if latest
-            else min(
-                plan.created_at.astimezone(ZoneInfo("Asia/Shanghai")).date(),
-                local.date(),
-            )
-        )
-        for offset in range(min(7, (local.date() - begin).days + 1)):
-            days.add(begin + timedelta(days=offset))
-    for day in sorted(days):
-        await service.generate_tasks(
-            day,
-            scheduled=True,
-            publish_clock=local.strftime("%H:%M") if day == local.date() else "23:59",
-        )
-    tasks = (
-        await db.scalars(
-            select(EnergyEntryTask).where(EnergyEntryTask.task_date == local.date())
-        )
-    ).all()
-    for task in tasks:
-        if str(task.definition["reminder_time"]) <= local.strftime("%H:%M"):
-            await enqueue_task_notifications(db, task, "reminder")

@@ -127,12 +127,14 @@ def test_single_head_retains_the_safety_reminder_history() -> None:
     cfg.set_main_option("script_location", str(_VERSIONS.parent))
     script = ScriptDirectory.from_config(cfg)
     heads = script.get_heads()
-    # 只约束「单一 head 且消防提醒迁移历史可达」，不断言具体 revision，
-    # 避免并行追加迁移时本测试反复失效。
-    assert len(heads) == 1, f"expected a single migration head, got {heads}"
-    assert "d4e7f1a9c3b5" in {
+    # d7f3b9c1e5a2：安全治理批次接在设备 feishu_apps/workshops 合并点
+    # （c797740130e1）之后的单 head
+    assert heads == ["d7f3b9c1e5a2"]
+    history = {
         revision.revision for revision in script.walk_revisions(head=heads[0])
     }
+    assert "c8e4a2f6d9b3" in history
+    assert "d4e7f1a9c3b5" in history
 
 
 def test_multi_table_tabs_upgrade_adds_columns_and_upgrades_index(monkeypatch) -> None:

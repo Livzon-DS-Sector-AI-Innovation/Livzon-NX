@@ -285,7 +285,7 @@ async def test_department_mapping_and_profile_cannot_self_escalate(monkeypatch):
         ({"department": "质量部"}, True),
         ({"department": None}, True),
         ({"status": "disabled"}, True),
-        ({"role": "admin"}, True),
+        ({"role": "admin", "reason": "测试角色变更"}, True),
         ({"department": "采购部"}, False),
         ({"name": "更新姓名"}, False),
     ],

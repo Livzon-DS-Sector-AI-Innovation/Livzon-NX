@@ -28,6 +28,12 @@ DEPS = ("db", "redis", "minio")
 UNSAFE_PHASES = {"quiescing", "backup", "migrating", "starting", "verifying", "observing", "recovery_required"}
 SHA = re.compile(r"[0-9a-f]{40}\Z")
 CANDIDATES = Path("/var/lib/dazah-candidates")
+# Runner hints are one small JSON file per merged SHA. The controller only reads the
+# file for the SHA it is about to consider, so anything old is dead weight. Keep the
+# newest few, whatever the controller state still references, and a time window so a
+# delayed investigation can still see recent history.
+CANDIDATE_RETENTION_DAYS = 30
+CANDIDATE_MIN_KEEP = 5
 
 
 class Refused(RuntimeError):
@@ -66,23 +72,48 @@ def digest(path: Path) -> str:
     return checksum.hexdigest()
 
 
-def archive_directory(source: Path, target: Path, *, timeout: int = 600) -> int:
-    """Retry a changing online file set, but accept only a successful, readable tar."""
+def archive_directory(source: Path, target: Path, *, timeout: int = 600) -> dict[str, object]:
+    """Archive an online file set and prove the result is readable.
+
+    ``tar`` exits 1 when files change or vanish while it reads them. That is the
+    normal case for live volume data (MinIO keeps writing during the archive), and
+    the archive it writes is still usable. Treating exit 1 as fatal made every
+    daily backup fail with "backup archive changed during all attempts" while the
+    files were in fact complete. So exit 1 is accepted, but only after listing the
+    archive end-to-end; exit codes >= 2 stay fatal, and unreadable archives retry.
+    """
     deadline = time.monotonic() + timeout
     for attempt in range(1, 4):
         remaining = max(1, int(deadline - time.monotonic()))
         try:
-            command(["tar", "-czf", str(target), "-C", str(source), "."], timeout=remaining)
-        except Refused as exc:
-            if str(exc) != "operation failed: tar, exit=1":
-                raise
+            result = subprocess.run(
+                ["tar", "-czf", str(target), "-C", str(source), "."],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                timeout=remaining,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as exc:
             if attempt == 3 or deadline - time.monotonic() <= 2:
-                raise Refused("backup archive changed during all attempts") from exc
+                raise Refused("backup archive timed out") from exc
             time.sleep(2)
             continue
-        command(["tar", "-tzf", str(target)], timeout=max(1, int(deadline - time.monotonic())),
-                output=subprocess.DEVNULL)
-        return attempt
+        # 2 is fatal (bad usage, unreadable path); retrying cannot help.
+        if result.returncode >= 2:
+            raise Refused(f"operation failed: tar, exit={result.returncode}")
+        if result.returncode == 0 or target.is_file():
+            listed = subprocess.run(
+                ["tar", "-tzf", str(target)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=max(1, int(deadline - time.monotonic())),
+                check=False,
+            )
+            if listed.returncode == 0:
+                return {"attempts": attempt, "changed_during_read": result.returncode == 1}
+        if attempt == 3 or deadline - time.monotonic() <= 2:
+            raise Refused("backup archive changed during all attempts")
+        time.sleep(2)
     raise Refused("backup archive did not complete")
 
 
@@ -318,7 +349,7 @@ class Controller:
             raise Refused("unexpected data root")
 
     def compose(self, *args: str, timeout=180, output=None) -> str:
-        files = ["compose.yml", "compose.edge.yml", "compose.single-host.yml", "compose.release.yml"]
+        files = ["compose.yml", "compose.edge.yml", "compose.release.yml"]
         argv = ["docker", "compose", "--project-name", "dazah", "--env-file", str(self.current / ".env")]
         for name in files:
             if (self.current / name).exists():
@@ -509,7 +540,7 @@ class Controller:
             service: {"image": image, "pull_policy": "never"} for service, image in images.items()}})
 
     def site_checksums(self) -> dict:
-        names = ("compose.yml", "compose.edge.yml", "compose.single-host.yml", ".env", "nginx.default.conf",
+        names = ("compose.yml", "compose.edge.yml", ".env", "nginx.default.conf",
                  "nginx-maintenance.conf", "nginx-capacity.conf", "migration-policy.json")
         return {name: digest(self.current / name) for name in names if (self.current / name).is_file()}
 
@@ -736,6 +767,42 @@ class Controller:
                 raise Refused("backup cleanup escaped root")
             shutil.rmtree(path)
             self.event("expired_backup_removed", backup=path.name)
+
+    def prune_candidates(self, keep_days: int = CANDIDATE_RETENTION_DAYS,
+                         keep_newest: int = CANDIDATE_MIN_KEEP) -> list[str]:
+        """Delete stale runner candidate hints; never touch anything else.
+
+        Only regular files named after a full commit SHA are candidates, so the
+        runner cannot smuggle other names into the directory and have this clean
+        them up. The newest hints, anything the controller state still references
+        and everything inside the retention window are preserved.
+        """
+        if not CANDIDATES.is_dir() or CANDIDATES.is_symlink():
+            return []
+        state = read_json(self.state_file, {})
+        referenced = {
+            value
+            for key in ("sha", "candidate", "candidate_sha", "deployed_sha")
+            if isinstance(value := state.get(key), str) and SHA.fullmatch(value)
+        }
+        cutoff = time.time() - keep_days * 86400
+        entries: list[Path] = []
+        for path in CANDIDATES.glob("*.json"):
+            if path.is_symlink() or not path.is_file() or not SHA.fullmatch(path.stem):
+                continue
+            entries.append(path)
+        entries.sort(key=lambda item: item.stat().st_mtime, reverse=True)
+        removed: list[str] = []
+        for index, path in enumerate(entries):
+            if index < keep_newest or path.stem in referenced:
+                continue
+            if path.stat().st_mtime >= cutoff:
+                continue
+            path.unlink()
+            removed.append(path.name)
+        if removed:
+            self.event("candidates_pruned", removed=len(removed), kept=len(entries) - len(removed))
+        return removed
 
     def drill(self) -> None:
         self.mount_check()
@@ -1153,7 +1220,8 @@ def lock(path: Path):
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("action", choices=["backup", "drill", "watchdog", "schedule", "status", "mount-check",
-                                         "verify", "drain", "traffic-guard", "maintenance-on", "maintenance-off", "announce", "resume-work", "open-work"])
+                                         "verify", "drain", "traffic-guard", "maintenance-on", "maintenance-off",
+                                         "announce", "resume-work", "open-work", "prune-candidates"])
     parser.add_argument("--config", default="/etc/dazah-cd/config.json")
     parser.add_argument("--notice-seconds", type=int, default=None)
     parser.add_argument("--lock-held", action="store_true", help="Called by the deployment helper which already owns the release lock")

@@ -20,7 +20,9 @@ router = APIRouter()
 @router.get("/maintainers", summary="获取设备模块维修人员列表")
 async def list_maintainers(
     workshop: str | None = Query(
-        None, pattern=r"^\d{3}(-\d)?$", description="车间代码（如 101-1 / 201-1）"
+        None,
+            pattern=r"^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
+            description="车间代码（如 101-1 / dlz）"
     ),
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:

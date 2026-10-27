@@ -14,6 +14,15 @@ export default function MaintenanceBoundary({ children }: { children: React.Reac
   const [dialogOpen, setDialogOpen] = useState(false)
   const [dismissedPhase, setDismissedPhase] = useState('')
   const dirty = useRef(false)
+  const screen = useRef<HTMLDivElement>(null)
+  const active = state.phase === 'maintenance'
+
+  useEffect(() => {
+    if (!active) return
+    const previous = document.activeElement
+    screen.current?.focus()
+    return () => { if (previous instanceof HTMLElement && previous.isConnected) previous.focus() }
+  }, [active])
 
   useEffect(() => {
     const original = window.fetch.bind(window)
@@ -27,7 +36,7 @@ export default function MaintenanceBoundary({ children }: { children: React.Reac
         next = { phase: 'maintenance' }
         controller.abort()
       } else if (controller.signal.aborted) controller = new AbortController()
-      if (next.phase === 'maintenance' && stateRef.current.phase !== 'maintenance') setDialogOpen(true)
+      if (next.phase === 'maintenance' && stateRef.current.phase !== 'maintenance') setDialogOpen(false)
       if (next.phase === 'normal') { setDialogOpen(false); setDismissedPhase('') }
       setNow(Date.now())
       stateRef.current = next
@@ -85,14 +94,23 @@ export default function MaintenanceBoundary({ children }: { children: React.Reac
   const description = '发布前提前 3 分钟提醒，请在倒计时内完成并保存当前工作，然后停止操作。维护开始后停止页面请求；维护结束后可继续使用。页面不会自动刷新，未保存输入仅保留在当前标签页。'
   const dismiss = () => { setDialogOpen(false); setDismissedPhase(state.phase) }
   return <>
-    {state.phase !== 'normal' && <div data-maintenance-control className={styles.floating}>
+    {state.phase === 'announced' && <div data-maintenance-control className={styles.floating}>
       {dismissedPhase !== state.phase ? <PlatformNotice type="warning" title={title} description={description}
         onLearnRules={() => setDialogOpen(true)} action={<Button onClick={dismiss}>我知道了</Button>} /> :
         <Button onClick={() => setDialogOpen(true)}>查看维护说明</Button>}
     </div>}
-    <div data-dazah-maintenance-boundary>{children}</div>
+    <div data-dazah-maintenance-boundary inert={active}>{children}</div>
+    {active && <div ref={screen} data-dazah-maintenance-screen data-maintenance-control className={styles.screen}
+      role="status" aria-live="polite" tabIndex={-1}>
+      <div className={styles.panel}>
+        <Typography.Paragraph>工厂管理平台</Typography.Paragraph>
+        <h1>系统维护中，请稍候</h1>
+        <PlatformNotice type="warning" title={title} description={description} onLearnRules={() => setDialogOpen(true)} />
+        <Typography.Paragraph>正在检查服务状态，维护结束后将自动恢复当前页面。未保存的输入仍保留在当前标签页。</Typography.Paragraph>
+      </div>
+    </div>}
     <Modal className="dazah-maintenance-dialog" open={dialogOpen} title="系统更新维护" onCancel={dismiss}
-      centered width={640} footer={<Button type="primary" onClick={dismiss}>我知道了，保留当前页面</Button>}>
+      centered width={640} zIndex={2100} footer={<Button type="primary" onClick={dismiss}>我知道了，保留当前页面</Button>}>
       <Typography.Paragraph strong>{title}</Typography.Paragraph>
       <Typography.Paragraph>{description}</Typography.Paragraph>
     </Modal>

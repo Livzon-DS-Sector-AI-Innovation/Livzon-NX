@@ -61,7 +61,7 @@ export function PagePermissionHealthPanel() {
         setDepartments(nextDepartments)
         setRoleTarget(role)
       } else {
-        const response = await getUsers({ status: "active" })
+        const response = await getUsers({ keyword: item.target_name, status: "active", limit: 50 })
         const user = response.items.find((entry) => entry.id === item.target_id)
         if (!user) throw new Error("用户已不存在，请重新检查")
         setUserTarget(user)

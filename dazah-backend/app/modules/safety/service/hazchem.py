@@ -427,7 +427,7 @@ def _inventory_response(
     )
     over_pct: float | None = None
     if over and inventory.upper_limit:
-        upper = _as_float(inventory.upper_limit)
+        upper = _as_float(inventory.upper_limit) or 0.0
         if upper > 0:
             over_pct = round((float(inventory.quantity) - upper) / upper * 100, 1)
     return ChemicalInventoryResponse(
@@ -447,4 +447,8 @@ def _inventory_response(
 
 
 def _as_float(value: object) -> float | None:
-    return float(value) if value is not None else None
+    if value is None:
+        return None
+    if isinstance(value, int | float):
+        return float(value)
+    return float(str(value))

@@ -65,6 +65,7 @@ async function flush() {
 it('diagnoses effective permission with source and data scope', async () => {
   await act(async () => root.render(createElement(PagePermissionDiagnostics)))
   await flush()
+  expect(mocks.users).toHaveBeenCalledWith({ status: 'active', limit: 500 })
   const user = document.querySelector<HTMLSelectElement>('select[aria-label="选择用户"]')!
   await act(async () => { user.value = 'user-1'; user.dispatchEvent(new Event('change', { bubbles: true })) })
   await flush()

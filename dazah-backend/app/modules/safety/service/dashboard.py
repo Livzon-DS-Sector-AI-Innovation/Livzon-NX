@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import UTC, datetime, time, timedelta, timezone
+from uuid import UUID
 
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -165,7 +166,7 @@ class SafetyOverviewService:
         items: list[MapRiskItem] = []
 
         # 当日特殊作业报备（驾驶舱口径：驳回/草稿未实际发生，不计入当日分布）
-        rows = (
+        special_rows = (
             await self.db.execute(
                 select(SpecialOperationReport).where(
                     SpecialOperationReport.is_deleted.is_(False),
@@ -175,7 +176,7 @@ class SafetyOverviewService:
                 )
             )
         ).scalars()
-        for report in rows:
+        for report in special_rows:
             items.append(
                 MapRiskItem(
                     source="special_op",
@@ -190,7 +191,7 @@ class SafetyOverviewService:
             )
 
         # 当日风险作业报备（同样排除驳回/草稿）
-        rows = (
+        daily_rows = (
             await self.db.execute(
                 select(DailyRiskReport).where(
                     DailyRiskReport.is_deleted.is_(False),
@@ -200,21 +201,21 @@ class SafetyOverviewService:
                 )
             )
         ).scalars()
-        for report in rows:
+        for daily in daily_rows:
             items.append(
                 MapRiskItem(
                     source="daily_risk",
-                    title=_truncate(report.operation_description or report.report_no),
-                    location_text=report.location or "",
-                    department=report.department or "",
-                    risk_level=report.risk_level or "",
-                    happened_at=report.report_date,
+                    title=_truncate(daily.operation_description or daily.report_no),
+                    location_text=daily.location or "",
+                    department=daily.department or "",
+                    risk_level=daily.risk_level or "",
+                    happened_at=daily.report_date,
                     detail_url="/safety/risk-reporting",
                 )
             )
 
         # 近 24h 事故（展示当日 0 点起）
-        rows = (
+        accident_rows = (
             await self.db.execute(
                 select(Accident).where(
                     Accident.is_deleted.is_(False),
@@ -222,7 +223,7 @@ class SafetyOverviewService:
                 )
             )
         ).scalars()
-        for accident in rows:
+        for accident in accident_rows:
             items.append(
                 MapRiskItem(
                     source="accident",
@@ -236,7 +237,7 @@ class SafetyOverviewService:
             )
 
         # 未关闭隐患（按部门兜底映射，无 location 字段）
-        rows = (
+        hazard_rows = (
             await self.db.execute(
                 select(HazardReport).where(
                     HazardReport.is_deleted.is_(False),
@@ -247,7 +248,7 @@ class SafetyOverviewService:
                 )
             )
         ).scalars()
-        for hazard in rows:
+        for hazard in hazard_rows:
             items.append(
                 MapRiskItem(
                     source="hazard",
@@ -260,7 +261,7 @@ class SafetyOverviewService:
             )
 
         # 归一落点：先按地点文本匹配，失败时按部门兜底（标记 matched_by）
-        markers_by_building: dict[int, MapBuildingMarkers] = {}
+        markers_by_building: dict[UUID, MapBuildingMarkers] = {}
         unmapped: dict[str, list[MapRiskItem]] = defaultdict(list)
         for item in items:
             building = match_building(item.location_text, alias_map)
@@ -313,7 +314,7 @@ class SafetyOverviewService:
         )
 
         # 超储物料 Top
-        rows = (
+        over_rows = (
             await self.db.execute(
                 select(ChemicalInventory, HazardousChemical)
                 .join(
@@ -357,7 +358,7 @@ class SafetyOverviewService:
                 ),
                 unit=inventory.unit,
             )
-            for inventory, chemical in rows
+            for inventory, chemical in over_rows
         ]
 
         open_hazard_count = sum(1 for item in items if item.source == "hazard")
