@@ -457,6 +457,10 @@ jobs:
       - name: Install PostgreSQL client
         run: sudo apt-get update && sudo apt-get install --yes postgresql-client
 
+      # 设备报修二维码 PDF 渲染需要中文字体（Docker 镜像已内置，runner 需补装）
+      - name: Install CJK fonts
+        run: sudo apt-get install --yes fonts-noto-cjk
+
       - name: Run backend integration and coverage checks
         run: bash dazah-backend/scripts/ci.sh integration
 
