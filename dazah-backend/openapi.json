@@ -7599,6 +7599,210 @@
         "title": "ApiResponseEnvelope[ReturnRecallOut]",
         "type": "object"
       },
+      "ApiResponseEnvelope_SafetyAgreementImportResultResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/SafetyAgreementImportResultResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[SafetyAgreementImportResultResponse]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_SafetyDutyAssessmentImportResultResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/SafetyDutyAssessmentImportResultResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[SafetyDutyAssessmentImportResultResponse]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_SafetyDutyAssessmentListResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/SafetyDutyAssessmentListResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[SafetyDutyAssessmentListResponse]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_SafetyDutyAssessmentResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/SafetyDutyAssessmentResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[SafetyDutyAssessmentResponse]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_SafetyDutyAssessmentStatsResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/SafetyDutyAssessmentStatsResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[SafetyDutyAssessmentStatsResponse]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_SafetyDutyTemplateResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/SafetyDutyTemplateResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[SafetyDutyTemplateResponse]",
+        "type": "object"
+      },
       "ApiResponseEnvelope_SafetyFacilityChecklistResponse_": {
         "properties": {
           "code": {
@@ -7903,6 +8107,108 @@
           "data"
         ],
         "title": "ApiResponseEnvelope[SafetyOverviewResponse]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_SafetyTargetAgreementListResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/SafetyTargetAgreementListResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[SafetyTargetAgreementListResponse]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_SafetyTargetAgreementResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/SafetyTargetAgreementResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[SafetyTargetAgreementResponse]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_SafetyTargetAgreementStatsResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/SafetyTargetAgreementStatsResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[SafetyTargetAgreementStatsResponse]",
         "type": "object"
       },
       "ApiResponseEnvelope_SafetyTargetListResponse_": {
@@ -10320,33 +10626,6 @@
           }
         },
         "title": "ApproveBody",
-        "type": "object"
-      },
-      "ApproveEhsChangeRequest": {
-        "description": "审批EHS变更请求",
-        "properties": {
-          "comments": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "审批意见",
-            "title": "Comments"
-          },
-          "decision": {
-            "description": "审批决定: approved/rejected",
-            "title": "Decision",
-            "type": "string"
-          }
-        },
-        "required": [
-          "decision"
-        ],
-        "title": "ApproveEhsChangeRequest",
         "type": "object"
       },
       "AssignUserRoleRequest": {
@@ -14127,6 +14406,34 @@
           "file"
         ],
         "title": "Body_import_purchase_request_records_api_v1_procurement_purchase_requests_import_post",
+        "type": "object"
+      },
+      "Body_import_safety_duty_assessments_api_v1_safety_safety_duty_assessments_import_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_import_safety_duty_assessments_api_v1_safety_safety_duty_assessments_import_post",
+        "type": "object"
+      },
+      "Body_import_safety_target_agreements_api_v1_safety_safety_target_agreements_import_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_import_safety_target_agreements_api_v1_safety_safety_target_agreements_import_post",
         "type": "object"
       },
       "Body_import_supplier_records_api_v1_procurement_suppliers_import_post": {
@@ -21274,50 +21581,6 @@
           }
         },
         "title": "ClaimTimeoutUpdateRequest",
-        "type": "object"
-      },
-      "CloseEhsChangeRequest": {
-        "description": "关闭EHS变更请求",
-        "properties": {
-          "closed_by": {
-            "anyOf": [
-              {
-                "maxLength": 100,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "关闭人",
-            "title": "Closed By"
-          },
-          "restored_date": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "恢复原状日期",
-            "title": "Restored Date"
-          },
-          "temp_expiry_date": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "临时变更到期日期",
-            "title": "Temp Expiry Date"
-          }
-        },
-        "title": "CloseEhsChangeRequest",
         "type": "object"
       },
       "ComplaintOut": {
@@ -33863,658 +34126,6 @@
           "source"
         ],
         "title": "EffectivePageGrantOut",
-        "type": "object"
-      },
-      "EhsChangeCreate": {
-        "description": "创建EHS变更",
-        "properties": {
-          "action_items": {
-            "anyOf": [
-              {
-                "items": {},
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "行动项",
-            "title": "Action Items"
-          },
-          "actual_completion": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "实际完成日期",
-            "title": "Actual Completion"
-          },
-          "actual_start": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "实际开始日期",
-            "title": "Actual Start"
-          },
-          "applicant_name": {
-            "anyOf": [
-              {
-                "maxLength": 100,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "申请人姓名",
-            "title": "Applicant Name"
-          },
-          "approval_chain": {
-            "anyOf": [
-              {
-                "items": {},
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "审批链",
-            "title": "Approval Chain"
-          },
-          "attachments": {
-            "anyOf": [
-              {
-                "items": {},
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "附件列表",
-            "title": "Attachments"
-          },
-          "change_duration": {
-            "default": "permanent",
-            "description": "变更期限",
-            "title": "Change Duration",
-            "type": "string"
-          },
-          "change_grade": {
-            "default": "general",
-            "description": "变更等级",
-            "title": "Change Grade",
-            "type": "string"
-          },
-          "change_no": {
-            "description": "变更编号",
-            "maxLength": 64,
-            "title": "Change No",
-            "type": "string"
-          },
-          "change_type": {
-            "description": "变更类型",
-            "title": "Change Type",
-            "type": "string"
-          },
-          "closure": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "变更关闭数据",
-            "title": "Closure"
-          },
-          "department": {
-            "anyOf": [
-              {
-                "maxLength": 100,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "申请部门",
-            "title": "Department"
-          },
-          "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "变更描述（变更前/变更后对比）",
-            "title": "Description"
-          },
-          "documents_to_update": {
-            "anyOf": [
-              {
-                "items": {},
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "需更新的文件清单",
-            "title": "Documents To Update"
-          },
-          "equipment_tags": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "关联设备位号",
-            "title": "Equipment Tags"
-          },
-          "expected_completion": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "预期完成日期",
-            "title": "Expected Completion"
-          },
-          "expected_effect": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "预期效果",
-            "title": "Expected Effect"
-          },
-          "expected_start": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "预期开始日期",
-            "title": "Expected Start"
-          },
-          "linked_safety_check_id": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "关联安全检查ID",
-            "title": "Linked Safety Check Id"
-          },
-          "location_unit": {
-            "anyOf": [
-              {
-                "maxLength": 255,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "所在单元/装置",
-            "title": "Location Unit"
-          },
-          "notes": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "备注",
-            "title": "Notes"
-          },
-          "pssr_checklist": {
-            "anyOf": [
-              {
-                "items": {},
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "PSSR检查清单",
-            "title": "Pssr Checklist"
-          },
-          "risk_assessments": {
-            "anyOf": [
-              {
-                "items": {},
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "风险评估记录",
-            "title": "Risk Assessments"
-          },
-          "technical_basis": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "变更技术依据",
-            "title": "Technical Basis"
-          },
-          "title": {
-            "description": "变更标题",
-            "maxLength": 255,
-            "title": "Title",
-            "type": "string"
-          },
-          "verification": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "变更验证数据",
-            "title": "Verification"
-          }
-        },
-        "required": [
-          "change_no",
-          "title",
-          "change_type"
-        ],
-        "title": "EhsChangeCreate",
-        "type": "object"
-      },
-      "EhsChangeUpdate": {
-        "description": "更新EHS变更（所有字段可选）",
-        "properties": {
-          "action_items": {
-            "anyOf": [
-              {
-                "items": {},
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "行动项",
-            "title": "Action Items"
-          },
-          "actual_completion": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "实际完成日期",
-            "title": "Actual Completion"
-          },
-          "actual_start": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "实际开始日期",
-            "title": "Actual Start"
-          },
-          "applicant_name": {
-            "anyOf": [
-              {
-                "maxLength": 100,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "申请人姓名",
-            "title": "Applicant Name"
-          },
-          "approval_chain": {
-            "anyOf": [
-              {
-                "items": {},
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "审批链",
-            "title": "Approval Chain"
-          },
-          "attachments": {
-            "anyOf": [
-              {
-                "items": {},
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "附件列表",
-            "title": "Attachments"
-          },
-          "change_duration": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "变更期限",
-            "title": "Change Duration"
-          },
-          "change_grade": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "变更等级",
-            "title": "Change Grade"
-          },
-          "change_no": {
-            "anyOf": [
-              {
-                "maxLength": 64,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "变更编号",
-            "title": "Change No"
-          },
-          "change_type": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "变更类型",
-            "title": "Change Type"
-          },
-          "closure": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "变更关闭数据",
-            "title": "Closure"
-          },
-          "department": {
-            "anyOf": [
-              {
-                "maxLength": 100,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "申请部门",
-            "title": "Department"
-          },
-          "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "变更描述",
-            "title": "Description"
-          },
-          "documents_to_update": {
-            "anyOf": [
-              {
-                "items": {},
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "需更新的文件清单",
-            "title": "Documents To Update"
-          },
-          "equipment_tags": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "关联设备位号",
-            "title": "Equipment Tags"
-          },
-          "expected_completion": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "预期完成日期",
-            "title": "Expected Completion"
-          },
-          "expected_effect": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "预期效果",
-            "title": "Expected Effect"
-          },
-          "expected_start": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "预期开始日期",
-            "title": "Expected Start"
-          },
-          "linked_safety_check_id": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "关联安全检查ID",
-            "title": "Linked Safety Check Id"
-          },
-          "location_unit": {
-            "anyOf": [
-              {
-                "maxLength": 255,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "所在单元/装置",
-            "title": "Location Unit"
-          },
-          "notes": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "备注",
-            "title": "Notes"
-          },
-          "pssr_checklist": {
-            "anyOf": [
-              {
-                "items": {},
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "PSSR检查清单",
-            "title": "Pssr Checklist"
-          },
-          "risk_assessments": {
-            "anyOf": [
-              {
-                "items": {},
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "风险评估记录",
-            "title": "Risk Assessments"
-          },
-          "technical_basis": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "变更技术依据",
-            "title": "Technical Basis"
-          },
-          "title": {
-            "anyOf": [
-              {
-                "maxLength": 255,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "变更标题",
-            "title": "Title"
-          },
-          "verification": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "变更验证数据",
-            "title": "Verification"
-          }
-        },
-        "title": "EhsChangeUpdate",
         "type": "object"
       },
       "EmailConfigUpdate": {
@@ -72885,6 +72496,33 @@
         "title": "RuleTerm",
         "type": "object"
       },
+      "SafetyAgreementImportResultResponse": {
+        "properties": {
+          "created": {
+            "description": "新建条数",
+            "title": "Created",
+            "type": "integer"
+          },
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/SafetyImportErrorItem"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "updated": {
+            "description": "更新（登记签订）条数",
+            "title": "Updated",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "updated",
+          "created"
+        ],
+        "title": "SafetyAgreementImportResultResponse",
+        "type": "object"
+      },
       "SafetyCheckCreate": {
         "description": "创建安全检查",
         "properties": {
@@ -73239,6 +72877,617 @@
           }
         },
         "title": "SafetyCheckUpdate",
+        "type": "object"
+      },
+      "SafetyDutyAssessmentCreate": {
+        "properties": {
+          "assessment_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "考核日期",
+            "title": "Assessment Date"
+          },
+          "assessor": {
+            "default": "",
+            "description": "考核单位",
+            "maxLength": 100,
+            "title": "Assessor",
+            "type": "string"
+          },
+          "department": {
+            "description": "被考核部门/单位",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Department",
+            "type": "string"
+          },
+          "items": {
+            "description": "评分明细",
+            "items": {
+              "$ref": "#/components/schemas/SafetyDutyAssessmentItemInput"
+            },
+            "maxItems": 100,
+            "title": "Items",
+            "type": "array"
+          },
+          "person_name": {
+            "default": "",
+            "description": "被考核人",
+            "maxLength": 100,
+            "title": "Person Name",
+            "type": "string"
+          },
+          "quarter": {
+            "description": "考核季度 1-4",
+            "maximum": 4.0,
+            "minimum": 1.0,
+            "title": "Quarter",
+            "type": "integer"
+          },
+          "remark": {
+            "default": "",
+            "description": "备注",
+            "maxLength": 8000,
+            "title": "Remark",
+            "type": "string"
+          },
+          "year": {
+            "description": "考核年度",
+            "maximum": 2100.0,
+            "minimum": 2000.0,
+            "title": "Year",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "year",
+          "quarter",
+          "department"
+        ],
+        "title": "SafetyDutyAssessmentCreate",
+        "type": "object"
+      },
+      "SafetyDutyAssessmentDepartmentStat": {
+        "properties": {
+          "avg_score": {
+            "title": "Avg Score",
+            "type": "number"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "department": {
+            "title": "Department",
+            "type": "string"
+          }
+        },
+        "required": [
+          "department",
+          "count",
+          "avg_score"
+        ],
+        "title": "SafetyDutyAssessmentDepartmentStat",
+        "type": "object"
+      },
+      "SafetyDutyAssessmentImportResultResponse": {
+        "properties": {
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/SafetyImportErrorItem"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "imported": {
+            "description": "新建考核条数",
+            "title": "Imported",
+            "type": "integer"
+          },
+          "skipped_sheets": {
+            "description": "未导入的 sheet（未填扣减分或无法识别）",
+            "items": {
+              "type": "string"
+            },
+            "title": "Skipped Sheets",
+            "type": "array"
+          },
+          "updated": {
+            "description": "覆盖更新考核条数",
+            "title": "Updated",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "imported",
+          "updated"
+        ],
+        "title": "SafetyDutyAssessmentImportResultResponse",
+        "type": "object"
+      },
+      "SafetyDutyAssessmentItemInput": {
+        "properties": {
+          "content": {
+            "description": "考核内容",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Content",
+            "type": "string"
+          },
+          "deduction_score": {
+            "default": 0,
+            "description": "扣减分",
+            "maximum": 1000.0,
+            "minimum": 0.0,
+            "title": "Deduction Score",
+            "type": "number"
+          },
+          "remark": {
+            "default": "",
+            "description": "考核明细说明",
+            "maxLength": 2000,
+            "title": "Remark",
+            "type": "string"
+          },
+          "rule": {
+            "default": "",
+            "description": "考核标准/扣分规则",
+            "maxLength": 2000,
+            "title": "Rule",
+            "type": "string"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "maximum": 1000.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "考核得分（缺省=标准分-扣减分）",
+            "title": "Score"
+          },
+          "standard_score": {
+            "default": 0,
+            "description": "标准分",
+            "maximum": 1000.0,
+            "minimum": 0.0,
+            "title": "Standard Score",
+            "type": "number"
+          }
+        },
+        "required": [
+          "content"
+        ],
+        "title": "SafetyDutyAssessmentItemInput",
+        "type": "object"
+      },
+      "SafetyDutyAssessmentItemResponse": {
+        "properties": {
+          "assessment_id": {
+            "format": "uuid",
+            "title": "Assessment Id",
+            "type": "string"
+          },
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "deduction_score": {
+            "title": "Deduction Score",
+            "type": "number"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "remark": {
+            "title": "Remark",
+            "type": "string"
+          },
+          "rule": {
+            "title": "Rule",
+            "type": "string"
+          },
+          "score": {
+            "title": "Score",
+            "type": "number"
+          },
+          "sort_order": {
+            "title": "Sort Order",
+            "type": "integer"
+          },
+          "standard_score": {
+            "title": "Standard Score",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "assessment_id",
+          "sort_order",
+          "content",
+          "rule",
+          "standard_score",
+          "deduction_score",
+          "score",
+          "remark"
+        ],
+        "title": "SafetyDutyAssessmentItemResponse",
+        "type": "object"
+      },
+      "SafetyDutyAssessmentListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SafetyDutyAssessmentResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "SafetyDutyAssessmentListResponse",
+        "type": "object"
+      },
+      "SafetyDutyAssessmentQuarterStat": {
+        "properties": {
+          "avg_score": {
+            "title": "Avg Score",
+            "type": "number"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "quarter": {
+            "title": "Quarter",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "quarter",
+          "count",
+          "avg_score"
+        ],
+        "title": "SafetyDutyAssessmentQuarterStat",
+        "type": "object"
+      },
+      "SafetyDutyAssessmentResponse": {
+        "properties": {
+          "assessment_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assessment Date"
+          },
+          "assessor": {
+            "title": "Assessor",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "department": {
+            "title": "Department",
+            "type": "string"
+          },
+          "grade": {
+            "title": "Grade",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SafetyDutyAssessmentItemResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "person_name": {
+            "title": "Person Name",
+            "type": "string"
+          },
+          "quarter": {
+            "title": "Quarter",
+            "type": "integer"
+          },
+          "remark": {
+            "title": "Remark",
+            "type": "string"
+          },
+          "total_score": {
+            "title": "Total Score",
+            "type": "number"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "year": {
+            "title": "Year",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "year",
+          "quarter",
+          "department",
+          "person_name",
+          "assessor",
+          "total_score",
+          "grade",
+          "remark",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "SafetyDutyAssessmentResponse",
+        "type": "object"
+      },
+      "SafetyDutyAssessmentStatsResponse": {
+        "properties": {
+          "avg_score": {
+            "title": "Avg Score",
+            "type": "number"
+          },
+          "departments": {
+            "items": {
+              "$ref": "#/components/schemas/SafetyDutyAssessmentDepartmentStat"
+            },
+            "title": "Departments",
+            "type": "array"
+          },
+          "excellent": {
+            "description": "优秀数（>=95）",
+            "title": "Excellent",
+            "type": "integer"
+          },
+          "good": {
+            "description": "良好数（>=90）",
+            "title": "Good",
+            "type": "integer"
+          },
+          "qualified": {
+            "description": "合格数（>=80）",
+            "title": "Qualified",
+            "type": "integer"
+          },
+          "quarters": {
+            "items": {
+              "$ref": "#/components/schemas/SafetyDutyAssessmentQuarterStat"
+            },
+            "title": "Quarters",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "unqualified": {
+            "description": "不合格数（<80）",
+            "title": "Unqualified",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "avg_score",
+          "excellent",
+          "good",
+          "qualified",
+          "unqualified"
+        ],
+        "title": "SafetyDutyAssessmentStatsResponse",
+        "type": "object"
+      },
+      "SafetyDutyAssessmentUpdate": {
+        "properties": {
+          "assessment_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assessment Date"
+          },
+          "assessor": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assessor"
+          },
+          "department": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Department"
+          },
+          "items": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SafetyDutyAssessmentItemInput"
+                },
+                "maxItems": 100,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "提供时整体替换评分明细",
+            "title": "Items"
+          },
+          "person_name": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Person Name"
+          },
+          "quarter": {
+            "anyOf": [
+              {
+                "maximum": 4.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quarter"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "maxLength": 8000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "maximum": 2100.0,
+                "minimum": 2000.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year"
+          }
+        },
+        "title": "SafetyDutyAssessmentUpdate",
+        "type": "object"
+      },
+      "SafetyDutyTemplateItem": {
+        "properties": {
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "rule": {
+            "default": "",
+            "title": "Rule",
+            "type": "string"
+          },
+          "standard_score": {
+            "title": "Standard Score",
+            "type": "number"
+          }
+        },
+        "required": [
+          "content",
+          "standard_score"
+        ],
+        "title": "SafetyDutyTemplateItem",
+        "type": "object"
+      },
+      "SafetyDutyTemplateResponse": {
+        "properties": {
+          "assessed": {
+            "default": "",
+            "title": "Assessed",
+            "type": "string"
+          },
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SafetyDutyTemplateItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "matched": {
+            "default": false,
+            "description": "是否按部门匹配到模板（未匹配返回通用空模板）",
+            "title": "Matched",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "category"
+        ],
+        "title": "SafetyDutyTemplateResponse",
         "type": "object"
       },
       "SafetyFacilityChecklistItem": {
@@ -74052,6 +74301,38 @@
         "title": "SafetyFeishuSettingsTestResult",
         "type": "object"
       },
+      "SafetyImportErrorItem": {
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "row": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "description": "出错行号（责任书）或 sheet 名（考核）",
+            "title": "Row"
+          },
+          "target": {
+            "default": "",
+            "description": "出错对象（部门/岗位）",
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": [
+          "row",
+          "message"
+        ],
+        "title": "SafetyImportErrorItem",
+        "type": "object"
+      },
       "SafetyKnowledgeArticleCreate": {
         "description": "创建知识库文章",
         "properties": {
@@ -74380,6 +74661,432 @@
           }
         },
         "title": "SafetyOverviewResponse",
+        "type": "object"
+      },
+      "SafetyTargetAgreementCreate": {
+        "properties": {
+          "category": {
+            "default": "岗位员工",
+            "description": "分类",
+            "maxLength": 30,
+            "title": "Category",
+            "type": "string"
+          },
+          "department": {
+            "description": "责任部门/单位",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Department",
+            "type": "string"
+          },
+          "expires_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "有效期至",
+            "title": "Expires Date"
+          },
+          "goals_text": {
+            "default": "",
+            "description": "目标条款（每行一条）",
+            "maxLength": 20000,
+            "title": "Goals Text",
+            "type": "string"
+          },
+          "party_a": {
+            "default": "",
+            "description": "甲方（考核方代表）",
+            "maxLength": 60,
+            "title": "Party A",
+            "type": "string"
+          },
+          "party_b": {
+            "default": "",
+            "description": "乙方（责任方签订人）",
+            "maxLength": 60,
+            "title": "Party B",
+            "type": "string"
+          },
+          "position": {
+            "description": "岗位/角色",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Position",
+            "type": "string"
+          },
+          "remark": {
+            "default": "",
+            "description": "备注",
+            "maxLength": 8000,
+            "title": "Remark",
+            "type": "string"
+          },
+          "signed_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "签订日期",
+            "title": "Signed Date"
+          },
+          "status": {
+            "default": "unsigned",
+            "description": "状态: unsigned/signed",
+            "maxLength": 20,
+            "title": "Status",
+            "type": "string"
+          },
+          "year": {
+            "description": "签订年度",
+            "maximum": 2100.0,
+            "minimum": 2000.0,
+            "title": "Year",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "year",
+          "department",
+          "position"
+        ],
+        "title": "SafetyTargetAgreementCreate",
+        "type": "object"
+      },
+      "SafetyTargetAgreementDepartmentStat": {
+        "properties": {
+          "department": {
+            "title": "Department",
+            "type": "string"
+          },
+          "signed": {
+            "title": "Signed",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "department",
+          "total",
+          "signed"
+        ],
+        "title": "SafetyTargetAgreementDepartmentStat",
+        "type": "object"
+      },
+      "SafetyTargetAgreementListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SafetyTargetAgreementResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "SafetyTargetAgreementListResponse",
+        "type": "object"
+      },
+      "SafetyTargetAgreementResponse": {
+        "properties": {
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "department": {
+            "title": "Department",
+            "type": "string"
+          },
+          "expires_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires Date"
+          },
+          "goals_text": {
+            "title": "Goals Text",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "party_a": {
+            "title": "Party A",
+            "type": "string"
+          },
+          "party_b": {
+            "title": "Party B",
+            "type": "string"
+          },
+          "position": {
+            "title": "Position",
+            "type": "string"
+          },
+          "remark": {
+            "title": "Remark",
+            "type": "string"
+          },
+          "signed_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Signed Date"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "year": {
+            "title": "Year",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "year",
+          "department",
+          "position",
+          "category",
+          "party_a",
+          "party_b",
+          "status",
+          "goals_text",
+          "remark",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "SafetyTargetAgreementResponse",
+        "type": "object"
+      },
+      "SafetyTargetAgreementStatsResponse": {
+        "properties": {
+          "departments": {
+            "items": {
+              "$ref": "#/components/schemas/SafetyTargetAgreementDepartmentStat"
+            },
+            "title": "Departments",
+            "type": "array"
+          },
+          "sign_rate": {
+            "description": "签订率（%）",
+            "title": "Sign Rate",
+            "type": "number"
+          },
+          "signed": {
+            "title": "Signed",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "unsigned": {
+            "title": "Unsigned",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "signed",
+          "unsigned",
+          "sign_rate"
+        ],
+        "title": "SafetyTargetAgreementStatsResponse",
+        "type": "object"
+      },
+      "SafetyTargetAgreementUpdate": {
+        "properties": {
+          "category": {
+            "anyOf": [
+              {
+                "maxLength": 30,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "department": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Department"
+          },
+          "expires_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires Date"
+          },
+          "goals_text": {
+            "anyOf": [
+              {
+                "maxLength": 20000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goals Text"
+          },
+          "party_a": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Party A"
+          },
+          "party_b": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Party B"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "maxLength": 8000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark"
+          },
+          "signed_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Signed Date"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "maxLength": 20,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "year": {
+            "anyOf": [
+              {
+                "maximum": 2100.0,
+                "minimum": 2000.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Year"
+          }
+        },
+        "title": "SafetyTargetAgreementUpdate",
         "type": "object"
       },
       "SafetyTargetCreate": {
@@ -216947,1176 +217654,6 @@
         ]
       }
     },
-    "/api/v1/safety/ehs-changes": {
-      "get": {
-        "description": "获取EHS变更列表，支持多条件筛选",
-        "operationId": "get_ehs_changes_api_v1_safety_ehs_changes_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "page",
-            "required": false,
-            "schema": {
-              "default": 1,
-              "minimum": 1,
-              "title": "Page",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "page_size",
-            "required": false,
-            "schema": {
-              "default": 20,
-              "maximum": 200,
-              "minimum": 1,
-              "title": "Page Size",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "status",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Status"
-            }
-          },
-          {
-            "in": "query",
-            "name": "change_type",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Change Type"
-            }
-          },
-          {
-            "in": "query",
-            "name": "change_grade",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Change Grade"
-            }
-          },
-          {
-            "in": "query",
-            "name": "change_duration",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Change Duration"
-            }
-          },
-          {
-            "in": "query",
-            "name": "department",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Department"
-            }
-          },
-          {
-            "in": "query",
-            "name": "keyword",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Keyword"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "获取EHS变更列表",
-        "tags": [
-          "安全管理"
-        ]
-      },
-      "post": {
-        "description": "创建EHS变更申请",
-        "operationId": "create_ehs_change_api_v1_safety_ehs_changes_post",
-        "parameters": [
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/EhsChangeCreate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "创建EHS变更",
-        "tags": [
-          "安全管理"
-        ]
-      }
-    },
-    "/api/v1/safety/ehs-changes/{change_id}": {
-      "delete": {
-        "description": "删除EHS变更（软删除）",
-        "operationId": "delete_ehs_change_api_v1_safety_ehs_changes__change_id__delete",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "change_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Change Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "删除EHS变更",
-        "tags": [
-          "安全管理"
-        ]
-      },
-      "get": {
-        "description": "获取EHS变更详情",
-        "operationId": "get_ehs_change_api_v1_safety_ehs_changes__change_id__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "change_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Change Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "获取EHS变更详情",
-        "tags": [
-          "安全管理"
-        ]
-      },
-      "put": {
-        "description": "更新EHS变更",
-        "operationId": "update_ehs_change_api_v1_safety_ehs_changes__change_id__put",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "change_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Change Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/EhsChangeUpdate"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "更新EHS变更",
-        "tags": [
-          "安全管理"
-        ]
-      }
-    },
-    "/api/v1/safety/ehs-changes/{change_id}/action-items/{index}": {
-      "put": {
-        "description": "更新行动项状态",
-        "operationId": "update_action_item_ehs_change_api_v1_safety_ehs_changes__change_id__action_items__index__put",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "change_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Change Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "index",
-            "required": true,
-            "schema": {
-              "title": "Index",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "状态: pending/in_progress/completed",
-            "in": "query",
-            "name": "status",
-            "required": true,
-            "schema": {
-              "description": "状态: pending/in_progress/completed",
-              "title": "Status",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "更新行动项状态",
-        "tags": [
-          "安全管理"
-        ]
-      }
-    },
-    "/api/v1/safety/ehs-changes/{change_id}/approve": {
-      "post": {
-        "description": "审批变更（审核中→已批准/已驳回）",
-        "operationId": "approve_ehs_change_api_v1_safety_ehs_changes__change_id__approve_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "change_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Change Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ApproveEhsChangeRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "审批EHS变更",
-        "tags": [
-          "安全管理"
-        ]
-      }
-    },
-    "/api/v1/safety/ehs-changes/{change_id}/cancel": {
-      "post": {
-        "description": "取消变更（草稿→已关闭）",
-        "operationId": "cancel_ehs_change_api_v1_safety_ehs_changes__change_id__cancel_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "change_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Change Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "取消EHS变更",
-        "tags": [
-          "安全管理"
-        ]
-      }
-    },
-    "/api/v1/safety/ehs-changes/{change_id}/close": {
-      "post": {
-        "description": "关闭变更（已投用→已关闭）",
-        "operationId": "close_ehs_change_api_v1_safety_ehs_changes__change_id__close_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "change_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Change Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CloseEhsChangeRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "关闭EHS变更",
-        "tags": [
-          "安全管理"
-        ]
-      }
-    },
-    "/api/v1/safety/ehs-changes/{change_id}/commission": {
-      "post": {
-        "description": "投用变更（实施中→已投用）",
-        "operationId": "commission_ehs_change_api_v1_safety_ehs_changes__change_id__commission_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "change_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Change Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "投用EHS变更",
-        "tags": [
-          "安全管理"
-        ]
-      }
-    },
-    "/api/v1/safety/ehs-changes/{change_id}/pssr-checklist": {
-      "put": {
-        "description": "更新PSSR检查清单",
-        "operationId": "update_pssr_checklist_ehs_change_api_v1_safety_ehs_changes__change_id__pssr_checklist_put",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "change_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Change Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "items": {
-                  "additionalProperties": true,
-                  "type": "object"
-                },
-                "title": "Data",
-                "type": "array"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "更新PSSR检查清单",
-        "tags": [
-          "安全管理"
-        ]
-      }
-    },
-    "/api/v1/safety/ehs-changes/{change_id}/reject": {
-      "post": {
-        "description": "驳回变更（审核中→已驳回）",
-        "operationId": "reject_ehs_change_api_v1_safety_ehs_changes__change_id__reject_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "change_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Change Id",
-              "type": "string"
-            }
-          },
-          {
-            "description": "驳回原因",
-            "in": "query",
-            "name": "comments",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "驳回原因",
-              "title": "Comments"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "驳回EHS变更",
-        "tags": [
-          "安全管理"
-        ]
-      }
-    },
-    "/api/v1/safety/ehs-changes/{change_id}/risk-assessments": {
-      "post": {
-        "description": "追加风险评估记录到变更",
-        "operationId": "add_risk_assessment_ehs_change_api_v1_safety_ehs_changes__change_id__risk_assessments_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "change_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Change Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "additionalProperties": true,
-                "title": "Data",
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "添加风险评估记录",
-        "tags": [
-          "安全管理"
-        ]
-      }
-    },
-    "/api/v1/safety/ehs-changes/{change_id}/start-implementation": {
-      "post": {
-        "description": "开始实施变更（已批准→实施中）",
-        "operationId": "start_implementation_ehs_change_api_v1_safety_ehs_changes__change_id__start_implementation_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "change_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Change Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "开始实施EHS变更",
-        "tags": [
-          "安全管理"
-        ]
-      }
-    },
-    "/api/v1/safety/ehs-changes/{change_id}/submit": {
-      "post": {
-        "description": "提交变更（草稿→审核中；紧急变更自动批准）",
-        "operationId": "submit_ehs_change_api_v1_safety_ehs_changes__change_id__submit_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "change_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Change Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "提交EHS变更",
-        "tags": [
-          "安全管理"
-        ]
-      }
-    },
-    "/api/v1/safety/ehs-changes/{change_id}/verification": {
-      "put": {
-        "description": "提交变更验证数据",
-        "operationId": "submit_verification_ehs_change_api_v1_safety_ehs_changes__change_id__verification_put",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "change_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Change Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "additionalProperties": true,
-                "title": "Data",
-                "type": "object"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "提交变更验证数据",
-        "tags": [
-          "安全管理"
-        ]
-      }
-    },
     "/api/v1/safety/emergency-cards": {
       "get": {
         "operationId": "list_emergency_cards_api_v1_safety_emergency_cards_get",
@@ -225006,8 +224543,7 @@
               "enum": [
                 "hazards",
                 "accidents",
-                "checks",
-                "ehs-actions"
+                "checks"
               ],
               "title": "Kind",
               "type": "string"
@@ -230064,6 +229600,697 @@
         ]
       }
     },
+    "/api/v1/safety/safety-duty-assessments": {
+      "get": {
+        "operationId": "list_safety_duty_assessments_api_v1_safety_safety_duty_assessments_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "考核年度",
+            "in": "query",
+            "name": "year",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "考核年度",
+              "title": "Year"
+            }
+          },
+          {
+            "description": "考核季度",
+            "in": "query",
+            "name": "quarter",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 4,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "考核季度",
+              "title": "Quarter"
+            }
+          },
+          {
+            "description": "被考核部门/单位",
+            "in": "query",
+            "name": "department",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "被考核部门/单位",
+              "title": "Department"
+            }
+          },
+          {
+            "description": "等级: 优秀/良好/合格/不合格",
+            "in": "query",
+            "name": "grade",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "等级: 优秀/良好/合格/不合格",
+              "title": "Grade"
+            }
+          },
+          {
+            "description": "部门/被考核人/考核单位关键字",
+            "in": "query",
+            "name": "keyword",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "部门/被考核人/考核单位关键字",
+              "title": "Keyword"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_SafetyDutyAssessmentListResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "责任制考核分页列表（年度/季度/部门/等级/关键字）",
+        "tags": [
+          "安全管理"
+        ]
+      },
+      "post": {
+        "operationId": "create_safety_duty_assessment_api_v1_safety_safety_duty_assessments_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SafetyDutyAssessmentCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_SafetyDutyAssessmentResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "新增责任制考核记录（含评分明细，总分与等级自动计算）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/safety-duty-assessments/import": {
+      "post": {
+        "operationId": "import_safety_duty_assessments_api_v1_safety_safety_duty_assessments_import_post",
+        "parameters": [
+          {
+            "description": "考核年度",
+            "in": "query",
+            "name": "year",
+            "required": true,
+            "schema": {
+              "description": "考核年度",
+              "maximum": 2100,
+              "minimum": 2000,
+              "title": "Year",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "考核季度",
+            "in": "query",
+            "name": "quarter",
+            "required": true,
+            "schema": {
+              "description": "考核季度",
+              "maximum": 4,
+              "minimum": 1,
+              "title": "Quarter",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_safety_duty_assessments_api_v1_safety_safety_duty_assessments_import_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_SafetyDutyAssessmentImportResultResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "批量导入季度考核（按 年度+季度+部门+被考核人 覆盖更新）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/safety-duty-assessments/import-template": {
+      "get": {
+        "operationId": "download_safety_duty_assessment_import_template_api_v1_safety_safety_duty_assessments_import_template_get",
+        "parameters": [
+          {
+            "description": "考核年度",
+            "in": "query",
+            "name": "year",
+            "required": true,
+            "schema": {
+              "description": "考核年度",
+              "maximum": 2100,
+              "minimum": 2000,
+              "title": "Year",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "考核季度",
+            "in": "query",
+            "name": "quarter",
+            "required": true,
+            "schema": {
+              "description": "考核季度",
+              "maximum": 4,
+              "minimum": 1,
+              "title": "Quarter",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "下载季度考核批量导入模板（按考核表模板一个部门一个 sheet）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/safety-duty-assessments/stats": {
+      "get": {
+        "operationId": "get_safety_duty_assessment_stats_api_v1_safety_safety_duty_assessments_stats_get",
+        "parameters": [
+          {
+            "description": "考核年度",
+            "in": "query",
+            "name": "year",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "考核年度",
+              "title": "Year"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_SafetyDutyAssessmentStatsResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "责任制考核统计（平均分/等级分布/季度与部门维度）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/safety-duty-assessments/template": {
+      "get": {
+        "operationId": "get_safety_duty_assessment_template_api_v1_safety_safety_duty_assessments_template_get",
+        "parameters": [
+          {
+            "description": "被考核部门/单位",
+            "in": "query",
+            "name": "department",
+            "required": true,
+            "schema": {
+              "description": "被考核部门/单位",
+              "maxLength": 100,
+              "minLength": 1,
+              "title": "Department",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_SafetyDutyTemplateResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "按被考核部门匹配责任制考核模板（2026 考核表文档）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/safety-duty-assessments/{assessment_id}": {
+      "delete": {
+        "operationId": "delete_safety_duty_assessment_api_v1_safety_safety_duty_assessments__assessment_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assessment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Assessment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_NoneType_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "删除责任制考核记录（软删除）",
+        "tags": [
+          "安全管理"
+        ]
+      },
+      "get": {
+        "operationId": "get_safety_duty_assessment_api_v1_safety_safety_duty_assessments__assessment_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assessment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Assessment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_SafetyDutyAssessmentResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "责任制考核详情（含评分明细）",
+        "tags": [
+          "安全管理"
+        ]
+      },
+      "put": {
+        "operationId": "update_safety_duty_assessment_api_v1_safety_safety_duty_assessments__assessment_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "assessment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Assessment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SafetyDutyAssessmentUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_SafetyDutyAssessmentResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "更新责任制考核（items 提供时整体替换评分明细）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
     "/api/v1/safety/safety-facilities": {
       "get": {
         "operationId": "list_safety_facilities_api_v1_safety_safety_facilities_get",
@@ -230828,6 +231055,542 @@
           }
         },
         "summary": "安全设施点检记录分页",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/safety-target-agreements": {
+      "get": {
+        "operationId": "list_safety_target_agreements_api_v1_safety_safety_target_agreements_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "签订年度",
+            "in": "query",
+            "name": "year",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "签订年度",
+              "title": "Year"
+            }
+          },
+          {
+            "description": "责任部门/单位",
+            "in": "query",
+            "name": "department",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "责任部门/单位",
+              "title": "Department"
+            }
+          },
+          {
+            "description": "分类",
+            "in": "query",
+            "name": "category",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "分类",
+              "title": "Category"
+            }
+          },
+          {
+            "description": "状态: unsigned/signed",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "状态: unsigned/signed",
+              "title": "Status"
+            }
+          },
+          {
+            "description": "部门/岗位/签订人关键字",
+            "in": "query",
+            "name": "keyword",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "部门/岗位/签订人关键字",
+              "title": "Keyword"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_SafetyTargetAgreementListResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "责任书分页列表（年度/部门/分类/状态/关键字）",
+        "tags": [
+          "安全管理"
+        ]
+      },
+      "post": {
+        "operationId": "create_safety_target_agreement_api_v1_safety_safety_target_agreements_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SafetyTargetAgreementCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_SafetyTargetAgreementResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "新增责任书记录",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/safety-target-agreements/import": {
+      "post": {
+        "operationId": "import_safety_target_agreements_api_v1_safety_safety_target_agreements_import_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_safety_target_agreements_api_v1_safety_safety_target_agreements_import_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_SafetyAgreementImportResultResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "批量导入责任书签订登记（存在即更新，缺失则新建）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/safety-target-agreements/import-template": {
+      "get": {
+        "operationId": "download_safety_target_agreement_import_template_api_v1_safety_safety_target_agreements_import_template_get",
+        "parameters": [
+          {
+            "description": "限定年度（缺省=全部台账）",
+            "in": "query",
+            "name": "year",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "限定年度（缺省=全部台账）",
+              "title": "Year"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "下载责任书签订登记导入模板（预填台账目录）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/safety-target-agreements/stats": {
+      "get": {
+        "operationId": "get_safety_target_agreement_stats_api_v1_safety_safety_target_agreements_stats_get",
+        "parameters": [
+          {
+            "description": "签订年度",
+            "in": "query",
+            "name": "year",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "签订年度",
+              "title": "Year"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_SafetyTargetAgreementStatsResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "责任书统计（部门签订情况与签订率）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/safety-target-agreements/{agreement_id}": {
+      "delete": {
+        "operationId": "delete_safety_target_agreement_api_v1_safety_safety_target_agreements__agreement_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "agreement_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Agreement Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_NoneType_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "删除责任书记录（软删除）",
+        "tags": [
+          "安全管理"
+        ]
+      },
+      "put": {
+        "operationId": "update_safety_target_agreement_api_v1_safety_safety_target_agreements__agreement_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "agreement_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Agreement Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SafetyTargetAgreementUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_SafetyTargetAgreementResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "更新责任书（含签订登记：状态/签订日期/甲乙方）",
         "tags": [
           "安全管理"
         ]

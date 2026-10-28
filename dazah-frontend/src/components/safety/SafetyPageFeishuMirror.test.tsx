@@ -163,4 +163,27 @@ describe('safety page feishu mirror shell', () => {
       initialError: '多维表格绑定未配置',
     })
   })
+
+  it('forwards the preferred column names to the table', async () => {
+    mocks.getSafetyPageTableRecords.mockResolvedValueOnce(
+      recordsResponse([{ field_id: 'f1', name: '申请编号', kind: 'text' }])
+    )
+    const preferred = ['申请编号', '发起时间', '变更级别']
+
+    const element = await SafetyPageFeishuMirror({
+      pageKey: PAGE_KEY,
+      pageName: 'EHS变更审批',
+      preferredColumnNames: preferred,
+    })
+    renderToStaticMarkup(element)
+
+    expect(
+      (mocks.PageFeishuTable.mock.calls.at(-1) as unknown as [
+        Record<string, unknown>,
+      ])[0]
+    ).toMatchObject({
+      summarizeColumns: true,
+      preferredColumnNames: preferred,
+    })
+  })
 })

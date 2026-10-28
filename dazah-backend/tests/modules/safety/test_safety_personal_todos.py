@@ -4,7 +4,7 @@ from uuid import uuid4
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.safety.models import Accident, EhsChange, HazardReport, SafetyCheck
+from app.modules.safety.models import Accident, HazardReport, SafetyCheck
 from app.modules.safety.todos import PAGES, router
 from app.platform.identity.data_scope import DepartmentScope
 from app.platform.identity.models import Department
@@ -52,7 +52,7 @@ async def test_safety_todos_filter_current_responsibility_scope_and_state(
                 else other_actor.name,
                 corrective_action_status="completed" if terminal else "pending",
             )
-        elif kind == "checks":
+        else:
             record = SafetyCheck(
                 check_no=number,
                 check_date=datetime.now(UTC),
@@ -61,39 +61,11 @@ async def test_safety_todos_filter_current_responsibility_scope_and_state(
                 inspector_name=actor.name,
                 status="submitted" if terminal else "draft",
             )
-        else:
-            record = EhsChange(
-                change_no=number,
-                title="EHS实施",
-                change_type="equipment_facility",
-                department=department,
-                status="closed" if terminal else "in_progress",
-                action_items=[
-                    {
-                        "task": "当前行动项",
-                        "owner": actor.name if personal else other_actor.name,
-                        "due_date": "invalid-date",
-                        "status": "pending",
-                    },
-                    {
-                        "task": "其他人的行动项",
-                        "owner": other_actor.name,
-                        "status": "pending",
-                    },
-                    {
-                        "task": "已完成行动项",
-                        "owner": actor.name,
-                        "status": "completed",
-                    },
-                ],
-            )
         record.is_deleted = variant == "deleted"
         db_session.add(record)
         await db_session.flush()
         if variant == "own":
-            expected.append(
-                f"{record.id}:1" if kind == "ehs-actions" else str(record.id)
-            )
+            expected.append(str(record.id))
     async with scoped_todo_client(
         db_session,
         actor,
@@ -107,9 +79,6 @@ async def test_safety_todos_filter_current_responsibility_scope_and_state(
         assert response.status_code == 200, response.text
         assert response.json()["total"] == 1
         assert [item["id"] for item in response.json()["items"]] == expected
-        if kind == "ehs-actions":
-            assert "其他人的行动项" not in response.text
-            assert "已完成行动项" not in response.text
 
 
 @pytest.mark.asyncio

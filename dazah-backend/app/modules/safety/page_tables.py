@@ -69,6 +69,16 @@ PAGE_TABLE_DEFINITIONS: tuple[PageTableDefinition, ...] = (
         page_name="灭火器及消防栓点检",
         route_path="/safety/fire-inspection",
     ),
+    PageTableDefinition(
+        page_key="safety:risk-hazard:ehs-change:ehs-change-review",
+        page_name="EHS变更审批",
+        route_path="/safety/ehs-change",
+    ),
+    PageTableDefinition(
+        page_key="safety:risk-hazard:ehs-change:ehs-change-acceptance",
+        page_name="变更验收审批",
+        route_path="/safety/ehs-change/acceptance",
+    ),
 )
 
 PAGE_TABLES_BY_KEY: dict[str, PageTableDefinition] = {

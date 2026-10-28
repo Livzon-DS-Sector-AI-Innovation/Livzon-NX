@@ -39,7 +39,6 @@ PENDING_SCOPE_MODULES = frozenset({"equipment", "energy", "safety", "research"})
 PERSONAL_TODO_SCOPE_PAGES = frozenset({
     "equipment:maintenance",
     "safety:risk-hazard:hazard-inspection:hazard-inspection-ledger",
-    "safety:risk-hazard:ehs-change:ehs-change-apply",
     "safety:emergency-accident:accident-ledger", "safety:training-check:safety-check",
 })
 QUALITY_INSPECTION_GLOBAL_PAGES = frozenset(
@@ -953,7 +952,6 @@ PAGE_API_BINDINGS += tuple(
         ("equipment", ("equipment:maintenance",)),
         ("safety", (
             "safety:risk-hazard:hazard-inspection:hazard-inspection-ledger",
-            "safety:risk-hazard:ehs-change:ehs-change-apply",
             "safety:emergency-accident:accident-ledger",
             "safety:training-check:safety-check",
         )),
@@ -1392,6 +1390,8 @@ SAFETY_PAGE_TABLE_PAGES = (
     "safety:risk-hazard:hazard-inspection:hazard-duty",
     "safety:risk-hazard:hazard-inspection:hazard-quick-report",
     "safety:emergency-accident:fire-equipment-inspection",
+    "safety:risk-hazard:ehs-change:ehs-change-review",
+    "safety:risk-hazard:ehs-change:ehs-change-acceptance",
 )
 
 PAGE_API_BINDINGS += _module_api_bindings(
@@ -1743,6 +1743,140 @@ PAGE_API_BINDINGS += _module_api_bindings(
         (
             "DELETE",
             "/safety-targets/{target_id}/records/{period}",
+            (_TARGET_PERFORMANCE_PAGE,),
+            "operate",
+            "delete",
+            "not_applicable",
+        ),
+        # 责任书签订台账：读接口随页面查询权限放行，维护与签订登记归
+        # 操作权限，删除责任书记录是已登记的独立破坏性动作。
+        (
+            "GET",
+            "/safety-target-agreements",
+            (_TARGET_PERFORMANCE_PAGE,),
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "GET",
+            "/safety-target-agreements/stats",
+            (_TARGET_PERFORMANCE_PAGE,),
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "POST",
+            "/safety-target-agreements",
+            (_TARGET_PERFORMANCE_PAGE,),
+            "operate",
+            None,
+            "not_applicable",
+        ),
+        (
+            "PUT",
+            "/safety-target-agreements/{agreement_id}",
+            (_TARGET_PERFORMANCE_PAGE,),
+            "operate",
+            None,
+            "not_applicable",
+        ),
+        (
+            "DELETE",
+            "/safety-target-agreements/{agreement_id}",
+            (_TARGET_PERFORMANCE_PAGE,),
+            "operate",
+            "delete",
+            "not_applicable",
+        ),
+        # 责任书签订登记批量导入：模板下载随查询权限放行，导入落库归操作权限。
+        (
+            "GET",
+            "/safety-target-agreements/import-template",
+            (_TARGET_PERFORMANCE_PAGE,),
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "POST",
+            "/safety-target-agreements/import",
+            (_TARGET_PERFORMANCE_PAGE,),
+            "operate",
+            None,
+            "not_applicable",
+        ),
+        # 责任制季度考核：模板匹配为只读种子查询；评分明细随考核记录
+        # 维护归操作权限，删除考核记录是已登记的独立破坏性动作。
+        (
+            "GET",
+            "/safety-duty-assessments/template",
+            (_TARGET_PERFORMANCE_PAGE,),
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "GET",
+            "/safety-duty-assessments",
+            (_TARGET_PERFORMANCE_PAGE,),
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "GET",
+            "/safety-duty-assessments/stats",
+            (_TARGET_PERFORMANCE_PAGE,),
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "POST",
+            "/safety-duty-assessments",
+            (_TARGET_PERFORMANCE_PAGE,),
+            "operate",
+            None,
+            "not_applicable",
+        ),
+        # 季度考核批量导入：模板下载随查询权限放行，导入落库归操作权限。
+        (
+            "GET",
+            "/safety-duty-assessments/import-template",
+            (_TARGET_PERFORMANCE_PAGE,),
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "POST",
+            "/safety-duty-assessments/import",
+            (_TARGET_PERFORMANCE_PAGE,),
+            "operate",
+            None,
+            "not_applicable",
+        ),
+        (
+            "GET",
+            "/safety-duty-assessments/{assessment_id}",
+            (_TARGET_PERFORMANCE_PAGE,),
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "PUT",
+            "/safety-duty-assessments/{assessment_id}",
+            (_TARGET_PERFORMANCE_PAGE,),
+            "operate",
+            None,
+            "not_applicable",
+        ),
+        (
+            "DELETE",
+            "/safety-duty-assessments/{assessment_id}",
             (_TARGET_PERFORMANCE_PAGE,),
             "operate",
             "delete",

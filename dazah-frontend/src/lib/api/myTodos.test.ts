@@ -118,3 +118,10 @@ it('equipment todo sources resolve maintenance only; inspection kind retired', (
   const scoped = { ...grant, page_key: 'equipment:workshop-101-1:maintenance-101-1' }
   expect(getTodoSources({ ...user, page_permissions: [scoped] }, moduleMenus)[0].path).toBe('/equipment?module=maintenance')
 })
+
+// EHS 变更页已并入统一验收页：业务待办映射不再登记 /safety/ehs-change
+it('drops the retired ehs-change page from business todo sources', () => {
+  const ehsGrant = { ...user.page_permissions![0], page_key: 'safety:risk-hazard:ehs-change:ehs-change-apply', module_code: 'safety' }
+  const sources = getTodoSources({ ...user, page_permissions: [ehsGrant] }, moduleMenus)
+  expect(sources.find((s) => s.path === '/safety/ehs-change')).toBeUndefined()
+})

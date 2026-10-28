@@ -11,17 +11,11 @@ from app.modules.safety.schemas import (
     ACCIDENT_LEVEL_OPTIONS,
     ACCIDENT_STATUS_OPTIONS,
     ACCIDENT_TYPE_OPTIONS,
-    ACTION_ITEM_STATUS_OPTIONS,
-    APPROVAL_DECISION_OPTIONS,
-    CHANGE_DURATION_OPTIONS,
-    CHANGE_GRADE_OPTIONS,
-    CHANGE_TYPE_OPTIONS,
     CHECK_TYPE_OPTIONS,
     COMPLETION_METHOD_OPTIONS,
     CONTRACTOR_STATUS_OPTIONS,
     CONTRACTOR_TRAINING_STATUS_OPTIONS,
     DETECTION_TYPE_OPTIONS,
-    EHS_CHANGE_STATUS_OPTIONS,
     EXAM_CONCLUSION_OPTIONS,
     EXAM_STATUS_OPTIONS,
     EXAM_TYPE_OPTIONS,
@@ -37,14 +31,12 @@ from app.modules.safety.schemas import (
     OPERATION_TYPE_OPTIONS,
     PERMIT_STATUS_OPTIONS,
     PERSONNEL_STATUS_OPTIONS,
-    PSSR_RESULT_OPTIONS,
     QUALIFICATION_LEVEL_OPTIONS,
     QUALIFICATION_TYPE_OPTIONS,
     REPORT_STATUS_OPTIONS,
     REVIEW_OPINION_OPTIONS,
     REVISION_SCOPE_OPTIONS,
     REVISION_TYPE_OPTIONS,
-    RISK_ASSESSMENT_METHOD_OPTIONS,
     RISK_LEVEL_OPTIONS,
     TRAINING_MODE_OPTIONS,
     TRAINING_TYPE_OPTIONS,
@@ -87,15 +79,15 @@ async def get_enums(
             "qualification_levels": QUALIFICATION_LEVEL_OPTIONS,
             "contractor_training_statuses": CONTRACTOR_TRAINING_STATUS_OPTIONS,
             "work_record_statuses": WORK_RECORD_STATUS_OPTIONS,
-            "ehs_change_types": CHANGE_TYPE_OPTIONS,
-            "ehs_change_grades": CHANGE_GRADE_OPTIONS,
-            "ehs_change_durations": CHANGE_DURATION_OPTIONS,
-            "ehs_change_statuses": EHS_CHANGE_STATUS_OPTIONS,
+
+
+
+
             "risk_levels": RISK_LEVEL_OPTIONS,
-            "risk_assessment_methods": RISK_ASSESSMENT_METHOD_OPTIONS,
-            "approval_decisions": APPROVAL_DECISION_OPTIONS,
-            "action_item_statuses": ACTION_ITEM_STATUS_OPTIONS,
-            "pssr_results": PSSR_RESULT_OPTIONS,
+
+
+
+
             "oh_detection_types": DETECTION_TYPE_OPTIONS,
             "oh_hazard_factor_categories": HAZARD_FACTOR_CATEGORY_OPTIONS,
             "oh_oel_compliance_statuses": OEL_COMPLIANCE_STATUS_OPTIONS,

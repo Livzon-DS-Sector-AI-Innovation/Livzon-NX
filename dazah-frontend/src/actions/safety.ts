@@ -66,9 +66,6 @@ import type {
   CardPreviewResponse,
   DataSourceOption,
   FeishuChat,
-  EhsChange,
-  EhsChangeFormData,
-  EhsChangeQueryParams,
   OhHazardMonitor,
   OhHazardMonitorFormData,
   OhHazardMonitorQueryParams,
@@ -1804,136 +1801,6 @@ export async function getHazardRiskOptions(params?: {
   return response
 }
 
-
-// ============ EHS变更管理 (MOC) ============
-
-// CRUD
-export async function getEhsChanges(params: EhsChangeQueryParams = {}) {
-  const searchParams = new URLSearchParams()
-  if (params.page) searchParams.set('page', String(params.page))
-  if (params.page_size) searchParams.set('page_size', String(params.page_size))
-  if (params.change_type) searchParams.set('change_type', params.change_type)
-  if (params.change_grade) searchParams.set('change_grade', params.change_grade)
-  if (params.change_duration) searchParams.set('change_duration', params.change_duration)
-  if (params.department) searchParams.set('department', params.department)
-  if (params.keyword) searchParams.set('keyword', params.keyword)
-  const qs = searchParams.toString()
-  return fetchApi<EhsChange[]>(`/safety/ehs-changes${qs ? `?${qs}` : ''}`)
-}
-
-export async function getEhsChange(id: string) {
-  return fetchApi<EhsChange>(`/safety/ehs-changes/${id}`)
-}
-
-export async function createEhsChange(data: EhsChangeFormData) {
-  const response = await fetchApi<EhsChange>('/safety/ehs-changes', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  })
-  revalidatePath('/safety/ehs-change')
-  return response
-}
-
-export async function updateEhsChange(id: string, data: Partial<EhsChangeFormData>) {
-  const response = await fetchApi<EhsChange>(`/safety/ehs-changes/${id}`, {
-    method: 'PUT',
-    body: JSON.stringify(data),
-  })
-  revalidatePath('/safety/ehs-change')
-  return response
-}
-
-export async function deleteEhsChange(id: string) {
-  const response = await fetchApi<null>(`/safety/ehs-changes/${id}`, { method: 'DELETE' })
-  revalidatePath('/safety/ehs-change')
-  return response
-}
-
-// Workflow
-export async function submitEhsChange(id: string) {
-  const response = await fetchApi<EhsChange>(`/safety/ehs-changes/${id}/submit`, { method: 'POST' })
-  revalidatePath('/safety/ehs-change')
-  return response
-}
-
-export async function approveEhsChange(id: string, decision: string, comments?: string) {
-  const response = await fetchApi<EhsChange>(`/safety/ehs-changes/${id}/approve`, {
-    method: 'POST',
-    body: JSON.stringify({ decision, comments }),
-  })
-  revalidatePath('/safety/ehs-change')
-  return response
-}
-
-export async function rejectEhsChange(id: string, comments?: string) {
-  const params = comments ? `?comments=${encodeURIComponent(comments)}` : ''
-  const response = await fetchApi<EhsChange>(`/safety/ehs-changes/${id}/reject${params}`, { method: 'POST' })
-  revalidatePath('/safety/ehs-change')
-  return response
-}
-
-export async function startImplementationEhsChange(id: string) {
-  const response = await fetchApi<EhsChange>(`/safety/ehs-changes/${id}/start-implementation`, { method: 'POST' })
-  revalidatePath('/safety/ehs-change')
-  return response
-}
-
-export async function commissionEhsChange(id: string) {
-  const response = await fetchApi<EhsChange>(`/safety/ehs-changes/${id}/commission`, { method: 'POST' })
-  revalidatePath('/safety/ehs-change')
-  return response
-}
-
-export async function closeEhsChange(id: string, closedBy?: string, tempExpiryDate?: string, restoredDate?: string) {
-  const response = await fetchApi<EhsChange>(`/safety/ehs-changes/${id}/close`, {
-    method: 'POST',
-    body: JSON.stringify({ closed_by: closedBy, temp_expiry_date: tempExpiryDate, restored_date: restoredDate }),
-  })
-  revalidatePath('/safety/ehs-change')
-  return response
-}
-
-export async function cancelEhsChange(id: string) {
-  const response = await fetchApi<EhsChange>(`/safety/ehs-changes/${id}/cancel`, { method: 'POST' })
-  revalidatePath('/safety/ehs-change')
-  return response
-}
-
-// JSON sub-record operations
-export async function addRiskAssessment(id: string, data: Record<string, unknown>) {
-  const response = await fetchApi<EhsChange>(`/safety/ehs-changes/${id}/risk-assessments`, {
-    method: 'POST',
-    body: JSON.stringify(data),
-  })
-  revalidatePath('/safety/ehs-change')
-  return response
-}
-
-export async function updateActionItem(id: string, index: number, status: string) {
-  const response = await fetchApi<EhsChange>(`/safety/ehs-changes/${id}/action-items/${index}?status=${encodeURIComponent(status)}`, { method: 'PUT' })
-  revalidatePath('/safety/ehs-change')
-  return response
-}
-
-export async function updatePSSRChecklist(id: string, data: Record<string, unknown>[] | object[]) {
-  const response = await fetchApi<EhsChange>(`/safety/ehs-changes/${id}/pssr-checklist`, {
-    method: 'PUT',
-    body: JSON.stringify(data),
-  })
-  revalidatePath('/safety/ehs-change')
-  return response
-}
-
-export async function submitVerification(id: string, data: Record<string, unknown>) {
-  const response = await fetchApi<EhsChange>(`/safety/ehs-changes/${id}/verification`, {
-    method: 'PUT',
-    body: JSON.stringify(data),
-  })
-  revalidatePath('/safety/ehs-change')
-  return response
-}
-
-
 // ==================== 职业危害因素监测 Actions ====================
 
 
@@ -2910,6 +2777,277 @@ export async function deleteSafetyTargetRecord(
   )
   revalidatePath('/safety/target-performance')
   return response
+}
+
+// ══════════════════════════════════════════════════════════════
+// 安全目标责任书
+// ══════════════════════════════════════════════════════════════
+
+type SafetyTargetAgreementItem =
+  components['schemas']['SafetyTargetAgreementResponse']
+type SafetyTargetAgreementListData =
+  components['schemas']['SafetyTargetAgreementListResponse']
+type SafetyTargetAgreementStatsData =
+  components['schemas']['SafetyTargetAgreementStatsResponse']
+type SafetyTargetAgreementCreateInput =
+  components['schemas']['SafetyTargetAgreementCreate']
+type SafetyTargetAgreementUpdateInput =
+  components['schemas']['SafetyTargetAgreementUpdate']
+
+export type {
+  SafetyTargetAgreementItem,
+  SafetyTargetAgreementListData,
+  SafetyTargetAgreementStatsData,
+  SafetyTargetAgreementCreateInput,
+  SafetyTargetAgreementUpdateInput,
+}
+
+export interface SafetyTargetAgreementQueryParams {
+  page?: number
+  page_size?: number
+  year?: number
+  department?: string
+  category?: string
+  status?: string
+  keyword?: string
+}
+
+export async function getSafetyTargetAgreements(
+  params: SafetyTargetAgreementQueryParams = {}
+) {
+  const searchParams = new URLSearchParams()
+  if (params.page) searchParams.set('page', String(params.page))
+  if (params.page_size) {
+    searchParams.set('page_size', String(params.page_size))
+  }
+  if (params.year) searchParams.set('year', String(params.year))
+  if (params.department) searchParams.set('department', params.department)
+  if (params.category) searchParams.set('category', params.category)
+  if (params.status) searchParams.set('status', params.status)
+  if (params.keyword) searchParams.set('keyword', params.keyword)
+
+  const queryString = searchParams.toString()
+  return fetchApi<SafetyTargetAgreementListData>(
+    `/safety/safety-target-agreements${queryString ? `?${queryString}` : ''}`
+  )
+}
+
+export async function getSafetyTargetAgreementStats(year?: number) {
+  const query = year ? `?year=${year}` : ''
+  return fetchApi<SafetyTargetAgreementStatsData>(
+    `/safety/safety-target-agreements/stats${query}`
+  )
+}
+
+export async function createSafetyTargetAgreement(
+  data: SafetyTargetAgreementCreateInput
+) {
+  const response = await fetchApi<SafetyTargetAgreementItem>(
+    '/safety/safety-target-agreements',
+    { method: 'POST', body: JSON.stringify(data) }
+  )
+  revalidatePath('/safety/target-performance')
+  return response
+}
+
+export async function updateSafetyTargetAgreement(
+  id: string,
+  data: SafetyTargetAgreementUpdateInput
+) {
+  const response = await fetchApi<SafetyTargetAgreementItem>(
+    `/safety/safety-target-agreements/${id}`,
+    { method: 'PUT', body: JSON.stringify(data) }
+  )
+  revalidatePath('/safety/target-performance')
+  return response
+}
+
+export async function deleteSafetyTargetAgreement(id: string) {
+  const response = await fetchApi<null>(`/safety/safety-target-agreements/${id}`, {
+    method: 'DELETE',
+  })
+  revalidatePath('/safety/target-performance')
+  return response
+}
+
+// ══════════════════════════════════════════════════════════════
+// 安全生产责任制季度考核
+// ══════════════════════════════════════════════════════════════
+
+type SafetyDutyAssessmentItemData =
+  components['schemas']['SafetyDutyAssessmentResponse']
+type SafetyDutyAssessmentListData =
+  components['schemas']['SafetyDutyAssessmentListResponse']
+type SafetyDutyAssessmentStatsData =
+  components['schemas']['SafetyDutyAssessmentStatsResponse']
+type SafetyDutyAssessmentCreateInput =
+  components['schemas']['SafetyDutyAssessmentCreate']
+type SafetyDutyAssessmentUpdateInput =
+  components['schemas']['SafetyDutyAssessmentUpdate']
+type SafetyDutyTemplateData = components['schemas']['SafetyDutyTemplateResponse']
+
+export type {
+  SafetyDutyAssessmentItemData,
+  SafetyDutyAssessmentListData,
+  SafetyDutyAssessmentStatsData,
+  SafetyDutyAssessmentCreateInput,
+  SafetyDutyAssessmentUpdateInput,
+  SafetyDutyTemplateData,
+}
+
+export interface SafetyDutyAssessmentQueryParams {
+  page?: number
+  page_size?: number
+  year?: number
+  quarter?: number
+  department?: string
+  grade?: string
+  keyword?: string
+}
+
+export async function getSafetyDutyAssessments(
+  params: SafetyDutyAssessmentQueryParams = {}
+) {
+  const searchParams = new URLSearchParams()
+  if (params.page) searchParams.set('page', String(params.page))
+  if (params.page_size) {
+    searchParams.set('page_size', String(params.page_size))
+  }
+  if (params.year) searchParams.set('year', String(params.year))
+  if (params.quarter) searchParams.set('quarter', String(params.quarter))
+  if (params.department) searchParams.set('department', params.department)
+  if (params.grade) searchParams.set('grade', params.grade)
+  if (params.keyword) searchParams.set('keyword', params.keyword)
+
+  const queryString = searchParams.toString()
+  return fetchApi<SafetyDutyAssessmentListData>(
+    `/safety/safety-duty-assessments${queryString ? `?${queryString}` : ''}`
+  )
+}
+
+export async function getSafetyDutyAssessmentStats(year?: number) {
+  const query = year ? `?year=${year}` : ''
+  return fetchApi<SafetyDutyAssessmentStatsData>(
+    `/safety/safety-duty-assessments/stats${query}`
+  )
+}
+
+export async function getSafetyDutyAssessmentTemplate(department: string) {
+  const query = `?department=${encodeURIComponent(department)}`
+  return fetchApi<SafetyDutyTemplateData>(
+    `/safety/safety-duty-assessments/template${query}`
+  )
+}
+
+export async function createSafetyDutyAssessment(
+  data: SafetyDutyAssessmentCreateInput
+) {
+  const response = await fetchApi<SafetyDutyAssessmentItemData>(
+    '/safety/safety-duty-assessments',
+    { method: 'POST', body: JSON.stringify(data) }
+  )
+  revalidatePath('/safety/target-performance')
+  return response
+}
+
+export async function updateSafetyDutyAssessment(
+  id: string,
+  data: SafetyDutyAssessmentUpdateInput
+) {
+  const response = await fetchApi<SafetyDutyAssessmentItemData>(
+    `/safety/safety-duty-assessments/${id}`,
+    { method: 'PUT', body: JSON.stringify(data) }
+  )
+  revalidatePath('/safety/target-performance')
+  return response
+}
+
+export async function deleteSafetyDutyAssessment(id: string) {
+  const response = await fetchApi<null>(`/safety/safety-duty-assessments/${id}`, {
+    method: 'DELETE',
+  })
+  revalidatePath('/safety/target-performance')
+  return response
+}
+
+// ══════════════════════════════════════════════════════════════
+// 责任书 / 季度考核 Excel 批量导入
+// ══════════════════════════════════════════════════════════════
+
+type SafetyAgreementImportResult =
+  components['schemas']['SafetyAgreementImportResultResponse']
+type SafetyDutyAssessmentImportResult =
+  components['schemas']['SafetyDutyAssessmentImportResultResponse']
+
+export type {
+  SafetyAgreementImportResult,
+  SafetyDutyAssessmentImportResult,
+}
+
+async function downloadExcel(url: string, fileName: string): Promise<void> {
+  const headers = await getAuthHeaders()
+  const response = await fetch(`${API_BASE}${url}`, { headers })
+  if (!response.ok) {
+    const text = await response.text()
+    throw new Error(`模板下载失败 (${response.status}): ${text}`)
+  }
+  const blob = await response.blob()
+  const link = document.createElement('a')
+  link.href = URL.createObjectURL(blob)
+  link.download = fileName
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(link.href)
+}
+
+export async function downloadAgreementImportTemplate(): Promise<void> {
+  await downloadExcel(
+    '/safety/safety-target-agreements/import-template',
+    '责任书签订登记模板.xlsx'
+  )
+}
+
+export async function importAgreementSigns(
+  file: File
+): Promise<ApiResponse<SafetyAgreementImportResult>> {
+  const formData = new FormData()
+  formData.append('file', file)
+  const uploadHeaders: Record<string, string> = await getAuthHeaders()
+  delete uploadHeaders['Content-Type']
+  const response = await fetch(
+    `${API_BASE}/safety/safety-target-agreements/import`,
+    { method: 'POST', headers: uploadHeaders, body: formData }
+  )
+  revalidatePath('/safety/target-performance')
+  return response.json()
+}
+
+export async function downloadDutyAssessmentImportTemplate(
+  year: number,
+  quarter: number
+): Promise<void> {
+  await downloadExcel(
+    `/safety/safety-duty-assessments/import-template?year=${year}&quarter=${quarter}`,
+    `责任制考核导入模板-${year}-Q${quarter}.xlsx`
+  )
+}
+
+export async function importDutyAssessmentResults(
+  file: File,
+  year: number,
+  quarter: number
+): Promise<ApiResponse<SafetyDutyAssessmentImportResult>> {
+  const formData = new FormData()
+  formData.append('file', file)
+  const uploadHeaders: Record<string, string> = await getAuthHeaders()
+  delete uploadHeaders['Content-Type']
+  const response = await fetch(
+    `${API_BASE}/safety/safety-duty-assessments/import?year=${year}&quarter=${quarter}`,
+    { method: 'POST', headers: uploadHeaders, body: formData }
+  )
+  revalidatePath('/safety/target-performance')
+  return response.json()
 }
 
 // ══════════════════════════════════════════════════════════════

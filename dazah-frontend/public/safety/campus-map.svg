@@ -1,0 +1,246 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 645" font-family="system-ui, 'Microsoft YaHei', sans-serif">
+<rect width="1200" height="645" fill="#f7f6f2"/>
+<polygon points="601.9,45.6 1075.3,318.9 605.8,589.9 132.5,316.6" fill="#eef0e7" stroke="none"/>
+<polygon points="488.5,115.9 953.5,384.4 944.3,389.7 479.2,121.2" fill="#dbd9d3" opacity="0.9"/>
+<polygon points="394.9,169.9 859.9,438.4 850.7,443.8 385.6,175.2" fill="#dbd9d3" opacity="0.9"/>
+<polygon points="359.5,190.4 824.5,458.9 815.3,464.2 350.2,195.7" fill="#dbd9d3" opacity="0.9"/>
+<polygon points="314.4,216.4 779.4,484.9 770.2,490.2 305.1,221.7" fill="#dbd9d3" opacity="0.9"/>
+<polygon points="274.1,239.6 739.2,508.2 730,513.5 264.9,245" fill="#dbd9d3" opacity="0.9"/>
+<polygon points="232.4,263.7 697.5,532.2 688.3,537.6 223.2,269" fill="#dbd9d3" opacity="0.9"/>
+<polygon points="162.6,304 627.6,572.6 618.4,577.9 153.4,309.4" fill="#dbd9d3" opacity="0.9"/>
+<polygon points="676.6,87.3 685.8,92.6 215.9,364 206.7,358.6" fill="#dbd9d3" opacity="0.9"/>
+<polygon points="660.6,204.1 669.8,209.4 309,417.7 299.8,412.4" fill="#dbd9d3" opacity="0.9"/>
+<polygon points="714.5,235.2 723.7,240.5 362.9,448.8 353.6,443.5" fill="#dbd9d3" opacity="0.9"/>
+<polygon points="792,280 801.3,285.3 457.4,483.8 448.2,478.5" fill="#dbd9d3" opacity="0.9"/>
+<polygon points="732.9,357.8 742.1,363.1 495.2,505.6 486,500.3" fill="#dbd9d3" opacity="0.9"/>
+<polygon points="945.3,323.6 954.5,329 554.9,559.7 545.7,554.4" fill="#dbd9d3" opacity="0.9"/>
+<polygon points="1064.1,311 1073.3,316.4 603.4,587.7 594.2,582.4" fill="#dbd9d3" opacity="0.9"/>
+<polygon points="601.9,45.6 1075.3,318.9 1075.3,313.8 601.9,40.6" fill="#b8b6b0" stroke="#8f8d86" stroke-width="0.5"/>
+<polygon points="1075.3,318.9 865.8,439.8 865.8,434.8 1075.3,313.8" fill="#b8b6b0" stroke="#8f8d86" stroke-width="0.5"/>
+<polygon points="846.4,451 605.8,589.9 605.8,584.9 846.4,446" fill="#b8b6b0" stroke="#8f8d86" stroke-width="0.5"/>
+<polygon points="605.8,589.9 437.1,492.5 437.1,487.4 605.8,584.9" fill="#b8b6b0" stroke="#8f8d86" stroke-width="0.5"/>
+<polygon points="398.3,470.1 132.5,316.6 132.5,311.6 398.3,465" fill="#b8b6b0" stroke="#8f8d86" stroke-width="0.5"/>
+<polygon points="132.5,316.6 601.9,45.6 601.9,40.6 132.5,311.6" fill="#b8b6b0" stroke="#8f8d86" stroke-width="0.5"/>
+<polygon points="593.9,82.7 613.3,93.9 613.3,82.7 593.9,71.5" fill="#b3d8d2" stroke="#6ba39a" stroke-width="0.6"/>
+<polygon points="613.3,93.9 625.5,86.9 625.5,75.7 613.3,82.7" fill="#c2e0db" stroke="#6ba39a" stroke-width="0.6"/>
+<polygon points="606.1,64.5 625.5,75.7 613.3,82.7 593.9,71.5" fill="#cfe8e4" stroke="#6ba39a" stroke-width="0.6"/>
+<text x="609.7" y="68" font-size="11" font-weight="600" fill="#1f4f47" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">液氨压缩机房</text>
+<g><path d="M584.5,93.2 L584.5,79.8 A5.8,3.4 0 0 1 596.1,79.8 L596.1,93.2 Z" fill="#efc2a2" stroke="#c68a5c" stroke-width="0.6"/><ellipse cx="590.3" cy="79.8" rx="5.8" ry="3.4" fill="#f8d8c0" stroke="#c68a5c" stroke-width="0.6"/></g>
+<text x="590.3" y="73" font-size="11" font-weight="600" fill="#6b3f1c" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">液氨储区</text>
+<polygon points="721.2,140.8 755.2,160.4 730.9,174.4 697,154.8" fill="#b5d8f2" stroke="#7fb3dd" stroke-width="0.8"/>
+<polygon points="721.2,139.1 755.2,158.7 730.9,172.7 697,153.1" fill="#b5d8f2" stroke="#7fb3dd" stroke-width="0.8"/>
+<text x="726.1" y="150.3" font-size="11" font-weight="600" fill="#1f4f7a" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">曝气池</text>
+<g><path d="M680.5,174.4 L680.5,165.4 A6.8,3.9 0 0 1 694.1,165.4 L694.1,174.4 Z" fill="#efc2a2" stroke="#c68a5c" stroke-width="0.6"/><ellipse cx="687.3" cy="165.4" rx="6.8" ry="3.9" fill="#f8d8c0" stroke="#c68a5c" stroke-width="0.6"/></g>
+<text x="687.3" y="158.7" font-size="11" font-weight="600" fill="#6b3f1c" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">污泥浓缩池</text>
+<g><path d="M759.6,184.2 L759.6,174.1 A7.8,4.5 0 0 1 775.1,174.1 L775.1,184.2 Z" fill="#efc2a2" stroke="#c68a5c" stroke-width="0.6"/><ellipse cx="767.3" cy="174.1" rx="7.8" ry="4.5" fill="#f8d8c0" stroke="#c68a5c" stroke-width="0.6"/></g>
+<text x="767.3" y="167.4" font-size="11" font-weight="600" fill="#6b3f1c" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">二沉池</text>
+<polygon points="688.7,186.4 748.9,221.2 748.9,212.2 688.7,177.5" fill="#b4d6b4" stroke="#74a874" stroke-width="0.6"/>
+<polygon points="748.9,221.2 797.4,193.2 797.4,184.2 748.9,212.2" fill="#c4dfc4" stroke="#74a874" stroke-width="0.6"/>
+<polygon points="737.2,149.5 797.4,184.2 748.9,212.2 688.7,177.5" fill="#cfe6cf" stroke="#74a874" stroke-width="0.6"/>
+<text x="743.1" y="175.2" font-size="11" font-weight="600" fill="#235c23" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">污水处理系统（一）</text>
+<polygon points="381.8,195.4 427.8,222 427.8,206.3 381.8,179.7" fill="#e2cd9c" stroke="#b3945f" stroke-width="0.6"/>
+<polygon points="427.8,222 444.8,212.2 444.8,196.5 427.8,206.3" fill="#ead6ab" stroke="#b3945f" stroke-width="0.6"/>
+<polygon points="398.7,169.9 444.8,196.5 427.8,206.3 381.8,179.7" fill="#f0e2c0" stroke="#b3945f" stroke-width="0.6"/>
+<text x="413.3" y="182.5" font-size="11" font-weight="600" fill="#5f4a1f" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">315仓库</text>
+<polygon points="607.8,210.8 628.1,222.6 628.1,201.3 607.8,189.5" fill="#b3d8d2" stroke="#6ba39a" stroke-width="0.6"/>
+<polygon points="628.1,222.6 654.3,207.4 654.3,186.2 628.1,201.3" fill="#c2e0db" stroke="#6ba39a" stroke-width="0.6"/>
+<polygon points="633.9,174.4 654.3,186.2 628.1,201.3 607.8,189.5" fill="#cfe8e4" stroke="#6ba39a" stroke-width="0.6"/>
+<text x="631" y="182.2" font-size="11" font-weight="600" fill="#1f4f47" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">锅炉房（516）</text>
+<polygon points="751.8,222.8 811.9,257.6 811.9,248.6 751.8,213.9" fill="#b4d6b4" stroke="#74a874" stroke-width="0.6"/>
+<polygon points="811.9,257.6 860.4,229.6 860.4,220.6 811.9,248.6" fill="#c4dfc4" stroke="#74a874" stroke-width="0.6"/>
+<polygon points="800.3,185.9 860.4,220.6 811.9,248.6 751.8,213.9" fill="#cfe6cf" stroke="#74a874" stroke-width="0.6"/>
+<text x="806.1" y="211.6" font-size="11" font-weight="600" fill="#235c23" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">污水处理系统（二）</text>
+<g><path d="M654.3,226.8 L654.3,182 A3.4,2 0 0 1 661.1,182 L661.1,226.8 Z" fill="#b3d8d2" stroke="#6ba39a" stroke-width="0.6"/><ellipse cx="657.7" cy="182" rx="3.4" ry="2" fill="#cfe8e4" stroke="#6ba39a" stroke-width="0.6"/></g>
+<text x="657.7" y="175.2" font-size="11" font-weight="600" fill="#1f4f47" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">烟囱</text>
+<polygon points="333.5,223.3 379.6,249.9 379.6,234.2 333.5,207.6" fill="#e2cd9c" stroke="#b3945f" stroke-width="0.6"/>
+<polygon points="379.6,249.9 397,239.8 397,224.1 379.6,234.2" fill="#ead6ab" stroke="#b3945f" stroke-width="0.6"/>
+<polygon points="351,197.5 397,224.1 379.6,234.2 333.5,207.6" fill="#f0e2c0" stroke="#b3945f" stroke-width="0.6"/>
+<text x="365.3" y="210.2" font-size="11" font-weight="600" fill="#5f4a1f" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">313仓库</text>
+<polygon points="572.4,227.3 606.3,246.9 606.3,233.5 572.4,213.9" fill="#b3d8d2" stroke="#6ba39a" stroke-width="0.6"/>
+<polygon points="606.3,246.9 622.8,237.4 622.8,224 606.3,233.5" fill="#c2e0db" stroke="#6ba39a" stroke-width="0.6"/>
+<polygon points="588.8,204.4 622.8,224 606.3,233.5 572.4,213.9" fill="#cfe8e4" stroke="#6ba39a" stroke-width="0.6"/>
+<text x="597.6" y="213.3" font-size="11" font-weight="600" fill="#1f4f47" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">除盐水站（518）</text>
+<polygon points="448.5,231.1 482.4,250.7 482.4,235 448.5,215.4" fill="#b3d8d2" stroke="#6ba39a" stroke-width="0.6"/>
+<polygon points="482.4,250.7 499.4,240.9 499.4,225.2 482.4,235" fill="#c2e0db" stroke="#6ba39a" stroke-width="0.6"/>
+<polygon points="465.4,205.6 499.4,225.2 482.4,235 448.5,215.4" fill="#cfe8e4" stroke="#6ba39a" stroke-width="0.6"/>
+<text x="473.9" y="214.7" font-size="11" font-weight="600" fill="#1f4f47" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">动力中心（513）</text>
+<polygon points="534.3,238.9 585.2,268.3 585.2,249.3 534.3,219.9" fill="#a9c0e6" stroke="#6f8fbd" stroke-width="0.6"/>
+<polygon points="585.2,268.3 604.6,257.1 604.6,238.1 585.2,249.3" fill="#b7cdee" stroke="#6f8fbd" stroke-width="0.6"/>
+<polygon points="553.7,208.7 604.6,238.1 585.2,249.3 534.3,219.9" fill="#c9d9f2" stroke="#6f8fbd" stroke-width="0.6"/>
+<text x="569.4" y="223.4" font-size="11" font-weight="600" fill="#1f3a5f" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">203车间</text>
+<polygon points="634.9,267.4 656.3,279.7 656.3,254.5 634.9,242.2" fill="#b3d8d2" stroke="#6ba39a" stroke-width="0.6"/>
+<polygon points="656.3,279.7 719.3,243.3 719.3,218.1 656.3,254.5" fill="#c2e0db" stroke="#6ba39a" stroke-width="0.6"/>
+<polygon points="698,205.8 719.3,218.1 656.3,254.5 634.9,242.2" fill="#cfe8e4" stroke="#6ba39a" stroke-width="0.6"/>
+<text x="677.1" y="224.5" font-size="11" font-weight="600" fill="#1f4f47" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">煤仓（515）</text>
+<polygon points="292.5,248.6 338.6,275.2 338.6,259.5 292.5,232.9" fill="#e2cd9c" stroke="#b3945f" stroke-width="0.6"/>
+<polygon points="338.6,275.2 355.6,265.4 355.6,249.7 338.6,259.5" fill="#ead6ab" stroke="#b3945f" stroke-width="0.6"/>
+<polygon points="309.5,223.1 355.6,249.7 338.6,259.5 292.5,232.9" fill="#f0e2c0" stroke="#b3945f" stroke-width="0.6"/>
+<text x="324.1" y="235.7" font-size="11" font-weight="600" fill="#5f4a1f" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">液体原料库</text>
+<polygon points="733.8,260.6 750.3,270.2 750.3,260.1 733.8,250.6" fill="#b3d8d2" stroke="#6ba39a" stroke-width="0.6"/>
+<polygon points="750.3,270.2 764.9,261.8 764.9,251.7 750.3,260.1" fill="#c2e0db" stroke="#6ba39a" stroke-width="0.6"/>
+<polygon points="748.4,242.2 764.9,251.7 750.3,260.1 733.8,250.6" fill="#cfe8e4" stroke="#6ba39a" stroke-width="0.6"/>
+<text x="749.4" y="245.5" font-size="11" font-weight="600" fill="#1f4f47" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">破碎间</text>
+<polygon points="395.3,259 472.9,303.8 472.9,285.8 395.3,241" fill="#a9c0e6" stroke="#6f8fbd" stroke-width="0.6"/>
+<polygon points="472.9,303.8 490.4,293.7 490.4,275.8 472.9,285.8" fill="#b7cdee" stroke="#6f8fbd" stroke-width="0.6"/>
+<polygon points="412.8,231 490.4,275.8 472.9,285.8 395.3,241" fill="#c9d9f2" stroke="#6f8fbd" stroke-width="0.6"/>
+<text x="442.9" y="252.8" font-size="11" font-weight="600" fill="#1f3a5f" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">203车间（北）</text>
+<polygon points="758.6,274.4 778,285.6 778,272.1 758.6,260.9" fill="#b4d6b4" stroke="#74a874" stroke-width="0.6"/>
+<polygon points="778,285.6 790.6,278.3 790.6,264.8 778,272.1" fill="#c4dfc4" stroke="#74a874" stroke-width="0.6"/>
+<polygon points="771.2,253.6 790.6,264.8 778,272.1 758.6,260.9" fill="#cfe6cf" stroke="#74a874" stroke-width="0.6"/>
+<text x="774.6" y="257.3" font-size="11" font-weight="600" fill="#235c23" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">RTO</text>
+<polygon points="253.5,269.5 299.6,296.1 299.6,280.4 253.5,253.8" fill="#e2cd9c" stroke="#b3945f" stroke-width="0.6"/>
+<polygon points="299.6,296.1 317,286 317,270.3 299.6,280.4" fill="#ead6ab" stroke="#b3945f" stroke-width="0.6"/>
+<polygon points="271,243.7 317,270.3 299.6,280.4 253.5,253.8" fill="#f0e2c0" stroke="#b3945f" stroke-width="0.6"/>
+<text x="285.3" y="256.4" font-size="11" font-weight="600" fill="#5f4a1f" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">311仓库</text>
+<polygon points="682.4,295.4 696,303.2 696,279.7 682.4,271.8" fill="#b3d8d2" stroke="#6ba39a" stroke-width="0.6"/>
+<polygon points="696,303.2 737.7,279.1 737.7,255.6 696,279.7" fill="#c2e0db" stroke="#6ba39a" stroke-width="0.6"/>
+<polygon points="724.1,247.8 737.7,255.6 696,279.7 682.4,271.8" fill="#cfe8e4" stroke="#6ba39a" stroke-width="0.6"/>
+<text x="710.1" y="258.1" font-size="11" font-weight="600" fill="#1f4f47" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">煤仓（504）</text>
+<polygon points="774.1,291.2 795.4,303.5 795.4,282.2 774.1,269.9" fill="#b3d8d2" stroke="#6ba39a" stroke-width="0.6"/>
+<polygon points="795.4,303.5 809,295.6 809,274.4 795.4,282.2" fill="#c2e0db" stroke="#6ba39a" stroke-width="0.6"/>
+<polygon points="787.7,262 809,274.4 795.4,282.2 774.1,269.9" fill="#cfe8e4" stroke="#6ba39a" stroke-width="0.6"/>
+<text x="791.6" y="266.5" font-size="11" font-weight="600" fill="#1f4f47" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">锅炉房（506）</text>
+<polygon points="556.4,292 580.6,306 580.6,295.9 556.4,281.9" fill="#b3d8d2" stroke="#6ba39a" stroke-width="0.6"/>
+<polygon points="580.6,306 595.2,297.6 595.2,287.5 580.6,295.9" fill="#c2e0db" stroke="#6ba39a" stroke-width="0.6"/>
+<polygon points="570.9,273.5 595.2,287.5 580.6,295.9 556.4,281.9" fill="#cfe8e4" stroke="#6ba39a" stroke-width="0.6"/>
+<text x="575.8" y="279.1" font-size="11" font-weight="600" fill="#1f4f47" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">供水站（512）</text>
+<polygon points="355.1,282.2 432.7,327 432.7,309.1 355.1,264.3" fill="#a9c0e6" stroke="#6f8fbd" stroke-width="0.6"/>
+<polygon points="432.7,327 453.1,315.2 453.1,297.3 432.7,309.1" fill="#b7cdee" stroke="#6f8fbd" stroke-width="0.6"/>
+<polygon points="375.5,252.5 453.1,297.3 432.7,309.1 355.1,264.3" fill="#c9d9f2" stroke="#6f8fbd" stroke-width="0.6"/>
+<text x="404.1" y="275.2" font-size="11" font-weight="600" fill="#1f3a5f" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">203车间（南）</text>
+<polygon points="930.3,300.7 947.7,310.8 947.7,289.5 930.3,279.4" fill="#b3d8d2" stroke="#6ba39a" stroke-width="0.6"/>
+<polygon points="947.7,310.8 967.1,299.6 967.1,278.3 947.7,289.5" fill="#c2e0db" stroke="#6ba39a" stroke-width="0.6"/>
+<polygon points="949.7,268.2 967.1,278.3 947.7,289.5 930.3,279.4" fill="#cfe8e4" stroke="#6ba39a" stroke-width="0.6"/>
+<text x="948.7" y="273.2" font-size="11" font-weight="600" fill="#1f4f47" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">MVR</text>
+<polygon points="663,299.8 683.4,311.6 683.4,299.3 663,287.5" fill="#b3d8d2" stroke="#6ba39a" stroke-width="0.6"/>
+<polygon points="683.4,311.6 695.1,304.9 695.1,292.6 683.4,299.3" fill="#c2e0db" stroke="#6ba39a" stroke-width="0.6"/>
+<polygon points="674.7,280.8 695.1,292.6 683.4,299.3 663,287.5" fill="#cfe8e4" stroke="#6ba39a" stroke-width="0.6"/>
+<text x="679" y="284.4" font-size="11" font-weight="600" fill="#1f4f47" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">除盐水站（501）</text>
+<polygon points="173.2,308.8 216.9,334 216.9,334 173.2,308.8" fill="#c8e6c4" stroke="#8fbb8a" stroke-width="0.6"/>
+<polygon points="216.9,334 246,317.2 246,317.2 216.9,334" fill="#c8e6c4" stroke="#8fbb8a" stroke-width="0.6"/>
+<polygon points="202.3,292 246,317.2 216.9,334 173.2,308.8" fill="#c8e6c4" stroke="#8fbb8a" stroke-width="0.6"/>
+<text x="209.6" y="307.4" font-size="11" font-weight="600" fill="#2f5c2a" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">足球场</text>
+<polygon points="134.9,315.2 144.6,320.8 144.6,314.1 134.9,308.5" fill="#d2d2d2" stroke="#9a9a9a" stroke-width="0.6"/>
+<polygon points="144.6,320.8 150.4,317.5 150.4,310.8 144.6,314.1" fill="#dadada" stroke="#9a9a9a" stroke-width="0.6"/>
+<polygon points="140.7,305.2 150.4,310.8 144.6,314.1 134.9,308.5" fill="#e2e2e2" stroke="#9a9a9a" stroke-width="0.6"/>
+<text x="142.7" y="304" font-size="11" font-weight="600" fill="#444444" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">物流门房</text>
+<polygon points="960.3,308 1008.8,336 1008.8,320.3 960.3,292.3" fill="#a9c0e6" stroke="#6f8fbd" stroke-width="0.6"/>
+<polygon points="1008.8,336 1019.5,329.8 1019.5,314.1 1008.8,320.3" fill="#b7cdee" stroke="#6f8fbd" stroke-width="0.6"/>
+<polygon points="971,286.1 1019.5,314.1 1008.8,320.3 960.3,292.3" fill="#c9d9f2" stroke="#6f8fbd" stroke-width="0.6"/>
+<text x="989.9" y="297.6" font-size="11" font-weight="600" fill="#1f3a5f" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">过滤生产区</text>
+<polygon points="694.1,310.5 762,349.7 762,330.6 694.1,291.4" fill="#a9c0e6" stroke="#6f8fbd" stroke-width="0.6"/>
+<polygon points="762,349.7 796.9,329.5 796.9,310.5 762,330.6" fill="#b7cdee" stroke="#6f8fbd" stroke-width="0.6"/>
+<polygon points="729,271.3 796.9,310.5 762,330.6 694.1,291.4" fill="#c9d9f2" stroke="#6f8fbd" stroke-width="0.6"/>
+<text x="745.5" y="295.4" font-size="11" font-weight="600" fill="#1f3a5f" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">202车间</text>
+<polygon points="1006.9,320.8 1017.6,327 1017.6,316.9 1006.9,310.8" fill="#b3d8d2" stroke="#6ba39a" stroke-width="0.6"/>
+<polygon points="1017.6,327 1025.3,322.5 1025.3,312.4 1017.6,316.9" fill="#c2e0db" stroke="#6ba39a" stroke-width="0.6"/>
+<polygon points="1014.6,306.3 1025.3,312.4 1017.6,316.9 1006.9,310.8" fill="#cfe8e4" stroke="#6ba39a" stroke-width="0.6"/>
+<text x="1016.1" y="306" font-size="11" font-weight="600" fill="#1f4f47" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">机修间</text>
+<polygon points="311.4,307.4 389,352.2 389,333.2 311.4,288.4" fill="#a9c0e6" stroke="#6f8fbd" stroke-width="0.6"/>
+<polygon points="389,352.2 408.4,341 408.4,322 389,333.2" fill="#b7cdee" stroke="#6f8fbd" stroke-width="0.6"/>
+<polygon points="330.8,277.2 408.4,322 389,333.2 311.4,288.4" fill="#c9d9f2" stroke="#6f8fbd" stroke-width="0.6"/>
+<text x="359.9" y="299.6" font-size="11" font-weight="600" fill="#1f3a5f" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">103车间</text>
+<polygon points="691.7,324.2 704.3,331.5 704.3,322.5 691.7,315.2" fill="#b3d8d2" stroke="#6ba39a" stroke-width="0.6"/>
+<polygon points="704.3,331.5 716.9,324.2 716.9,315.2 704.3,322.5" fill="#c2e0db" stroke="#6ba39a" stroke-width="0.6"/>
+<polygon points="704.3,308 716.9,315.2 704.3,322.5 691.7,315.2" fill="#cfe8e4" stroke="#6ba39a" stroke-width="0.6"/>
+<text x="704.3" y="309.6" font-size="11" font-weight="600" fill="#1f4f47" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">配电室</text>
+<polygon points="495.7,317.5 541.3,343.8 541.3,331.5 495.7,305.2" fill="#b3d8d2" stroke="#6ba39a" stroke-width="0.6"/>
+<polygon points="541.3,343.8 559.7,333.2 559.7,320.8 541.3,331.5" fill="#c2e0db" stroke="#6ba39a" stroke-width="0.6"/>
+<polygon points="514.2,294.5 559.7,320.8 541.3,331.5 495.7,305.2" fill="#cfe8e4" stroke="#6ba39a" stroke-width="0.6"/>
+<text x="527.7" y="307.4" font-size="11" font-weight="600" fill="#1f4f47" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">循环水站（511）</text>
+<polygon points="941.4,318.9 989.9,346.9 989.9,331.2 941.4,303.2" fill="#a9c0e6" stroke="#6f8fbd" stroke-width="0.6"/>
+<polygon points="989.9,346.9 1007.4,336.8 1007.4,321.1 989.9,331.2" fill="#b7cdee" stroke="#6f8fbd" stroke-width="0.6"/>
+<polygon points="958.9,293.1 1007.4,321.1 989.9,331.2 941.4,303.2" fill="#c9d9f2" stroke="#6f8fbd" stroke-width="0.6"/>
+<text x="974.4" y="306.6" font-size="11" font-weight="600" fill="#1f3a5f" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">干燥间</text>
+<polygon points="264.9,327.6 289.1,341.6 289.1,341.6 264.9,327.6" fill="#c8e6c4" stroke="#8fbb8a" stroke-width="0.6"/>
+<polygon points="289.1,341.6 303.7,333.2 303.7,333.2 289.1,341.6" fill="#c8e6c4" stroke="#8fbb8a" stroke-width="0.6"/>
+<polygon points="279.4,319.2 303.7,333.2 289.1,341.6 264.9,327.6" fill="#c8e6c4" stroke="#8fbb8a" stroke-width="0.6"/>
+<text x="284.3" y="324.8" font-size="11" font-weight="600" fill="#2f5c2a" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">篮球场</text>
+<polygon points="525.8,298.4 637.3,362.8 628.6,367.9 517.1,303.5" fill="#b5d8f2" stroke="#7fb3dd" stroke-width="0.8"/>
+<polygon points="525.8,296.8 637.3,361.2 628.6,366.2 517.1,301.8" fill="#b5d8f2" stroke="#7fb3dd" stroke-width="0.8"/>
+<text x="577.2" y="325.9" font-size="11" font-weight="600" fill="#1f4f7a" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">循环水池</text>
+<polygon points="619.4,327 665.5,353.6 665.5,343.5 619.4,316.9" fill="#b3d8d2" stroke="#6ba39a" stroke-width="0.6"/>
+<polygon points="665.5,353.6 677.6,346.6 677.6,336.5 665.5,343.5" fill="#c2e0db" stroke="#6ba39a" stroke-width="0.6"/>
+<polygon points="631.5,309.9 677.6,336.5 665.5,343.5 619.4,316.9" fill="#cfe8e4" stroke="#6ba39a" stroke-width="0.6"/>
+<text x="648.5" y="321.1" font-size="11" font-weight="600" fill="#1f4f47" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">供水站（503）</text>
+<polygon points="228.8,340.3 250.6,352.9 250.6,352.9 228.8,340.3" fill="#c8e6c4" stroke="#8fbb8a" stroke-width="0.6"/>
+<polygon points="250.6,352.9 265.1,344.5 265.1,344.5 250.6,352.9" fill="#c8e6c4" stroke="#8fbb8a" stroke-width="0.6"/>
+<polygon points="243.3,331.9 265.1,344.5 250.6,352.9 228.8,340.3" fill="#c8e6c4" stroke="#8fbb8a" stroke-width="0.6"/>
+<text x="246.9" y="336.8" font-size="11" font-weight="600" fill="#2f5c2a" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">网球场</text>
+<polygon points="843.9,327.6 936.1,380.8 936.1,361.7 843.9,308.5" fill="#a9c0e6" stroke="#6f8fbd" stroke-width="0.6"/>
+<polygon points="936.1,380.8 955.5,369.6 955.5,350.5 936.1,361.7" fill="#b7cdee" stroke="#6f8fbd" stroke-width="0.6"/>
+<polygon points="863.3,297.3 955.5,350.5 936.1,361.7 843.9,308.5" fill="#c9d9f2" stroke="#6f8fbd" stroke-width="0.6"/>
+<text x="899.7" y="323.9" font-size="11" font-weight="600" fill="#1f3a5f" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">201二车间</text>
+<polygon points="566.8,359.3 609.5,384 609.5,371.7 566.8,347" fill="#b3d8d2" stroke="#6ba39a" stroke-width="0.6"/>
+<polygon points="609.5,384 628.4,373.1 628.4,360.7 609.5,371.7" fill="#c2e0db" stroke="#6ba39a" stroke-width="0.6"/>
+<polygon points="585.7,336.1 628.4,360.7 609.5,371.7 566.8,347" fill="#cfe8e4" stroke="#6ba39a" stroke-width="0.6"/>
+<text x="597.6" y="348.3" font-size="11" font-weight="600" fill="#1f4f47" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">循环水站（502）</text>
+<polygon points="808.5,348 900.7,401.2 900.7,382.2 808.5,329" fill="#a9c0e6" stroke="#6f8fbd" stroke-width="0.6"/>
+<polygon points="900.7,401.2 920.1,390 920.1,371 900.7,382.2" fill="#b7cdee" stroke="#6f8fbd" stroke-width="0.6"/>
+<polygon points="827.9,317.8 920.1,371 900.7,382.2 808.5,329" fill="#c9d9f2" stroke="#6f8fbd" stroke-width="0.6"/>
+<text x="864.3" y="344.4" font-size="11" font-weight="600" fill="#1f3a5f" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">201一车间</text>
+<g><path d="M784.3,368.4 L784.3,356.1 A6.3,3.6 0 0 1 796.9,356.1 L796.9,368.4 Z" fill="#efc2a2" stroke="#c68a5c" stroke-width="0.6"/><ellipse cx="790.6" cy="356.1" rx="6.3" ry="3.6" fill="#f8d8c0" stroke="#c68a5c" stroke-width="0.6"/></g>
+<g><path d="M805.6,380.8 L805.6,368.4 A6.3,3.6 0 0 1 818.2,368.4 L818.2,380.8 Z" fill="#efc2a2" stroke="#c68a5c" stroke-width="0.6"/><ellipse cx="811.9" cy="368.4" rx="6.3" ry="3.6" fill="#f8d8c0" stroke="#c68a5c" stroke-width="0.6"/></g>
+<text x="801.3" y="355.6" font-size="11" font-weight="600" fill="#6b3f1c" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">甲类罐区</text>
+<polygon points="762.5,376.3 774.1,383 774.1,375.2 762.5,368.4" fill="#b3d8d2" stroke="#6ba39a" stroke-width="0.6"/>
+<polygon points="774.1,383 780.9,379.1 780.9,371.2 774.1,375.2" fill="#c2e0db" stroke="#6ba39a" stroke-width="0.6"/>
+<polygon points="769.3,364.5 780.9,371.2 774.1,375.2 762.5,368.4" fill="#cfe8e4" stroke="#6ba39a" stroke-width="0.6"/>
+<text x="771.7" y="364.2" font-size="11" font-weight="600" fill="#1f4f47" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">泵房（305）</text>
+<polygon points="778,381.3 789.6,388 789.6,380.2 778,373.5" fill="#efc2a2" stroke="#c68a5c" stroke-width="0.6"/>
+<polygon points="789.6,388 797.4,383.6 797.4,375.7 789.6,380.2" fill="#f4cdae" stroke="#c68a5c" stroke-width="0.6"/>
+<polygon points="785.7,369 797.4,375.7 789.6,380.2 778,373.5" fill="#f8d8c0" stroke="#c68a5c" stroke-width="0.6"/>
+<text x="787.7" y="369" font-size="11" font-weight="600" fill="#6b3f1c" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">装卸罐</text>
+<polygon points="826,402.9 859,421.9 859,407.4 826,388.3" fill="#e2cd9c" stroke="#b3945f" stroke-width="0.6"/>
+<polygon points="859,421.9 876.4,411.8 876.4,397.3 859,407.4" fill="#ead6ab" stroke="#b3945f" stroke-width="0.6"/>
+<polygon points="843.4,378.2 876.4,397.3 859,407.4 826,388.3" fill="#f0e2c0" stroke="#b3945f" stroke-width="0.6"/>
+<text x="851.2" y="387.2" font-size="11" font-weight="600" fill="#5f4a1f" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">危险品库</text>
+<polygon points="652.1,408.9 717.6,446.7 717.6,431 652.1,393.2" fill="#b3d8d2" stroke="#6ba39a" stroke-width="0.6"/>
+<polygon points="717.6,446.7 737,435.5 737,419.8 717.6,431" fill="#c2e0db" stroke="#6ba39a" stroke-width="0.6"/>
+<polygon points="671.5,382 737,419.8 717.6,431 652.1,393.2" fill="#cfe8e4" stroke="#6ba39a" stroke-width="0.6"/>
+<text x="694.6" y="400.9" font-size="11" font-weight="600" fill="#1f4f47" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">动力中心（501）</text>
+<polygon points="401.2,429.2 459.4,462.8 459.4,437 401.2,403.4" fill="#c6b9e8" stroke="#8b7abf" stroke-width="0.6"/>
+<polygon points="459.4,462.8 488.5,446 488.5,420.2 459.4,437" fill="#d2c7ee" stroke="#8b7abf" stroke-width="0.6"/>
+<polygon points="430.3,386.6 488.5,420.2 459.4,437 401.2,403.4" fill="#dcd4f2" stroke="#8b7abf" stroke-width="0.6"/>
+<text x="444.8" y="406.2" font-size="11" font-weight="600" fill="#3a2d6b" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">办公质检楼</text>
+<polygon points="525.8,446.8 535.5,452.4 535.5,445.7 525.8,440.1" fill="#d2d2d2" stroke="#9a9a9a" stroke-width="0.6"/>
+<polygon points="535.5,452.4 541.3,449.1 541.3,442.4 535.5,445.7" fill="#dadada" stroke="#9a9a9a" stroke-width="0.6"/>
+<polygon points="531.6,436.8 541.3,442.4 535.5,445.7 525.8,440.1" fill="#e2e2e2" stroke="#9a9a9a" stroke-width="0.6"/>
+<text x="533.6" y="435.6" font-size="11" font-weight="600" fill="#444444" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">门卫</text>
+<polygon points="612.6,435.9 680.5,475.1 680.5,456.1 612.6,416.9" fill="#a9c0e6" stroke="#6f8fbd" stroke-width="0.6"/>
+<polygon points="680.5,475.1 701.8,462.8 701.8,443.8 680.5,456.1" fill="#b7cdee" stroke="#6f8fbd" stroke-width="0.6"/>
+<polygon points="633.9,404.6 701.8,443.8 680.5,456.1 612.6,416.9" fill="#c9d9f2" stroke="#6f8fbd" stroke-width="0.6"/>
+<line x1="667.9" y1="424.2" x2="646.6" y2="436.5" stroke="#6f8fbd" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="674.2" y="434.5" font-size="10" font-weight="600" fill="#1f3a5f" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">101一车间</text>
+<text x="640.3" y="414.9" font-size="10" font-weight="600" fill="#1f3a5f" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">101二车间</text>
+<polygon points="737,458.5 767.6,476.1 767.6,460.4 737,442.8" fill="#e2cd9c" stroke="#b3945f" stroke-width="0.6"/>
+<polygon points="767.6,476.1 787.9,464.3 787.9,448.7 767.6,460.4" fill="#ead6ab" stroke="#b3945f" stroke-width="0.6"/>
+<polygon points="757.4,431 787.9,448.7 767.6,460.4 737,442.8" fill="#f0e2c0" stroke="#b3945f" stroke-width="0.6"/>
+<text x="762.5" y="440.1" font-size="11" font-weight="600" fill="#5f4a1f" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">303仓库</text>
+<polygon points="572.4,459.2 640.3,498.4 640.3,479.3 572.4,440.1" fill="#a9c0e6" stroke="#6f8fbd" stroke-width="0.6"/>
+<polygon points="640.3,498.4 661.6,486 661.6,467 640.3,479.3" fill="#b7cdee" stroke="#6f8fbd" stroke-width="0.6"/>
+<polygon points="593.7,427.8 661.6,467 640.3,479.3 572.4,440.1" fill="#c9d9f2" stroke="#6f8fbd" stroke-width="0.6"/>
+<line x1="627.6" y1="447.4" x2="606.3" y2="459.7" stroke="#6f8fbd" stroke-width="1" stroke-dasharray="4 3"/>
+<text x="633.9" y="457.8" font-size="10" font-weight="600" fill="#1f3a5f" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">102一车间</text>
+<text x="600" y="438.2" font-size="10" font-weight="600" fill="#1f3a5f" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">102二车间</text>
+<polygon points="522.2,481.1 553.7,499.3 553.7,484.8 522.2,466.6" fill="#c6b9e8" stroke="#8b7abf" stroke-width="0.6"/>
+<polygon points="553.7,499.3 573.1,488.1 573.1,473.6 553.7,484.8" fill="#d2c7ee" stroke="#8b7abf" stroke-width="0.6"/>
+<polygon points="541.6,455.4 573.1,473.6 553.7,484.8 522.2,466.6" fill="#dcd4f2" stroke="#8b7abf" stroke-width="0.6"/>
+<text x="547.6" y="464.5" font-size="11" font-weight="600" fill="#3a2d6b" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">食堂</text>
+<polygon points="694.8,482.8 725.4,500.5 725.4,484.8 694.8,467.1" fill="#e2cd9c" stroke="#b3945f" stroke-width="0.6"/>
+<polygon points="725.4,500.5 745.7,488.7 745.7,473 725.4,484.8" fill="#ead6ab" stroke="#b3945f" stroke-width="0.6"/>
+<polygon points="715.2,455.4 745.7,473 725.4,484.8 694.8,467.1" fill="#f0e2c0" stroke="#b3945f" stroke-width="0.6"/>
+<text x="720.3" y="464.5" font-size="11" font-weight="600" fill="#5f4a1f" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">302仓库</text>
+<polygon points="562.7,505.1 594.7,523.6 594.7,497.8 562.7,479.3" fill="#c6b9e8" stroke="#8b7abf" stroke-width="0.6"/>
+<polygon points="594.7,523.6 613.1,512.9 613.1,487.2 594.7,497.8" fill="#d2c7ee" stroke="#8b7abf" stroke-width="0.6"/>
+<polygon points="581.1,468.7 613.1,487.2 594.7,497.8 562.7,479.3" fill="#dcd4f2" stroke="#8b7abf" stroke-width="0.6"/>
+<text x="587.9" y="477.6" font-size="11" font-weight="600" fill="#3a2d6b" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">倒班楼西楼</text>
+<polygon points="654.1,506.3 684.6,524 684.6,508.3 654.1,490.7" fill="#e2cd9c" stroke="#b3945f" stroke-width="0.6"/>
+<polygon points="684.6,524 705,512.2 705,496.5 684.6,508.3" fill="#ead6ab" stroke="#b3945f" stroke-width="0.6"/>
+<polygon points="674.4,478.9 705,496.5 684.6,508.3 654.1,490.7" fill="#f0e2c0" stroke="#b3945f" stroke-width="0.6"/>
+<text x="679.5" y="488" font-size="11" font-weight="600" fill="#5f4a1f" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">301仓库</text>
+<polygon points="609.2,532 640.3,549.9 640.3,524.1 609.2,506.2" fill="#c6b9e8" stroke="#8b7abf" stroke-width="0.6"/>
+<polygon points="640.3,549.9 658.7,539.2 658.7,513.5 640.3,524.1" fill="#d2c7ee" stroke="#8b7abf" stroke-width="0.6"/>
+<polygon points="627.6,495.6 658.7,513.5 640.3,524.1 609.2,506.2" fill="#dcd4f2" stroke="#8b7abf" stroke-width="0.6"/>
+<text x="633.9" y="504.2" font-size="11" font-weight="600" fill="#3a2d6b" text-anchor="middle" stroke="#ffffff" stroke-width="2.4" paint-order="stroke" font-family="system-ui, 'Microsoft YaHei', sans-serif">倒班楼东楼</text>
+<g><line x1="1036.5" y1="325.6" x2="1036.5" y2="291.6" stroke="#5d5b54" stroke-width="2"/><polygon points="1036.5,285.6 1031.5,297.6 1041.5,297.6" fill="#5d5b54"/><text x="1036.5" y="337.6" font-size="12" font-weight="700" fill="#5d5b54" text-anchor="middle">N</text></g>
+</svg>

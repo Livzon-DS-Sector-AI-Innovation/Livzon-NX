@@ -17,7 +17,9 @@ vi.mock('@ant-design/icons', () => {
   return {
     AimOutlined: Icon,
     EnvironmentOutlined: Icon,
+    ExpandOutlined: Icon,
     QuestionCircleOutlined: Icon,
+    ShrinkOutlined: Icon,
   }
 })
 
@@ -26,6 +28,12 @@ vi.mock('antd', async () => {
   type AnyProps = Record<string, unknown>
   const Box = ({ children, title, extra }: AnyProps) =>
     createElement('div', null, title as ReactNode, extra as ReactNode, children as ReactNode)
+  const Button = ({ children, onClick, disabled }: AnyProps) =>
+    createElement(
+      'button',
+      { type: 'button', disabled: Boolean(disabled), onClick: onClick as never },
+      children as ReactNode
+    )
   const Collapse = ({ items }: { items?: Array<{ key: string; label: ReactNode; children: ReactNode }> }) =>
     createElement(
       'div',
@@ -42,6 +50,7 @@ vi.mock('antd', async () => {
   const Text = ({ children }: AnyProps) => createElement('span', null, children as ReactNode)
 
   return {
+    Button,
     Card: Box,
     Collapse,
     Drawer: ({ children, open, title }: AnyProps) =>
@@ -153,34 +162,34 @@ async function renderMap(overview: SafetyOverviewData) {
 }
 
 describe('SafetyOverviewMap', () => {
-  it('renders campus image with risk-building badges and dot-only non-risk buildings', async () => {
+  it('renders vector campus map with count bubbles only on risk buildings', async () => {
     await renderMap(OVERVIEW)
     const image = container.querySelector('img')
     expect(image).not.toBeNull()
-    expect(image!.getAttribute('src')).toBe('/safety/campus-map.png')
+    expect(image!.getAttribute('src')).toBe('/safety/campus-map.svg')
 
-    const riskBuilding = [...container.querySelectorAll('button')].find((button) =>
-      button.textContent?.includes('101车间 2')
-    )
-    expect(riskBuilding).toBeDefined()
+    // 有风险的建筑渲染数量气泡（title 含建筑名），点击可打开明细
+    const riskBubble = container.querySelector('button[title^="101车间 · 当日 2 条"]')
+    expect(riskBubble).not.toBeNull()
+    expect(riskBubble!.textContent).toContain('101车间')
+    expect(riskBubble!.textContent).toContain('2')
 
-    // 无风险建筑只渲染圆点（title 保留名称），不再显示文字标签
-    const dot = container.querySelector('span[title="污水处理系统"]')
-    expect(dot).not.toBeNull()
-    expect(dot!.textContent).toBe('')
+    // 无风险建筑不再渲染覆盖层（名称已烙入底图）
+    expect(container.innerHTML).not.toContain('污水处理系统 · 当日')
 
     expect(container.innerHTML).toContain('当日 3 条 · 落点 2 · 未映射 1')
     expect(container.innerHTML).toContain('未映射地点 1 处')
     expect(container.innerHTML).toContain('特殊作业 2')
   })
 
-  it('opens building detail drawer on marker click and navigates on item click', async () => {
+  it('opens building detail drawer on bubble click and navigates on item click', async () => {
     await renderMap(OVERVIEW)
-    const marker = [...container.querySelectorAll('button')].find((button) =>
-      button.textContent?.includes('101车间 2')
-    )
+    // 风险建筑渲染数量气泡（title 含建筑名与条数）
+    const bubble = container.querySelector('button[title^="101车间 · 当日 2 条"]')
+    expect(bubble).not.toBeNull()
+    expect(bubble!.textContent).toContain('101车间 2')
     await act(async () => {
-      marker!.click()
+      ;(bubble as HTMLElement).click()
     })
     const drawer = container.querySelector('[data-drawer-open="true"]')
     expect(drawer).not.toBeNull()
@@ -193,5 +202,23 @@ describe('SafetyOverviewMap', () => {
       ;(itemRow as HTMLElement).click()
     })
     expect(pushMock).toHaveBeenCalledWith('/safety/special-ops')
+  })
+
+  it('全宽切换按钮往返切换', async () => {
+    const view = await renderMap(OVERVIEW)
+    const toggle = Array.from(
+      container.querySelectorAll<HTMLButtonElement>('button'),
+    ).find((b) => b.textContent === '全宽')
+    expect(toggle).toBeTruthy()
+    await act(async () => {
+      toggle!.click()
+      await new Promise((r) => setTimeout(r, 30))
+    })
+    const half = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find((b) => b.textContent === '半宽')
+    expect(half).toBeTruthy()
+    await act(async () => {
+      half!.click()
+      await new Promise((r) => setTimeout(r, 30))
+    })
   })
 })

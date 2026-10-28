@@ -41,7 +41,6 @@ API_MODULES = (
     "app.modules.safety.api.checks",
     "app.modules.safety.api.contractors",
     "app.modules.safety.api.daily_risk_reports",
-    "app.modules.safety.api.ehs_changes",
     "app.modules.safety.api.hazard_identifications",
     "app.modules.safety.api.hazards",
     "app.modules.safety.api.knowledge",

@@ -22923,278 +22923,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/safety/ehs-changes": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * 获取EHS变更列表
-         * @description 获取EHS变更列表，支持多条件筛选
-         */
-        get: operations["get_ehs_changes_api_v1_safety_ehs_changes_get"];
-        put?: never;
-        /**
-         * 创建EHS变更
-         * @description 创建EHS变更申请
-         */
-        post: operations["create_ehs_change_api_v1_safety_ehs_changes_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/safety/ehs-changes/{change_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * 获取EHS变更详情
-         * @description 获取EHS变更详情
-         */
-        get: operations["get_ehs_change_api_v1_safety_ehs_changes__change_id__get"];
-        /**
-         * 更新EHS变更
-         * @description 更新EHS变更
-         */
-        put: operations["update_ehs_change_api_v1_safety_ehs_changes__change_id__put"];
-        post?: never;
-        /**
-         * 删除EHS变更
-         * @description 删除EHS变更（软删除）
-         */
-        delete: operations["delete_ehs_change_api_v1_safety_ehs_changes__change_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/safety/ehs-changes/{change_id}/action-items/{index}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * 更新行动项状态
-         * @description 更新行动项状态
-         */
-        put: operations["update_action_item_ehs_change_api_v1_safety_ehs_changes__change_id__action_items__index__put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/safety/ehs-changes/{change_id}/approve": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * 审批EHS变更
-         * @description 审批变更（审核中→已批准/已驳回）
-         */
-        post: operations["approve_ehs_change_api_v1_safety_ehs_changes__change_id__approve_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/safety/ehs-changes/{change_id}/cancel": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * 取消EHS变更
-         * @description 取消变更（草稿→已关闭）
-         */
-        post: operations["cancel_ehs_change_api_v1_safety_ehs_changes__change_id__cancel_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/safety/ehs-changes/{change_id}/close": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * 关闭EHS变更
-         * @description 关闭变更（已投用→已关闭）
-         */
-        post: operations["close_ehs_change_api_v1_safety_ehs_changes__change_id__close_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/safety/ehs-changes/{change_id}/commission": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * 投用EHS变更
-         * @description 投用变更（实施中→已投用）
-         */
-        post: operations["commission_ehs_change_api_v1_safety_ehs_changes__change_id__commission_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/safety/ehs-changes/{change_id}/pssr-checklist": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * 更新PSSR检查清单
-         * @description 更新PSSR检查清单
-         */
-        put: operations["update_pssr_checklist_ehs_change_api_v1_safety_ehs_changes__change_id__pssr_checklist_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/safety/ehs-changes/{change_id}/reject": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * 驳回EHS变更
-         * @description 驳回变更（审核中→已驳回）
-         */
-        post: operations["reject_ehs_change_api_v1_safety_ehs_changes__change_id__reject_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/safety/ehs-changes/{change_id}/risk-assessments": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * 添加风险评估记录
-         * @description 追加风险评估记录到变更
-         */
-        post: operations["add_risk_assessment_ehs_change_api_v1_safety_ehs_changes__change_id__risk_assessments_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/safety/ehs-changes/{change_id}/start-implementation": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * 开始实施EHS变更
-         * @description 开始实施变更（已批准→实施中）
-         */
-        post: operations["start_implementation_ehs_change_api_v1_safety_ehs_changes__change_id__start_implementation_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/safety/ehs-changes/{change_id}/submit": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * 提交EHS变更
-         * @description 提交变更（草稿→审核中；紧急变更自动批准）
-         */
-        post: operations["submit_ehs_change_api_v1_safety_ehs_changes__change_id__submit_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/safety/ehs-changes/{change_id}/verification": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * 提交变更验证数据
-         * @description 提交变更验证数据
-         */
-        put: operations["submit_verification_ehs_change_api_v1_safety_ehs_changes__change_id__verification_put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/safety/emergency-cards": {
         parameters: {
             query?: never;
@@ -25654,6 +25382,111 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/safety/safety-duty-assessments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 责任制考核分页列表（年度/季度/部门/等级/关键字） */
+        get: operations["list_safety_duty_assessments_api_v1_safety_safety_duty_assessments_get"];
+        put?: never;
+        /** 新增责任制考核记录（含评分明细，总分与等级自动计算） */
+        post: operations["create_safety_duty_assessment_api_v1_safety_safety_duty_assessments_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/safety-duty-assessments/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 批量导入季度考核（按 年度+季度+部门+被考核人 覆盖更新） */
+        post: operations["import_safety_duty_assessments_api_v1_safety_safety_duty_assessments_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/safety-duty-assessments/import-template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 下载季度考核批量导入模板（按考核表模板一个部门一个 sheet） */
+        get: operations["download_safety_duty_assessment_import_template_api_v1_safety_safety_duty_assessments_import_template_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/safety-duty-assessments/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 责任制考核统计（平均分/等级分布/季度与部门维度） */
+        get: operations["get_safety_duty_assessment_stats_api_v1_safety_safety_duty_assessments_stats_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/safety-duty-assessments/template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 按被考核部门匹配责任制考核模板（2026 考核表文档） */
+        get: operations["get_safety_duty_assessment_template_api_v1_safety_safety_duty_assessments_template_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/safety-duty-assessments/{assessment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 责任制考核详情（含评分明细） */
+        get: operations["get_safety_duty_assessment_api_v1_safety_safety_duty_assessments__assessment_id__get"];
+        /** 更新责任制考核（items 提供时整体替换评分明细） */
+        put: operations["update_safety_duty_assessment_api_v1_safety_safety_duty_assessments__assessment_id__put"];
+        post?: never;
+        /** 删除责任制考核记录（软删除） */
+        delete: operations["delete_safety_duty_assessment_api_v1_safety_safety_duty_assessments__assessment_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/safety/safety-facilities": {
         parameters: {
             query?: never;
@@ -25755,6 +25588,93 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/safety-target-agreements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 责任书分页列表（年度/部门/分类/状态/关键字） */
+        get: operations["list_safety_target_agreements_api_v1_safety_safety_target_agreements_get"];
+        put?: never;
+        /** 新增责任书记录 */
+        post: operations["create_safety_target_agreement_api_v1_safety_safety_target_agreements_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/safety-target-agreements/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 批量导入责任书签订登记（存在即更新，缺失则新建） */
+        post: operations["import_safety_target_agreements_api_v1_safety_safety_target_agreements_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/safety-target-agreements/import-template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 下载责任书签订登记导入模板（预填台账目录） */
+        get: operations["download_safety_target_agreement_import_template_api_v1_safety_safety_target_agreements_import_template_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/safety-target-agreements/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 责任书统计（部门签订情况与签订率） */
+        get: operations["get_safety_target_agreement_stats_api_v1_safety_safety_target_agreements_stats_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/safety-target-agreements/{agreement_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 更新责任书（含签订登记：状态/签订日期/甲乙方） */
+        put: operations["update_safety_target_agreement_api_v1_safety_safety_target_agreements__agreement_id__put"];
+        post?: never;
+        /** 删除责任书记录（软删除） */
+        delete: operations["delete_safety_target_agreement_api_v1_safety_safety_target_agreements__agreement_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -31117,6 +31037,114 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** ApiResponseEnvelope[SafetyAgreementImportResultResponse] */
+        ApiResponseEnvelope_SafetyAgreementImportResultResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["SafetyAgreementImportResultResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[SafetyDutyAssessmentImportResultResponse] */
+        ApiResponseEnvelope_SafetyDutyAssessmentImportResultResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["SafetyDutyAssessmentImportResultResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[SafetyDutyAssessmentListResponse] */
+        ApiResponseEnvelope_SafetyDutyAssessmentListResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["SafetyDutyAssessmentListResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[SafetyDutyAssessmentResponse] */
+        ApiResponseEnvelope_SafetyDutyAssessmentResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["SafetyDutyAssessmentResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[SafetyDutyAssessmentStatsResponse] */
+        ApiResponseEnvelope_SafetyDutyAssessmentStatsResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["SafetyDutyAssessmentStatsResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[SafetyDutyTemplateResponse] */
+        ApiResponseEnvelope_SafetyDutyTemplateResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["SafetyDutyTemplateResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** ApiResponseEnvelope[SafetyFacilityChecklistResponse] */
         ApiResponseEnvelope_SafetyFacilityChecklistResponse_: {
             /**
@@ -31269,6 +31297,60 @@ export interface components {
              */
             code: number;
             data: components["schemas"]["SafetyOverviewResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[SafetyTargetAgreementListResponse] */
+        ApiResponseEnvelope_SafetyTargetAgreementListResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["SafetyTargetAgreementListResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[SafetyTargetAgreementResponse] */
+        ApiResponseEnvelope_SafetyTargetAgreementResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["SafetyTargetAgreementResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[SafetyTargetAgreementStatsResponse] */
+        ApiResponseEnvelope_SafetyTargetAgreementStatsResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["SafetyTargetAgreementStatsResponse"];
             /**
              * Message
              * @default success
@@ -32506,22 +32588,6 @@ export interface components {
             approve: boolean;
             /** Operator */
             operator?: string | null;
-        };
-        /**
-         * ApproveEhsChangeRequest
-         * @description 审批EHS变更请求
-         */
-        ApproveEhsChangeRequest: {
-            /**
-             * Comments
-             * @description 审批意见
-             */
-            comments?: string | null;
-            /**
-             * Decision
-             * @description 审批决定: approved/rejected
-             */
-            decision: string;
         };
         /** AssignUserRoleRequest */
         AssignUserRoleRequest: {
@@ -34248,6 +34314,16 @@ export interface components {
              * File
              * @description 采购申请表格文件
              */
+            file: string;
+        };
+        /** Body_import_safety_duty_assessments_api_v1_safety_safety_duty_assessments_import_post */
+        Body_import_safety_duty_assessments_api_v1_safety_safety_duty_assessments_import_post: {
+            /** File */
+            file: string;
+        };
+        /** Body_import_safety_target_agreements_api_v1_safety_safety_target_agreements_import_post */
+        Body_import_safety_target_agreements_api_v1_safety_safety_target_agreements_import_post: {
+            /** File */
             file: string;
         };
         /** Body_import_supplier_records_api_v1_procurement_suppliers_import_post */
@@ -36891,27 +36967,6 @@ export interface components {
             low?: number | null;
             /** Medium */
             medium?: number | null;
-        };
-        /**
-         * CloseEhsChangeRequest
-         * @description 关闭EHS变更请求
-         */
-        CloseEhsChangeRequest: {
-            /**
-             * Closed By
-             * @description 关闭人
-             */
-            closed_by?: string | null;
-            /**
-             * Restored Date
-             * @description 恢复原状日期
-             */
-            restored_date?: string | null;
-            /**
-             * Temp Expiry Date
-             * @description 临时变更到期日期
-             */
-            temp_expiry_date?: string | null;
         };
         /**
          * ComplaintOut
@@ -41554,288 +41609,6 @@ export interface components {
             source_role_names?: string[];
             /** Visible Sections */
             visible_sections?: string[] | null;
-        };
-        /**
-         * EhsChangeCreate
-         * @description 创建EHS变更
-         */
-        EhsChangeCreate: {
-            /**
-             * Action Items
-             * @description 行动项
-             */
-            action_items?: unknown[] | null;
-            /**
-             * Actual Completion
-             * @description 实际完成日期
-             */
-            actual_completion?: string | null;
-            /**
-             * Actual Start
-             * @description 实际开始日期
-             */
-            actual_start?: string | null;
-            /**
-             * Applicant Name
-             * @description 申请人姓名
-             */
-            applicant_name?: string | null;
-            /**
-             * Approval Chain
-             * @description 审批链
-             */
-            approval_chain?: unknown[] | null;
-            /**
-             * Attachments
-             * @description 附件列表
-             */
-            attachments?: unknown[] | null;
-            /**
-             * Change Duration
-             * @description 变更期限
-             * @default permanent
-             */
-            change_duration: string;
-            /**
-             * Change Grade
-             * @description 变更等级
-             * @default general
-             */
-            change_grade: string;
-            /**
-             * Change No
-             * @description 变更编号
-             */
-            change_no: string;
-            /**
-             * Change Type
-             * @description 变更类型
-             */
-            change_type: string;
-            /**
-             * Closure
-             * @description 变更关闭数据
-             */
-            closure?: {
-                [key: string]: unknown;
-            } | null;
-            /**
-             * Department
-             * @description 申请部门
-             */
-            department?: string | null;
-            /**
-             * Description
-             * @description 变更描述（变更前/变更后对比）
-             */
-            description?: string | null;
-            /**
-             * Documents To Update
-             * @description 需更新的文件清单
-             */
-            documents_to_update?: unknown[] | null;
-            /**
-             * Equipment Tags
-             * @description 关联设备位号
-             */
-            equipment_tags?: string[] | null;
-            /**
-             * Expected Completion
-             * @description 预期完成日期
-             */
-            expected_completion?: string | null;
-            /**
-             * Expected Effect
-             * @description 预期效果
-             */
-            expected_effect?: string | null;
-            /**
-             * Expected Start
-             * @description 预期开始日期
-             */
-            expected_start?: string | null;
-            /**
-             * Linked Safety Check Id
-             * @description 关联安全检查ID
-             */
-            linked_safety_check_id?: string | null;
-            /**
-             * Location Unit
-             * @description 所在单元/装置
-             */
-            location_unit?: string | null;
-            /**
-             * Notes
-             * @description 备注
-             */
-            notes?: string | null;
-            /**
-             * Pssr Checklist
-             * @description PSSR检查清单
-             */
-            pssr_checklist?: unknown[] | null;
-            /**
-             * Risk Assessments
-             * @description 风险评估记录
-             */
-            risk_assessments?: unknown[] | null;
-            /**
-             * Technical Basis
-             * @description 变更技术依据
-             */
-            technical_basis?: string | null;
-            /**
-             * Title
-             * @description 变更标题
-             */
-            title: string;
-            /**
-             * Verification
-             * @description 变更验证数据
-             */
-            verification?: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /**
-         * EhsChangeUpdate
-         * @description 更新EHS变更（所有字段可选）
-         */
-        EhsChangeUpdate: {
-            /**
-             * Action Items
-             * @description 行动项
-             */
-            action_items?: unknown[] | null;
-            /**
-             * Actual Completion
-             * @description 实际完成日期
-             */
-            actual_completion?: string | null;
-            /**
-             * Actual Start
-             * @description 实际开始日期
-             */
-            actual_start?: string | null;
-            /**
-             * Applicant Name
-             * @description 申请人姓名
-             */
-            applicant_name?: string | null;
-            /**
-             * Approval Chain
-             * @description 审批链
-             */
-            approval_chain?: unknown[] | null;
-            /**
-             * Attachments
-             * @description 附件列表
-             */
-            attachments?: unknown[] | null;
-            /**
-             * Change Duration
-             * @description 变更期限
-             */
-            change_duration?: string | null;
-            /**
-             * Change Grade
-             * @description 变更等级
-             */
-            change_grade?: string | null;
-            /**
-             * Change No
-             * @description 变更编号
-             */
-            change_no?: string | null;
-            /**
-             * Change Type
-             * @description 变更类型
-             */
-            change_type?: string | null;
-            /**
-             * Closure
-             * @description 变更关闭数据
-             */
-            closure?: {
-                [key: string]: unknown;
-            } | null;
-            /**
-             * Department
-             * @description 申请部门
-             */
-            department?: string | null;
-            /**
-             * Description
-             * @description 变更描述
-             */
-            description?: string | null;
-            /**
-             * Documents To Update
-             * @description 需更新的文件清单
-             */
-            documents_to_update?: unknown[] | null;
-            /**
-             * Equipment Tags
-             * @description 关联设备位号
-             */
-            equipment_tags?: string[] | null;
-            /**
-             * Expected Completion
-             * @description 预期完成日期
-             */
-            expected_completion?: string | null;
-            /**
-             * Expected Effect
-             * @description 预期效果
-             */
-            expected_effect?: string | null;
-            /**
-             * Expected Start
-             * @description 预期开始日期
-             */
-            expected_start?: string | null;
-            /**
-             * Linked Safety Check Id
-             * @description 关联安全检查ID
-             */
-            linked_safety_check_id?: string | null;
-            /**
-             * Location Unit
-             * @description 所在单元/装置
-             */
-            location_unit?: string | null;
-            /**
-             * Notes
-             * @description 备注
-             */
-            notes?: string | null;
-            /**
-             * Pssr Checklist
-             * @description PSSR检查清单
-             */
-            pssr_checklist?: unknown[] | null;
-            /**
-             * Risk Assessments
-             * @description 风险评估记录
-             */
-            risk_assessments?: unknown[] | null;
-            /**
-             * Technical Basis
-             * @description 变更技术依据
-             */
-            technical_basis?: string | null;
-            /**
-             * Title
-             * @description 变更标题
-             */
-            title?: string | null;
-            /**
-             * Verification
-             * @description 变更验证数据
-             */
-            verification?: {
-                [key: string]: unknown;
-            } | null;
         };
         /**
          * EmailConfigUpdate
@@ -57932,6 +57705,21 @@ export interface components {
             /** Metric Key */
             metric_key: string;
         };
+        /** SafetyAgreementImportResultResponse */
+        SafetyAgreementImportResultResponse: {
+            /**
+             * Created
+             * @description 新建条数
+             */
+            created: number;
+            /** Errors */
+            errors?: components["schemas"]["SafetyImportErrorItem"][];
+            /**
+             * Updated
+             * @description 更新（登记签订）条数
+             */
+            updated: number;
+        };
         /**
          * SafetyCheckCreate
          * @description 创建安全检查
@@ -58094,6 +57882,288 @@ export interface components {
              * @description 状态
              */
             status?: string | null;
+        };
+        /** SafetyDutyAssessmentCreate */
+        SafetyDutyAssessmentCreate: {
+            /**
+             * Assessment Date
+             * @description 考核日期
+             */
+            assessment_date?: string | null;
+            /**
+             * Assessor
+             * @description 考核单位
+             * @default
+             */
+            assessor: string;
+            /**
+             * Department
+             * @description 被考核部门/单位
+             */
+            department: string;
+            /**
+             * Items
+             * @description 评分明细
+             */
+            items?: components["schemas"]["SafetyDutyAssessmentItemInput"][];
+            /**
+             * Person Name
+             * @description 被考核人
+             * @default
+             */
+            person_name: string;
+            /**
+             * Quarter
+             * @description 考核季度 1-4
+             */
+            quarter: number;
+            /**
+             * Remark
+             * @description 备注
+             * @default
+             */
+            remark: string;
+            /**
+             * Year
+             * @description 考核年度
+             */
+            year: number;
+        };
+        /** SafetyDutyAssessmentDepartmentStat */
+        SafetyDutyAssessmentDepartmentStat: {
+            /** Avg Score */
+            avg_score: number;
+            /** Count */
+            count: number;
+            /** Department */
+            department: string;
+        };
+        /** SafetyDutyAssessmentImportResultResponse */
+        SafetyDutyAssessmentImportResultResponse: {
+            /** Errors */
+            errors?: components["schemas"]["SafetyImportErrorItem"][];
+            /**
+             * Imported
+             * @description 新建考核条数
+             */
+            imported: number;
+            /**
+             * Skipped Sheets
+             * @description 未导入的 sheet（未填扣减分或无法识别）
+             */
+            skipped_sheets?: string[];
+            /**
+             * Updated
+             * @description 覆盖更新考核条数
+             */
+            updated: number;
+        };
+        /** SafetyDutyAssessmentItemInput */
+        SafetyDutyAssessmentItemInput: {
+            /**
+             * Content
+             * @description 考核内容
+             */
+            content: string;
+            /**
+             * Deduction Score
+             * @description 扣减分
+             * @default 0
+             */
+            deduction_score: number;
+            /**
+             * Remark
+             * @description 考核明细说明
+             * @default
+             */
+            remark: string;
+            /**
+             * Rule
+             * @description 考核标准/扣分规则
+             * @default
+             */
+            rule: string;
+            /**
+             * Score
+             * @description 考核得分（缺省=标准分-扣减分）
+             */
+            score?: number | null;
+            /**
+             * Standard Score
+             * @description 标准分
+             * @default 0
+             */
+            standard_score: number;
+        };
+        /** SafetyDutyAssessmentItemResponse */
+        SafetyDutyAssessmentItemResponse: {
+            /**
+             * Assessment Id
+             * Format: uuid
+             */
+            assessment_id: string;
+            /** Content */
+            content: string;
+            /** Deduction Score */
+            deduction_score: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Remark */
+            remark: string;
+            /** Rule */
+            rule: string;
+            /** Score */
+            score: number;
+            /** Sort Order */
+            sort_order: number;
+            /** Standard Score */
+            standard_score: number;
+        };
+        /** SafetyDutyAssessmentListResponse */
+        SafetyDutyAssessmentListResponse: {
+            /** Items */
+            items: components["schemas"]["SafetyDutyAssessmentResponse"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
+        };
+        /** SafetyDutyAssessmentQuarterStat */
+        SafetyDutyAssessmentQuarterStat: {
+            /** Avg Score */
+            avg_score: number;
+            /** Count */
+            count: number;
+            /** Quarter */
+            quarter: number;
+        };
+        /** SafetyDutyAssessmentResponse */
+        SafetyDutyAssessmentResponse: {
+            /** Assessment Date */
+            assessment_date?: string | null;
+            /** Assessor */
+            assessor: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Department */
+            department: string;
+            /** Grade */
+            grade: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Items */
+            items?: components["schemas"]["SafetyDutyAssessmentItemResponse"][];
+            /** Person Name */
+            person_name: string;
+            /** Quarter */
+            quarter: number;
+            /** Remark */
+            remark: string;
+            /** Total Score */
+            total_score: number;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Year */
+            year: number;
+        };
+        /** SafetyDutyAssessmentStatsResponse */
+        SafetyDutyAssessmentStatsResponse: {
+            /** Avg Score */
+            avg_score: number;
+            /** Departments */
+            departments?: components["schemas"]["SafetyDutyAssessmentDepartmentStat"][];
+            /**
+             * Excellent
+             * @description 优秀数（>=95）
+             */
+            excellent: number;
+            /**
+             * Good
+             * @description 良好数（>=90）
+             */
+            good: number;
+            /**
+             * Qualified
+             * @description 合格数（>=80）
+             */
+            qualified: number;
+            /** Quarters */
+            quarters?: components["schemas"]["SafetyDutyAssessmentQuarterStat"][];
+            /** Total */
+            total: number;
+            /**
+             * Unqualified
+             * @description 不合格数（<80）
+             */
+            unqualified: number;
+        };
+        /** SafetyDutyAssessmentUpdate */
+        SafetyDutyAssessmentUpdate: {
+            /** Assessment Date */
+            assessment_date?: string | null;
+            /** Assessor */
+            assessor?: string | null;
+            /** Department */
+            department?: string | null;
+            /**
+             * Items
+             * @description 提供时整体替换评分明细
+             */
+            items?: components["schemas"]["SafetyDutyAssessmentItemInput"][] | null;
+            /** Person Name */
+            person_name?: string | null;
+            /** Quarter */
+            quarter?: number | null;
+            /** Remark */
+            remark?: string | null;
+            /** Year */
+            year?: number | null;
+        };
+        /** SafetyDutyTemplateItem */
+        SafetyDutyTemplateItem: {
+            /** Content */
+            content: string;
+            /**
+             * Rule
+             * @default
+             */
+            rule: string;
+            /** Standard Score */
+            standard_score: number;
+        };
+        /** SafetyDutyTemplateResponse */
+        SafetyDutyTemplateResponse: {
+            /**
+             * Assessed
+             * @default
+             */
+            assessed: string;
+            /** Category */
+            category: string;
+            /** Items */
+            items?: components["schemas"]["SafetyDutyTemplateItem"][];
+            /**
+             * Matched
+             * @description 是否按部门匹配到模板（未匹配返回通用空模板）
+             * @default false
+             */
+            matched: boolean;
+            /** Name */
+            name: string;
         };
         /** SafetyFacilityChecklistItem */
         SafetyFacilityChecklistItem: {
@@ -58418,6 +58488,22 @@ export interface components {
             /** Success */
             success: boolean;
         };
+        /** SafetyImportErrorItem */
+        SafetyImportErrorItem: {
+            /** Message */
+            message: string;
+            /**
+             * Row
+             * @description 出错行号（责任书）或 sheet 名（考核）
+             */
+            row: number | string;
+            /**
+             * Target
+             * @description 出错对象（部门/岗位）
+             * @default
+             */
+            target: string;
+        };
         /**
          * SafetyKnowledgeArticleCreate
          * @description 创建知识库文章
@@ -58556,6 +58642,171 @@ export interface components {
             unmapped?: components["schemas"]["UnmappedRiskGroup"][];
             /** Weekly Operation Types */
             weekly_operation_types?: components["schemas"]["WeeklyOperationTypeCount"][];
+        };
+        /** SafetyTargetAgreementCreate */
+        SafetyTargetAgreementCreate: {
+            /**
+             * Category
+             * @description 分类
+             * @default 岗位员工
+             */
+            category: string;
+            /**
+             * Department
+             * @description 责任部门/单位
+             */
+            department: string;
+            /**
+             * Expires Date
+             * @description 有效期至
+             */
+            expires_date?: string | null;
+            /**
+             * Goals Text
+             * @description 目标条款（每行一条）
+             * @default
+             */
+            goals_text: string;
+            /**
+             * Party A
+             * @description 甲方（考核方代表）
+             * @default
+             */
+            party_a: string;
+            /**
+             * Party B
+             * @description 乙方（责任方签订人）
+             * @default
+             */
+            party_b: string;
+            /**
+             * Position
+             * @description 岗位/角色
+             */
+            position: string;
+            /**
+             * Remark
+             * @description 备注
+             * @default
+             */
+            remark: string;
+            /**
+             * Signed Date
+             * @description 签订日期
+             */
+            signed_date?: string | null;
+            /**
+             * Status
+             * @description 状态: unsigned/signed
+             * @default unsigned
+             */
+            status: string;
+            /**
+             * Year
+             * @description 签订年度
+             */
+            year: number;
+        };
+        /** SafetyTargetAgreementDepartmentStat */
+        SafetyTargetAgreementDepartmentStat: {
+            /** Department */
+            department: string;
+            /** Signed */
+            signed: number;
+            /** Total */
+            total: number;
+        };
+        /** SafetyTargetAgreementListResponse */
+        SafetyTargetAgreementListResponse: {
+            /** Items */
+            items: components["schemas"]["SafetyTargetAgreementResponse"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
+        };
+        /** SafetyTargetAgreementResponse */
+        SafetyTargetAgreementResponse: {
+            /** Category */
+            category: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Department */
+            department: string;
+            /** Expires Date */
+            expires_date?: string | null;
+            /** Goals Text */
+            goals_text: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Party A */
+            party_a: string;
+            /** Party B */
+            party_b: string;
+            /** Position */
+            position: string;
+            /** Remark */
+            remark: string;
+            /** Signed Date */
+            signed_date?: string | null;
+            /** Status */
+            status: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Year */
+            year: number;
+        };
+        /** SafetyTargetAgreementStatsResponse */
+        SafetyTargetAgreementStatsResponse: {
+            /** Departments */
+            departments?: components["schemas"]["SafetyTargetAgreementDepartmentStat"][];
+            /**
+             * Sign Rate
+             * @description 签订率（%）
+             */
+            sign_rate: number;
+            /** Signed */
+            signed: number;
+            /** Total */
+            total: number;
+            /** Unsigned */
+            unsigned: number;
+        };
+        /** SafetyTargetAgreementUpdate */
+        SafetyTargetAgreementUpdate: {
+            /** Category */
+            category?: string | null;
+            /** Department */
+            department?: string | null;
+            /** Expires Date */
+            expires_date?: string | null;
+            /** Goals Text */
+            goals_text?: string | null;
+            /** Party A */
+            party_a?: string | null;
+            /** Party B */
+            party_b?: string | null;
+            /** Position */
+            position?: string | null;
+            /** Remark */
+            remark?: string | null;
+            /** Signed Date */
+            signed_date?: string | null;
+            /** Status */
+            status?: string | null;
+            /** Year */
+            year?: number | null;
         };
         /** SafetyTargetCreate */
         SafetyTargetCreate: {
@@ -126684,580 +126935,6 @@ export interface operations {
             };
         };
     };
-    get_ehs_changes_api_v1_safety_ehs_changes_get: {
-        parameters: {
-            query?: {
-                page?: number;
-                page_size?: number;
-                status?: string | null;
-                change_type?: string | null;
-                change_grade?: string | null;
-                change_duration?: string | null;
-                department?: string | null;
-                keyword?: string | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_ehs_change_api_v1_safety_ehs_changes_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["EhsChangeCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_ehs_change_api_v1_safety_ehs_changes__change_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                change_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_ehs_change_api_v1_safety_ehs_changes__change_id__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                change_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["EhsChangeUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_ehs_change_api_v1_safety_ehs_changes__change_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                change_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_action_item_ehs_change_api_v1_safety_ehs_changes__change_id__action_items__index__put: {
-        parameters: {
-            query: {
-                /** @description 状态: pending/in_progress/completed */
-                status: string;
-            };
-            header?: never;
-            path: {
-                change_id: string;
-                index: number;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    approve_ehs_change_api_v1_safety_ehs_changes__change_id__approve_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                change_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ApproveEhsChangeRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    cancel_ehs_change_api_v1_safety_ehs_changes__change_id__cancel_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                change_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    close_ehs_change_api_v1_safety_ehs_changes__change_id__close_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                change_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CloseEhsChangeRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    commission_ehs_change_api_v1_safety_ehs_changes__change_id__commission_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                change_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_pssr_checklist_ehs_change_api_v1_safety_ehs_changes__change_id__pssr_checklist_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                change_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    [key: string]: unknown;
-                }[];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    reject_ehs_change_api_v1_safety_ehs_changes__change_id__reject_post: {
-        parameters: {
-            query?: {
-                /** @description 驳回原因 */
-                comments?: string | null;
-            };
-            header?: never;
-            path: {
-                change_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    add_risk_assessment_ehs_change_api_v1_safety_ehs_changes__change_id__risk_assessments_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                change_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    start_implementation_ehs_change_api_v1_safety_ehs_changes__change_id__start_implementation_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                change_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    submit_ehs_change_api_v1_safety_ehs_changes__change_id__submit_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                change_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    submit_verification_ehs_change_api_v1_safety_ehs_changes__change_id__verification_put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                change_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     list_emergency_cards_api_v1_safety_emergency_cards_get: {
         parameters: {
             query?: {
@@ -130664,7 +130341,7 @@ export interface operations {
     safety_my_todos_api_v1_safety_my_todos_get: {
         parameters: {
             query: {
-                kind: "hazards" | "accidents" | "checks" | "ehs-actions";
+                kind: "hazards" | "accidents" | "checks";
                 page?: number;
                 page_size?: number;
             };
@@ -133071,6 +132748,332 @@ export interface operations {
             };
         };
     };
+    list_safety_duty_assessments_api_v1_safety_safety_duty_assessments_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                /** @description 考核年度 */
+                year?: number | null;
+                /** @description 考核季度 */
+                quarter?: number | null;
+                /** @description 被考核部门/单位 */
+                department?: string | null;
+                /** @description 等级: 优秀/良好/合格/不合格 */
+                grade?: string | null;
+                /** @description 部门/被考核人/考核单位关键字 */
+                keyword?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_SafetyDutyAssessmentListResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_safety_duty_assessment_api_v1_safety_safety_duty_assessments_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SafetyDutyAssessmentCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_SafetyDutyAssessmentResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_safety_duty_assessments_api_v1_safety_safety_duty_assessments_import_post: {
+        parameters: {
+            query: {
+                /** @description 考核年度 */
+                year: number;
+                /** @description 考核季度 */
+                quarter: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_safety_duty_assessments_api_v1_safety_safety_duty_assessments_import_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_SafetyDutyAssessmentImportResultResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_safety_duty_assessment_import_template_api_v1_safety_safety_duty_assessments_import_template_get: {
+        parameters: {
+            query: {
+                /** @description 考核年度 */
+                year: number;
+                /** @description 考核季度 */
+                quarter: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_safety_duty_assessment_stats_api_v1_safety_safety_duty_assessments_stats_get: {
+        parameters: {
+            query?: {
+                /** @description 考核年度 */
+                year?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_SafetyDutyAssessmentStatsResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_safety_duty_assessment_template_api_v1_safety_safety_duty_assessments_template_get: {
+        parameters: {
+            query: {
+                /** @description 被考核部门/单位 */
+                department: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_SafetyDutyTemplateResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_safety_duty_assessment_api_v1_safety_safety_duty_assessments__assessment_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assessment_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_SafetyDutyAssessmentResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_safety_duty_assessment_api_v1_safety_safety_duty_assessments__assessment_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assessment_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SafetyDutyAssessmentUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_SafetyDutyAssessmentResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_safety_duty_assessment_api_v1_safety_safety_duty_assessments__assessment_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                assessment_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_NoneType_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_safety_facilities_api_v1_safety_safety_facilities_get: {
         parameters: {
             query?: {
@@ -133416,6 +133419,258 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiResponseEnvelope_SafetyFacilityInspectionListResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_safety_target_agreements_api_v1_safety_safety_target_agreements_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                /** @description 签订年度 */
+                year?: number | null;
+                /** @description 责任部门/单位 */
+                department?: string | null;
+                /** @description 分类 */
+                category?: string | null;
+                /** @description 状态: unsigned/signed */
+                status?: string | null;
+                /** @description 部门/岗位/签订人关键字 */
+                keyword?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_SafetyTargetAgreementListResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_safety_target_agreement_api_v1_safety_safety_target_agreements_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SafetyTargetAgreementCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_SafetyTargetAgreementResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_safety_target_agreements_api_v1_safety_safety_target_agreements_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_safety_target_agreements_api_v1_safety_safety_target_agreements_import_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_SafetyAgreementImportResultResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_safety_target_agreement_import_template_api_v1_safety_safety_target_agreements_import_template_get: {
+        parameters: {
+            query?: {
+                /** @description 限定年度（缺省=全部台账） */
+                year?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_safety_target_agreement_stats_api_v1_safety_safety_target_agreements_stats_get: {
+        parameters: {
+            query?: {
+                /** @description 签订年度 */
+                year?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_SafetyTargetAgreementStatsResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_safety_target_agreement_api_v1_safety_safety_target_agreements__agreement_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agreement_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SafetyTargetAgreementUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_SafetyTargetAgreementResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_safety_target_agreement_api_v1_safety_safety_target_agreements__agreement_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agreement_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_NoneType_"];
                 };
             };
             /** @description Validation Error */

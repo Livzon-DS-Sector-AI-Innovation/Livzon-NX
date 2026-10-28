@@ -4209,9 +4209,21 @@
       }
     },
     "safety:risk-hazard:ehs-change:ehs-change-apply": {
+      "status": "retired",
+      "module_code": "safety",
+      "route_path": "/safety/ehs-change",
+      "actions": {}
+    },
+    "safety:risk-hazard:ehs-change:ehs-change-review": {
       "status": "active",
       "module_code": "safety",
       "route_path": "/safety/ehs-change",
+      "actions": {}
+    },
+    "safety:risk-hazard:ehs-change:ehs-change-acceptance": {
+      "status": "active",
+      "module_code": "safety",
+      "route_path": "/safety/ehs-change/acceptance",
       "actions": {}
     },
     "safety:risk-hazard:hazard-inspection:hazard-duty": {
