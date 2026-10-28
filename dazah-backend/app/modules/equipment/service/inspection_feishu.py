@@ -65,6 +65,31 @@ _HELP_COMMANDS = {"帮助", "help", "?", "？"}
 # ═══════════ 主入口 ═══════════
 
 
+async def _handoff_to_repair_photo(
+    *,
+    user_id: str,
+    open_id: str,
+    message_id: str,
+    image_key: str,
+    chat_id: str,
+    chat_type: str,
+) -> None:
+    """巡检无法处理的图片转交拍照报修（识别设备 → 确认卡片建单）。"""
+    from app.modules.equipment.service.repair_photo import process_repair_photo
+
+    try:
+        await process_repair_photo(
+            user_id=user_id,
+            open_id=open_id,
+            message_id=message_id,
+            image_key=image_key,
+            chat_id=chat_id,
+            chat_type=chat_type,
+        )
+    except Exception:
+        logger.exception("拍照报修转交失败")
+
+
 async def process_feishu_image(
     *,
     user_id: str,
@@ -84,10 +109,17 @@ async def process_feishu_image(
         return
 
     async with async_session_factory() as db:
-        # 1. 查找用户
+        # 1. 查找用户（未绑定账号的图片不属于巡检 → 转交拍照报修）
         user = await _find_user_by_user_id(db, user_id)
         if not user:
-            await _reply_text(open_id, "未找到您的系统账号，请先在系统中完成飞书绑定。")
+            await _handoff_to_repair_photo(
+                user_id=user_id,
+                open_id=open_id,
+                message_id=message_id,
+                image_key=image_key,
+                chat_id=chat_id,
+                chat_type=chat_type,
+            )
             return
 
         # 2. 获取或创建会话 — 优先使用已有会话的任务，避免跳到其他任务
@@ -109,11 +141,17 @@ async def process_feishu_image(
                 )
                 return
         else:
-            # 无会话 → 查找最新活跃任务，自动创建会话
+            # 无会话 → 查找最新活跃任务，自动创建会话；
+            # 没有巡检任务的图片 → 转交拍照报修
             task = await _find_active_task(db, user.id)
             if not task:
-                await _reply_text(
-                    open_id, "当前没有执行中的巡检任务。\n请先在系统中开始巡检。"
+                await _handoff_to_repair_photo(
+                    user_id=user_id,
+                    open_id=open_id,
+                    message_id=message_id,
+                    image_key=image_key,
+                    chat_id=chat_id,
+                    chat_type=chat_type,
                 )
                 return
             session = await _auto_create_session(db, task, open_id)

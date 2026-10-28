@@ -107523,6 +107523,66 @@
         ]
       }
     },
+    "/api/v1/equipment/equipments/qrcode-pdf": {
+      "get": {
+        "description": "按车间导出设备报修二维码 PDF（A4 一页 12 枚，打印覆膜张贴）。\n\n码内容为纯文本「报修 {车间全名} {设备名} {设备编号}」，扫码后复制\n发到维修群即可建单，不编码任何平台地址。",
+        "operationId": "export_equipment_qrcode_pdf_api_v1_equipment_equipments_qrcode_pdf_get",
+        "parameters": [
+          {
+            "description": "车间代码（必填，如 101-1 / dlz）",
+            "in": "query",
+            "name": "workshop",
+            "required": true,
+            "schema": {
+              "description": "车间代码（必填，如 101-1 / dlz）",
+              "pattern": "^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
+              "title": "Workshop",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "导出车间设备报修二维码 PDF",
+        "tags": [
+          "设备管理"
+        ]
+      }
+    },
     "/api/v1/equipment/equipments/statistics": {
       "get": {
         "description": "获取设备统计",

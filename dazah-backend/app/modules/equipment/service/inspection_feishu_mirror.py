@@ -329,6 +329,27 @@ async def _upsert_record(
         )
 
 
+async def _ensure_ledger_registration(db: AsyncSession, device: Any) -> None:
+    """镜像设备自动注册进设备台账（按编号去重、幂等）。
+
+    台账是出码与报修的唯一依据；飞书巡检表新增设备后经此自动入账，
+    无需等待首次报修或人工导入。注册失败只记日志，不中断同步。
+    """
+    if not (device.equipment_name or device.equipment_no):
+        return
+    from app.modules.equipment.service.work_order_feishu import (
+        _register_mirror_equipment,
+    )
+
+    try:
+        await _register_mirror_equipment(db, device)
+    except Exception:
+        logger.exception(
+            "镜像设备自动注册台账失败: %s",
+            device.equipment_no or device.equipment_name or device.record_id,
+        )
+
+
 async def _upsert_device(
     db: AsyncSession, workshop_code: str, item: dict[str, Any]
 ) -> None:
@@ -352,16 +373,18 @@ async def _upsert_device(
         existing.equipment_name = name
         existing.equipment_no = no
         existing.last_modified_at = modified
+        device_obj: Any = existing
     else:
-        db.add(
-            EquipmentInspectionFeishuDevice(
-                workshop_code=workshop_code,
-                record_id=record_id,
-                equipment_name=name,
-                equipment_no=no,
-                last_modified_at=modified,
-            )
+        device_obj = EquipmentInspectionFeishuDevice(
+            workshop_code=workshop_code,
+            record_id=record_id,
+            equipment_name=name,
+            equipment_no=no,
+            last_modified_at=modified,
         )
+        db.add(device_obj)
+    # 新增/变更设备自动注册进台账（幂等，失败不影响同步）
+    await _ensure_ledger_registration(db, device_obj)
 
 
 async def sync_table(
