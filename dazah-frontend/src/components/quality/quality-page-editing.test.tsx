@@ -106,6 +106,16 @@ it('OOS report changes reporter without sending attachment fields', async () => 
   await renderPage(<OosOotReportRecordPage />)
   const headers = Array.from(container.querySelectorAll('th')).map(el => el.textContent)
   expect(headers).toEqual([...feishuColumnLayouts.oosReport, '操作'])
+  // 详情抽屉使用 antd v6 的 size 属性（由 width 迁移而来），应应用 600px 宽度
+  await button('详情')
+  expect(document.body.textContent ?? '').toContain('报告记录详情')
+  const drawerWrapper = document.querySelector('.ant-drawer-content-wrapper') as HTMLElement | null
+  expect(drawerWrapper).toBeTruthy()
+  expect(drawerWrapper!.style.width).toBe('600px')
+  const closeButton = document.querySelector('.ant-drawer-close') as HTMLElement | null
+  expect(closeButton).toBeTruthy()
+  await act(async () => closeButton!.click())
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)) })
   await button('修改')
   await choose('reporter', '新人员')
   await button('确定')
