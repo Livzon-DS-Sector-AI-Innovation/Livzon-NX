@@ -113,3 +113,11 @@ async def client(
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
     app.dependency_overrides.clear()
+
+
+@pytest.fixture(autouse=True)
+def _disable_repair_ledger(monkeypatch):
+    """测试中禁用飞书台账同步（后台任务会逃逸测试事件循环）。"""
+    from app.modules.equipment.feishu import repair_ledger
+
+    monkeypatch.setattr(repair_ledger, "ledger_enabled", lambda: False)

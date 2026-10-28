@@ -132,6 +132,11 @@ async def update_work_order(
 
     await db.flush()
     await db.refresh(wo)
+    # 飞书台账镜像（延迟后台任务，失败不影响主流程）
+    from app.modules.equipment.feishu.repair_ledger import schedule_ledger_sync
+
+    schedule_ledger_sync(wo.work_order_no)
+
     return wo
 
 
@@ -147,6 +152,11 @@ async def assign_work_order(
     wo.assigned_at = datetime.now(UTC)
     await db.flush()
     await db.refresh(wo)
+    # 飞书台账镜像（延迟后台任务，失败不影响主流程）
+    from app.modules.equipment.feishu.repair_ledger import schedule_ledger_sync
+
+    schedule_ledger_sync(wo.work_order_no)
+
     return wo
 
 
@@ -162,6 +172,11 @@ async def start_work_order(
     wo.started_at = datetime.now(UTC)
     await db.flush()
     await db.refresh(wo)
+    # 飞书台账镜像（延迟后台任务，失败不影响主流程）
+    from app.modules.equipment.feishu.repair_ledger import schedule_ledger_sync
+
+    schedule_ledger_sync(wo.work_order_no)
+
     return wo
 
 
@@ -325,6 +340,11 @@ async def verify_work_order(
 
     await db.flush()
     await db.refresh(wo)
+    # 飞书台账镜像（延迟后台任务，失败不影响主流程）
+    from app.modules.equipment.feishu.repair_ledger import schedule_ledger_sync
+
+    schedule_ledger_sync(wo.work_order_no)
+
     return wo
 
 
@@ -344,6 +364,11 @@ async def close_work_order(
     await _update_equipment_status(db, wo.equipment_id, restore_status)
 
     await db.refresh(wo)
+    # 飞书台账镜像（延迟后台任务，失败不影响主流程）
+    from app.modules.equipment.feishu.repair_ledger import schedule_ledger_sync
+
+    schedule_ledger_sync(wo.work_order_no)
+
     return wo
 
 
