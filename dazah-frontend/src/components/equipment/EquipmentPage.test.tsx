@@ -36,24 +36,34 @@ const equipmentStore = vi.hoisted(() => ({
   setTotal: vi.fn(),
 }))
 
+const qrcodeApi = vi.hoisted(() => ({
+  fetchEquipmentQrcodePdf: vi.fn(),
+  message: { success: vi.fn(), error: vi.fn() },
+}))
+
 vi.mock('@/lib/api/equipment-client', () => api)
 vi.mock('@/stores/equipment', () => ({ useEquipmentStore: () => equipmentStore }))
+vi.mock('@/lib/api/client/equipmentQrcode', () => ({
+  fetchEquipmentQrcodePdf: qrcodeApi.fetchEquipmentQrcodePdf,
+}))
 
 vi.mock('antd', async () => {
   const { createElement } = await import('react')
   const Wrapper = ({ children }: { children?: ReactNode }) => createElement('div', null, children)
+  const App = Object.assign(Wrapper, { useApp: () => ({ message: qrcodeApi.message }) })
   const Button = ({ children, onClick }: { children?: ReactNode; onClick?: () => void }) =>
     createElement('button', { onClick }, children)
   const Tabs = ({ items }: { items: Array<{ children: ReactNode; label: string }> }) =>
     createElement('div', null, items.map((item) => createElement('section', { key: item.label }, item.children)))
   const ConfigProvider = ({ children, theme }: { children?: ReactNode; theme?: unknown }) =>
     createElement('div', { 'data-theme-source': theme ? 'local' : 'inherited' }, children)
-  return { App: Wrapper, Button, ConfigProvider, Tabs }
+  return { App, Button, ConfigProvider, Tabs }
 })
 
 vi.mock('@ant-design/icons', () => ({
   MenuFoldOutlined: () => null,
   MenuUnfoldOutlined: () => null,
+  QrcodeOutlined: () => null,
   ReloadOutlined: () => null,
 }))
 
@@ -196,5 +206,68 @@ describe('EquipmentPage data lifecycle', () => {
     expect(equipmentStore.setLocations).toHaveBeenCalledWith([expect.objectContaining({ id: 'second' })])
     expect(equipmentStore.setDepartments).toHaveBeenCalledWith([department('second', '部门-second')])
     expect(equipmentStore.setTotal).toHaveBeenCalledWith(2)
+  })
+
+  it('exports workshop qrcode PDF from the toolbar button', async () => {
+    qrcodeApi.fetchEquipmentQrcodePdf.mockResolvedValueOnce(undefined)
+
+    await act(async () => {
+      root.render(
+        <EquipmentPage
+          workshopCode="201-1"
+          initialCategories={[]}
+          initialLocations={[]}
+          initialEquipments={[]}
+          initialTotal={0}
+          initialStatistics={statistics}
+          initialDepartments={[]}
+        />,
+      )
+      await Promise.resolve()
+    })
+
+    const exportButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent?.includes('导出设备码'),
+    )
+    expect(exportButton).toBeTruthy()
+
+    await act(async () => {
+      exportButton!.click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(qrcodeApi.fetchEquipmentQrcodePdf).toHaveBeenCalledWith('201-1')
+    expect(qrcodeApi.message.success).toHaveBeenCalled()
+  })
+
+  it('shows an error message when qrcode export fails', async () => {
+    qrcodeApi.fetchEquipmentQrcodePdf.mockRejectedValueOnce(new Error('导出超时（>30秒），请重试'))
+
+    await act(async () => {
+      root.render(
+        <EquipmentPage
+          workshopCode="201-1"
+          initialCategories={[]}
+          initialLocations={[]}
+          initialEquipments={[]}
+          initialTotal={0}
+          initialStatistics={statistics}
+          initialDepartments={[]}
+        />,
+      )
+      await Promise.resolve()
+    })
+
+    const exportButton = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent?.includes('导出设备码'),
+    )
+    await act(async () => {
+      exportButton!.click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(qrcodeApi.message.error).toHaveBeenCalledWith('导出超时（>30秒），请重试')
   })
 })

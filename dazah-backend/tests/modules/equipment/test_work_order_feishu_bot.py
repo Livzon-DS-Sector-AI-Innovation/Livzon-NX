@@ -359,3 +359,115 @@ async def test_patch_reliably_retries_until_confirmed(monkeypatch):
         "om_1", {"header": {}}, expected_title_prefix="✅ 已接单 WO-1"
     )
     assert patched.await_count == 2  # 立即一次 + 复核未生效重打一次
+
+
+# ── 拍照报修确认卡片回调 ─────────────────────────────────
+
+
+def _photo_payload(
+    eq_id,
+    *,
+    act="photo_repair",
+    ft="泄漏",
+    ph="nonce-1",
+    open_id="ou_1",
+):
+    return {
+        "operator": {"open_id": open_id, "union_id": "on_1", "user_id": ""},
+        "action": {
+            "value": {"act": act, "eq": eq_id, "ft": ft, "ph": ph},
+            "tag": "button",
+        },
+        "context": {"open_message_id": "om_p", "open_chat_id": "oc_1"},
+    }
+
+
+def _patch_photo_env(monkeypatch, db, *, user_obj, eq, wo, set_return=True):
+    monkeypatch.setattr(wof, "async_session_factory", _factory(db), raising=False)
+    monkeypatch.setattr(wof, "_find_user_by_feishu", AsyncMock(return_value=user_obj))
+    monkeypatch.setattr(wof.repo, "get_equipment_by_id", AsyncMock(return_value=eq))
+
+    import app.modules.equipment.service.work_order as wo_svc
+
+    create_mock = AsyncMock(return_value=wo)
+    monkeypatch.setattr(wo_svc, "create_work_order", create_mock)
+
+    redis = SimpleNamespace(
+        set=AsyncMock(return_value=set_return), get=AsyncMock(return_value=None)
+    )
+    monkeypatch.setattr("app.core.redis.redis_client", redis)
+
+    dispatch = AsyncMock()
+    monkeypatch.setattr(wof, "dispatch_repair_card", dispatch)
+    sends: list = []
+
+    async def _send(**kw):
+        sends.append(kw)
+
+    monkeypatch.setattr(wof, "send_user_card", _send)
+    return create_mock, dispatch, sends
+
+
+@pytest.mark.asyncio
+async def test_card_photo_repair_creates_order_and_dispatches(monkeypatch):
+    db = _db_mock()
+    user_obj = SimpleNamespace(id=USER_ID, name="秦佳豪", username="q")
+    eq = _eq()
+    wo = SimpleNamespace(id=uuid.uuid4(), work_order_no="WO-P1", status="待处理")
+
+    create_mock, dispatch, sends = _patch_photo_env(
+        monkeypatch, db, user_obj=user_obj, eq=eq, wo=wo
+    )
+
+    result = await handle_card_action(_photo_payload(str(eq.id)))
+
+    assert result["code"] == 0
+    create_mock.assert_awaited_once()
+    payload_arg = create_mock.await_args.args[1]
+    assert payload_arg.equipment_id == eq.id
+    assert payload_arg.priority == "高"
+    assert payload_arg.fault_description == "[拍照报修] 泄漏"
+    # 与文字报修一致：建单后由维修群接单，不自动指派
+    dispatch.assert_awaited_once()
+    assert dispatch.await_args.kwargs["work_order_no"] == "WO-P1"
+    assert any("拍照报修已受理" in s["title"] for s in sends)
+    db.commit.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_card_photo_repair_rejects_replay(monkeypatch):
+    db = _db_mock()
+    user_obj = SimpleNamespace(id=USER_ID, name="秦佳豪", username="q")
+    eq = _eq()
+    wo = SimpleNamespace(id=uuid.uuid4(), work_order_no="WO-P2", status="待处理")
+
+    create_mock, dispatch, _ = _patch_photo_env(
+        monkeypatch, db, user_obj=user_obj, eq=eq, wo=wo, set_return=False
+    )
+
+    result = await handle_card_action(_photo_payload(str(eq.id)))
+
+    assert result["toast"]["type"] == "error"
+    create_mock.assert_not_awaited()
+    dispatch.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_card_photo_cancel_is_ack_only(monkeypatch):
+    db = _db_mock()
+    create_mock, dispatch, sends = _patch_photo_env(
+        monkeypatch,
+        db,
+        user_obj=SimpleNamespace(id=USER_ID, name="秦佳豪", username="q"),
+        eq=_eq(),
+        wo=SimpleNamespace(id=uuid.uuid4(), work_order_no="WO-P3", status="待处理"),
+    )
+
+    result = await handle_card_action(
+        _photo_payload("ignored", act="photo_cancel")
+    )
+
+    assert result["code"] == 0
+    create_mock.assert_not_awaited()
+    dispatch.assert_not_awaited()
+    assert sends == []

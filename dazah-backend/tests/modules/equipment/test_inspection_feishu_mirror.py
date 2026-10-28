@@ -914,3 +914,64 @@ async def test_list_records_excludes_split_raw_rows(db_session) -> None:
     )
     assert explicit_total == 1
     assert [item.record_id for item in explicit] == ["rec_split"]
+
+
+# ---------- 设备自动注册进台账（出码/报修依据） ----------
+
+
+async def test_sync_devices_auto_registers_ledger_equipment(
+    db_session, monkeypatch
+) -> None:
+    """镜像同步的设备应自动注册进设备台账（幂等，按编号去重）。"""
+    from sqlalchemy import select as sa_select
+
+    from app.modules.equipment.models.equipment import Equipment
+
+    await _enable_config(monkeypatch)
+    modified = int(datetime(2026, 10, 28, 10, 0, tzinfo=UTC).timestamp() * 1000)
+
+    async def fake_fetch(client: Any, table_id: str, **kwargs: Any):
+        return [
+            _item(
+                f"rec_dev_{i}",
+                {
+                    "设备名称": [{"text": f"离心机{i}", "type": "text"}],
+                    "设备编号": [{"text": f"XT9-9-9-{i:03d}", "type": "text"}],
+                },
+                modified,
+            )
+            for i in range(3)
+        ]
+
+    monkeypatch.setattr(mirror, "_fetch_pages", fake_fetch)
+
+    results = await mirror.sync_all(db_session, "201-1", incremental=False)
+    assert results["devices"]["synced"] == 3
+
+    ledger = (
+        (
+            await db_session.execute(
+                sa_select(Equipment).where(Equipment.workshop_code == "201-1")
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert {(e.name, e.equipment_no) for e in ledger} >= {
+        ("离心机0", "XT9-9-9-000"),
+        ("离心机1", "XT9-9-9-001"),
+        ("离心机2", "XT9-9-9-002"),
+    }
+
+    # 再同步一次：编号去重，台账不重复增长
+    await mirror.sync_all(db_session, "201-1", incremental=False)
+    ledger_again = (
+        (
+            await db_session.execute(
+                sa_select(Equipment).where(Equipment.workshop_code == "201-1")
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert len(ledger_again) == len(ledger)
