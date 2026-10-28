@@ -16,12 +16,17 @@ vi.mock('@ant-design/icons', () => {
     CheckCircleOutlined: Icon,
     ClockCircleOutlined: Icon,
     EnvironmentOutlined: Icon,
+    FireOutlined: Icon,
     RobotOutlined: Icon,
     TeamOutlined: Icon,
     UserOutlined: Icon,
     WarningOutlined: Icon,
   }
 })
+
+vi.mock('./SafetyOverviewMap', () => ({
+  default: () => null,
+}))
 
 vi.mock('antd', async () => {
   const { createElement } = await import('react')
@@ -37,6 +42,7 @@ vi.mock('antd', async () => {
   const Title = ({ children, style }: Props) => createElement('h1', { style }, children)
 
   return {
+    Alert: Box,
     Card: Box,
     Col: Box,
     Drawer: Box,
@@ -57,6 +63,7 @@ const dashboardData: DashboardData = {
   expiringCerts: [],
   todaySpecialOps: [],
   todayDailyRisks: [],
+  overview: null,
 }
 
 describe('SafetyDashboard font contract', () => {

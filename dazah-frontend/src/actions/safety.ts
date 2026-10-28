@@ -22,6 +22,10 @@ import type {
   OperationRegulation,
   OperationRegulationFormData,
   OperationRegulationQueryParams,
+  RegulationBatchUploadResponse,
+  RegulationDocumentPreview,
+  RegulationLatestReviewEntry,
+  RegulationReview,
   RegulationRevision,
   RegulationRevisionFormData,
   RegulationRevisionQueryParams,
@@ -1027,6 +1031,84 @@ export async function exportSopPdf(regulationId: string): Promise<ApiResponse<Bl
   }
   const blob = await response.blob()
   return { code: 0, message: 'ok', data: blob }
+}
+
+// ============ Regulation Batch Upload & Compliance Review Actions ============
+
+export async function batchUploadRegulations(
+  files: File[],
+  options: { hintWorkshop?: string; useAi?: boolean } = {}
+): Promise<ApiResponse<RegulationBatchUploadResponse>> {
+  const formData = new FormData()
+  files.forEach((file) => formData.append('files', file))
+  if (options.hintWorkshop) formData.append('hint_workshop', options.hintWorkshop)
+  formData.append('use_ai', String(options.useAi !== false))
+  const authHeaders = await getAuthHeaders()
+  const { 'Content-Type': _, ...uploadHeaders } = authHeaders
+  const response = await fetch(
+    `${API_BASE}/safety/regulations/batch-upload`,
+    { method: 'POST', headers: uploadHeaders, body: formData }
+  )
+  if (!response.ok) {
+    const text = await response.text()
+    return { code: response.status, message: `批量导入失败: ${text}` } as ApiResponse<RegulationBatchUploadResponse>
+  }
+  revalidatePath('/safety/regulation')
+  return response.json()
+}
+
+export async function runComplianceReview(
+  regulationId: string
+): Promise<ApiResponse<RegulationReview>> {
+  const response = await fetchApi<RegulationReview>(
+    `/safety/regulations/${regulationId}/compliance-review`,
+    { method: 'POST' }
+  )
+  revalidatePath('/safety/regulation')
+  return response
+}
+
+export async function getRegulationReviews(
+  regulationId: string
+): Promise<ApiResponse<{ items: RegulationReview[]; total: number }>> {
+  return fetchApi(`/safety/regulations/${regulationId}/reviews`)
+}
+
+export async function getLatestRegulationReviews(
+  regulationIds: string[]
+): Promise<ApiResponse<RegulationLatestReviewEntry[]>> {
+  const query = new URLSearchParams({ regulation_ids: regulationIds.join(',') })
+  return fetchApi(`/safety/regulation-reviews/latest?${query.toString()}`)
+}
+
+export async function getRegulationDocumentPreview(
+  regulationId: string
+): Promise<ApiResponse<RegulationDocumentPreview>> {
+  return fetchApi(`/safety/regulations/${regulationId}/document-content`)
+}
+
+export async function downloadRegulationDocument(
+  regulationId: string,
+  fileName?: string
+): Promise<void> {
+  const headers = await getAuthHeaders()
+  const response = await fetch(
+    `${API_BASE}/safety/regulations/${regulationId}/document`,
+    { headers }
+  )
+  if (!response.ok) {
+    const text = await response.text()
+    throw new Error(`下载失败 (${response.status}): ${text}`)
+  }
+  const blob = await response.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = fileName || '操规文档'
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
 }
 
 // ============ RegulationRevision Actions ============
@@ -2582,4 +2664,833 @@ export async function testFireExpiryNotify() {
     },
   )
   return res
+}
+
+type FireEquipmentDashboardResponse =
+  components['schemas']['FireEquipmentDashboardResponse']
+
+export async function getFireEquipmentDashboard(params: { pageKey: string }) {
+  return fetchApi<FireEquipmentDashboardResponse>(
+    '/safety/fire-equipment/dashboard',
+    { headers: fireEquipmentPageHeaders(params.pageKey) }
+  )
+}
+
+// ============ 应急处置卡 ============
+
+type EmergencyCardItem = components['schemas']['EmergencyCardResponse']
+type EmergencyCardListData = components['schemas']['EmergencyCardListResponse']
+type EmergencyCardStatsData = components['schemas']['EmergencyCardStatsResponse']
+type EmergencyCardStep = components['schemas']['EmergencyCardStep']
+type EmergencyCardCreateInput = components['schemas']['EmergencyCardCreate']
+type EmergencyCardUpdateInput = components['schemas']['EmergencyCardUpdate']
+type EmergencyCardReviewData = components['schemas']['EmergencyCardReviewResponse']
+
+export type {
+  EmergencyCardItem,
+  EmergencyCardListData,
+  EmergencyCardStatsData,
+  EmergencyCardStep,
+  EmergencyCardCreateInput,
+  EmergencyCardUpdateInput,
+  EmergencyCardReviewData,
+}
+
+export interface EmergencyCardQueryParams {
+  page?: number
+  page_size?: number
+  workshop?: string
+  position?: string
+  accident_type?: string
+  keyword?: string
+}
+
+export async function getEmergencyCards(
+  params: EmergencyCardQueryParams = {}
+) {
+  const searchParams = new URLSearchParams()
+  if (params.page) searchParams.set('page', String(params.page))
+  if (params.page_size) {
+    searchParams.set('page_size', String(params.page_size))
+  }
+  if (params.workshop) searchParams.set('workshop', params.workshop)
+  if (params.position) searchParams.set('position', params.position)
+  if (params.accident_type) {
+    searchParams.set('accident_type', params.accident_type)
+  }
+  if (params.keyword) searchParams.set('keyword', params.keyword)
+
+  const queryString = searchParams.toString()
+  const endpoint = `/safety/emergency-cards${queryString ? `?${queryString}` : ''}`
+  return fetchApi<EmergencyCardListData>(endpoint)
+}
+
+export async function getEmergencyCardStats() {
+  return fetchApi<EmergencyCardStatsData>('/safety/emergency-cards/stats')
+}
+
+export async function getEmergencyCard(id: string) {
+  return fetchApi<EmergencyCardItem>(`/safety/emergency-cards/${id}`)
+}
+
+export async function createEmergencyCard(data: EmergencyCardCreateInput) {
+  const response = await fetchApi<EmergencyCardItem>('/safety/emergency-cards', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+  revalidatePath('/safety/emergency-card')
+  return response
+}
+
+export async function updateEmergencyCard(
+  id: string,
+  data: EmergencyCardUpdateInput
+) {
+  const response = await fetchApi<EmergencyCardItem>(
+    `/safety/emergency-cards/${id}`,
+    {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }
+  )
+  revalidatePath('/safety/emergency-card')
+  return response
+}
+
+export async function deleteEmergencyCard(id: string) {
+  const response = await fetchApi<null>(`/safety/emergency-cards/${id}`, {
+    method: 'DELETE',
+  })
+  revalidatePath('/safety/emergency-card')
+  return response
+}
+
+export async function reviewEmergencyCard(id: string) {
+  return fetchApi<EmergencyCardReviewData>(
+    `/safety/emergency-cards/${id}/ai-review`,
+    { method: 'POST' }
+  )
+}
+
+// ══════════════════════════════════════════════════════════════
+// 总览驾驶舱（厂区平面图落点 + 超储 + 近7日统计）
+// ══════════════════════════════════════════════════════════════
+
+type SafetyOverviewData = components['schemas']['SafetyOverviewResponse']
+type CampusBuildingItem = components['schemas']['CampusBuildingItem']
+type MapBuildingMarkers = components['schemas']['MapBuildingMarkers']
+type MapRiskItem = components['schemas']['MapRiskItem']
+type UnmappedRiskGroup = components['schemas']['UnmappedRiskGroup']
+type OverLimitChemicalItem = components['schemas']['OverLimitChemicalItem']
+
+export type {
+  SafetyOverviewData,
+  CampusBuildingItem,
+  MapBuildingMarkers,
+  MapRiskItem,
+  UnmappedRiskGroup,
+  OverLimitChemicalItem,
+}
+
+export async function getSafetyOverview() {
+  return fetchApi<SafetyOverviewData>('/safety/dashboard/overview')
+}
+
+// ══════════════════════════════════════════════════════════════
+// 目标责任与绩效
+// ══════════════════════════════════════════════════════════════
+
+type SafetyTargetItem = components['schemas']['SafetyTargetResponse']
+type SafetyTargetListData = components['schemas']['SafetyTargetListResponse']
+type SafetyTargetStatsData = components['schemas']['SafetyTargetStatsResponse']
+type SafetyTargetRecordItem = components['schemas']['SafetyTargetRecordResponse']
+type SafetyTargetCreateInput = components['schemas']['SafetyTargetCreate']
+type SafetyTargetUpdateInput = components['schemas']['SafetyTargetUpdate']
+type SafetyTargetRecordUpdateInput =
+  components['schemas']['SafetyTargetRecordUpdate']
+
+export type {
+  SafetyTargetItem,
+  SafetyTargetListData,
+  SafetyTargetStatsData,
+  SafetyTargetRecordItem,
+  SafetyTargetCreateInput,
+  SafetyTargetUpdateInput,
+  SafetyTargetRecordUpdateInput,
+}
+
+export interface SafetyTargetQueryParams {
+  page?: number
+  page_size?: number
+  year?: number
+  category?: string
+  department?: string
+  status?: string
+  keyword?: string
+}
+
+export async function getSafetyTargets(
+  params: SafetyTargetQueryParams = {}
+) {
+  const searchParams = new URLSearchParams()
+  if (params.page) searchParams.set('page', String(params.page))
+  if (params.page_size) {
+    searchParams.set('page_size', String(params.page_size))
+  }
+  if (params.year) searchParams.set('year', String(params.year))
+  if (params.category) searchParams.set('category', params.category)
+  if (params.department) searchParams.set('department', params.department)
+  if (params.status) searchParams.set('status', params.status)
+  if (params.keyword) searchParams.set('keyword', params.keyword)
+
+  const queryString = searchParams.toString()
+  return fetchApi<SafetyTargetListData>(
+    `/safety/safety-targets${queryString ? `?${queryString}` : ''}`
+  )
+}
+
+export async function getSafetyTargetStats(year?: number) {
+  const query = year ? `?year=${year}` : ''
+  return fetchApi<SafetyTargetStatsData>(`/safety/safety-targets/stats${query}`)
+}
+
+export async function getSafetyTarget(id: string) {
+  return fetchApi<SafetyTargetItem>(`/safety/safety-targets/${id}`)
+}
+
+export async function createSafetyTarget(data: SafetyTargetCreateInput) {
+  const response = await fetchApi<SafetyTargetItem>('/safety/safety-targets', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+  revalidatePath('/safety/target-performance')
+  return response
+}
+
+export async function updateSafetyTarget(
+  id: string,
+  data: SafetyTargetUpdateInput
+) {
+  const response = await fetchApi<SafetyTargetItem>(
+    `/safety/safety-targets/${id}`,
+    { method: 'PUT', body: JSON.stringify(data) }
+  )
+  revalidatePath('/safety/target-performance')
+  return response
+}
+
+export async function deleteSafetyTarget(id: string) {
+  const response = await fetchApi<null>(`/safety/safety-targets/${id}`, {
+    method: 'DELETE',
+  })
+  revalidatePath('/safety/target-performance')
+  return response
+}
+
+export async function upsertSafetyTargetRecord(
+  targetId: string,
+  period: string,
+  data: SafetyTargetRecordUpdateInput
+) {
+  const response = await fetchApi<SafetyTargetRecordItem>(
+    `/safety/safety-targets/${targetId}/records/${encodeURIComponent(period)}`,
+    { method: 'PUT', body: JSON.stringify(data) }
+  )
+  revalidatePath('/safety/target-performance')
+  return response
+}
+
+export async function deleteSafetyTargetRecord(
+  targetId: string,
+  period: string
+) {
+  const response = await fetchApi<null>(
+    `/safety/safety-targets/${targetId}/records/${encodeURIComponent(period)}`,
+    { method: 'DELETE' }
+  )
+  revalidatePath('/safety/target-performance')
+  return response
+}
+
+// ══════════════════════════════════════════════════════════════
+// 安全设施台账（洗眼器/气体检测仪/防护设施等）
+// ══════════════════════════════════════════════════════════════
+
+type SafetyFacilityItem = components['schemas']['SafetyFacilityResponse']
+type SafetyFacilityListData = components['schemas']['SafetyFacilityListResponse']
+type SafetyFacilityStatsData = components['schemas']['SafetyFacilityStatsResponse']
+type SafetyFacilityChecklistData =
+  components['schemas']['SafetyFacilityChecklistResponse']
+type SafetyFacilityInspectionItem =
+  components['schemas']['SafetyFacilityInspectionResponse']
+type SafetyFacilityInspectionListData =
+  components['schemas']['SafetyFacilityInspectionListResponse']
+type SafetyFacilityCreateInput = components['schemas']['SafetyFacilityCreate']
+type SafetyFacilityUpdateInput = components['schemas']['SafetyFacilityUpdate']
+type SafetyFacilityInspectionSubmitInput =
+  components['schemas']['CreateSafetyFacilityInspectionRequest']
+
+export type {
+  SafetyFacilityItem,
+  SafetyFacilityListData,
+  SafetyFacilityStatsData,
+  SafetyFacilityChecklistData,
+  SafetyFacilityInspectionItem,
+  SafetyFacilityInspectionListData,
+  SafetyFacilityCreateInput,
+  SafetyFacilityUpdateInput,
+  SafetyFacilityInspectionSubmitInput,
+}
+
+export interface SafetyFacilityQueryParams {
+  page?: number
+  page_size?: number
+  category?: string
+  department?: string
+  status?: string
+  expiry_status?: string
+  keyword?: string
+}
+
+export async function getSafetyFacilities(
+  params: SafetyFacilityQueryParams = {}
+) {
+  const searchParams = new URLSearchParams()
+  if (params.page) searchParams.set('page', String(params.page))
+  if (params.page_size) {
+    searchParams.set('page_size', String(params.page_size))
+  }
+  if (params.category) searchParams.set('category', params.category)
+  if (params.department) searchParams.set('department', params.department)
+  if (params.status) searchParams.set('status', params.status)
+  if (params.expiry_status) {
+    searchParams.set('expiry_status', params.expiry_status)
+  }
+  if (params.keyword) searchParams.set('keyword', params.keyword)
+
+  const queryString = searchParams.toString()
+  return fetchApi<SafetyFacilityListData>(
+    `/safety/safety-facilities${queryString ? `?${queryString}` : ''}`
+  )
+}
+
+export async function getSafetyFacilityStats() {
+  return fetchApi<SafetyFacilityStatsData>('/safety/safety-facilities/stats')
+}
+
+export async function getSafetyFacilityChecklist(category: string) {
+  return fetchApi<SafetyFacilityChecklistData>(
+    `/safety/safety-facilities/checklist?category=${encodeURIComponent(category)}`
+  )
+}
+
+export async function getSafetyFacility(id: string) {
+  return fetchApi<SafetyFacilityItem>(`/safety/safety-facilities/${id}`)
+}
+
+export async function createSafetyFacility(data: SafetyFacilityCreateInput) {
+  const response = await fetchApi<SafetyFacilityItem>(
+    '/safety/safety-facilities',
+    { method: 'POST', body: JSON.stringify(data) }
+  )
+  revalidatePath('/safety/facilities')
+  return response
+}
+
+export async function updateSafetyFacility(
+  id: string,
+  data: SafetyFacilityUpdateInput
+) {
+  const response = await fetchApi<SafetyFacilityItem>(
+    `/safety/safety-facilities/${id}`,
+    { method: 'PUT', body: JSON.stringify(data) }
+  )
+  revalidatePath('/safety/facilities')
+  return response
+}
+
+export async function deleteSafetyFacility(id: string) {
+  const response = await fetchApi<null>(`/safety/safety-facilities/${id}`, {
+    method: 'DELETE',
+  })
+  revalidatePath('/safety/facilities')
+  return response
+}
+
+export async function submitSafetyFacilityInspection(
+  facilityId: string,
+  data: SafetyFacilityInspectionSubmitInput
+) {
+  const response = await fetchApi<SafetyFacilityInspectionItem>(
+    `/safety/safety-facilities/${facilityId}/inspections`,
+    { method: 'POST', body: JSON.stringify(data) }
+  )
+  revalidatePath('/safety/facilities')
+  return response
+}
+
+export async function getSafetyFacilityInspections(
+  params: {
+    page?: number
+    page_size?: number
+    facility_id?: string
+    result?: string
+  } = {}
+) {
+  const searchParams = new URLSearchParams()
+  if (params.page) searchParams.set('page', String(params.page))
+  if (params.page_size) {
+    searchParams.set('page_size', String(params.page_size))
+  }
+  if (params.facility_id) {
+    searchParams.set('facility_id', params.facility_id)
+  }
+  if (params.result) searchParams.set('result', params.result)
+
+  const queryString = searchParams.toString()
+  return fetchApi<SafetyFacilityInspectionListData>(
+    `/safety/safety-facility-inspections${queryString ? `?${queryString}` : ''}`
+  )
+}
+
+// ══════════════════════════════════════════════════════════════
+// 危化品与 MSDS
+// ══════════════════════════════════════════════════════════════
+
+type HazardousChemicalItem = components['schemas']['HazardousChemicalResponse']
+type HazardousChemicalListData =
+  components['schemas']['HazardousChemicalListResponse']
+type HazchemStatsData = components['schemas']['HazchemStatsResponse']
+type ChemicalInventoryItem = components['schemas']['ChemicalInventoryResponse']
+type ChemicalInventoryListData =
+  components['schemas']['ChemicalInventoryListResponse']
+type HazardousChemicalCreateInput =
+  components['schemas']['HazardousChemicalCreate']
+type HazardousChemicalUpdateInput =
+  components['schemas']['HazardousChemicalUpdate']
+type ChemicalInventoryCreateInput =
+  components['schemas']['ChemicalInventoryCreate']
+type ChemicalInventoryUpdateInput =
+  components['schemas']['ChemicalInventoryUpdate']
+
+export type {
+  HazardousChemicalItem,
+  HazardousChemicalListData,
+  HazchemStatsData,
+  ChemicalInventoryItem,
+  ChemicalInventoryListData,
+  HazardousChemicalCreateInput,
+  HazardousChemicalUpdateInput,
+  ChemicalInventoryCreateInput,
+  ChemicalInventoryUpdateInput,
+}
+
+export async function getHazardousChemicals(
+  params: {
+    page?: number
+    page_size?: number
+    category?: string
+    keyword?: string
+  } = {}
+) {
+  const searchParams = new URLSearchParams()
+  if (params.page) searchParams.set('page', String(params.page))
+  if (params.page_size) {
+    searchParams.set('page_size', String(params.page_size))
+  }
+  if (params.category) searchParams.set('category', params.category)
+  if (params.keyword) searchParams.set('keyword', params.keyword)
+
+  const queryString = searchParams.toString()
+  return fetchApi<HazardousChemicalListData>(
+    `/safety/hazardous-chemicals${queryString ? `?${queryString}` : ''}`
+  )
+}
+
+export async function getHazchemStats() {
+  return fetchApi<HazchemStatsData>('/safety/hazardous-chemicals/stats')
+}
+
+export async function getOverLimitChemicals(limit = 10) {
+  return fetchApi<ChemicalInventoryItem[]>(
+    `/safety/hazardous-chemicals/over-limit?limit=${limit}`
+  )
+}
+
+export async function createHazardousChemical(
+  data: HazardousChemicalCreateInput
+) {
+  const response = await fetchApi<HazardousChemicalItem>(
+    '/safety/hazardous-chemicals',
+    { method: 'POST', body: JSON.stringify(data) }
+  )
+  revalidatePath('/safety/hazchem')
+  return response
+}
+
+export async function updateHazardousChemical(
+  id: string,
+  data: HazardousChemicalUpdateInput
+) {
+  const response = await fetchApi<HazardousChemicalItem>(
+    `/safety/hazardous-chemicals/${id}`,
+    { method: 'PUT', body: JSON.stringify(data) }
+  )
+  revalidatePath('/safety/hazchem')
+  return response
+}
+
+export async function deleteHazardousChemical(id: string) {
+  const response = await fetchApi<null>(`/safety/hazardous-chemicals/${id}`, {
+    method: 'DELETE',
+  })
+  revalidatePath('/safety/hazchem')
+  return response
+}
+
+export async function uploadChemicalMsds(id: string, file: File) {
+  const formData = new FormData()
+  formData.append('file', file)
+  // 上传必须剥离 JSON Content-Type，让浏览器自动生成 multipart boundary
+  const authHeaders = await getAuthHeaders()
+  const { 'Content-Type': _, ...uploadHeaders } = authHeaders
+  const response = await fetch(
+    `${API_BASE}/safety/hazardous-chemicals/${id}/msds`,
+    { method: 'POST', headers: uploadHeaders, body: formData }
+  )
+  if (!response.ok) {
+    const text = await response.text()
+    return { code: response.status, message: text } as ApiResponse<HazardousChemicalItem>
+  }
+  const data = (await response.json()) as ApiResponse<HazardousChemicalItem>
+  revalidatePath('/safety/hazchem')
+  return data
+}
+
+export async function downloadChemicalMsds(
+  id: string,
+  fileName?: string
+): Promise<void> {
+  const headers = await getAuthHeaders()
+  const response = await fetch(
+    `${API_BASE}/safety/hazardous-chemicals/${id}/msds`,
+    { headers }
+  )
+  if (!response.ok) {
+    const text = await response.text()
+    throw new Error(`MSDS 下载失败 (${response.status}): ${text}`)
+  }
+  const blob = await response.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = fileName || 'MSDS'
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+export async function getChemicalInventories(
+  params: {
+    page?: number
+    page_size?: number
+    workshop?: string
+    chemical_id?: string
+    over_limit_only?: boolean
+    keyword?: string
+  } = {}
+) {
+  const searchParams = new URLSearchParams()
+  if (params.page) searchParams.set('page', String(params.page))
+  if (params.page_size) {
+    searchParams.set('page_size', String(params.page_size))
+  }
+  if (params.workshop) searchParams.set('workshop', params.workshop)
+  if (params.chemical_id) searchParams.set('chemical_id', params.chemical_id)
+  if (params.over_limit_only) {
+    searchParams.set('over_limit_only', 'true')
+  }
+  if (params.keyword) searchParams.set('keyword', params.keyword)
+
+  const queryString = searchParams.toString()
+  return fetchApi<ChemicalInventoryListData>(
+    `/safety/chemical-inventories${queryString ? `?${queryString}` : ''}`
+  )
+}
+
+export async function createChemicalInventory(
+  data: ChemicalInventoryCreateInput
+) {
+  const response = await fetchApi<ChemicalInventoryItem>(
+    '/safety/chemical-inventories',
+    { method: 'POST', body: JSON.stringify(data) }
+  )
+  revalidatePath('/safety/hazchem')
+  return response
+}
+
+export async function updateChemicalInventory(
+  id: string,
+  data: ChemicalInventoryUpdateInput
+) {
+  const response = await fetchApi<ChemicalInventoryItem>(
+    `/safety/chemical-inventories/${id}`,
+    { method: 'PUT', body: JSON.stringify(data) }
+  )
+  revalidatePath('/safety/hazchem')
+  return response
+}
+
+export async function deleteChemicalInventory(id: string) {
+  const response = await fetchApi<null>(`/safety/chemical-inventories/${id}`, {
+    method: 'DELETE',
+  })
+  revalidatePath('/safety/hazchem')
+  return response
+}
+
+// ══════════════════════════════════════════════════════════════
+// 应急管理（预案 / 演练 / 物资）
+// ══════════════════════════════════════════════════════════════
+
+type EmergencyPlanItem = components['schemas']['EmergencyPlanResponse']
+type EmergencyPlanListData = components['schemas']['EmergencyPlanListResponse']
+type EmergencyDrillItem = components['schemas']['EmergencyDrillResponse']
+type EmergencyDrillListData = components['schemas']['EmergencyDrillListResponse']
+type EmergencySupplyItem = components['schemas']['EmergencySupplyResponse']
+type EmergencySupplyListData =
+  components['schemas']['EmergencySupplyListResponse']
+type EmergencyMgmtStatsData = components['schemas']['EmergencyMgmtStatsResponse']
+type EmergencyPlanCreateInput = components['schemas']['EmergencyPlanCreate']
+type EmergencyPlanUpdateInput = components['schemas']['EmergencyPlanUpdate']
+type EmergencyDrillCreateInput = components['schemas']['EmergencyDrillCreate']
+type EmergencyDrillUpdateInput = components['schemas']['EmergencyDrillUpdate']
+type EmergencySupplyCreateInput = components['schemas']['EmergencySupplyCreate']
+type EmergencySupplyUpdateInput = components['schemas']['EmergencySupplyUpdate']
+
+export type {
+  EmergencyPlanItem,
+  EmergencyPlanListData,
+  EmergencyDrillItem,
+  EmergencyDrillListData,
+  EmergencySupplyItem,
+  EmergencySupplyListData,
+  EmergencyMgmtStatsData,
+  EmergencyPlanCreateInput,
+  EmergencyPlanUpdateInput,
+  EmergencyDrillCreateInput,
+  EmergencyDrillUpdateInput,
+  EmergencySupplyCreateInput,
+  EmergencySupplyUpdateInput,
+}
+
+export async function getEmergencyPlans(
+  params: {
+    page?: number
+    page_size?: number
+    plan_type?: string
+    status?: string
+    keyword?: string
+  } = {}
+) {
+  const searchParams = new URLSearchParams()
+  if (params.page) searchParams.set('page', String(params.page))
+  if (params.page_size) {
+    searchParams.set('page_size', String(params.page_size))
+  }
+  if (params.plan_type) searchParams.set('plan_type', params.plan_type)
+  if (params.status) searchParams.set('status', params.status)
+  if (params.keyword) searchParams.set('keyword', params.keyword)
+
+  const queryString = searchParams.toString()
+  return fetchApi<EmergencyPlanListData>(
+    `/safety/emergency-plans${queryString ? `?${queryString}` : ''}`
+  )
+}
+
+export async function getEmergencyMgmtStats() {
+  return fetchApi<EmergencyMgmtStatsData>('/safety/emergency-mgmt/stats')
+}
+
+export async function createEmergencyPlan(data: EmergencyPlanCreateInput) {
+  const response = await fetchApi<EmergencyPlanItem>(
+    '/safety/emergency-plans',
+    { method: 'POST', body: JSON.stringify(data) }
+  )
+  revalidatePath('/safety/emergency-mgmt')
+  return response
+}
+
+export async function updateEmergencyPlan(
+  id: string,
+  data: EmergencyPlanUpdateInput
+) {
+  const response = await fetchApi<EmergencyPlanItem>(
+    `/safety/emergency-plans/${id}`,
+    { method: 'PUT', body: JSON.stringify(data) }
+  )
+  revalidatePath('/safety/emergency-mgmt')
+  return response
+}
+
+export async function deleteEmergencyPlan(id: string) {
+  const response = await fetchApi<null>(`/safety/emergency-plans/${id}`, {
+    method: 'DELETE',
+  })
+  revalidatePath('/safety/emergency-mgmt')
+  return response
+}
+
+export async function uploadEmergencyPlanFile(id: string, file: File) {
+  const formData = new FormData()
+  formData.append('file', file)
+  // 上传必须剥离 JSON Content-Type，让浏览器自动生成 multipart boundary
+  const authHeaders = await getAuthHeaders()
+  const { 'Content-Type': _, ...uploadHeaders } = authHeaders
+  const response = await fetch(
+    `${API_BASE}/safety/emergency-plans/${id}/file`,
+    { method: 'POST', headers: uploadHeaders, body: formData }
+  )
+  if (!response.ok) {
+    const text = await response.text()
+    return { code: response.status, message: text } as ApiResponse<EmergencyPlanItem>
+  }
+  const data = (await response.json()) as ApiResponse<EmergencyPlanItem>
+  revalidatePath('/safety/emergency-mgmt')
+  return data
+}
+
+export async function downloadEmergencyPlanFile(
+  id: string,
+  fileName?: string
+): Promise<void> {
+  const headers = await getAuthHeaders()
+  const response = await fetch(
+    `${API_BASE}/safety/emergency-plans/${id}/file`,
+    { headers }
+  )
+  if (!response.ok) {
+    const text = await response.text()
+    throw new Error(`预案下载失败 (${response.status}): ${text}`)
+  }
+  const blob = await response.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = fileName || '应急预案'
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+export async function getEmergencyDrills(
+  params: {
+    page?: number
+    page_size?: number
+    drill_type?: string
+    status?: string
+    year?: number
+    keyword?: string
+  } = {}
+) {
+  const searchParams = new URLSearchParams()
+  if (params.page) searchParams.set('page', String(params.page))
+  if (params.page_size) {
+    searchParams.set('page_size', String(params.page_size))
+  }
+  if (params.drill_type) searchParams.set('drill_type', params.drill_type)
+  if (params.status) searchParams.set('status', params.status)
+  if (params.year) searchParams.set('year', String(params.year))
+  if (params.keyword) searchParams.set('keyword', params.keyword)
+
+  const queryString = searchParams.toString()
+  return fetchApi<EmergencyDrillListData>(
+    `/safety/emergency-drills${queryString ? `?${queryString}` : ''}`
+  )
+}
+
+export async function createEmergencyDrill(data: EmergencyDrillCreateInput) {
+  const response = await fetchApi<EmergencyDrillItem>(
+    '/safety/emergency-drills',
+    { method: 'POST', body: JSON.stringify(data) }
+  )
+  revalidatePath('/safety/emergency-mgmt')
+  return response
+}
+
+export async function updateEmergencyDrill(
+  id: string,
+  data: EmergencyDrillUpdateInput
+) {
+  const response = await fetchApi<EmergencyDrillItem>(
+    `/safety/emergency-drills/${id}`,
+    { method: 'PUT', body: JSON.stringify(data) }
+  )
+  revalidatePath('/safety/emergency-mgmt')
+  return response
+}
+
+export async function deleteEmergencyDrill(id: string) {
+  const response = await fetchApi<null>(`/safety/emergency-drills/${id}`, {
+    method: 'DELETE',
+  })
+  revalidatePath('/safety/emergency-mgmt')
+  return response
+}
+
+export async function getEmergencySupplies(
+  params: {
+    page?: number
+    page_size?: number
+    category?: string
+    status?: string
+    department?: string
+    keyword?: string
+  } = {}
+) {
+  const searchParams = new URLSearchParams()
+  if (params.page) searchParams.set('page', String(params.page))
+  if (params.page_size) {
+    searchParams.set('page_size', String(params.page_size))
+  }
+  if (params.category) searchParams.set('category', params.category)
+  if (params.status) searchParams.set('status', params.status)
+  if (params.department) searchParams.set('department', params.department)
+  if (params.keyword) searchParams.set('keyword', params.keyword)
+
+  const queryString = searchParams.toString()
+  return fetchApi<EmergencySupplyListData>(
+    `/safety/emergency-supplies${queryString ? `?${queryString}` : ''}`
+  )
+}
+
+export async function createEmergencySupply(data: EmergencySupplyCreateInput) {
+  const response = await fetchApi<EmergencySupplyItem>(
+    '/safety/emergency-supplies',
+    { method: 'POST', body: JSON.stringify(data) }
+  )
+  revalidatePath('/safety/emergency-mgmt')
+  return response
+}
+
+export async function updateEmergencySupply(
+  id: string,
+  data: EmergencySupplyUpdateInput
+) {
+  const response = await fetchApi<EmergencySupplyItem>(
+    `/safety/emergency-supplies/${id}`,
+    { method: 'PUT', body: JSON.stringify(data) }
+  )
+  revalidatePath('/safety/emergency-mgmt')
+  return response
+}
+
+export async function deleteEmergencySupply(id: string) {
+  const response = await fetchApi<null>(`/safety/emergency-supplies/${id}`, {
+    method: 'DELETE',
+  })
+  revalidatePath('/safety/emergency-mgmt')
+  return response
 }

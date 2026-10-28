@@ -1059,12 +1059,12 @@ export default function SopContentEditor({
       const result = await exportSopPdf(regulationId)
       const blob = result.data
       if (!blob) { message.error('导出失败：未返回文件数据'); setExporting(false); return }
+      // 后端返回带打印样式的 HTML，新窗口打开后自动弹出打印界面，
+      // 在打印对话框中选择「另存为 PDF」即可得到 PDF 文件
       const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url; a.download = `${regulationName || '标准化操规'}.pdf`
-      document.body.appendChild(a); a.click(); document.body.removeChild(a)
-      URL.revokeObjectURL(url)
-      message.success('PDF 下载已开始')
+      window.open(url, '_blank')
+      setTimeout(() => URL.revokeObjectURL(url), 60000)
+      message.success('已打开打印窗口，可在打印对话框中选择「另存为 PDF」')
     } catch (err: unknown) {
       message.error(err instanceof Error ? err.message : '导出失败')
     } finally { setExporting(false) }

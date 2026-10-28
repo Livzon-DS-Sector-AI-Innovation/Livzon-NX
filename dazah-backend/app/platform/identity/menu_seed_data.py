@@ -88,20 +88,7 @@ _LEGACY_SEED_MENUS: list[dict[str, Any]] = [
         "/safety",
         icon="shield",
         children=[
-            _n(
-                "system-config",
-                "系统配置",
-                "",
-                children=[
-                    _n("ai-workflow", "AI工作流配置", "/safety/ai-workflow-config"),
-                    _n("scheduled-tasks", "定时任务", "/safety/scheduled-tasks"),
-                    _n(
-                        "safety-feishu-settings",
-                        "飞书设置",
-                        "/safety/settings/feishu",
-                    ),
-                ],
-            ),
+            _n("overview", "安全总览", "/safety"),
             _n(
                 "ops-safety",
                 "作业安全",
@@ -213,11 +200,45 @@ _LEGACY_SEED_MENUS: list[dict[str, Any]] = [
                 "",
                 children=[
                     _n("accident-ledger", "事故台账", "/safety/accident"),
-                    _n("emergency-plan", "应急预案", "", disabled=True),
+                    _n("emergency-card", "应急处置卡", "/safety/emergency-card"),
                     _n(
                         "fire-equipment-inspection",
                         "灭火器及消防栓点检",
                         "/safety/fire-inspection",
+                    ),
+                    _n(
+                        "emergency-mgmt",
+                        "应急管理",
+                        "/safety/emergency-mgmt",
+                    ),
+                ],
+            ),
+            _n(
+                "governance",
+                "体系治理",
+                "",
+                children=[
+                    _n(
+                        "target-performance",
+                        "目标责任与绩效",
+                        "/safety/target-performance",
+                    ),
+                ],
+            ),
+            _n(
+                "site-mgmt",
+                "现场管理",
+                "",
+                children=[
+                    _n(
+                        "safety-facilities",
+                        "安全设施台账",
+                        "/safety/facilities",
+                    ),
+                    _n(
+                        "hazchem-msds",
+                        "危化品与MSDS管理",
+                        "/safety/hazchem",
                     ),
                 ],
             ),
@@ -245,6 +266,20 @@ _LEGACY_SEED_MENUS: list[dict[str, Any]] = [
                 "",
                 children=[
                     _n("knowledge-base", "安全知识库", "/safety/knowledge-base"),
+                ],
+            ),
+            _n(
+                "system-config",
+                "系统配置",
+                "",
+                children=[
+                    _n("ai-workflow", "AI工作流配置", "/safety/ai-workflow-config"),
+                    _n("scheduled-tasks", "定时任务", "/safety/scheduled-tasks"),
+                    _n(
+                        "safety-feishu-settings",
+                        "飞书设置",
+                        "/safety/settings/feishu",
+                    ),
                 ],
             ),
         ],

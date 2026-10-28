@@ -6,17 +6,22 @@ from datetime import datetime
 from typing import Any
 from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, Query, UploadFile
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
+from fastapi.responses import FileResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import CurrentUser, get_current_user
+from app.core.exceptions import AppException
 from app.core.response import ApiResponse
 from app.modules.safety.schemas import (
     OperationRegulationCreate,
     OperationRegulationResponse,
     OperationRegulationUpdate,
+    RegulationBatchUploadResponse,
+    RegulationLatestReviewEntry,
+    RegulationReviewListResponse,
+    RegulationReviewResponse,
     RegulationRevisionCreate,
     RegulationRevisionResponse,
     RegulationRevisionUpdate,
@@ -24,6 +29,7 @@ from app.modules.safety.schemas import (
     SopGenerateResponse,
 )
 from app.modules.safety.service import (
+    RegulationComplianceService,
     RegulationService,
     SopGeneratorService,
 )
@@ -38,6 +44,7 @@ async def get_regulations(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=200),
     position: str | None = None,
+    workshop: str | None = Query(None, description="车间/部门筛选"),
     keyword: str | None = None,
     status: str | None = Query(
         None, description="操规状态，逗号分隔多值: draft,generated,reviewed,exported"
@@ -45,11 +52,11 @@ async def get_regulations(
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
 ) -> Any:
-    """获取安全操作规程列表，支持按岗位、关键词和状态筛选"""
+    """获取安全操作规程列表，支持按车间、岗位、关键词和状态筛选"""
     service = RegulationService(db)
     skip = (page - 1) * page_size
     items, total = await service.get_regulations(
-        skip, page_size, position, keyword, status
+        skip, page_size, position, keyword, status, workshop
     )
     return ApiResponse(
         data=[OperationRegulationResponse.model_validate(r) for r in items],
@@ -456,31 +463,224 @@ async def update_sop_content(
 
 @regulations_router.post(
     "/regulations/{regulation_id}/export",
-    summary="导出标准化操规 PDF",
+    summary="导出标准化操规（可打印 HTML）",
 )
 async def export_sop_pdf(
     regulation_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
 ) -> Any:
-    """将存储的标准化 Markdown 渲染为 PDF，返回文件下载。"""
+    """将存储的标准化 Markdown 渲染为带打印样式的 HTML，
+    浏览器打开后自动弹出打印界面，可选择「另存为 PDF」。"""
     service = SopGeneratorService(db)
-    pdf_path = await service.export_pdf(regulation_id)
+    html_text = await service.export_html(regulation_id)
 
-    if not pdf_path or not os.path.exists(pdf_path):
+    if not html_text:
         return ApiResponse(code=400, message="导出失败：操规不存在或内容为空")
 
     await db.commit()
 
     # Generate a friendly download filename (RFC 5987 encoded for non-ASCII chars)
-    filename = f"标准化操规_{datetime.now().strftime('%Y%m%d%H%M%S')}.pdf"
+    filename = f"标准化操规_{datetime.now().strftime('%Y%m%d%H%M%S')}.html"
     encoded_filename = quote(filename)
 
-    return FileResponse(
-        pdf_path,
-        media_type="application/pdf",
-        filename=filename,
+    return Response(
+        content=html_text,
+        media_type="text/html; charset=utf-8",
         headers={
             "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}",
         },
     )
+
+
+# ═══════════════════════════════════════════════════════════════════
+# 操规文档预览与下载
+# ═══════════════════════════════════════════════════════════════════
+
+
+@regulations_router.get(
+    "/regulations/{regulation_id}/document-content",
+    response_model=ApiResponse,
+    summary="操规文档正文预览",
+)
+async def preview_regulation_document(
+    regulation_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser | None = Depends(get_current_user),
+) -> Any:
+    """提取操规上传文档的正文文本用于在线预览；
+    文档缺失或不可提取时返回标准化内容并附说明。"""
+    service = RegulationComplianceService(db)
+    regulation = await service.get_regulation_for_document(regulation_id)
+    if regulation is None:
+        return ApiResponse(code=404, message="操规不存在")
+    payload = await service.get_document_preview(regulation)
+    return ApiResponse(data=payload)
+
+
+@regulations_router.get(
+    "/regulations/{regulation_id}/document",
+    summary="下载操规原始文档",
+)
+async def download_regulation_document(
+    regulation_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser | None = Depends(get_current_user),
+) -> Any:
+    service = RegulationComplianceService(db)
+    regulation = await service.get_regulation_for_document(regulation_id)
+    if regulation is None:
+        return ApiResponse(code=404, message="操规不存在")
+    document = service.get_document_file(regulation)
+    if document is None:
+        return ApiResponse(code=400, message="该操规尚未上传文档文件")
+    file_path, download_name = document
+    encoded_name = quote(download_name)
+    return FileResponse(
+        file_path,
+        filename=download_name,
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_name}",
+        },
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════
+# 操规批量导入（自动识别）与 AI 法规合规审核
+# ═══════════════════════════════════════════════════════════════════
+
+
+@regulations_router.post(
+    "/regulations/batch-upload",
+    response_model=ApiResponse,
+    summary="批量上传操规文档并自动识别车间/岗位",
+)
+async def batch_upload_regulations(
+    files: list[UploadFile] = File(
+        ..., description="操规文档（docx/doc/docm/pdf/txt/md）"
+    ),
+    hint_workshop: str = Form(
+        "", description="文件名未标明车间时的兜底车间/部门"
+    ),
+    use_ai: bool = Form(
+        True,
+        description="是否使用大模型辅助识别（不可用时自动回退规则识别）",
+    ),
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser | None = Depends(get_current_user),
+) -> Any:
+    """批量导入车间操规文档：保存文件、提取正文、识别车间/岗位/名称，
+    为每个文件创建操规台账记录（同一文件重复导入自动跳过）。"""
+    if current_user is None:
+        raise AppException(status_code=401, message="请先登录")
+    if not files:
+        raise AppException(status_code=400, message="请选择要导入的文件")
+    if len(files) > 50:
+        raise AppException(status_code=400, message="单次最多导入 50 个文件")
+
+    payloads: list[tuple[str, bytes]] = []
+    for file in files:
+        content = await file.read()
+        payloads.append((file.filename or "未命名.docx", content))
+
+    service = RegulationComplianceService(db)
+    items = await service.batch_upload(
+        payloads,
+        hint_workshop=hint_workshop,
+        use_ai=use_ai,
+        user_id=current_user.id,
+    )
+    await db.commit()
+
+    response = RegulationBatchUploadResponse(
+        items=items,
+        success_count=sum(1 for item in items if item.ok),
+        fail_count=sum(1 for item in items if not item.ok),
+    )
+    return ApiResponse(
+        data=response.model_dump(),
+        message=(
+            f"导入完成：成功 {response.success_count} 个，"
+            f"跳过/失败 {response.fail_count} 个"
+        ),
+    )
+
+
+@regulations_router.post(
+    "/regulations/{regulation_id}/compliance-review",
+    response_model=ApiResponse,
+    summary="对操规执行 AI 法规合规审核",
+)
+async def run_regulation_compliance_review(
+    regulation_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser | None = Depends(get_current_user),
+) -> Any:
+    """依据内置安全法规审核要点（安全生产法、危化品管理条例、GB 30871 等）
+    对操规内容做 AI 合规审核，保存并返回审核报告（结论/评分/缺失项/不合规项）。
+    AI 结论仅作辅助分析，整改与放行由人工确认。"""
+    if current_user is None:
+        raise AppException(status_code=401, message="请先登录")
+
+    service = RegulationComplianceService(db)
+    review = await service.run_compliance_review(
+        regulation_id, user_id=current_user.id
+    )
+    await db.commit()
+    payload = RegulationReviewResponse.model_validate(review)
+    return ApiResponse(data=payload.model_dump())
+
+
+@regulations_router.get(
+    "/regulations/{regulation_id}/reviews",
+    response_model=ApiResponse,
+    summary="获取操规的合规审核记录",
+)
+async def list_regulation_reviews(
+    regulation_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser | None = Depends(get_current_user),
+) -> Any:
+    service = RegulationComplianceService(db)
+    reviews, total = await service.list_reviews(regulation_id)
+    payload = RegulationReviewListResponse(
+        items=[RegulationReviewResponse.model_validate(item) for item in reviews],
+        total=total,
+    )
+    return ApiResponse(data=payload.model_dump())
+
+
+@regulations_router.get(
+    "/regulation-reviews/latest",
+    response_model=ApiResponse,
+    summary="批量获取操规最新审核状态",
+)
+async def get_latest_regulation_reviews(
+    regulation_ids: str = Query(
+        ..., description="操规ID列表，逗号分隔（最多 200 个）"
+    ),
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser | None = Depends(get_current_user),
+) -> Any:
+    ids_raw = [part.strip() for part in regulation_ids.split(",") if part.strip()]
+    if not ids_raw:
+        return ApiResponse(data=[])
+    if len(ids_raw) > 200:
+        raise AppException(status_code=400, message="一次最多查询 200 条操规")
+    try:
+        ids = [uuid.UUID(value) for value in ids_raw]
+    except ValueError as exc:
+        raise AppException(status_code=400, message="操规ID格式不正确") from exc
+
+    service = RegulationComplianceService(db)
+    latest = await service.latest_reviews(ids)
+    entries = [
+        RegulationLatestReviewEntry(
+            regulation_id=regulation_id,
+            result=review.result,
+            score=review.score,
+            reviewed_at=review.created_at,
+        ).model_dump(mode="json")
+        for regulation_id, review in latest.items()
+    ]
+    return ApiResponse(data=entries)

@@ -1,0 +1,117 @@
+"""危化品与 MSDS 的请求 / 响应模型。"""
+
+from __future__ import annotations
+
+from datetime import datetime
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class HazardousChemicalCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=200, description="化学品名称")
+    alias: str = Field(default="", max_length=200, description="别名/商品名")
+    cas_no: str = Field(default="", max_length=60, description="CAS 号")
+    category: str = Field(
+        default="other",
+        max_length=40,
+        description="危险性类别: explosive/flammable_gas/oxidizing_gas/"
+        "flammable_liquid/flammable_solid/self_reactive/oxidizing_liquid/"
+        "organic_peroxide/toxic/corrosive/other",
+    )
+    hazard_statements: str = Field(
+        default="", max_length=8000, description="危险性概述"
+    )
+    storage_requirements: str = Field(
+        default="", max_length=8000, description="储存要求"
+    )
+    remark: str = Field(default="", max_length=8000, description="备注")
+
+
+class HazardousChemicalUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=200)
+    alias: str | None = Field(default=None, max_length=200)
+    cas_no: str | None = Field(default=None, max_length=60)
+    category: str | None = Field(default=None, max_length=40)
+    hazard_statements: str | None = Field(default=None, max_length=8000)
+    storage_requirements: str | None = Field(default=None, max_length=8000)
+    remark: str | None = Field(default=None, max_length=8000)
+
+
+class HazardousChemicalResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    name: str
+    alias: str
+    cas_no: str
+    category: str
+    hazard_statements: str
+    storage_requirements: str
+    msds_file_path: str
+    msds_file_name: str
+    remark: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class HazardousChemicalListResponse(BaseModel):
+    items: list[HazardousChemicalResponse]
+    total: int
+    page: int
+    page_size: int
+
+
+class ChemicalInventoryCreate(BaseModel):
+    chemical_id: UUID = Field(description="危化品")
+    workshop: str = Field(min_length=1, max_length=100, description="车间/库房")
+    quantity: float = Field(ge=0, description="当前存量")
+    upper_limit: float | None = Field(default=None, ge=0, description="存量上限")
+    unit: str = Field(default="kg", max_length=30, description="单位")
+    remark: str = Field(default="", max_length=8000, description="备注")
+
+
+class ChemicalInventoryUpdate(BaseModel):
+    quantity: float | None = Field(default=None, ge=0)
+    upper_limit: float | None = Field(default=None, ge=0)
+    unit: str | None = Field(default=None, max_length=30)
+    remark: str | None = Field(default=None, max_length=8000)
+
+
+class ChemicalInventoryResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    chemical_id: UUID
+    chemical_name: str = ""
+    category: str = ""
+    workshop: str
+    quantity: float
+    upper_limit: float | None = None
+    over_limit: bool = False
+    over_pct: float | None = Field(
+        default=None, description="超储幅度（%），未超储为 None"
+    )
+    unit: str
+    remark: str
+    updated_at: datetime
+
+
+class ChemicalInventoryListResponse(BaseModel):
+    items: list[ChemicalInventoryResponse]
+    total: int
+    page: int
+    page_size: int
+
+
+class ChemicalInventoryStatsResponse(BaseModel):
+    total_entries: int
+    over_limit_count: int
+    limited_count: int
+    by_category: dict[str, int] = Field(default_factory=dict)
+
+
+class HazchemStatsResponse(BaseModel):
+    chemicals_total: int
+    msds_uploaded: int
+    inventory: ChemicalInventoryStatsResponse

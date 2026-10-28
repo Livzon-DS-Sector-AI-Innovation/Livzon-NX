@@ -189,9 +189,9 @@ describe('SpecialOpsManagement 默认筛选', () => {
     render()
     await settle()
 
-    const today = new Date().toLocaleDateString('sv-SE', {
-      timeZone: 'Asia/Shanghai',
-    })
+    // 组件用 dayjs()（运行时本地时区）算「今天」，期望值同口径；
+    // 显式 Asia/Shanghai 会在 UTC 16:00-24:00（北京次日凌晨）窗口与组件分歧
+    const today = new Date().toLocaleDateString('sv-SE')
     expect(mocks.getSpecialOperationReports).toHaveBeenCalledWith(
       expect.objectContaining({ date_from: today, date_to: today })
     )

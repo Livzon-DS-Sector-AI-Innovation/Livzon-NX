@@ -9,7 +9,7 @@ from cryptography.fernet import Fernet
 from sqlalchemy import delete, select
 
 from app.core.exceptions import AppException
-from app.core.llm.encryption import encrypt_api_key
+from app.core.llm.encryption import decrypt_api_key, encrypt_api_key
 from app.modules.safety.feishu.runtime_config import (
     SafetyFeishuConfigError,
     build_runtime_config,
@@ -194,7 +194,8 @@ async def test_update_with_new_secret_replaces_stored_secret(db_session):
         ),
     )
     row = await _get_single_row(db_session)
-    assert row.app_secret == encrypt_api_key("rotated-secret-456")
+    # Fernet 每次加密产生不同密文（随机 IV），这里解密比对明文
+    assert decrypt_api_key(row.app_secret) == "rotated-secret-456"
 
 
 async def test_test_settings_success_writes_status(db_session, monkeypatch):
