@@ -158,7 +158,11 @@ def _patch_flow(monkeypatch, db, *, workshops, equipments=None, mirror=None):
         AsyncMock(return_value=equipments if equipments is not None else []),
     )
     mirror_rows = mirror if mirror is not None else []
-    db.execute = AsyncMock(return_value=_Result(mirror_rows))
+    # create_repair_by_text 先查注册车间（LLM 接地），再查巡检镜像
+    lead_ws = workshops[0] if workshops else _ws()
+    db.execute = AsyncMock(
+        side_effect=[_Result([lead_ws]), _Result(mirror_rows)]
+    )
     monkeypatch.setattr(
         wof, "_sample_ledger_names", AsyncMock(return_value=[]), raising=False
     )

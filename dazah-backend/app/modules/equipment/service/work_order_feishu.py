@@ -396,7 +396,36 @@ async def create_repair_by_text(
         body = body.replace(k, " ")
     body = body.strip()
 
+    # LLM 意图解析：口语归一化（车间/设备/故障/紧急度），失败静默回落规则。
+    # 解析结果只用于增强匹配文本与紧急度判定，业务动作仍由确定性匹配执行
+    from app.modules.equipment.feishu.repair_intent import parse_repair_intent
+
     async with async_session_factory() as db:
+        # 注册车间清单交给 LLM 做接地：口语车间名归一化为注册名
+        registered = (
+            (
+                await db.execute(
+                    select(EquipmentWorkshop).where(
+                        EquipmentWorkshop.is_enabled == True,  # noqa: E712
+                        EquipmentWorkshop.is_deleted == False,  # noqa: E712
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        intent = await parse_repair_intent(
+            text, [ws.name for ws in registered]
+        )
+        match_body = body
+        if intent is not None:
+            if intent["urgency"] == "紧急":
+                priority = "紧急"
+            parts = (body, intent["workshop"], intent["equipment"])
+            enriched = " ".join(p for p in parts if p)
+            if len(enriched) > len(body):
+                match_body = enriched
+
         # 报修人：优先飞书绑定的平台账号（union_id 跨应用最稳）；
         # 无绑定（如外包人员）落到系统管理员
         user = await _find_user_by_feishu(
@@ -406,7 +435,7 @@ async def create_repair_by_text(
             user = await get_or_create_system_admin(db)
         reporter_label = user.name if user.username != "system_admin" else "飞书用户"
 
-        workshops = await _match_workshops(db, body)
+        workshops = await _match_workshops(db, match_body)
         if len(workshops) == 0:
             all_workshops = (
                 (await db.execute(
@@ -438,8 +467,10 @@ async def create_repair_by_text(
             return
         workshop = workshops[0]
 
-        tokens = _split_tokens(body, workshop.code, workshop.name)
-        equipments = await _match_equipments(db, workshop.code, tokens, body=body)
+        tokens = _split_tokens(match_body, workshop.code, workshop.name)
+        equipments = await _match_equipments(
+            db, workshop.code, tokens, body=match_body
+        )
         if len(equipments) == 0:
             # 台账没有 → 回落到巡检镜像（飞书多维表格同步的真实设备），
             # 唯一命中时自动注册进台账后建单
@@ -456,7 +487,7 @@ async def create_repair_by_text(
                     )
                 )
             ).scalars().all()
-            compact_body = _COMPACT.sub("", body)
+            compact_body = _COMPACT.sub("", match_body)
             mirror_matched = [
                 d
                 for d in mirror_rows
