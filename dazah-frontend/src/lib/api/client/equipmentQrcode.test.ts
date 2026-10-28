@@ -23,13 +23,18 @@ it('requests the workshop pdf and triggers a blob download', async () => {
 
   await fetchEquipmentQrcodePdf('201-1')
 
-  const [url] = fetchMock.mock.calls[0]
+  const calls = fetchMock.mock.calls as unknown as Array<
+    [string, RequestInit | undefined]
+  >
+  const [url] = calls[0]
   expect(new URL(url, 'http://test').searchParams.get('workshop')).toBe('201-1')
   expect(new URL(url, 'http://test').pathname).toBe(
     '/api/v1/equipment/equipments/qrcode-pdf'
   )
   expect(createObjectURL).toHaveBeenCalledTimes(1)
-  expect(createObjectURL.mock.calls[0][0]).toBeInstanceOf(Blob)
+  expect(
+    (createObjectURL.mock.calls[0] as unknown as [Blob])[0]
+  ).toBeInstanceOf(Blob)
   expect(revokeObjectURL).toHaveBeenCalledWith('blob:mock')
 })
 
