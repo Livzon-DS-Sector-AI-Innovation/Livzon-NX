@@ -1,4 +1,4 @@
-"""Personal hazard rectification, inspection and EHS action work."""
+"""Personal hazard rectification and inspection work."""
 
 from datetime import date
 from typing import Literal
@@ -16,13 +16,11 @@ from sqlalchemy import (
     literal,
     or_,
     select,
-    true,
 )
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.modules.safety.models import Accident, EhsChange, HazardReport, SafetyCheck
+from app.modules.safety.models import Accident, HazardReport, SafetyCheck
 from app.platform.identity.data_scope import current_page_key
 from app.platform.identity.deps import RequiredUser
 from app.platform.identity.todo_access import (
@@ -32,12 +30,11 @@ from app.platform.identity.todo_access import (
 )
 from app.shared.todo_schemas import BusinessTodoItem, BusinessTodoPage
 
-SafetyTodoKind = Literal["hazards", "accidents", "checks", "ehs-actions"]
+SafetyTodoKind = Literal["hazards", "accidents", "checks"]
 PAGES = {
     "hazards": "safety:risk-hazard:hazard-inspection:hazard-inspection-ledger",
     "accidents": "safety:emergency-accident:accident-ledger",
     "checks": "safety:training-check:safety-check",
-    "ehs-actions": "safety:risk-hazard:ehs-change:ehs-change-apply",
 }
 router = APIRouter()
 
@@ -143,49 +140,6 @@ def safety_todo_query(
             SafetyCheck.is_deleted.is_(False), SafetyCheck.status == "draft", inspector
         )
         department = SafetyCheck.department
-    else:
-        value = cast(EhsChange.action_items, JSONB)
-        safe = case(
-            (func.jsonb_typeof(value) == "array", value), else_=literal([], type_=JSONB)
-        )
-        actions = (
-            func.jsonb_array_elements(safe)
-            .table_valued("value", with_ordinality="ordinality")
-            .render_derived()
-            .alias("actions")
-        )
-        action = cast(actions.c.value, JSONB)
-        owner_id = func.coalesce(action["owner_id"].astext, "")
-        owner = or_(
-            owner_id.in_(actor.person_ids),
-            and_(owner_id == "", action["owner"].astext == name if name else false()),
-        )
-        stmt = (
-            select(
-                func.concat(
-                    cast(EhsChange.id, String), ":", cast(actions.c.ordinality, String)
-                ).label("id"),
-                func.concat(EhsChange.change_no, " · ", action["task"].astext).label(
-                    "title"
-                ),
-                func.concat(
-                    "待完成行动项 · 截止日期：",
-                    func.coalesce(action["due_date"].astext, "未填写"),
-                ).label("detail"),
-                cast(
-                    func.timezone("Asia/Shanghai", EhsChange.expected_completion), Date
-                ).label("due_date"),
-            )
-            .select_from(EhsChange)
-            .join(actions, true())
-            .where(
-                EhsChange.is_deleted.is_(False),
-                EhsChange.status.in_(["approved", "in_progress"]),
-                action["status"].astext.in_(["pending", "in_progress"]),
-                owner,
-            )
-        )
-        department = EhsChange.department
     if not actor.scope.is_all:
         stmt = stmt.where(department.in_(actor.scope.department_names))
     return stmt

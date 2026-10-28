@@ -39,7 +39,6 @@ const businessTodoPages: Record<string, {
   '/safety/hazard-ledger': { moduleCode: 'safety', kind: 'hazards' },
   '/safety/accident': { moduleCode: 'safety', kind: 'accidents' },
   '/safety/check': { moduleCode: 'safety', kind: 'checks' },
-  '/safety/ehs-change': { moduleCode: 'safety', kind: 'ehs-actions' },
   '/registration/declaration-progress/international-planned-in-progress': { moduleCode: 'registration', kind: 'validation-audits' },
   '/hr/training/plan-tracking': { moduleCode: 'hr', kind: 'plan-tracking' },
   '/hr/position-transfer': { moduleCode: 'hr', kind: 'position-transfer' },

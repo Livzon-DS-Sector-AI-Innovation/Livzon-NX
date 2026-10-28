@@ -7,8 +7,6 @@ import type {
   Contractor,
   ContractorQueryParams,
   ContractorWorkRecord,
-  EhsChange,
-  EhsChangeQueryParams,
   HazardReport,
   HazardReportQueryParams,
   OhHazardMonitor,
@@ -140,12 +138,6 @@ interface SafetyState {
   hazardIdentificationQueryParams: HazardIdentificationQueryParams
   hazardIdentificationTotal: number
   hazardIdentificationLoading: boolean
-
-  ehsChanges: EhsChange[]
-  currentEhsChange: EhsChange | null
-  ehsChangeQueryParams: EhsChangeQueryParams
-  ehsChangeTotal: number
-  ehsChangeLoading: boolean
 
   // Contractor state
   contractors: Contractor[]
@@ -311,16 +303,6 @@ interface SafetyState {
   updateHazardIdentification: (id: string, item: Partial<HazardIdentification>) => void
   removeHazardIdentification: (id: string) => void
 
-  // Actions - EHS Change
-  setEhsChanges: (changes: EhsChange[]) => void
-  setCurrentEhsChange: (c: EhsChange | null) => void
-  setEhsChangeQueryParams: (params: Partial<EhsChangeQueryParams>) => void
-  setEhsChangeTotal: (total: number) => void
-  setEhsChangeLoading: (loading: boolean) => void
-  addEhsChange: (c: EhsChange) => void
-  updateEhsChange: (id: string, c: Partial<EhsChange>) => void
-  removeEhsChange: (id: string) => void
-
   // Actions - Contractor
   setContractors: (contractors: Contractor[]) => void
   setCurrentContractor: (c: Contractor | null) => void
@@ -382,7 +364,6 @@ interface SafetyState {
   resetArticleState: () => void
   resetSpecialOpReportState: () => void
   resetDailyRiskReportState: () => void
-  resetEhsChangeState: () => void
   resetContractorState: () => void
   resetHazardIdentificationState: () => void
   resetAll: () => void
@@ -493,14 +474,6 @@ const initialHazardIdentificationState = {
   hazardIdentificationLoading: false,
 }
 
-const initialEhsChangeState = {
-  ehsChanges: [] as EhsChange[],
-  currentEhsChange: null as EhsChange | null,
-  ehsChangeQueryParams: { page: 1, page_size: 20 } as EhsChangeQueryParams,
-  ehsChangeTotal: 0,
-  ehsChangeLoading: false,
-}
-
 const initialContractorState = {
   contractors: [] as Contractor[],
   currentContractor: null as Contractor | null,
@@ -553,7 +526,6 @@ export const useSafetyStore = create<SafetyState>((set) => ({
   ...initialSpecialOpReportState,
   ...initialDailyRiskReportState,
   ...initialHazardIdentificationState,
-  ...initialEhsChangeState,
   ...initialContractorState,
   ...initialOhHazardMonitorState,
   ...initialOhHealthExamState,
@@ -876,26 +848,6 @@ export const useSafetyStore = create<SafetyState>((set) => ({
         state.currentHazardIdentification?.id === id ? null : state.currentHazardIdentification,
     })),
 
-  // ============ EHS Change Actions ============
-  setEhsChanges: (ehsChanges) => set({ ehsChanges }),
-  setCurrentEhsChange: (currentEhsChange) => set({ currentEhsChange }),
-  setEhsChangeQueryParams: (params) =>
-    set((state) => ({ ehsChangeQueryParams: { ...state.ehsChangeQueryParams, ...params } })),
-  setEhsChangeTotal: (ehsChangeTotal) => set({ ehsChangeTotal }),
-  setEhsChangeLoading: (ehsChangeLoading) => set({ ehsChangeLoading }),
-  addEhsChange: (c) =>
-    set((state) => ({ ehsChanges: [c, ...state.ehsChanges] })),
-  updateEhsChange: (id, updates) =>
-    set((state) => ({
-      ehsChanges: state.ehsChanges.map((c) => (c.id === id ? { ...c, ...updates } : c)),
-      currentEhsChange: state.currentEhsChange?.id === id ? { ...state.currentEhsChange, ...updates } : state.currentEhsChange,
-    })),
-  removeEhsChange: (id) =>
-    set((state) => ({
-      ehsChanges: state.ehsChanges.filter((c) => c.id !== id),
-      currentEhsChange: state.currentEhsChange?.id === id ? null : state.currentEhsChange,
-    })),
-
   // ============ Contractor Actions ============
   setContractors: (contractors) => set({ contractors }),
   setCurrentContractor: (c) => set({ currentContractor: c }),
@@ -998,7 +950,6 @@ export const useSafetyStore = create<SafetyState>((set) => ({
   resetArticleState: () => set(initialArticleState),
   resetSpecialOpReportState: () => set(initialSpecialOpReportState),
   resetDailyRiskReportState: () => set(initialDailyRiskReportState),
-  resetEhsChangeState: () => set(initialEhsChangeState),
   resetContractorState: () => set(initialContractorState),
   resetHazardIdentificationState: () => set(initialHazardIdentificationState),
   resetOhHazardMonitorState: () => set(initialOhHazardMonitorState),
@@ -1020,7 +971,6 @@ export const useSafetyStore = create<SafetyState>((set) => ({
       ...initialSpecialOpReportState,
       ...initialDailyRiskReportState,
       ...initialHazardIdentificationState,
-      ...initialEhsChangeState,
       ...initialContractorState,
       ...initialOhHazardMonitorState,
       ...initialOhHealthExamState,

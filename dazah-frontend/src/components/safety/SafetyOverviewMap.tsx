@@ -2,11 +2,13 @@
 
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Card, Collapse, Drawer, Empty, Space, Tag, Typography } from 'antd'
+import { Button, Card, Collapse, Drawer, Empty, Space, Tag, Typography } from 'antd'
 import {
   AimOutlined,
   EnvironmentOutlined,
+  ExpandOutlined,
   QuestionCircleOutlined,
+  ShrinkOutlined,
 } from '@ant-design/icons'
 import type {
   MapBuildingMarkers,
@@ -66,6 +68,8 @@ export default function SafetyOverviewMap({
 }) {
   const router = useRouter()
   const [selected, setSelected] = useState<MapBuildingMarkers | null>(null)
+  // 半宽为默认展示；全宽时底图建筑名清晰可读，便于核对风险归属
+  const [fullWidth, setFullWidth] = useState(false)
 
   const buildings = overview.buildings ?? []
   const markers = overview.markers ?? []
@@ -177,41 +181,33 @@ export default function SafetyOverviewMap({
               </Text>
             </Space>
           ))}
+          <Button
+            size="small"
+            icon={fullWidth ? <ShrinkOutlined /> : <ExpandOutlined />}
+            onClick={() => setFullWidth((v) => !v)}
+          >
+            {fullWidth ? '半宽' : '全宽'}
+          </Button>
         </Space>
       }
     >
-      {/* 底图按原始一半宽度展示，缩小后无风险建筑只显示圆点（悬浮看名称） */}
+      {/* 底图（2.5D 等轴测矢量图）已包含建筑名称/道路/围墙，覆盖层只标
+          注有风险的建筑数量气泡；坐标来自 campus_buildings 的投影标定 */}
       <div className="flex justify-center">
         <div
-          className="relative select-none w-full md:w-1/2"
+          className={`relative select-none ${fullWidth ? 'w-full' : 'w-full md:w-1/2'}`}
           style={{ borderRadius: 10, overflow: 'hidden', border: `1px solid ${T.hairline}` }}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="/safety/campus-map.png"
+            src="/safety/campus-map.svg"
             alt="厂区平面图"
             className="block w-full h-auto"
             draggable={false}
           />
           {buildings.map((building) => {
             const marker = markerById.get(building.id)
-            const hasRisk = (marker?.total ?? 0) > 0
-            if (!hasRisk) {
-              return (
-                <span
-                  key={building.id}
-                  className="absolute inline-block w-1.5 h-1.5 rounded-full"
-                  style={{
-                    left: `${building.x_pct}%`,
-                    top: `${building.y_pct}%`,
-                    transform: 'translate(-50%, -50%)',
-                    backgroundColor: T.muted,
-                    opacity: 0.7,
-                  }}
-                  title={building.name}
-                />
-              )
-            }
+            if (!marker || marker.total <= 0) return null
             return (
               <button
                 key={building.id}
@@ -221,26 +217,20 @@ export default function SafetyOverviewMap({
                   left: `${building.x_pct}%`,
                   top: `${building.y_pct}%`,
                   transform: 'translate(-50%, -50%)',
-                  backgroundColor: 'rgba(255, 255, 255, 0.92)',
-                  border: `1.5px solid ${T.error}`,
+                  backgroundColor: T.error,
+                  color: '#ffffff',
+                  border: '1.5px solid #ffffff',
                   borderRadius: 999,
-                  boxShadow: '0 1px 4px rgba(0,0,0,0.18)',
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.3)',
                   lineHeight: 1.2,
+                  fontSize: 11,
+                  fontWeight: 700,
+                  whiteSpace: 'nowrap',
                 }}
-                title={building.name}
+                title={`${building.name} · 当日 ${marker.total} 条，点击查看明细`}
                 onClick={() => marker && setSelected(marker)}
               >
-                <span
-                  className="inline-block w-1.5 h-1.5 rounded-full"
-                  style={{ backgroundColor: T.error }}
-                />
-                <span
-                  className="font-semibold whitespace-nowrap"
-                  style={{ color: T.dark, fontSize: 10 }}
-                >
-                  {building.name}
-                  {hasRisk ? ` ${marker?.total}` : ''}
-                </span>
+                {building.name} {marker.total}
               </button>
             )
           })}

@@ -189,7 +189,16 @@ _LEGACY_SEED_MENUS: list[dict[str, Any]] = [
                         "EHS变更管理",
                         "",
                         children=[
-                            _n("ehs-change-apply", "EHS变更申请", "/safety/ehs-change"),
+                            _n(
+                                "ehs-change-review",
+                                "EHS变更审批",
+                                "/safety/ehs-change",
+                            ),
+                            _n(
+                                "ehs-change-acceptance",
+                                "变更验收审批",
+                                "/safety/ehs-change/acceptance",
+                            ),
                         ],
                     ),
                 ],

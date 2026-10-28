@@ -7,6 +7,8 @@ import {
   columnOptions,
   displayFieldText,
   isPreviewableAttachment,
+  SAFETY_PAGE_TABLE_KEYS,
+  SAFETY_PAGE_TABLE_PREFERRED_COLUMNS,
   toPageTableStats,
   toRecordRow,
   toRecordRows,
@@ -98,9 +100,28 @@ describe('safety page table helpers', () => {
   })
 })
 
+describe('EHS 变更镜像页关键列', () => {
+  it('declares non-empty unique preferred columns for both change pages', () => {
+    expect(SAFETY_PAGE_TABLE_KEYS.ehsChangeReview).toBe(
+      'safety:risk-hazard:ehs-change:ehs-change-review'
+    )
+    expect(SAFETY_PAGE_TABLE_KEYS.ehsChangeAcceptance).toBe(
+      'safety:risk-hazard:ehs-change:ehs-change-acceptance'
+    )
+    for (const key of [
+      SAFETY_PAGE_TABLE_KEYS.ehsChangeReview,
+      SAFETY_PAGE_TABLE_KEYS.ehsChangeAcceptance,
+    ]) {
+      const preferred = SAFETY_PAGE_TABLE_PREFERRED_COLUMNS[key]
+      expect(preferred?.length).toBeGreaterThan(0)
+      // 关键列按声明顺序展示且不重复（列名与飞书表字段一一对应）
+      expect(new Set(preferred).size).toBe(preferred.length)
+    }
+  })
+})
+
 describe('toPageTableStats', () => {
-  it('returns null for missing stats and fills optional arrays', () => {
-    expect(toPageTableStats(null)).toBeNull()
+  it('returns null for missing stats and fills optional arrays', () => {    expect(toPageTableStats(null)).toBeNull()
     expect(toPageTableStats(undefined)).toBeNull()
 
     const result = toPageTableStats({

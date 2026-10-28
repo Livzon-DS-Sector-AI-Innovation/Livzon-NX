@@ -3721,6 +3721,206 @@ class SafetyTargetRecord(BaseModel):
     )
 
 
+class SafetyTargetAgreement(BaseModel):
+    """安全目标责任书：年度×部门×岗位的安全生产目标责任签订台账。"""
+
+    __tablename__ = "safety_target_agreements"
+    __table_args__ = (
+        Index(
+            "uq_safety_target_agreements_key",
+            "year",
+            "department",
+            "position",
+            unique=True,
+            postgresql_where=text("is_deleted = false"),
+        ),
+        Index("ix_safety_target_agreements_year", "year", "is_deleted"),
+        Index("ix_safety_target_agreements_status", "status", "is_deleted"),
+        {"schema": "safety"},
+    )
+
+    year: Mapped[int] = mapped_column(Integer, nullable=False, comment="签订年度")
+    department: Mapped[str] = mapped_column(
+        String(100), nullable=False, comment="责任部门/单位（公司领导层用 公司领导）"
+    )
+    position: Mapped[str] = mapped_column(
+        String(100), nullable=False, comment="岗位/角色（如 负责人、安全管理科人员）"
+    )
+    category: Mapped[str] = mapped_column(
+        String(30),
+        nullable=False,
+        default="岗位员工",
+        server_default="岗位员工",
+        comment="分类: 公司领导 / 部门/车间负责人 / 岗位员工",
+    )
+    party_a: Mapped[str] = mapped_column(
+        String(60),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="甲方（公司/考核方代表）",
+    )
+    party_b: Mapped[str] = mapped_column(
+        String(60),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="乙方（责任方签订人）",
+    )
+    status: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="unsigned",
+        server_default="unsigned",
+        comment="状态: unsigned=未签订 / signed=已签订",
+    )
+    signed_date: Mapped[date | None] = mapped_column(
+        Date, nullable=True, comment="签订日期"
+    )
+    expires_date: Mapped[date | None] = mapped_column(
+        Date, nullable=True, comment="有效期至（责任书一年一签）",
+    )
+    goals_text: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="",
+        server_default="",
+        comment="安全生产目标条款（每行一条）",
+    )
+    remark: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="",
+        server_default="",
+        comment="备注"
+    )
+    search_text: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default="", comment="关键字搜索文本"
+    )
+
+
+class SafetyDutyAssessment(BaseModel):
+    """安全生产责任制考核：按季度对部门/负责人的责任制考核记录（百分制）。"""
+
+    __tablename__ = "safety_duty_assessments"
+    __table_args__ = (
+        Index(
+            "uq_safety_duty_assessments_key",
+            "year",
+            "quarter",
+            "department",
+            "person_name",
+            unique=True,
+            postgresql_where=text("is_deleted = false"),
+        ),
+        Index(
+            "ix_safety_duty_assessments_year_quarter",
+            "year",
+            "quarter",
+            "is_deleted",
+        ),
+        {"schema": "safety"},
+    )
+
+    year: Mapped[int] = mapped_column(Integer, nullable=False, comment="考核年度")
+    quarter: Mapped[int] = mapped_column(
+        Integer, nullable=False, comment="考核季度 1-4"
+    )
+    department: Mapped[str] = mapped_column(
+        String(100), nullable=False, comment="被考核部门/单位"
+    )
+    person_name: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="被考核人（可空=部门整体）",
+    )
+    assessor: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="考核单位（如 安全部）",
+    )
+    assessment_date: Mapped[date | None] = mapped_column(
+        Date, nullable=True, comment="考核日期"
+    )
+    total_score: Mapped[float] = mapped_column(
+        Float,
+        nullable=False,
+        default=0.0,
+        server_default="0",
+        comment="考核总得分（百分制）",
+    )
+    grade: Mapped[str] = mapped_column(
+        String(10),
+        nullable=False,
+        default="不合格",
+        server_default="不合格",
+        comment="等级: >=95优秀 / >=90良好 / >=80合格 / <80不合格",
+    )
+    remark: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+        default="",
+        server_default="",
+        comment="备注"
+    )
+    search_text: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default="", comment="关键字搜索文本"
+    )
+
+    items: Mapped[list["SafetyDutyAssessmentItem"]] = relationship(
+        primaryjoin="and_(SafetyDutyAssessment.id == "
+        "foreign(SafetyDutyAssessmentItem.assessment_id), "
+        "SafetyDutyAssessmentItem.is_deleted.is_(False))",
+        viewonly=True,
+        lazy="selectin",
+        order_by="SafetyDutyAssessmentItem.sort_order",
+    )
+
+
+class SafetyDutyAssessmentItem(BaseModel):
+    """责任制考核评分明细：考核内容/标准分/扣减分/得分。"""
+
+    __tablename__ = "safety_duty_assessment_items"
+    __table_args__ = (
+        Index(
+            "ix_safety_duty_assessment_items_assessment",
+            "assessment_id",
+            "is_deleted",
+        ),
+        {"schema": "safety"},
+    )
+
+    assessment_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("safety.safety_duty_assessments.id"),
+        nullable=False,
+        comment="所属考核记录",
+    )
+    sort_order: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0", comment="排列序号"
+    )
+    content: Mapped[str] = mapped_column(Text, nullable=False, comment="考核内容")
+    rule: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default="", comment="考核标准/扣分规则"
+    )
+    standard_score: Mapped[float] = mapped_column(
+        Float, nullable=False, default=0.0, server_default="0", comment="标准分"
+    )
+    deduction_score: Mapped[float] = mapped_column(
+        Float, nullable=False, default=0.0, server_default="0", comment="扣减分"
+    )
+    score: Mapped[float] = mapped_column(
+        Float, nullable=False, default=0.0, server_default="0", comment="考核得分"
+    )
+    remark: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default="", comment="考核明细说明"
+    )
+
+
 # ==================== 现场管理：安全设施台账 ====================
 
 

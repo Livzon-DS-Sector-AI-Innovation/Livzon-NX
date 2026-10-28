@@ -1,51 +1,615 @@
 [
-  {"code": "", "name": "液氨压缩机房", "category": "utility", "x_pct": 9.0, "y_pct": 7.0, "aliases": ["液氨压缩机房", "压缩机房"]},
-  {"code": "316", "name": "液氨储区", "category": "tank", "x_pct": 8.5, "y_pct": 10.0, "aliases": ["液氨储区", "液氨"]},
-  {"code": "802", "name": "污水处理系统", "category": "env", "x_pct": 47.0, "y_pct": 12.0, "aliases": ["污水处理系统", "污水站", "污水处理", "污水处理车间", "厌氧塔", "总排在线房", "压泥间", "802"]},
-  {"code": "516", "name": "锅炉房（516）", "category": "utility", "x_pct": 33.4, "y_pct": 27.0, "aliases": ["锅炉房516", "锅炉房西"]},
-  {"code": "", "name": "烟囱", "category": "utility", "x_pct": 39.3, "y_pct": 27.4, "aliases": ["烟囱"]},
-  {"code": "515", "name": "煤仓（515）", "category": "utility", "x_pct": 46.4, "y_pct": 30.5, "aliases": ["煤仓515", "煤仓西"]},
-  {"code": "518", "name": "除盐水站（518）", "category": "utility", "x_pct": 34.1, "y_pct": 34.6, "aliases": ["除盐水站518", "除盐水站西"]},
-  {"code": "803", "name": "203车间", "category": "workshop", "x_pct": 34.0, "y_pct": 40.3, "aliases": []},
-  {"code": "512", "name": "供水站（512）", "category": "utility", "x_pct": 43.0, "y_pct": 48.0, "aliases": ["供水站512"]},
-  {"code": "315", "name": "315仓库", "category": "warehouse", "x_pct": 10.0, "y_pct": 48.5, "aliases": ["315库", "315"]},
-  {"code": "513", "name": "动力中心（513）", "category": "utility", "x_pct": 22.0, "y_pct": 48.0, "aliases": ["动力中心513", "动力中心西"]},
-  {"code": "313", "name": "313仓库", "category": "warehouse", "x_pct": 10.0, "y_pct": 58.4, "aliases": ["313库", "313"]},
-  {"code": "312", "name": "液体原料库", "category": "warehouse", "x_pct": 10.3, "y_pct": 67.2, "aliases": ["原料库", "312"]},
-  {"code": "311", "name": "311仓库", "category": "warehouse", "x_pct": 10.0, "y_pct": 74.9, "aliases": ["311库", "311"]},
-  {"code": "", "name": "足球场", "category": "sports", "x_pct": 8.5, "y_pct": 89.0, "aliases": ["足球场"]},
-  {"code": "", "name": "篮球场", "category": "sports", "x_pct": 19.3, "y_pct": 84.4, "aliases": ["篮球场"]},
-  {"code": "", "name": "网球场", "category": "sports", "x_pct": 17.6, "y_pct": 90.4, "aliases": ["网球场"]},
-  {"code": "", "name": "物流门房", "category": "logistics", "x_pct": 2.2, "y_pct": 96.5, "aliases": ["物流门房"]},
-  {"code": "203", "name": "203车间（北）", "category": "workshop", "x_pct": 26.0, "y_pct": 58.4, "aliases": ["203北", "北203"]},
-  {"code": "203", "name": "203车间（南）", "category": "workshop", "x_pct": 26.0, "y_pct": 66.4, "aliases": ["203南", "南203"]},
-  {"code": "103", "name": "103车间", "category": "workshop", "x_pct": 26.0, "y_pct": 75.5, "aliases": ["103"]},
-  {"code": "", "name": "循环水池", "category": "utility", "x_pct": 50.0, "y_pct": 54.7, "aliases": ["循环水池", "冷却水池"]},
-  {"code": "511", "name": "循环水站（511）", "category": "utility", "x_pct": 43.5, "y_pct": 58.4, "aliases": ["循环水站511"]},
-  {"code": "502", "name": "循环水站（502）", "category": "utility", "x_pct": 58.0, "y_pct": 58.5, "aliases": ["循环水站502"]},
-  {"code": "501", "name": "动力中心（501）", "category": "utility", "x_pct": 78.0, "y_pct": 58.5, "aliases": ["动力中心501", "动力中心东"]},
-  {"code": "", "name": "破碎间", "category": "utility", "x_pct": 54.9, "y_pct": 24.1, "aliases": ["破碎间"]},
-  {"code": "", "name": "RTO", "category": "env", "x_pct": 60.2, "y_pct": 24.2, "aliases": ["RTO", "rto", "蓄热焚烧"]},
-  {"code": "506", "name": "锅炉房（506）", "category": "utility", "x_pct": 65.0, "y_pct": 25.5, "aliases": ["锅炉房506", "锅炉房东"]},
-  {"code": "504", "name": "煤仓（504）", "category": "utility", "x_pct": 55.5, "y_pct": 32.8, "aliases": ["煤仓504", "煤仓东"]},
-  {"code": "202", "name": "202车间", "category": "workshop", "x_pct": 65.0, "y_pct": 35.0, "aliases": ["202"]},
-  {"code": "501", "name": "除盐水站（501）", "category": "utility", "x_pct": 55.0, "y_pct": 38.7, "aliases": ["除盐水站501", "除盐水站东"]},
-  {"code": "507", "name": "配电室", "category": "utility", "x_pct": 61.5, "y_pct": 40.0, "aliases": ["配电室", "507"]},
-  {"code": "503", "name": "供水站（503）", "category": "utility", "x_pct": 58.0, "y_pct": 48.0, "aliases": ["供水站503"]},
-  {"code": "", "name": "门卫", "category": "logistics", "x_pct": 66.0, "y_pct": 79.7, "aliases": ["门卫"]},
-  {"code": "", "name": "食堂", "category": "office", "x_pct": 74.0, "y_pct": 84.8, "aliases": ["食堂"]},
-  {"code": "601", "name": "办公质检楼", "category": "office", "x_pct": 55.0, "y_pct": 87.0, "aliases": ["质检楼", "办公楼", "601"]},
-  {"code": "603", "name": "倒班楼西楼", "category": "office", "x_pct": 82.5, "y_pct": 85.0, "aliases": ["倒班楼西"]},
-  {"code": "602", "name": "倒班楼东楼", "category": "office", "x_pct": 92.0, "y_pct": 85.0, "aliases": ["倒班楼东", "倒班楼"]},
-  {"code": "206", "name": "201二车间", "category": "workshop", "x_pct": 86.0, "y_pct": 24.2, "aliases": ["206", "206车间", "201二车间"]},
-  {"code": "201", "name": "201一车间", "category": "workshop", "x_pct": 86.0, "y_pct": 31.5, "aliases": ["201", "201车间"]},
-  {"code": "305", "name": "甲类罐区", "category": "tank", "x_pct": 80.5, "y_pct": 39.0, "aliases": ["罐区", "甲类罐区"]},
-  {"code": "305", "name": "装卸罐", "category": "tank", "x_pct": 80.5, "y_pct": 41.8, "aliases": ["装卸罐"]},
-  {"code": "305", "name": "泵房（305）", "category": "utility", "x_pct": 78.0, "y_pct": 42.6, "aliases": ["泵房305"]},
-  {"code": "306", "name": "危险品库", "category": "warehouse", "x_pct": 91.5, "y_pct": 39.7, "aliases": ["危化品库", "危险品"]},
-  {"code": "303", "name": "303仓库", "category": "warehouse", "x_pct": 92.0, "y_pct": 58.5, "aliases": ["303库", "303"]},
-  {"code": "302", "name": "302仓库", "category": "warehouse", "x_pct": 92.0, "y_pct": 67.2, "aliases": ["302库", "302"]},
-  {"code": "301", "name": "301仓库", "category": "warehouse", "x_pct": 92.0, "y_pct": 75.6, "aliases": ["301库", "301"]},
-  {"code": "101", "name": "101车间", "category": "workshop", "x_pct": 79.0, "y_pct": 67.2, "aliases": ["101一车间", "101二车间", "101"]},
-  {"code": "102", "name": "102车间", "category": "workshop", "x_pct": 79.0, "y_pct": 75.5, "aliases": ["102一车间", "102二车间", "102"]}
+  {
+    "code": "",
+    "name": "液氨压缩机房",
+    "category": "utility",
+    "x_pct": 50.8,
+    "y_pct": 13.1,
+    "aliases": [
+      "液氨压缩机房",
+      "压缩机房"
+    ]
+  },
+  {
+    "code": "316",
+    "name": "液氨储区",
+    "category": "tank",
+    "x_pct": 49.2,
+    "y_pct": 14.4,
+    "aliases": [
+      "液氨储区",
+      "液氨"
+    ]
+  },
+  {
+    "code": "516",
+    "name": "锅炉房（516）",
+    "category": "utility",
+    "x_pct": 52.6,
+    "y_pct": 32.4,
+    "aliases": [
+      "锅炉房516",
+      "锅炉房西"
+    ]
+  },
+  {
+    "code": "",
+    "name": "烟囱",
+    "category": "utility",
+    "x_pct": 54.8,
+    "y_pct": 35.2,
+    "aliases": [
+      "烟囱"
+    ]
+  },
+  {
+    "code": "515",
+    "name": "煤仓（515）",
+    "category": "utility",
+    "x_pct": 56.4,
+    "y_pct": 39.6,
+    "aliases": [
+      "煤仓515",
+      "煤仓西"
+    ]
+  },
+  {
+    "code": "518",
+    "name": "除盐水站（518）",
+    "category": "utility",
+    "x_pct": 49.8,
+    "y_pct": 36,
+    "aliases": [
+      "除盐水站518",
+      "除盐水站西"
+    ]
+  },
+  {
+    "code": "803",
+    "name": "203车间",
+    "category": "workshop",
+    "x_pct": 47.5,
+    "y_pct": 38.5,
+    "aliases": []
+  },
+  {
+    "code": "512",
+    "name": "供水站（512）",
+    "category": "utility",
+    "x_pct": 48,
+    "y_pct": 45.7,
+    "aliases": [
+      "供水站512"
+    ]
+  },
+  {
+    "code": "315",
+    "name": "315仓库",
+    "category": "warehouse",
+    "x_pct": 34.4,
+    "y_pct": 31.6,
+    "aliases": [
+      "315库",
+      "315"
+    ]
+  },
+  {
+    "code": "513",
+    "name": "动力中心（513）",
+    "category": "utility",
+    "x_pct": 39.5,
+    "y_pct": 36.6,
+    "aliases": [
+      "动力中心513",
+      "动力中心西"
+    ]
+  },
+  {
+    "code": "313",
+    "name": "313仓库",
+    "category": "warehouse",
+    "x_pct": 30.4,
+    "y_pct": 35.9,
+    "aliases": [
+      "313库",
+      "313"
+    ]
+  },
+  {
+    "code": "312",
+    "name": "液体原料库",
+    "category": "warehouse",
+    "x_pct": 27,
+    "y_pct": 39.8,
+    "aliases": [
+      "原料库",
+      "312"
+    ]
+  },
+  {
+    "code": "311",
+    "name": "311仓库",
+    "category": "warehouse",
+    "x_pct": 23.8,
+    "y_pct": 43.1,
+    "aliases": [
+      "311库",
+      "311"
+    ]
+  },
+  {
+    "code": "",
+    "name": "足球场",
+    "category": "sports",
+    "x_pct": 17.5,
+    "y_pct": 48.5,
+    "aliases": [
+      "足球场"
+    ]
+  },
+  {
+    "code": "",
+    "name": "篮球场",
+    "category": "sports",
+    "x_pct": 23.7,
+    "y_pct": 51.2,
+    "aliases": [
+      "篮球场"
+    ]
+  },
+  {
+    "code": "",
+    "name": "网球场",
+    "category": "sports",
+    "x_pct": 20.6,
+    "y_pct": 53.1,
+    "aliases": [
+      "网球场"
+    ]
+  },
+  {
+    "code": "",
+    "name": "物流门房",
+    "category": "logistics",
+    "x_pct": 11.9,
+    "y_pct": 49,
+    "aliases": [
+      "物流门房"
+    ]
+  },
+  {
+    "code": "203",
+    "name": "203车间（北）",
+    "category": "workshop",
+    "x_pct": 36.9,
+    "y_pct": 42.8,
+    "aliases": [
+      "203北",
+      "北203"
+    ]
+  },
+  {
+    "code": "203",
+    "name": "203车间（南）",
+    "category": "workshop",
+    "x_pct": 33.7,
+    "y_pct": 46.3,
+    "aliases": [
+      "203南",
+      "南203"
+    ]
+  },
+  {
+    "code": "103",
+    "name": "103车间",
+    "category": "workshop",
+    "x_pct": 30,
+    "y_pct": 50.3,
+    "aliases": [
+      "103"
+    ]
+  },
+  {
+    "code": "",
+    "name": "循环水池",
+    "category": "utility",
+    "x_pct": 48.1,
+    "y_pct": 51.7,
+    "aliases": [
+      "循环水池",
+      "冷却水池",
+      "新循环水池"
+    ]
+  },
+  {
+    "code": "511",
+    "name": "循环水站（511）",
+    "category": "utility",
+    "x_pct": 44,
+    "y_pct": 50.4,
+    "aliases": [
+      "循环水站511",
+      "西循环水站",
+      "西凉水塔"
+    ]
+  },
+  {
+    "code": "502",
+    "name": "循环水站（502）",
+    "category": "utility",
+    "x_pct": 49.8,
+    "y_pct": 56.8,
+    "aliases": [
+      "循环水站502",
+      "东循环水站",
+      "东凉水塔"
+    ]
+  },
+  {
+    "code": "501",
+    "name": "动力中心（501）",
+    "category": "utility",
+    "x_pct": 57.9,
+    "y_pct": 65.5,
+    "aliases": [
+      "动力中心501",
+      "动力中心东"
+    ]
+  },
+  {
+    "code": "",
+    "name": "破碎间",
+    "category": "utility",
+    "x_pct": 62.4,
+    "y_pct": 40.5,
+    "aliases": [
+      "破碎间"
+    ]
+  },
+  {
+    "code": "",
+    "name": "RTO",
+    "category": "env",
+    "x_pct": 64.5,
+    "y_pct": 42.8,
+    "aliases": [
+      "RTO",
+      "rto",
+      "蓄热焚烧"
+    ]
+  },
+  {
+    "code": "506",
+    "name": "锅炉房（506）",
+    "category": "utility",
+    "x_pct": 66,
+    "y_pct": 45.5,
+    "aliases": [
+      "锅炉房506",
+      "锅炉房东"
+    ]
+  },
+  {
+    "code": "504",
+    "name": "煤仓（504）",
+    "category": "utility",
+    "x_pct": 59.2,
+    "y_pct": 44.5,
+    "aliases": [
+      "煤仓504",
+      "煤仓东"
+    ]
+  },
+  {
+    "code": "202",
+    "name": "202车间",
+    "category": "workshop",
+    "x_pct": 62.1,
+    "y_pct": 49.6,
+    "aliases": [
+      "202"
+    ]
+  },
+  {
+    "code": "501",
+    "name": "除盐水站（501）",
+    "category": "utility",
+    "x_pct": 56.6,
+    "y_pct": 46.9,
+    "aliases": [
+      "除盐水站501",
+      "除盐水站东"
+    ]
+  },
+  {
+    "code": "507",
+    "name": "配电室",
+    "category": "utility",
+    "x_pct": 58.7,
+    "y_pct": 50.3,
+    "aliases": [
+      "配电室",
+      "507"
+    ]
+  },
+  {
+    "code": "503",
+    "name": "供水站（503）",
+    "category": "utility",
+    "x_pct": 54,
+    "y_pct": 52.2,
+    "aliases": [
+      "供水站503"
+    ]
+  },
+  {
+    "code": "",
+    "name": "门卫",
+    "category": "logistics",
+    "x_pct": 44.5,
+    "y_pct": 69.5,
+    "aliases": [
+      "门卫"
+    ]
+  },
+  {
+    "code": "",
+    "name": "食堂",
+    "category": "office",
+    "x_pct": 45.6,
+    "y_pct": 75.1,
+    "aliases": [
+      "食堂"
+    ]
+  },
+  {
+    "code": "601",
+    "name": "办公质检楼",
+    "category": "office",
+    "x_pct": 37.1,
+    "y_pct": 67.8,
+    "aliases": [
+      "质检楼",
+      "办公楼",
+      "601"
+    ]
+  },
+  {
+    "code": "603",
+    "name": "倒班楼西楼",
+    "category": "office",
+    "x_pct": 49,
+    "y_pct": 78.9,
+    "aliases": [
+      "倒班楼西"
+    ]
+  },
+  {
+    "code": "602",
+    "name": "倒班楼东楼",
+    "category": "office",
+    "x_pct": 52.8,
+    "y_pct": 83,
+    "aliases": [
+      "倒班楼东",
+      "倒班楼"
+    ]
+  },
+  {
+    "code": "206",
+    "name": "201二车间",
+    "category": "workshop",
+    "x_pct": 75,
+    "y_pct": 54,
+    "aliases": [
+      "206",
+      "206车间",
+      "201二车间"
+    ]
+  },
+  {
+    "code": "201",
+    "name": "201一车间",
+    "category": "workshop",
+    "x_pct": 72,
+    "y_pct": 57.2,
+    "aliases": [
+      "201",
+      "201车间"
+    ]
+  },
+  {
+    "code": "305",
+    "name": "甲类罐区",
+    "category": "tank",
+    "x_pct": 66.8,
+    "y_pct": 58.1,
+    "aliases": [
+      "罐区",
+      "甲类罐区"
+    ]
+  },
+  {
+    "code": "305",
+    "name": "装卸罐",
+    "category": "tank",
+    "x_pct": 65.6,
+    "y_pct": 59.3,
+    "aliases": [
+      "装卸罐"
+    ]
+  },
+  {
+    "code": "305",
+    "name": "泵房（305）",
+    "category": "utility",
+    "x_pct": 64.3,
+    "y_pct": 58.6,
+    "aliases": [
+      "泵房305"
+    ]
+  },
+  {
+    "code": "306",
+    "name": "危险品库",
+    "category": "warehouse",
+    "x_pct": 70.9,
+    "y_pct": 63.2,
+    "aliases": [
+      "危化品库",
+      "危险品"
+    ]
+  },
+  {
+    "code": "303",
+    "name": "303仓库",
+    "category": "warehouse",
+    "x_pct": 63.5,
+    "y_pct": 71.5,
+    "aliases": [
+      "303库",
+      "303"
+    ]
+  },
+  {
+    "code": "302",
+    "name": "302仓库",
+    "category": "warehouse",
+    "x_pct": 60,
+    "y_pct": 75.3,
+    "aliases": [
+      "302库",
+      "302"
+    ]
+  },
+  {
+    "code": "301",
+    "name": "301仓库",
+    "category": "warehouse",
+    "x_pct": 56.6,
+    "y_pct": 79,
+    "aliases": [
+      "301库",
+      "301"
+    ]
+  },
+  {
+    "code": "101",
+    "name": "101车间",
+    "category": "workshop",
+    "x_pct": 54.8,
+    "y_pct": 69.7,
+    "aliases": [
+      "101一车间",
+      "101二车间",
+      "101"
+    ]
+  },
+  {
+    "code": "102",
+    "name": "102车间",
+    "category": "workshop",
+    "x_pct": 51.4,
+    "y_pct": 73.3,
+    "aliases": [
+      "102一车间",
+      "102二车间",
+      "102"
+    ]
+  },
+  {
+    "code": "210",
+    "name": "MVR",
+    "category": "utility",
+    "aliases": [
+      "mvr"
+    ],
+    "x_pct": 79.1,
+    "y_pct": 46.5
+  },
+  {
+    "code": "208",
+    "name": "过滤生产区",
+    "category": "workshop",
+    "aliases": [
+      "208"
+    ],
+    "x_pct": 82.5,
+    "y_pct": 49.4
+  },
+  {
+    "code": "209",
+    "name": "干燥间",
+    "category": "workshop",
+    "aliases": [
+      "209"
+    ],
+    "x_pct": 81.2,
+    "y_pct": 50.8
+  },
+  {
+    "code": "",
+    "name": "机修间",
+    "category": "utility",
+    "aliases": [
+      "机修间"
+    ],
+    "x_pct": 84.7,
+    "y_pct": 49.9
+  },
+  {
+    "code": "",
+    "name": "曝气池",
+    "category": "env",
+    "aliases": [
+      "曝气池"
+    ],
+    "x_pct": 60.5,
+    "y_pct": 24.4
+  },
+  {
+    "code": "",
+    "name": "二沉池",
+    "category": "env",
+    "aliases": [
+      "二沉池"
+    ],
+    "x_pct": 63.9,
+    "y_pct": 28.6
+  },
+  {
+    "code": "",
+    "name": "污泥浓缩池",
+    "category": "env",
+    "aliases": [
+      "污泥浓缩池"
+    ],
+    "x_pct": 57.3,
+    "y_pct": 27
+  },
+  {
+    "code": "802",
+    "name": "污水处理系统（一）",
+    "category": "env",
+    "x_pct": 61.9,
+    "y_pct": 29.4,
+    "aliases": [
+      "污水处理系统",
+      "污水站",
+      "污水处理",
+      "污水处理车间",
+      "厌氧塔",
+      "总排在线房",
+      "压泥间",
+      "802"
+    ]
+  },
+  {
+    "code": "802",
+    "name": "污水处理系统（二）",
+    "category": "env",
+    "x_pct": 67.2,
+    "y_pct": 35.1,
+    "aliases": []
+  }
 ]

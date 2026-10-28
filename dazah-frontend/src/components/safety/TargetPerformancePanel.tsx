@@ -15,6 +15,7 @@ import {
   Select,
   Space,
   Table,
+  Tabs,
   Tag,
   Typography,
 } from 'antd'
@@ -27,10 +28,16 @@ import {
   getSafetyTargetStats,
   updateSafetyTarget,
   upsertSafetyTargetRecord,
+  type SafetyDutyAssessmentItemData,
+  type SafetyDutyAssessmentStatsData,
+  type SafetyTargetAgreementItem,
+  type SafetyTargetAgreementStatsData,
   type SafetyTargetItem,
   type SafetyTargetStatsData,
 } from '@/actions/safety'
 import { usePagePermissions } from '@/hooks/usePagePermissions'
+import TargetAgreementPanel from './TargetAgreementPanel'
+import DutyAssessmentPanel from './DutyAssessmentPanel'
 
 const { Text, Title } = Typography
 
@@ -96,11 +103,19 @@ export default function TargetPerformancePanel({
   pageKey,
   initialTargets,
   initialStats,
+  initialAgreements,
+  initialAgreementStats,
+  initialAssessments,
+  initialAssessmentStats,
   initialError,
 }: {
   pageKey: string
   initialTargets: SafetyTargetItem[]
   initialStats: SafetyTargetStatsData | null
+  initialAgreements: SafetyTargetAgreementItem[]
+  initialAgreementStats: SafetyTargetAgreementStatsData | null
+  initialAssessments: SafetyDutyAssessmentItemData[]
+  initialAssessmentStats: SafetyDutyAssessmentStatsData | null
   initialError: string | null
 }) {
   const { canOperate, canDelete } = usePagePermissions(pageKey)
@@ -360,81 +375,120 @@ export default function TargetPerformancePanel({
         <div>
           <Title level={4} className="!mb-1">目标责任与绩效</Title>
           <Text style={{ color: T.slate, fontSize: 13 }}>
-            年度安全目标台账与考核进度 · 数据来源：安全目标责任书分解
+            年度安全目标台账 · 安全目标责任书逐级签订 · 安全生产责任制季度考核（依据 2026 安全目标责任书与责任制考核表）
           </Text>
         </div>
-        <Button type="primary" disabled={!canOperate} onClick={openCreate}>
-          新增安全目标
-        </Button>
       </div>
 
-      {stats && (
-        <Card variant="borderless" size="small" style={{ borderRadius: 12, border: `1px solid ${T.hairline}` }}>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {[
-              { label: '目标总数', value: stats.total, color: T.primary },
-              { label: '已达成', value: stats.achieved, color: T.success },
-              { label: '进行中', value: stats.in_progress, color: T.warning },
-              { label: '未达成', value: stats.not_achieved, color: T.error },
-            ].map((item) => (
-              <div key={item.label} className="rounded-lg p-3" style={{ backgroundColor: T.surface }}>
-                <Text style={{ color: T.slate, fontSize: 12 }}>{item.label}</Text>
-                <div className="text-2xl font-semibold" style={{ color: item.color }}>{item.value}</div>
+      <Tabs
+        defaultActiveKey="targets"
+        items={[
+          {
+            key: 'targets',
+            label: '安全目标台账',
+            children: (
+              <div className="space-y-4">
+                <div className="flex justify-end">
+                  <Button type="primary" disabled={!canOperate} onClick={openCreate}>
+                    新增安全目标
+                  </Button>
+                </div>
+                {stats && (
+                  <Card variant="borderless" size="small" style={{ borderRadius: 12, border: `1px solid ${T.hairline}` }}>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      {[
+                        { label: '目标总数', value: stats.total, color: T.primary },
+                        { label: '已达成', value: stats.achieved, color: T.success },
+                        { label: '进行中', value: stats.in_progress, color: T.warning },
+                        { label: '未达成', value: stats.not_achieved, color: T.error },
+                      ].map((item) => (
+                        <div key={item.label} className="rounded-lg p-3" style={{ backgroundColor: T.surface }}>
+                          <Text style={{ color: T.slate, fontSize: 12 }}>{item.label}</Text>
+                          <div className="text-2xl font-semibold" style={{ color: item.color }}>{item.value}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+                )}
+
+                {error && (
+                  <Card variant="borderless" style={{ borderRadius: 12, border: `1px solid ${T.error}33` }}>
+                    <Text style={{ color: T.error }}>{error}</Text>
+                  </Card>
+                )}
+
+                <Card variant="borderless" style={{ borderRadius: 12, border: `1px solid ${T.hairline}` }}>
+                  <div className="flex items-center gap-3 mb-3 flex-wrap">
+                    <Segmented
+                      value={year}
+                      onChange={(v) => {
+                        setYear(v as number)
+                        refresh(v as number, statusFilter, keyword)
+                      }}
+                      options={[CURRENT_YEAR - 1, CURRENT_YEAR, CURRENT_YEAR + 1]}
+                    />
+                    <Segmented
+                      value={statusFilter}
+                      onChange={(v) => {
+                        setStatusFilter(v as string)
+                        refresh(year, v as string, keyword)
+                      }}
+                      options={[
+                        { label: '全部', value: 'all' },
+                        { label: '进行中', value: 'in_progress' },
+                        { label: '已达成', value: 'achieved' },
+                        { label: '未达成', value: 'not_achieved' },
+                      ]}
+                    />
+                    <Input.Search
+                      placeholder="搜索目标名称/指标"
+                      allowClear
+                      style={{ maxWidth: 260 }}
+                      onSearch={(v) => {
+                        setKeyword(v)
+                        refresh(year, statusFilter, v)
+                      }}
+                    />
+                    <Text style={{ color: T.muted, fontSize: 12, marginLeft: 'auto' }}>共 {total} 条</Text>
+                  </div>
+                  <Table<SafetyTargetItem>
+                    rowKey="id"
+                    columns={columns}
+                    dataSource={targets}
+                    loading={loading}
+                    pagination={{ pageSize: 20, showSizeChanger: false }}
+                    size="middle"
+                  />
+                </Card>
               </div>
-            ))}
-          </div>
-        </Card>
-      )}
-
-      {error && (
-        <Card variant="borderless" style={{ borderRadius: 12, border: `1px solid ${T.error}33` }}>
-          <Text style={{ color: T.error }}>{error}</Text>
-        </Card>
-      )}
-
-      <Card variant="borderless" style={{ borderRadius: 12, border: `1px solid ${T.hairline}` }}>
-        <div className="flex items-center gap-3 mb-3 flex-wrap">
-          <Segmented
-            value={year}
-            onChange={(v) => {
-              setYear(v as number)
-              refresh(v as number, statusFilter, keyword)
-            }}
-            options={[CURRENT_YEAR - 1, CURRENT_YEAR, CURRENT_YEAR + 1]}
-          />
-          <Segmented
-            value={statusFilter}
-            onChange={(v) => {
-              setStatusFilter(v as string)
-              refresh(year, v as string, keyword)
-            }}
-            options={[
-              { label: '全部', value: 'all' },
-              { label: '进行中', value: 'in_progress' },
-              { label: '已达成', value: 'achieved' },
-              { label: '未达成', value: 'not_achieved' },
-            ]}
-          />
-          <Input.Search
-            placeholder="搜索目标名称/指标"
-            allowClear
-            style={{ maxWidth: 260 }}
-            onSearch={(v) => {
-              setKeyword(v)
-              refresh(year, statusFilter, v)
-            }}
-          />
-          <Text style={{ color: T.muted, fontSize: 12, marginLeft: 'auto' }}>共 {total} 条</Text>
-        </div>
-        <Table<SafetyTargetItem>
-          rowKey="id"
-          columns={columns}
-          dataSource={targets}
-          loading={loading}
-          pagination={{ pageSize: 20, showSizeChanger: false }}
-          size="middle"
-        />
-      </Card>
+            ),
+          },
+          {
+            key: 'agreements',
+            label: '责任书签订',
+            children: (
+              <TargetAgreementPanel
+                pageKey={pageKey}
+                initialAgreements={initialAgreements}
+                initialStats={initialAgreementStats}
+                initialError={initialError}
+              />
+            ),
+          },
+          {
+            key: 'assessments',
+            label: '季度考核',
+            children: (
+              <DutyAssessmentPanel
+                pageKey={pageKey}
+                initialAssessments={initialAssessments}
+                initialStats={initialAssessmentStats}
+                initialError={initialError}
+              />
+            ),
+          },
+        ]}
+      />
 
       <Modal
         title={editing ? '编辑安全目标' : '新增安全目标'}

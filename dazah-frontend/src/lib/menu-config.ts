@@ -243,7 +243,8 @@ export const moduleMenus: ModuleMenu[] = [
             label: "EHS变更管理",
             path: "",
             children: [
-              { key: "ehs-change-apply", label: "EHS变更申请", path: "/safety/ehs-change" },
+              { key: "ehs-change-review", label: "EHS变更审批", path: "/safety/ehs-change" },
+              { key: "ehs-change-acceptance", label: "变更验收审批", path: "/safety/ehs-change/acceptance" },
             ],
           },
         ],

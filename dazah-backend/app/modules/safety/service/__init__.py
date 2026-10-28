@@ -7,7 +7,6 @@ from app.modules.safety.service import feishu_settings, knowledge_feishu
 from app.modules.safety.service.attachment import AttachmentService
 from app.modules.safety.service.config import ConfigService, create_ai_service
 from app.modules.safety.service.daily_risk_report import DailyRiskReportService
-from app.modules.safety.service.ehs_change import EhsChangeService
 from app.modules.safety.service.emergency_card import EmergencyCardService
 from app.modules.safety.service.hazard_ledger_import import HazardLedgerImportService
 from app.modules.safety.service.knowledge import KnowledgeService
@@ -37,9 +36,7 @@ __all__ = [
     "SpecialOperationService",
     "KnowledgeService",
     "SpecialOperationReportService",
-    "DailyRiskReportService",
-    "EhsChangeService",
-    "HazardLedgerImportService",
+    "DailyRiskReportService",    "HazardLedgerImportService",
     "OhHazardMonitorService",
     "OhHealthExamService",
     "ScheduledTaskService",
