@@ -31,8 +31,17 @@ def test_qrcode_item_repair_text_property():
     assert _items(1)[0].repair_text == "报修 201一车间 离心泵1 LB-001"
 
 
-def test_render_qrcode_pdf_outputs_valid_pdf():
-    pdf = render_qrcode_pdf(_items(3))
+def test_render_qrcode_pdf_outputs_valid_pdf(monkeypatch):
+    """PDF 组装与分页逻辑不依赖具体字体：桩掉字体加载（CI runner 无 CJK 字体，
+    生产/Docker 镜像内置 Noto CJK，由镜像构建与部署环境保证）。"""
+    from PIL import ImageFont
+
+    import app.modules.equipment.service.equipment_qrcode as qrcode_svc
+
+    monkeypatch.setattr(
+        qrcode_svc, "_load_font", lambda size: ImageFont.load_default()
+    )
+    pdf = qrcode_svc.render_qrcode_pdf(_items(3))
     assert pdf.startswith(b"%PDF")
     assert len(pdf) > 10_000
 
@@ -40,6 +49,15 @@ def test_render_qrcode_pdf_outputs_valid_pdf():
 def test_render_qrcode_pdf_empty_items_rejected():
     with pytest.raises(ValueError):
         render_qrcode_pdf([])
+
+
+def test_load_font_raises_without_any_candidate(monkeypatch):
+    """生产语义：一个可用字体都没有时必须显式失败，禁止静默出乱码标签。"""
+    import app.modules.equipment.service.equipment_qrcode as qrcode_svc
+
+    monkeypatch.setattr(qrcode_svc, "_FONT_CANDIDATES", ())
+    with pytest.raises(RuntimeError, match="中文字体"):
+        qrcode_svc._load_font(24)
 
 
 @pytest.mark.asyncio
