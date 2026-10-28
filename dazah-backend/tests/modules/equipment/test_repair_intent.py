@@ -14,7 +14,7 @@ from app.modules.equipment.feishu.repair_intent import parse_repair_intent
 @pytest.mark.asyncio
 async def test_parse_extracts_and_normalizes_fields(monkeypatch):
     monkeypatch.setattr(
-        repair_intent.llm_client,
+        type(repair_intent.llm_client),
         "chat_json",
         AsyncMock(
             return_value={
@@ -37,7 +37,7 @@ async def test_parse_extracts_and_normalizes_fields(monkeypatch):
 @pytest.mark.asyncio
 async def test_parse_falls_back_on_llm_error(monkeypatch):
     monkeypatch.setattr(
-        repair_intent.llm_client,
+        type(repair_intent.llm_client),
         "chat_json",
         AsyncMock(side_effect=LLMError("bad output", "raw")),
     )
@@ -47,7 +47,7 @@ async def test_parse_falls_back_on_llm_error(monkeypatch):
 @pytest.mark.asyncio
 async def test_parse_falls_back_on_any_failure(monkeypatch):
     monkeypatch.setattr(
-        repair_intent.llm_client,
+        type(repair_intent.llm_client),
         "chat_json",
         AsyncMock(side_effect=TimeoutError()),
     )
@@ -57,7 +57,7 @@ async def test_parse_falls_back_on_any_failure(monkeypatch):
 @pytest.mark.asyncio
 async def test_parse_empty_body_returns_none(monkeypatch):
     called = AsyncMock()
-    monkeypatch.setattr(repair_intent.llm_client, "chat_json", called)
+    monkeypatch.setattr(type(repair_intent.llm_client), "chat_json", called)
     assert await parse_repair_intent("报修") is None
     called.assert_not_awaited()
 
@@ -65,7 +65,7 @@ async def test_parse_empty_body_returns_none(monkeypatch):
 @pytest.mark.asyncio
 async def test_parse_all_empty_fields_returns_none(monkeypatch):
     monkeypatch.setattr(
-        repair_intent.llm_client,
+        type(repair_intent.llm_client),
         "chat_json",
         AsyncMock(
             return_value={
