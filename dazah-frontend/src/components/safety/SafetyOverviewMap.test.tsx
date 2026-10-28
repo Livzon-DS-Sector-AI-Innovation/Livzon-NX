@@ -203,4 +203,22 @@ describe('SafetyOverviewMap', () => {
     })
     expect(pushMock).toHaveBeenCalledWith('/safety/special-ops')
   })
+
+  it('全宽切换按钮往返切换', async () => {
+    const view = await renderMap(OVERVIEW)
+    const toggle = Array.from(
+      container.querySelectorAll<HTMLButtonElement>('button'),
+    ).find((b) => b.textContent === '全宽')
+    expect(toggle).toBeTruthy()
+    await act(async () => {
+      toggle!.click()
+      await new Promise((r) => setTimeout(r, 30))
+    })
+    const half = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find((b) => b.textContent === '半宽')
+    expect(half).toBeTruthy()
+    await act(async () => {
+      half!.click()
+      await new Promise((r) => setTimeout(r, 30))
+    })
+  })
 })
