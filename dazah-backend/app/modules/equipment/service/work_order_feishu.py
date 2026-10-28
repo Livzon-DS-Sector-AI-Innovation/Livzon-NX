@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import re
+import uuid
 from datetime import UTC, datetime
 from typing import Any
 
@@ -648,6 +649,139 @@ def _card_error_payload(message: str) -> dict[str, Any]:
     return {"code": 0, "toast": {"type": "error", "content": message}}
 
 
+def _card_ok_payload(message: str = "") -> dict[str, Any]:
+    """卡片回调成功时的 ACK 响应。"""
+    payload: dict[str, Any] = {"code": 0}
+    if message:
+        payload["toast"] = {"type": "success", "content": message}
+    return payload
+
+
+async def _attach_repair_photo(
+    db: AsyncSession, wo_id: uuid.UUID, photo_nonce: str
+) -> None:
+    """把拍照识别的临时照片归档为工单附件（nonce 一次性，10 分钟内有效）。"""
+    import os
+    from io import BytesIO
+
+    from fastapi import UploadFile
+
+    from app.core.redis import redis_client
+    from app.modules.equipment.service.work_order_image import upload_images
+
+    if not photo_nonce:
+        return
+    photo_path = await redis_client.get(f"repair:photo:img:{photo_nonce}")
+    if not photo_path or not os.path.exists(photo_path):
+        return
+    with open(photo_path, "rb") as f:
+        content = f.read()
+    upload = UploadFile(file=BytesIO(content), filename="拍照报修.jpg")
+    upload.size = len(content)
+    try:
+        await upload_images(db, wo_id, [upload])
+    except Exception:
+        logger.exception("拍照报修照片归档失败（不影响工单）")
+
+
+async def _handle_photo_action(
+    value: dict[str, Any], *, open_id: str, union_id: str
+) -> dict[str, Any]:
+    """拍照报修确认卡片回调：photo_repair=确认建单，photo_cancel=取消。"""
+    import uuid as uuid_mod
+
+    from app.core.redis import redis_client
+    from app.modules.equipment.service.work_order import create_work_order
+
+    async def _fail(message: str) -> dict[str, Any]:
+        if open_id:
+            try:
+                await send_user_card(
+                    open_id=open_id,
+                    title="❌ 拍照报修未完成",
+                    receive_id_type="open_id",
+                    content=message,
+                )
+            except Exception:
+                logger.exception("拍照报修失败提示发送失败")
+        return _card_error_payload(message)
+
+    act = value.get("act", "")
+    if act == "photo_cancel":
+        return _card_ok_payload("已取消，可重拍或发送文字「报修 …」")
+
+    eq_id = str(value.get("eq", "") or "")
+    fault = str(value.get("ft", "") or "").strip()
+    photo_nonce = str(value.get("ph", "") or "")
+    if not eq_id:
+        return await _fail("卡片数据缺失，请重新拍照报修")
+
+    # 一次性消费照片 nonce，防连点重复建单
+    if photo_nonce:
+        used = await redis_client.set(
+            f"repair:photo:used:{photo_nonce}", "1", ex=600, nx=True
+        )
+        if not used:
+            return await _fail("这张照片已处理过，请勿重复点击")
+
+    try:
+        eq_uuid = uuid_mod.UUID(eq_id)
+    except ValueError:
+        return await _fail("设备信息无效，请重新拍照报修")
+
+    async with async_session_factory() as db:
+        user = await _find_user_by_feishu(db, open_id=open_id, union_id=union_id)
+        if user is None:
+            return await _fail("未绑定平台账号，请先用飞书登录一次平台后重试")
+        equipment = await repo.get_equipment_by_id(db, eq_uuid)
+        if equipment is None:
+            return await _fail("设备不存在或已删除，请重新拍照报修")
+
+        fault_text = f"[拍照报修] {fault}" if fault else "[拍照报修]（见附件照片）"
+        try:
+            wo = await create_work_order(
+                db,
+                WorkOrderCreate(
+                    equipment_id=equipment.id,
+                    order_type="故障维修",
+                    priority="高",
+                    fault_description=fault_text,
+                ),
+                reporter_id=user.id,
+            )
+        except Exception as exc:
+            logger.exception("拍照报修建单失败")
+            return await _fail(f"工单创建失败：{exc}")
+
+        await _attach_repair_photo(db, wo.id, photo_nonce)
+        await db.commit()
+
+    workshop_name = equipment.workshop_code or ""
+    await send_user_card(
+        open_id=open_id,
+        title="✅ 拍照报修已受理",
+        receive_id_type="open_id",
+        content=(
+            f"**工单号：**{wo.work_order_no}\n"
+            f"**设备：**{equipment.name}（{equipment.equipment_no}）\n"
+            f"**描述：**{fault_text}\n\n"
+            "照片已作为附件归档，维修人员接单后会更新进度。"
+        ),
+    )
+    try:
+        await dispatch_repair_card(
+            work_order_no=wo.work_order_no,
+            equipment_label=f"{equipment.name}（{equipment.equipment_no}）",
+            workshop_name=workshop_name or "未知车间",
+            fault=fault_text,
+            priority="高",
+            reporter_name=user.name,
+        )
+    except Exception:
+        logger.exception("拍照报修派单群通知失败（工单已创建，不影响）")
+    return _card_ok_payload("已建单并派发维修群")
+
+
 # 后台补丁任务引用（防止被 GC 中断）
 _patch_tasks: set[asyncio.Task[None]] = set()
 
@@ -724,6 +858,9 @@ async def handle_card_action(payload: dict[str, Any]) -> dict[str, Any]:
             except Exception:
                 logger.exception("卡片操作失败提示发送失败")
         return _card_error_payload(message)
+
+    if act in ("photo_repair", "photo_cancel"):
+        return await _handle_photo_action(value, open_id=open_id, union_id=union_id)
 
     if act not in ("accept", "complete") or not wo_no:
         return await _fail("未知操作")

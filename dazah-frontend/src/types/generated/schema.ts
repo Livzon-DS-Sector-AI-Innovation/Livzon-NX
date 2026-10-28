@@ -2132,6 +2132,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/equipment/equipments/qrcode-pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 导出车间设备报修二维码 PDF
+         * @description 按车间导出设备报修二维码 PDF（A4 一页 12 枚，打印覆膜张贴）。
+         *
+         *     码内容为纯文本「报修 {车间全名} {设备名} {设备编号}」，扫码后复制
+         *     发到维修群即可建单，不编码任何平台地址。
+         */
+        get: operations["export_equipment_qrcode_pdf_api_v1_equipment_equipments_qrcode_pdf_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/equipment/equipments/statistics": {
         parameters: {
             query?: never;
@@ -72030,6 +72053,40 @@ export interface operations {
     download_equipment_import_template_api_v1_equipment_equipments_import_template_get: {
         parameters: {
             query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_equipment_qrcode_pdf_api_v1_equipment_equipments_qrcode_pdf_get: {
+        parameters: {
+            query: {
+                /** @description 车间代码（必填，如 101-1 / dlz） */
+                workshop: string;
+            };
             header?: never;
             path?: never;
             cookie?: {

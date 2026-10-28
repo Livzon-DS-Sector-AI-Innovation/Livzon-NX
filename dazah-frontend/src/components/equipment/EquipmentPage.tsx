@@ -3,10 +3,11 @@
 import { useEffect, useCallback, useRef, useState } from 'react'
 import { App, ConfigProvider, Tabs, Button } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
-import { MenuFoldOutlined, MenuUnfoldOutlined, ReloadOutlined } from '@ant-design/icons'
+import { MenuFoldOutlined, MenuUnfoldOutlined, QrcodeOutlined, ReloadOutlined } from '@ant-design/icons'
 import { EquipmentCategory, Location, Equipment, EquipmentStatistics, DepartmentOption } from '@/types/equipment'
 import { useEquipmentStore } from '@/stores/equipment'
 import { fetchEquipmentsClient, fetchEquipmentStatisticsClient, fetchCategoriesClient, fetchLocationsClient, fetchDepartmentsClient } from '@/lib/api/equipment-client'
+import { fetchEquipmentQrcodePdf } from '@/lib/api/client/equipmentQrcode'
 import { StatsCards } from './StatsCards'
 import { EquipmentTable } from './EquipmentTable'
 import { CategoryTree } from './CategoryTree'
@@ -65,6 +66,21 @@ export function EquipmentPage({
   const [resetKey, setResetKey] = useState(0)
   // 用户当前选择的每页条数：筛选/保存后的刷新沿用，避免分页器显示 N 而数据只有 20
   const pageSizeRef = useRef(20)
+  const [qrcodeExporting, setQrcodeExporting] = useState(false)
+  const { message } = App.useApp()
+
+  const handleExportQrcode = useCallback(async () => {
+    if (qrcodeExporting) return
+    setQrcodeExporting(true)
+    try {
+      await fetchEquipmentQrcodePdf(workshopCode)
+      message.success('设备报修码 PDF 已开始下载，打印覆膜后张贴到设备')
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '设备码导出失败')
+    } finally {
+      setQrcodeExporting(false)
+    }
+  }, [qrcodeExporting, workshopCode, message])
 
   // 初始化 store 数据（包含 SSR 数据）
   useEffect(() => {
@@ -238,7 +254,7 @@ export function EquipmentPage({
               overflow: 'hidden',
             }}
           >
-            {/* 折叠按钮 + 统计 + 标题 */}
+            {/* 折叠按钮 + 统计 + 导出设备码 */}
             <div className="mb-3 flex items-center gap-3" style={{ flexShrink: 0 }}>
               <Button
                 type="text"
@@ -247,6 +263,15 @@ export function EquipmentPage({
                 style={{ color: '#5d5b54', flexShrink: 0 }}
               />
               <StatsCards statistics={currentStats} compact />
+              <Button
+                size="small"
+                icon={<QrcodeOutlined />}
+                loading={qrcodeExporting}
+                onClick={() => { void handleExportQrcode() }}
+                style={{ marginLeft: 'auto', flexShrink: 0 }}
+              >
+                导出设备码
+              </Button>
             </div>
 
             {/* 表格区域 */}
