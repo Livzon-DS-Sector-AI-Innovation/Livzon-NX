@@ -374,7 +374,7 @@ export default function OosOotInvestigationPushPage() {
         title="调查推送详情"
         open={drawerOpen}
         onClose={() => { setDrawerOpen(false); setDrawerRecord(null) }}
-        width={600}
+        size={600}
       >
         {drawerRecord && (
           <Space orientation="vertical" size={16} style={{ display: 'flex' }}>

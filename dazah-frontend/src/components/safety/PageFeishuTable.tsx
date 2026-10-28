@@ -1134,7 +1134,7 @@ export default function PageFeishuTable({
       />
       <Drawer
         title={createOpen ? `${pageName} · 新建记录` : `${pageName} · 记录详情`}
-        width={720}
+        size={720}
         open={detail !== null || createOpen}
         onClose={() => {
           setDetail(null)
