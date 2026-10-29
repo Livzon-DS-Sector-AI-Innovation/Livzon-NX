@@ -165,6 +165,7 @@ def upgrade() -> None:
             "ix_safety_oh_detection_reports_date", "detection_date", "is_deleted"
         ),
         schema="safety",
+        comment="职业病危害因素检测报告",
     )
 
     op.create_table(
@@ -297,6 +298,7 @@ def upgrade() -> None:
             "ix_safety_oh_detection_results_verdict", "verdict", "is_deleted"
         ),
         schema="safety",
+        comment="职业病危害因素检测结果明细",
     )
 
 
