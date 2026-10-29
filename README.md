@@ -27,6 +27,21 @@ Reuse the existing development images without rebuilding:
 .\scripts\dev.ps1 -NoBuild
 ```
 
+Startup only checks database revisions; it never applies migrations. If a
+migration is pending, review the target database and revisions, then run:
+
+```powershell
+.\scripts\dev.ps1 -Migrate -NoBuild
+```
+
+Type the displayed confirmation to authorize that invocation. For an already
+authorized non-interactive run, pass the exact reviewed phrase with
+`-MigrationApproval`. Approval is piped to a disposable `run --rm` container;
+it must not be saved in environment files or container commands. The migration
+service has a separate profile and defaults to a read-only check. The launcher
+removes stopped migration containers left by older configurations, without
+removing database volumes. After migration, start the stack normally.
+
 The root Docker stack enables Watchfiles and Watchpack polling for source changes.
 `WATCHPACK_POLLING` controls the frontend polling interval; recreate the
 application containers with `scripts/dev.ps1 -NoBuild` after changing it.
@@ -64,8 +79,9 @@ that local copy on later starts. If the initial download is unavailable,
 Hermes still starts but reports that Feishu resource CLI operations are
 temporarily unavailable.
 
-The launcher runs the native Alembic migration before starting the Backend,
-automatically maps Compose service URLs to localhost, and uses Next.js
+The launcher checks the database revision before starting the Backend,
+and directs pending migrations to the explicitly confirmed Docker command above.
+It automatically maps Compose service URLs to localhost, and uses Next.js
 Turbopack by default. Use `-FrontendWebpack` if the Webpack development
 command is needed. Before starting Frontend, it stops a leftover Next.js
 process for this project while preserving `.next/dev` so compiled routes can be

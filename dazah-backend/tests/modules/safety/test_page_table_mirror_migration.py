@@ -127,14 +127,15 @@ def test_single_head_retains_the_safety_reminder_history() -> None:
     cfg.set_main_option("script_location", str(_VERSIONS.parent))
     script = ScriptDirectory.from_config(cfg)
     heads = script.get_heads()
-    # a7c3e5f1b8d2：目标责任书/责任制考核批次接在安全治理（d7f3b9c1e5a2）
-    # 与厂区矢量底图（c5d7e9f1a3b6）之后的单 head
-    assert heads == ["a7c3e5f1b8d2"]
+    assert len(heads) == 1
     history = {
         revision.revision for revision in script.walk_revisions(head=heads[0])
     }
     assert "c8e4a2f6d9b3" in history
     assert "d4e7f1a9c3b5" in history
+    assert "d1f2a3b4c5d6" in history
+    assert "f4a6c8e0b2d5" in history
+    assert "a7c3e5f1b8d2" in history
 
 
 def test_multi_table_tabs_upgrade_adds_columns_and_upgrades_index(monkeypatch) -> None:

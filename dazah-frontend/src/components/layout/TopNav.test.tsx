@@ -33,7 +33,9 @@ vi.mock('next/link', () => ({
 }))
 
 vi.mock('antd', () => ({
-  Avatar: () => createElement('span', null, '头像'),
+  Avatar: ({ src, onError }: { src?: string; onError?: () => boolean }) =>
+    createElement('span', { 'data-avatar': true }, '头像',
+      src ? createElement('img', { src, alt: '用户头像', onError }) : null),
 }))
 vi.mock('@ant-design/icons', () => ({
   LoadingOutlined: () => createElement('span', { 'data-loading': 'true' }),
@@ -96,6 +98,37 @@ it('renders module navigation and account actions without page search', async ()
 })
 
 describe('TopNav module feedback', () => {
+  it('falls back after an avatar error and retries when the avatar URL changes', async () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    const initialUser = { ...user, avatar_url: 'https://avatar.example/old.png' }
+    try {
+      await act(async () => root.render(createElement(TopNav, { user: initialUser, modules })))
+      const image = host.querySelector('img')
+      expect(image?.getAttribute('src')).toBe(initialUser.avatar_url)
+      await act(async () => image?.dispatchEvent(new Event('error')))
+      expect(host.querySelector('img')).toBeNull()
+      expect(host.querySelector('[data-avatar]')?.textContent).toBe('头像')
+      expect(host.textContent).toContain('测试用户')
+
+      await act(async () => root.render(createElement(TopNav, { user: { ...initialUser }, modules })))
+      expect(host.querySelector('img')).toBeNull()
+
+      const updatedUser = { ...user, avatar_url: 'https://avatar.example/new.png' }
+      await act(async () => root.render(createElement(TopNav, { user: updatedUser, modules })))
+      expect(host.querySelector('img')?.getAttribute('src')).toBe(updatedUser.avatar_url)
+      await act(async () => host.querySelector('img')?.dispatchEvent(new Event('error')))
+      expect(host.querySelector('img')).toBeNull()
+
+      await act(async () => root.render(createElement(TopNav, { user, modules })))
+      expect(host.querySelector('img')).toBeNull()
+      expect(host.querySelector('a[href="/auth/logout"]')?.textContent).toBe('退出')
+    } finally {
+      await act(async () => root.unmount())
+    }
+  })
+
   it('marks the current module and shows pending feedback until navigation completes', async () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
     const host = document.createElement('div')

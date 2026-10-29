@@ -5250,6 +5250,10 @@ async def update_email_config(
     import json
 
     payload_dict = payload.model_dump(exclude_none=True)
+    # Validate/encrypt every submitted credential before any setting commits.
+    for field in ("imap_pass", "smtp_pass"):
+        if payload_dict.get(field):
+            payload_dict[field] = encrypt_api_key(payload_dict[field])
     for form_key, db_key in key_map.items():
         value = payload_dict.get(form_key)
         if value is None:
@@ -5258,7 +5262,6 @@ async def update_email_config(
             # 留空时保持原密码不变
             if not value:
                 continue
-            value = encrypt_api_key(value)
         if db_key == "HR_MAIL_FETCH_ENABLED":
             value = "true" if value else "false"
         if db_key == "HR_MAIL_FETCH_SCHEDULE_HOURS":
@@ -5943,10 +5946,21 @@ async def get_onboarding_attachment_content(
     from fastapi.responses import Response as _Response
 
     encoded_name = quote(filename)
+    # Feishu attachments can be created outside our upload validator. Never
+    # serve HTML/SVG or other active documents inline on the application's origin.
+    preview_types = {
+        "application/pdf", "image/png", "image/jpeg", "image/gif", "image/webp",
+        "image/bmp",
+    }
+    disposition = "inline" if content_type in preview_types else "attachment"
     return _Response(
         content=content,
         media_type=content_type,
-        headers={"Content-Disposition": f"inline; filename*=UTF-8''{encoded_name}"},
+        headers={
+            "Content-Disposition": f"{disposition}; filename*=UTF-8''{encoded_name}",
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "private, no-store",
+        },
     )
 
 

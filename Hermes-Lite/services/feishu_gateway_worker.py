@@ -248,7 +248,10 @@ async def _resolve_dazah_confirmation(
     async with httpx.AsyncClient(timeout=120) as client:
         response = await client.post(
             f"{base_url}/agent/confirmations/{confirmation_id}/resolve",
-            headers={"Authorization": f"Bearer {token}"},
+            headers={
+                "Authorization": f"Bearer {token}",
+                "X-Dazah-Delegation": str(subject.get("delegation_token") or ""),
+            },
             json={"subject": subject, "choice": choice},
         )
     response.raise_for_status()

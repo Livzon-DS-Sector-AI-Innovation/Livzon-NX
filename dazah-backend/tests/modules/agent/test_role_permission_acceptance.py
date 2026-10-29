@@ -27,6 +27,7 @@ from app.platform.identity.models import (
 )
 from app.platform.identity.page_permissions import PagePermissionService
 from app.platform.identity.rbac import seed_menus
+from tests.modules.agent.delegation_helpers import delegated_subject
 
 SUPPLIER_PAGE = "purchasing:supplier"
 REQUEST_PAGE = "purchasing:request:request-hardware"
@@ -83,8 +84,8 @@ async def test_assigned_roles_control_catalog_execution_confirmations_and_automa
         # Cache notifications are external boundaries; authorization is real DB logic.
         monkeypatch.setattr(rbac_api, "publish_permissions_changed", AsyncMock())
         monkeypatch.setattr(rbac_api, "publish_permissions_changed_all", AsyncMock())
-        subject = {"user_id": str(user.id), "tenant_id": "local", "source": source}
-        headers = {"Authorization": "Bearer acceptance-token"}
+        trusted_subject, headers = await delegated_subject(db, settings, user, source)
+        subject = trusted_subject.model_dump(mode="json")
         scope_service = AgentAccessScopeService()
         scanner = AgentAccessScopeSyncGenerator(batch_size=10000)
 

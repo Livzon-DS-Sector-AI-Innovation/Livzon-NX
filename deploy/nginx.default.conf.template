@@ -54,6 +54,7 @@ server {
     listen 443 ssl;
     listen [::]:443 ssl;
     server_name __PUBLIC_HOST__;
+    server_tokens off;
 
     ssl_certificate /etc/letsencrypt/live/__PUBLIC_HOST__/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/__PUBLIC_HOST__/privkey.pem;
@@ -78,6 +79,7 @@ server {
     add_header X-Content-Type-Options nosniff always;
     add_header Referrer-Policy same-origin always;
     add_header Permissions-Policy "geolocation=(), microphone=(), camera=(), payment=()" always;
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
 
     location /api/ {
         proxy_pass http://app_upstream;

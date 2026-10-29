@@ -1,4 +1,5 @@
 import hashlib
+import hmac
 import json
 import time
 import uuid
@@ -17,6 +18,7 @@ from app.core.redaction import redact_sensitive
 from app.core.response import error_response, success_response
 from app.platform.audit.middleware import current_audit_request_id
 from app.platform.audit.models import AuditLog
+from app.platform.identity.agent_delegation import require_agent_delegation
 from app.platform.identity.deps import AdminUser, RequiredUser, SystemAdminUser
 from app.platform.identity.models import User
 from app.shared.schemas import ApiResponseEnvelope
@@ -387,7 +389,7 @@ async def submit_internal_feishu_interaction_request(
 
 def require_service_token(expected: str, authorization: str | None) -> None:
     token = _bearer_token(authorization)
-    if not expected or token != expected:
+    if not expected or token is None or not hmac.compare_digest(token, expected):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid Agent service token")
 
 
@@ -916,8 +918,15 @@ async def execute_tool(
     db: AsyncSession = Depends(get_db),
     authorization: str | None = Header(default=None),
     settings: Settings = Depends(get_settings),
+    x_dazah_delegation: str | None = Header(default=None),
 ):
     require_service_token(settings.AGENT_TOOL_TOKEN, authorization)
+    await require_agent_delegation(
+        db, settings, x_dazah_delegation,
+        user_id=payload.subject.user_id, tenant_id=payload.subject.tenant_id,
+        source=payload.subject.source,
+        external_binding_id=payload.subject.external_binding_id,
+    )
     result = await AgentService(settings).execute_tool(db, request=payload)
     return success_response(data=result.model_dump(mode="json"))
 
@@ -1404,8 +1413,15 @@ async def search_tools(
     db: AsyncSession = Depends(get_db),
     authorization: str | None = Header(default=None),
     settings: Settings = Depends(get_settings),
+    x_dazah_delegation: str | None = Header(default=None),
 ):
     require_service_token(settings.AGENT_TOOL_TOKEN, authorization)
+    await require_agent_delegation(
+        db, settings, x_dazah_delegation,
+        user_id=payload.subject.user_id, tenant_id=payload.subject.tenant_id,
+        source=payload.subject.source,
+        external_binding_id=payload.subject.external_binding_id,
+    )
     started_at = time.monotonic()
     result = await ToolCatalogService().search(db, payload)
     db.add(
@@ -1468,8 +1484,13 @@ async def describe_tool(
     db: AsyncSession = Depends(get_db),
     authorization: str | None = Header(default=None),
     settings: Settings = Depends(get_settings),
+    x_dazah_delegation: str | None = Header(default=None),
 ):
     require_service_token(settings.AGENT_TOOL_TOKEN, authorization)
+    await require_agent_delegation(
+        db, settings, x_dazah_delegation,
+        user_id=subject_user_id, tenant_id=subject_tenant_id,
+    )
     result = await ToolCatalogService().describe(
         db,
         operation=operation,
@@ -1691,15 +1712,15 @@ async def resolve_confirmation_from_gateway(
     db: AsyncSession = Depends(get_db),
     authorization: str | None = Header(default=None),
     settings: Settings = Depends(get_settings),
+    x_dazah_delegation: str | None = Header(default=None),
 ):
     require_service_token(settings.AGENT_TOOL_TOKEN, authorization)
-    user = await db.get(User, payload.subject.user_id)
-    if user is None or user.is_deleted or user.status != "active":
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Trusted subject is not active")
-    if (user.tenant_key or "default") != payload.subject.tenant_id:
-        raise HTTPException(
-            status.HTTP_403_FORBIDDEN, "Trusted subject tenant mismatch"
-        )
+    user = await require_agent_delegation(
+        db, settings, x_dazah_delegation,
+        user_id=payload.subject.user_id, tenant_id=payload.subject.tenant_id,
+        source=payload.subject.source,
+        external_binding_id=payload.subject.external_binding_id,
+    )
     service = AgentService(settings)
     if payload.choice == "reject":
         confirmation = await service.cancel_confirmation(

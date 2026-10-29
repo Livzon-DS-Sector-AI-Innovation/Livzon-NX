@@ -27,6 +27,7 @@ async function fetchBackend(path: string, options?: RequestInit) {
       return await fetch(url, {
         ...options,
         cache: 'no-store',
+        redirect: 'error',
       })
     } catch (error) {
       lastError = error

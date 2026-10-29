@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
-import rehypeRaw from 'rehype-raw'
 
 interface AIReportPanelProps {
   content: string
@@ -75,9 +74,7 @@ export default function AIReportPanel({ content }: AIReportPanelProps) {
       )}
 
       {(phase === 'streaming' || phase === 'done') && (
-        <ReactMarkdown rehypePlugins={[rehypeRaw]}>
-          {visibleText}
-        </ReactMarkdown>
+        <ReactMarkdown>{visibleText}</ReactMarkdown>
       )}
 
       {phase === 'streaming' && (

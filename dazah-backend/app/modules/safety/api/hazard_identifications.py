@@ -1,17 +1,19 @@
 """Safety API — hazard_identifications endpoints."""
 
 import json
-import os
 import uuid
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, Form, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.deps import CurrentUser, get_current_user
 from app.core.response import ApiResponse
+from app.core.upload_security import read_upload_secure
 from app.modules.safety.schemas import (
     HazardFilterOptions,
     HazardIdentificationCreate,
@@ -281,19 +283,33 @@ async def upload_hazard_attachment(
     """上传危险源辨识的岗位资料附件"""
     # 保存到本地 uploads/safety/hazard 目录
 
-    upload_dir = os.path.join("uploads", "safety", "hazard")
-    os.makedirs(upload_dir, exist_ok=True)
-
-    file_ext = os.path.splitext(file.filename or ".bin")[1]
-    safe_name = f"{hid}_{int(datetime.now().timestamp())}{file_ext}"
-    file_path = os.path.join(upload_dir, safe_name)
-
-    content = await file.read()
-    with open(file_path, "wb") as f:
-        f.write(content)
+    filename, content = await read_upload_secure(
+        file,
+        max_bytes=get_settings().MAX_UPLOAD_SIZE_MB * 1024 * 1024,
+        allowed_extensions={
+            ".doc",
+            ".docx",
+            ".pdf",
+            ".xls",
+            ".xlsx",
+            ".png",
+            ".jpg",
+            ".jpeg",
+            ".zip",
+        },
+        what="附件",
+    )
+    upload_dir = Path("uploads") / "safety" / "hazard"
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    safe_name = (
+        f"{hid}_{int(datetime.now().timestamp())}_"
+        f"{uuid.uuid4().hex}{Path(filename).suffix.lower()}"
+    )
+    file_path = upload_dir / safe_name
+    file_path.write_bytes(content)
 
     service = SafetyService(db)
-    item = await service.upload_attachment(hid, file.filename or "unknown", file_path)
+    item = await service.upload_attachment(hid, filename, str(file_path))
     if not item:
         return ApiResponse(code=404, message="记录不存在")
     await db.commit()

@@ -508,16 +508,22 @@ async def test_resolve_user_and_pending_confirmations_filters_invalid_entries() 
     session_user_id = uuid.uuid4()
     pending: Any = SimpleNamespace(
         id=uuid.uuid4(),
+        user_id=session_user_id,
+        is_deleted=False,
         status="pending",
         expires_at=now + timedelta(minutes=5),
     )
     expired: Any = SimpleNamespace(
         id=uuid.uuid4(),
+        user_id=session_user_id,
+        is_deleted=False,
         status="pending",
         expires_at=now - timedelta(minutes=5),
     )
     completed: Any = SimpleNamespace(
         id=uuid.uuid4(),
+        user_id=session_user_id,
+        is_deleted=False,
         status="completed",
         expires_at=now + timedelta(minutes=5),
     )
@@ -551,5 +557,6 @@ async def test_resolve_user_and_pending_confirmations_filters_invalid_entries() 
     result = await service._resolve_pending_confirmations(
         None,  # type: ignore[arg-type]
         {"confirmation_id": str(pending.id), "invalid": "not-a-uuid"},
+        user_id=session_user_id,
     )
     assert result == [pending]

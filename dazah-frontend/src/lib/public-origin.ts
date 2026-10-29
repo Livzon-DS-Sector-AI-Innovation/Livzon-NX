@@ -23,3 +23,18 @@ export function getPublicOrigin(request: NextRequest): string {
 export function isSecurePublicRequest(request: NextRequest): boolean {
   return new URL(getPublicOrigin(request)).protocol === "https:"
 }
+
+/** Login forms must prove their browser source before receiving a session. */
+export function isTrustedBrowserWriteRequest(request: NextRequest): boolean {
+  if (request.headers.get("sec-fetch-site") === "cross-site") return false
+  const expected = getPublicOrigin(request)
+  const origin = request.headers.get("origin")
+  if (origin) return origin === expected
+  const referer = request.headers.get("referer")
+  if (!referer) return false
+  try {
+    return new URL(referer).origin === expected
+  } catch {
+    return false
+  }
+}

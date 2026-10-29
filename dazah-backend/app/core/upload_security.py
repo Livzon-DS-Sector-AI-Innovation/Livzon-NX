@@ -203,3 +203,58 @@ async def read_upload_secure(
         allowed_mimes=allowed_mimes,
     )
     return filename, content
+
+
+async def stream_upload_to_path(
+    file: UploadFile,
+    destination: Path,
+    *,
+    max_bytes: int,
+    allowed_extensions: set[str] | None = None,
+    allowed_mimes: set[str] | None = None,
+    what: str = "文件",
+) -> tuple[str, int]:
+    """Stream an upload to ``destination`` with name and size enforcement.
+
+    Large media files must not be buffered in memory. The destination file is
+    created exclusively (``xb``) and removed again when validation or the size
+    limit fails, so a rejected request never leaves a partial file behind.
+    """
+
+    filename = validate_upload_metadata(
+        file,
+        allowed_extensions=allowed_extensions,
+        allowed_mimes=allowed_mimes,
+    )
+    declared_size = getattr(file, "size", None)
+    if declared_size is not None and declared_size > max_bytes:
+        raise AppException(
+            message=f"{what}大小超过 {max_bytes // (1024 * 1024)}MB 限制",
+            status_code=413,
+        )
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    total = 0
+    created = False
+    try:
+        with destination.open("xb") as handle:
+            created = True
+            while True:
+                chunk = await file.read(UPLOAD_CHUNK_SIZE)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > max_bytes:
+                    raise AppException(
+                        message=f"{what}大小超过 {max_bytes // (1024 * 1024)}MB 限制",
+                        status_code=413,
+                    )
+                handle.write(chunk)
+        if total == 0:
+            raise AppException(message=f"{what}不能为空", status_code=400)
+    except BaseException:
+        # A collision/permission failure before creation must not delete a file
+        # belonging to a previous successful upload.
+        if created:
+            destination.unlink(missing_ok=True)
+        raise
+    return filename, total

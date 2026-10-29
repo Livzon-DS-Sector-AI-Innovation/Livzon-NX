@@ -189,3 +189,72 @@ quiesce_and_migrate
         assert f"migrate .venv/bin/alembic upgrade {head}" in operations
         assert revision.read_text() == head
         assert operations.index("upgrade") < operations.index("resume-work")
+
+
+def test_production_frontend_cannot_be_republished_by_old_bind_host_setting():
+    compose = (ROOT / "compose.yml").read_text(encoding="utf-8")
+    frontend = re.search(
+        r"^  frontend:\n(.*?)(?=^\S|^  \w|\Z)", compose, re.M | re.S
+    ).group(1)
+    assert "${FRONTEND_BIND_HOST" not in frontend
+    assert '"127.0.0.1:${FRONTEND_PORT:-3000}:3000"' in frontend
+
+
+@pytest.mark.skipif(
+    shutil.which("docker") is None, reason="Docker Compose not installed"
+)
+@pytest.mark.parametrize("legacy_host", ["", "0.0.0.0", "::", "192.0.2.10"])
+def test_rendered_production_ports_ignore_legacy_wildcard_env(tmp_path, legacy_host):
+    compose = (ROOT / "compose.yml").read_text(encoding="utf-8")
+    required = set(re.findall(r"\$\{([A-Z0-9_]+):\?", compose))
+    env_file = tmp_path / "synthetic.env"
+    env_file.write_text(
+        "\n".join(f"{name}=synthetic" for name in required), encoding="utf-8"
+    )
+    env = {
+        name: os.environ[name]
+        for name in (
+            "PATH",
+            "SystemRoot",
+            "WINDIR",
+            "TEMP",
+            "TMP",
+            "USERPROFILE",
+            "APPDATA",
+            "LOCALAPPDATA",
+            "ProgramFiles",
+            "ProgramFiles(x86)",
+            "ProgramData",
+            "HOME",
+            "HOMEDRIVE",
+            "HOMEPATH",
+        )
+        if name in os.environ
+    }
+    env["FRONTEND_BIND_HOST"] = legacy_host
+    # --env-file controls interpolation; service env_file needs its own override.
+    env["DAZAH_ENV_FILE"] = str(env_file)
+    result = subprocess.run(
+        [
+            "docker",
+            "compose",
+            "--env-file",
+            str(env_file),
+            "-f",
+            str(ROOT / "compose.yml"),
+            "-f",
+            str(ROOT / "deploy/compose.edge.yml"),
+            "config",
+            "--no-env-resolution",
+            "--format",
+            "json",
+        ],
+        cwd=ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 0, "Synthetic Compose configuration failed"
+    ports = json.loads(result.stdout)["services"]["frontend"]["ports"]
+    assert all(port["host_ip"] == "127.0.0.1" for port in ports)

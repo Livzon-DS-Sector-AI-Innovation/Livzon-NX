@@ -1,5 +1,7 @@
 """Dossier Writer API endpoints."""
 
+import logging
+from pathlib import Path
 from typing import Any
 from uuid import UUID
 
@@ -8,8 +10,11 @@ from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.database import get_db
+from app.core.exceptions import AppException
 from app.core.response import error_response, success_response
+from app.core.upload_security import MAX_UPLOAD_FILES, read_upload_secure
 
 from .field_fill_service import FieldFillService
 from .field_models import FieldFillResult, FieldMapping
@@ -26,6 +31,29 @@ from .schemas import (
 from .service import DossierService
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
+
+def resolve_dossier_download_path(outputs_path: str, filename: str) -> Path:
+    """Resolve an exported file strictly inside ``outputs_path``.
+
+    ``filename`` arrives from the query string, so separators, absolute paths
+    and ``..`` segments must be rejected instead of being joined blindly.
+    """
+    if (
+        not filename
+        or filename in {".", ".."}
+        or "\x00" in filename
+        or "/" in filename
+        or "\\" in filename
+        or Path(filename).is_absolute()
+    ):
+        raise HTTPException(status_code=400, detail="文件名非法")
+    root = Path(outputs_path).resolve()
+    candidate = (root / filename).resolve()
+    if candidate.parent != root or not candidate.name:
+        raise HTTPException(status_code=400, detail="文件名非法")
+    return candidate
 
 
 # ====== Product Dossier ======
@@ -121,38 +149,25 @@ async def upload_templates(
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     """批量上传模板文件"""
+    if len(files) > MAX_UPLOAD_FILES:
+        raise HTTPException(status_code=400, detail="一次最多上传 20 个模板文件")
+    # Validate the entire request first, so a rejected later file leaves no writes.
+    validated = [
+        await read_upload_secure(
+            file,
+            max_bytes=get_settings().MAX_UPLOAD_SIZE_MB * 1024 * 1024,
+            allowed_extensions={".docx"},
+            what="模板文件",
+        )
+        for file in files
+    ]
     service = DossierService(db)
 
     results: list[dict[str, Any]] = []
-    for file in files:
-        # 验证文件类型
-        if not file.filename or not file.filename.lower().endswith(".docx"):
-            results.append(
-                {
-                    "filename": file.filename,
-                    "status": "failed",
-                    "error": "仅支持 .docx 格式文件",
-                }
-            )
-            continue
-
+    for filename, content in validated:
         try:
-            # 读取文件内容
-            content = await file.read()
-            import logging
-
-            _logger = logging.getLogger(__name__)
-            _logger.info(
-                f"[Upload] Processing file: {file.filename}, size: {len(content)} bytes"
-            )
-
-            # 保存模板
             template = await service.save_template_file(
-                dossier_id, file.filename, content
-            )
-            _logger.info(
-                f"[Upload] Saved template: {template.id}, "
-                f"filename: {template.original_filename}"
+                dossier_id, filename, content
             )
 
             results.append(
@@ -164,28 +179,28 @@ async def upload_templates(
                     "status": "success",
                 }
             )
-        except Exception as e:
-            import logging
-
-            _logger = logging.getLogger(__name__)
-            _logger.error(
-                f"[Upload] Failed to save {file.filename}: {e}", exc_info=True
-            )
+        except AppException:
+            raise
+        except Exception:
+            await db.rollback()
+            logger.exception("Template upload failed for dossier %s", dossier_id)
             results.append(
-                {"filename": file.filename, "status": "failed", "error": str(e)}
+                {"filename": filename, "status": "failed", "error": "模板保存失败"}
             )
-
-    # 更新品种状态为 template_uploaded
-    await service.repo.update_product_dossier(
-        dossier_id, parse_status="template_uploaded"
-    )
-    await service.db.commit()
 
     success_count = sum(1 for r in results if r["status"] == "success")
+    # 更新品种状态为 template_uploaded
+    if success_count:
+        await service.repo.update_product_dossier(
+            dossier_id, parse_status="template_uploaded"
+        )
+        await service.db.commit()
     failed_count = len(results) - success_count
 
     # 自动触发匹配
-    match_result = await service.match_assets_to_chapters(dossier_id)
+    match_result = (
+        await service.match_assets_to_chapters(dossier_id) if success_count else {}
+    )
 
     return success_response(
         data={
@@ -369,12 +384,10 @@ async def download_exported_file(
     if not dossier:
         raise HTTPException(status_code=404, detail="品种资料不存在")
 
-    from pathlib import Path
-
     if not dossier.outputs_path:
         raise HTTPException(status_code=404, detail="导出目录未配置")
-    file_path = Path(dossier.outputs_path) / filename
-    if not file_path.exists():
+    file_path = resolve_dossier_download_path(dossier.outputs_path, filename)
+    if not file_path.is_file():
         raise HTTPException(status_code=404, detail="文件不存在")
 
     return FileResponse(

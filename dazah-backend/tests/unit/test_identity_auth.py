@@ -259,8 +259,9 @@ def test_production_requires_an_accessible_administrator_path() -> None:
     settings = Settings.model_construct(
         APP_ENV="production",
         LOCAL_LOGIN_MODE=None,
-        SECRET_KEY="secret",
+        SECRET_KEY="synthetic-session-signing-key-for-tests",
         ENCRYPTION_KEY="encryption-key",
+        LLM_ENCRYPTION_KEY="YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE=",
         FRONTEND_URL="https://factory.example.com",
         SSO_ADMIN_IDENTIFIERS="",
         BOOTSTRAP_ADMIN_USERNAME="",
@@ -275,8 +276,9 @@ def test_production_accepts_a_configured_sso_administrator() -> None:
     settings = Settings.model_construct(
         APP_ENV="production",
         LOCAL_LOGIN_MODE=None,
-        SECRET_KEY="secret",
+        SECRET_KEY="synthetic-session-signing-key-for-tests",
         ENCRYPTION_KEY="encryption-key",
+        LLM_ENCRYPTION_KEY="YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE=",
         FRONTEND_URL="https://factory.example.com",
         SSO_ADMIN_IDENTIFIERS="admin@example.com",
         BOOTSTRAP_ADMIN_USERNAME="",

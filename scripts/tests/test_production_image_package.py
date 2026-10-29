@@ -10,6 +10,15 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def test_frontend_compiler_has_a_build_only_api_origin_without_runtime_fallback():
+    dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+    builder = dockerfile.split(" AS frontend-builder\n", 1)[1].split("\nFROM ", 1)[0]
+    runtime = dockerfile.split(" AS frontend\n", 1)[1].split("\nFROM ", 1)[0]
+    assert "API_BASE_URL=http://127.0.0.1:8000 pnpm build:single-host" in builder
+    assert "ENV API_BASE_URL" not in builder
+    assert "API_BASE_URL" not in runtime
+
+
 HARNESS = r"""
 param(
   [string]$TestScript,

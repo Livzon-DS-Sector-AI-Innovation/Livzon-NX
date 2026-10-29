@@ -22,7 +22,7 @@ class ProductCreate(ProductBase):
 
 
 class ProductUpdate(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="forbid")
 
     name: str | None = Field(None, max_length=128)
     major_category: str | None = Field(None, max_length=32)

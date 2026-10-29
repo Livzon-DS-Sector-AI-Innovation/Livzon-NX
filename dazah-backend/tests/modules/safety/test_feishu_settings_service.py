@@ -8,6 +8,7 @@ import pytest
 from cryptography.fernet import Fernet
 from sqlalchemy import delete, select
 
+from app.core.config import get_settings
 from app.core.exceptions import AppException
 from app.core.llm.encryption import decrypt_api_key, encrypt_api_key
 from app.modules.safety.feishu.runtime_config import (
@@ -46,11 +47,11 @@ def _bind_runtime_session(monkeypatch, db_session) -> None:
     )
 
 
-@pytest.fixture
+@pytest.fixture(autouse=True)
 def encryption_key(monkeypatch: pytest.MonkeyPatch) -> str:
     """启用真实 Fernet 加密，验证密文落库与解密路径。"""
     key = Fernet.generate_key().decode()
-    monkeypatch.setenv("LLM_ENCRYPTION_KEY", key)
+    monkeypatch.setattr(get_settings(), "LLM_ENCRYPTION_KEY", key)
     return key
 
 
@@ -185,7 +186,7 @@ async def test_update_round_trips_knowledge_binding(db_session):
 
 
 async def test_update_with_new_secret_replaces_stored_secret(db_session):
-    await _seed_row(db_session)
+    original = (await _seed_row(db_session)).app_secret
     await feishu_settings.update_safety_feishu_app_settings(
         db_session,
         UpdateSafetyFeishuAppSettingsRequest(
@@ -194,6 +195,8 @@ async def test_update_with_new_secret_replaces_stored_secret(db_session):
         ),
     )
     row = await _get_single_row(db_session)
+    assert row.app_secret != original
+    assert row.app_secret != "rotated-secret-456"
     # Fernet 每次加密产生不同密文（随机 IV），这里解密比对明文
     assert decrypt_api_key(row.app_secret) == "rotated-secret-456"
 

@@ -4,12 +4,21 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+from cryptography.fernet import Fernet
 
+from app.core.config import get_settings
 from app.modules.hr import feishu_settings_service as service
 from app.modules.hr.schemas import (
     UpdateHrFeishuAppSettingsRequest,
     UpdateHrFeishuEntitySettingRequest,
 )
+
+
+@pytest.fixture(autouse=True)
+def _test_encryption_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        get_settings(), "LLM_ENCRYPTION_KEY", Fernet.generate_key().decode()
+    )
 
 
 class _Result:

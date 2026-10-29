@@ -1,9 +1,18 @@
 'use server'
 
+import { getAuthHeaders } from '@/lib/auth'
 import { getServerApiBaseUrl } from '@/lib/server-api'
 import { revalidatePath } from 'next/cache'
 
 const API_BASE_URL = getServerApiBaseUrl()
+
+async function requireAuthHeader(): Promise<Record<string, string>> {
+  const headers = await getAuthHeaders()
+  if (!headers.Authorization) {
+    throw new Error('未登录或登录已过期')
+  }
+  return { Authorization: headers.Authorization }
+}
 
 /**
  * AI解析实验记录文件
@@ -16,12 +25,12 @@ export async function parseExperimentRecord(file: File, type: 'lab_confirmation'
 
   const response = await fetch(`${API_BASE_URL}/api/v1/ai/parse-experiment`, {
     method: 'POST',
+    headers: await requireAuthHeader(),
     body: formData,
   })
 
   if (!response.ok) {
-    const errorText = await response.text()
-    throw new Error(`解析失败: ${response.status} ${errorText}`)
+    throw new Error(`解析失败（${response.status}）`)
   }
 
   const result = await response.json()
@@ -36,13 +45,15 @@ export async function parseExperimentRecord(file: File, type: 'lab_confirmation'
 export async function parseProcessParameters(content: string, type: 'lab_confirmation' | 'scale_up'): Promise<any> {
   const response = await fetch(`${API_BASE_URL}/api/v1/ai/parse-parameters`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(await requireAuthHeader()),
+    },
     body: JSON.stringify({ content, parse_type: type }),
   })
 
   if (!response.ok) {
-    const errorText = await response.text()
-    throw new Error(`解析失败: ${response.status} ${errorText}`)
+    throw new Error(`解析失败（${response.status}）`)
   }
 
   const result = await response.json()

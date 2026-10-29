@@ -10,6 +10,7 @@ from cryptography.fernet import Fernet
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.exceptions import AppException
 from app.core.llm.encryption import decrypt_api_key, mask_api_key
 from app.modules.quality.models import QualityFeishuAppSettings
@@ -40,7 +41,7 @@ def fernet_keys(monkeypatch: pytest.MonkeyPatch) -> Iterator[tuple[str, str]]:
     """当前环境密钥 + 旧密钥：模拟密钥轮换后存量密文解不开的场景。"""
     current = Fernet.generate_key().decode()
     stale = Fernet.generate_key().decode()
-    monkeypatch.setenv("LLM_ENCRYPTION_KEY", current)
+    monkeypatch.setattr(get_settings(), "LLM_ENCRYPTION_KEY", current)
     yield current, stale
     monkeypatch.delenv("LLM_ENCRYPTION_KEY", raising=False)
 
