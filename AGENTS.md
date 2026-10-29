@@ -141,9 +141,11 @@ date before merging”。除非已经确认的紧急流程明确授权，不允�
    涉及后端迁移、数据库模型或需要启动本地开发后端时，必须先确认目标是本次授权的
    本地开发库，并使用根目录 `.env.local` 和 `compose.dev.yml` 检查 Alembic 状态：
    `heads` 必须只有一个，且应比较数据库 `current` 与代码 `head`。数据库落后时，
-   先更新开发后端镜像所需依赖，再通过开发栈的 `migrate` 服务执行
-   `alembic upgrade head`；根目录命令为
-   `docker compose --env-file .env.local -f compose.dev.yml run --rm migrate`。禁止用
+   先更新开发后端镜像所需依赖，再执行根目录 `.\scripts\dev.ps1 -Migrate`
+   （依赖镜像已更新时可加 `-NoBuild`），核对目标库及迁移版本后按提示确认。
+   默认启动与 `migrate` 服务默认命令只读检查版本，不执行迁移。已有本次明确迁移
+   授权时，可通过 `-MigrationApproval` 传入已核对计划的完整确认短语；短语仅经标准
+   输入传给 `run --rm` 一次性容器，不得写入环境文件或容器持久命令。禁止用
    `stamp`、手工 SQL 或修改
    `alembic_version` 跳过迁移。迁移失败、出现多个 head、版本不在当前迁移链或目标
    数据库无法确认时必须停止，不得继续启动后端。迁移成功后再次确认

@@ -80,6 +80,7 @@ async def test_resolved_subject_uses_local_user_tenant(
         id=uuid4(),
         name="测试用户",
         tenant_key="local-tenant",
+        session_version=1,
         is_deleted=False,
         status="active",
     )

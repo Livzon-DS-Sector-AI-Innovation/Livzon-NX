@@ -140,6 +140,7 @@ async def test_tool_search_records_result_and_http_metadata_without_query_text(
         assert authorization == "Bearer audit-test"
 
     monkeypatch.setattr(api, "require_service_token", authenticate)
+    monkeypatch.setattr(api, "require_agent_delegation", AsyncMock(return_value=actor))
     app.dependency_overrides[get_settings] = lambda: SimpleNamespace(
         AGENT_TOOL_TOKEN=""
     )

@@ -1,5 +1,6 @@
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
+from uuid import UUID
 
 import pytest
 from fastapi import FastAPI, HTTPException
@@ -19,6 +20,8 @@ from app.modules.agent.tools import (
     ToolRegistry,
     tool_registry,
 )
+from app.platform.identity.agent_delegation import issue_agent_delegation
+from app.platform.identity.models import User
 
 
 @pytest.mark.parametrize(
@@ -139,20 +142,30 @@ async def test_settings_execution_http_rejects_even_administrator(monkeypatch):
     from app.modules.agent.service import AgentService
 
     service = AgentService(get_settings())
-    db = SimpleNamespace(get=AsyncMock(), execute=AsyncMock())
+    user = User(
+        id=UUID("00000000-0000-0000-0000-000000000001"),
+        tenant_key="local", status="active", is_deleted=False, session_version=0,
+    )
+    db = SimpleNamespace(get=AsyncMock(return_value=user), execute=AsyncMock())
     monkeypatch.setattr(api, "AgentService", lambda settings: service)
     app = FastAPI()
     app.include_router(api.router, prefix="/api/v1/agent")
-    app.dependency_overrides[get_settings] = lambda: SimpleNamespace(
-        AGENT_TOOL_TOKEN="exclusion-test-token"
+    settings = SimpleNamespace(
+        AGENT_TOOL_TOKEN="exclusion-test-token", SECRET_KEY="a" * 40
     )
+    app.dependency_overrides[get_settings] = lambda: settings
     app.dependency_overrides[get_db] = lambda: db
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
         response = await client.post(
             "/api/v1/agent/tools/execute",
-            headers={"Authorization": "Bearer exclusion-test-token"},
+            headers={
+                "Authorization": "Bearer exclusion-test-token",
+                "X-Dazah-Delegation": issue_agent_delegation(
+                    settings, user, source="web"
+                ),
+            },
             json={
                 "operation": "identity.check_feishu_permissions",
                 "params": {},
@@ -165,7 +178,7 @@ async def test_settings_execution_http_rejects_even_administrator(monkeypatch):
         )
     assert response.status_code == 400
     assert "registry" in response.json()["detail"]
-    db.get.assert_not_awaited()
+    db.get.assert_awaited_once_with(User, user.id)
     db.execute.assert_not_awaited()
 
 

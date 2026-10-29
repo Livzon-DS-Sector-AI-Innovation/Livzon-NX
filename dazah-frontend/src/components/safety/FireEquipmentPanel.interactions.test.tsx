@@ -33,20 +33,6 @@ const mocks = vi.hoisted(() => ({
   getFireEquipmentDetail: vi.fn(async (): Promise<unknown> => ({ code: 200, data: {} })),
 }))
 
-// 面板经 App.useApp() 调用 message；无 Provider 时会落到真实静态 message，
-// 其 Notification 异步渲染会在 teardown 后继续产生日志。此处保留真实 antd
-// 组件，仅替换 App 上下文为桩，避免收尾竞态。
-vi.mock('antd', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('antd')>()
-  const AppStub = Object.assign(
-    ({ children }: { children?: unknown }) => children as never,
-    {
-      useApp: () => mocks.message,
-    },
-  )
-  return { ...actual, App: AppStub }
-})
-
 vi.mock('@/actions/safety', () => ({
   getFireEquipmentStats: mocks.getFireEquipmentStats,
   getFireEquipmentDashboard: mocks.getFireEquipmentDashboard,
@@ -324,6 +310,7 @@ describe('FireEquipmentPanel interactions (batch3 supplement)', () => {
       await flush()
     })
     expect(mocks.syncFireEquipment).toHaveBeenCalled()
+    expect(mocks.message.error).toHaveBeenCalledWith('飞书绑定失效')
   })
 
   it('回写子表初始化失败分支提示错误', async () => {
@@ -343,6 +330,7 @@ describe('FireEquipmentPanel interactions (batch3 supplement)', () => {
       await flush()
     })
     expect(mocks.initFireEquipmentWritebackTable).toHaveBeenCalled()
+    expect(mocks.message.error).toHaveBeenCalledWith('创建失败')
   })
 
   it('批量打印：清单读取失败与空清单两个分支', async () => {

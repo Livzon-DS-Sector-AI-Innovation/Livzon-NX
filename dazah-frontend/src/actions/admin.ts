@@ -46,18 +46,16 @@ export type PermissionModuleRolloutPreviewOut = components["schemas"]["Permissio
 async function authedFetch(path: string, init?: RequestInit): Promise<Response> {
   const cookieStore = await cookies()
   const token = cookieStore.get("auth_token")
+  if (!token?.value) {
+    throw new Error("未登录或登录已过期")
+  }
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(init?.headers as Record<string, string> | undefined),
-  }
-  if (token?.value) {
-    headers["Authorization"] = `Bearer ${token.value}`
+    Authorization: `Bearer ${token.value}`,
   }
   const operationId = (await requestHeaders()).get('X-Dazah-Operation-ID')
   if (operationId) headers['X-Dazah-Operation-ID'] = operationId
-  // 无 token 时不拦截：交由后端鉴权（开发免登录模式后端放行；
-  // 生产环境后端返回 401 → handleResponse 抛出"未登录或登录已过期"），
-  // 与 getCurrentUser 的免登录降级策略保持一致
   return fetch(`${API_BASE}/api/v1${path}`, { ...init, headers })
 }
 

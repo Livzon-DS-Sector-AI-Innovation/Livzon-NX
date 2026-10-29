@@ -13,6 +13,8 @@ from typing import Any
 
 import httpx
 
+from app.core.llm.http_security import provider_client, validate_provider_url
+
 from .exceptions import LLMConfigError
 
 
@@ -267,9 +269,10 @@ async def probe_api_base_url(
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> None:
     """Verify that an OpenAI-compatible API base URL and credential work."""
+    validate_provider_url(api_base_url)
     url = api_base_url.rstrip("/") + "/models"
     timeout = httpx.Timeout(min(timeout_seconds, 30))
-    async with httpx.AsyncClient(timeout=timeout, transport=transport) as client:
+    async with provider_client(timeout=timeout, transport=transport) as client:
         try:
             response = await client.get(
                 url,
@@ -298,11 +301,12 @@ async def probe_model_connection(
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> None:
     """Check that the configured model returns a text answer in one request."""
+    validate_provider_url(api_base_url)
     deadline = max(1, min(timeout_seconds, 30))
     try:
         async with (
             asyncio.timeout(deadline),
-            httpx.AsyncClient(
+            provider_client(
                 timeout=httpx.Timeout(deadline), transport=transport
             ) as client,
         ):
@@ -337,11 +341,12 @@ async def detect_model_capabilities(
     transport: httpx.AsyncBaseTransport | None = None,
 ) -> LLMCapabilities:
     # The deadline covers all probes/retries, not just each network operation.
+    validate_provider_url(api_base_url)
     deadline = max(1, min(timeout_seconds, 180))
     try:
         async with (
             asyncio.timeout(deadline),
-            httpx.AsyncClient(
+            provider_client(
                 timeout=httpx.Timeout(deadline),
                 transport=transport,
             ) as client,

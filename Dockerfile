@@ -75,8 +75,10 @@ RUN --mount=type=cache,id=dazah-frontend-pnpm,target=/root/.local/share/pnpm/sto
 COPY dazah-frontend/ ./
 
 ENV NODE_ENV=production
+# Page metadata imports the server API helper during compilation. This local
+# placeholder is scoped to the build command; the runner needs its own config.
 RUN --mount=type=cache,id=dazah-frontend-next,target=/app/.next/cache,sharing=locked \
-    pnpm build:single-host
+    API_BASE_URL=http://127.0.0.1:8000 pnpm build:single-host
 
 
 FROM node:24.22.1-alpine@sha256:06d7adf3e0ef61a13f1d28682726366f97a15aa1888c934d3ecec86c33918b53 AS frontend

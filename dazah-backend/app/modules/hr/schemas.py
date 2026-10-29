@@ -412,7 +412,7 @@ class EmployeePublicCreate(BaseModel):
 
 
 class EmployeeUpdate(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="forbid")
 
     employee_number: str | None = Field(None, max_length=32)
     name: str | None = Field(None, max_length=64)
@@ -471,6 +471,34 @@ class EmployeeUpdate(BaseModel):
     status: str | None = Field(None, max_length=16)
     contract_opinion: str | None = Field(None, max_length=32)
     dept_leader_name: str | None = Field(None, max_length=64)
+
+
+    # Explicitly declare the business fields used by the employee form.
+    seq_number: int | None = Field(None, description="序号（飞书自动编号）")
+    sub_department: str | None = Field(None, max_length=64, description="二级部门")
+    employment_type: str | None = Field(None, max_length=32, description="人员就业方式")
+    certificate_number: str | None = Field(None, max_length=64, description="证书编号")
+    certificate_review_date: date | None = Field(None, description="技能证书复审时间")
+    ethnic_group: str | None = Field(None, max_length=32, description="民族")
+    health_status: str | None = Field(None, max_length=32, description="健康状况")
+    degree: str | None = Field(None, max_length=32, description="学位")
+    contract_start_5: date | None = Field(None, description="第五次续签合同日期")
+    contract_end_5: str | None = Field(None, max_length=32, description="合同截止日期5")
+    contract_start_6: str | None = Field(
+        None, max_length=32, description="第六次续签合同日期"
+    )
+    contract_end_6: str | None = Field(None, max_length=32, description="合同截止日期6")
+    archive_number: str | None = Field(None, max_length=32, description="档案编号")
+    work_experience_1: str | None = Field(None, description="工作经验一")
+    work_experience_2: str | None = Field(None, description="工作经验二")
+    work_experience_3: str | None = Field(None, description="工作经验三")
+    work_experience_4: str | None = Field(None, description="工作经验四")
+    probation_status: str | None = Field(None, max_length=32, description="转正状态")
+    planned_probation_date: date | None = Field(None, description="拟转正日期")
+    probation_effective_date: date | None = Field(None, description="转正生效日期")
+    last_working_day: date | None = Field(None, description="最后工作日")
+    offboarding_type: str | None = Field(None, max_length=16, description="离职类型")
+    offboarding_reason: str | None = Field(None, max_length=512, description="离职原因")
 
 
 class EmployeeResponse(EmployeeBase):

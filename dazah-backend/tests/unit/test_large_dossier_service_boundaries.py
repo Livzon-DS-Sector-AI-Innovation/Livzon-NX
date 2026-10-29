@@ -10,6 +10,7 @@ from uuid import uuid4
 import pytest
 from docx import Document
 
+from app.core.exceptions import AppException, NotFoundException
 from app.modules.dossier_writer import service as dossier_service
 
 SimpleNamespace: Any = _SimpleNamespace
@@ -207,22 +208,31 @@ async def test_dossier_template_save_existing_and_new(tmp_path: Any) -> Any:
     service = _service(tmp_path)
     dossier = _dossier(tmp_path)
     service.repo.get_product_dossier.return_value = None
-    with pytest.raises(ValueError, match="不存在"):
+    with pytest.raises(NotFoundException, match="不存在"):
         await service.save_template_file(dossier.id, "a.docx", b"x")
 
     service.repo.get_product_dossier.return_value = dossier
-    existing: Any = SimpleNamespace(file_path="", file_size=0)
+    existing: Any = SimpleNamespace(
+        file_path=str(Path(dossier.source_templates_path) / "stored-template.docx"),
+        file_size=0,
+    )
     service.repo.get_template_by_filename.return_value = existing
     assert await service.save_template_file(dossier.id, "a.docx", b"abc") is existing
     assert existing.file_size == 3
     service.db.flush.assert_awaited_once()
-    assert (Path(dossier.source_templates_path) / "a.docx").read_bytes() == b"abc"
+    assert Path(existing.file_path).read_bytes() == b"abc"
 
     service.repo.get_template_by_filename.return_value = None
     service.repo.create_template.side_effect = lambda item: item
-    created = await service.save_template_file(dossier.id, "b.pdf", b"data")
-    assert created.original_filename == "b.pdf"
+    with pytest.raises(AppException, match=".docx"):
+        await service.save_template_file(dossier.id, "b.pdf", b"data")
+    service.repo.create_template.assert_not_awaited()
+    created = await service.save_template_file(dossier.id, "b.docx", b"data")
+    assert created.original_filename == "b.docx"
     assert created.file_size == 4
+    assert Path(created.file_path).parent == Path(dossier.source_templates_path)
+    assert Path(created.file_path).name != created.original_filename
+    assert Path(created.file_path).read_bytes() == b"data"
 
 
 @pytest.mark.asyncio

@@ -26,6 +26,7 @@ from fastapi import HTTPException
 from sqlalchemy import false, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.events import event_bus
 from app.core.redis import cache_delete, cache_get, cache_set
 from app.platform.identity.models import DataScopeRule, Department, User
@@ -118,7 +119,10 @@ async def _resolve_department_scope(db: AsyncSession, user: User) -> DepartmentS
     roles = await resolve_user_roles(db, user.id)
     if any(r.code == SUPER_ADMIN_ROLE_CODE for r in roles):
         return DepartmentScope(is_all=True)
-    if str(user.feishu_open_id) == DEV_BYPASS_OPEN_ID:
+    if (
+        str(user.feishu_open_id) == DEV_BYPASS_OPEN_ID
+        and not get_settings().is_production
+    ):
         return DepartmentScope(is_all=True)
 
     # 用户级配置（个例覆盖，如高管）

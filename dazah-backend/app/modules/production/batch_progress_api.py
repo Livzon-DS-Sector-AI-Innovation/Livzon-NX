@@ -46,6 +46,21 @@ STEP_LABELS = [
 ]
 
 
+def build_batch_progress_query(batch_no: str | None) -> tuple[str, dict[str, Any]]:
+    """Build the progress matrix query with every user value bound as a parameter."""
+    unions = " UNION ALL ".join(
+        f"SELECT \"{col}\" AS batch_no, '{key}' AS step FROM production.{table} WHERE is_deleted = false AND workshop = :ws"  # noqa: E501
+        for key, table, col in STEP_TABLES
+    )
+    sql = f"SELECT batch_no, step FROM ({unions}) AS t"
+    params: dict[str, Any] = {}
+    if batch_no:
+        sql += " WHERE batch_no ILIKE :batch_no"
+        params["batch_no"] = f"%{batch_no}%"
+    sql += " ORDER BY batch_no DESC, step"
+    return sql, params
+
+
 @router.get("/batch-progress", summary="批次进度总览")
 async def batch_progress(
     s: str | None = Query(None, alias="batch_no"),
@@ -54,16 +69,9 @@ async def batch_progress(
 ) -> Any:
     """一次查询13张表，返回批次进度矩阵 + 概览统计 + 卡点分析"""
     # ── 1. 批次进度矩阵 ──
-    unions = " UNION ALL ".join(
-        f"SELECT \"{col}\" AS batch_no, '{key}' AS step FROM production.{table} WHERE is_deleted = false AND workshop = :ws"  # noqa: E501
-        for key, table, col in STEP_TABLES
-    )
-    sql = f"SELECT batch_no, step FROM ({unions}) AS t"
-    if s:
-        sql += f" WHERE batch_no ILIKE '%{s}%'"
-    sql += " ORDER BY batch_no DESC, step"
-
-    result = await session.execute(text(sql), {"ws": workshop})
+    sql, query_params = build_batch_progress_query(s)
+    query_params["ws"] = workshop
+    result = await session.execute(text(sql), query_params)
     rows = result.fetchall()
 
     batch_map: dict[str, set[str]] = {}

@@ -90,6 +90,7 @@ class AgentTrustedSubject(BaseModel):
     display_name: str | None = Field(default=None, max_length=200)
     source: Literal["web", "feishu", "automation", "internal"]
     external_binding_id: str | None = Field(default=None, max_length=64)
+    delegation_token: str | None = Field(default=None, max_length=4096, exclude=True, repr=False)
 
 
 class AgentBackendSource(BaseModel):
@@ -143,6 +144,7 @@ class AgentBackendV2Request(BaseModel):
             "user_id": self.subject.user_id,
             "user_name": self.subject.display_name,
             "external_binding_id": self.subject.external_binding_id,
+            "delegation_token": self.subject.delegation_token,
             "channel": self.source.platform,
             "feishu_sender_id": (
                 self.source.sender_union_id or self.source.sender_open_id or self.source.sender_user_id

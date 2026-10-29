@@ -188,6 +188,9 @@ class FakeAgentRepository:
         self.session.title = title
         return self.session
 
+    async def get_session(self: Any, db: Any, session_id: Any) -> Any:
+        return self.session if self.session.id == session_id else None
+
     async def add_message(
         self: Any,
         db: Any,
@@ -267,6 +270,7 @@ class FakeAgentRepository:
     ) -> Any:
         confirmation: Any = SimpleNamespace(
             id=uuid.uuid4(),
+            is_deleted=False,
             session_id=session_id,
             user_id=user_id,
             operation=operation,
@@ -294,6 +298,7 @@ class FakeAgentRepository:
             return existing
         confirmation: Any = SimpleNamespace(
             id=confirmation_id,
+            is_deleted=False,
             status="pending",
             **values,
         )
@@ -875,6 +880,7 @@ async def test_high_risk_tool_execution_returns_policy_refusal() -> None:
 @pytest.mark.anyio
 async def test_resolve_pending_confirmation_from_assistant_text_id() -> None:
     repo: Any = FakeAgentRepository()
+    repo.session.user_id = uuid.uuid4()
     service = AgentService(
         settings=SimpleNamespace(),
         repo=repo,
@@ -883,7 +889,7 @@ async def test_resolve_pending_confirmation_from_assistant_text_id() -> None:
     confirmation = await repo.create_confirmation(
         cast(Any, FakeDb)(),
         session_id=repo.session.id,
-        user_id=uuid.uuid4(),
+        user_id=repo.session.user_id,
         operation="identity.deliver_feishu_message",
         summary="向但昊发送飞书卡片消息",
         risk_level="medium",
@@ -901,6 +907,7 @@ async def test_resolve_pending_confirmation_from_assistant_text_id() -> None:
             "pending_confirmations": [],
             "tool_trace": [],
         },
+        session_id=repo.session.id,
     )
 
     assert pending == [confirmation]
@@ -909,11 +916,12 @@ async def test_resolve_pending_confirmation_from_assistant_text_id() -> None:
 @pytest.mark.anyio
 async def test_resolve_multiple_pending_confirmations_from_same_result() -> None:
     repo: Any = FakeAgentRepository()
+    repo.session.user_id = uuid.uuid4()
     service = AgentService(settings=SimpleNamespace(), repo=repo)
     first_confirmation = await repo.create_confirmation(
         cast(Any, FakeDb)(),
         session_id=repo.session.id,
-        user_id=uuid.uuid4(),
+        user_id=repo.session.user_id,
         operation="identity.deliver_feishu_message",
         summary="向张三发送飞书文本消息",
         risk_level="medium",
@@ -923,7 +931,7 @@ async def test_resolve_multiple_pending_confirmations_from_same_result() -> None
     second_confirmation = await repo.create_confirmation(
         cast(Any, FakeDb)(),
         session_id=repo.session.id,
-        user_id=uuid.uuid4(),
+        user_id=repo.session.user_id,
         operation="identity.deliver_feishu_message",
         summary="向李四发送飞书卡片消息",
         risk_level="medium",
@@ -945,6 +953,7 @@ async def test_resolve_multiple_pending_confirmations_from_same_result() -> None
             ],
             "tool_trace": [],
         },
+        session_id=repo.session.id,
     )
 
     assert pending == [first_confirmation, second_confirmation]
@@ -953,11 +962,12 @@ async def test_resolve_multiple_pending_confirmations_from_same_result() -> None
 @pytest.mark.anyio
 async def test_resolve_pending_confirmations_includes_session_pending() -> None:
     repo: Any = FakeAgentRepository()
+    repo.session.user_id = uuid.uuid4()
     service = AgentService(settings=SimpleNamespace(), repo=repo)
     first_confirmation = await repo.create_confirmation(
         cast(Any, FakeDb)(),
         session_id=repo.session.id,
-        user_id=uuid.uuid4(),
+        user_id=repo.session.user_id,
         operation="identity.deliver_feishu_message",
         summary="向张三发送飞书文本消息",
         risk_level="medium",
@@ -967,7 +977,7 @@ async def test_resolve_pending_confirmations_includes_session_pending() -> None:
     second_confirmation = await repo.create_confirmation(
         cast(Any, FakeDb)(),
         session_id=repo.session.id,
-        user_id=uuid.uuid4(),
+        user_id=repo.session.user_id,
         operation="identity.deliver_feishu_message",
         summary="向李四发送飞书卡片消息",
         risk_level="medium",

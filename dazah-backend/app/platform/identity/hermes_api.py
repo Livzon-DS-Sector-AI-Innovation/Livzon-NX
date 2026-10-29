@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import Settings, get_settings
 from app.core.database import get_db
 from app.platform.audit.models import AuditLog
+from app.platform.identity.agent_delegation import issue_agent_delegation
 from app.platform.identity.models import User
 from app.platform.identity.repository import (
     ExternalIdentityBindingRepository,
@@ -116,6 +117,9 @@ async def resolve_external_identity(
             "display_name": user.name,
             "source": "feishu",
             "external_binding_id": str(binding.id),
+            "delegation_token": issue_agent_delegation(
+                settings, user, source="feishu", external_binding_id=binding.id
+            ),
         }
     }
 

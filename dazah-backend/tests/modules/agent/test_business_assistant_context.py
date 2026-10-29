@@ -14,6 +14,7 @@ from app.modules.agent.page_context import resolve_page_context
 from app.modules.agent.schemas import AgentPageContext
 from app.modules.agent.tool_registration import ensure_agent_tools_registered
 from app.modules.agent.tools import tool_registry
+from app.platform.identity.agent_delegation import issue_agent_delegation
 from app.platform.identity.page_permissions import PagePermissionService
 from app.platform.identity.page_policy import PAGE_DEFINITIONS
 
@@ -105,7 +106,9 @@ async def test_hermes_request_forwards_page_hints_separately_from_trusted_subjec
     settings = Settings(
         _env_file=None, HERMES_AGENT_V2_URL="http://hermes/v2/agent/runs"
     )
-    user = SimpleNamespace(id=uuid4(), tenant_key="tenant", name="User")
+    user = SimpleNamespace(
+        id=uuid4(), tenant_key="tenant", name="User", session_version=1
+    )
     page = next(p for p in PAGE_DEFINITIONS if p.module_code == "production")
     context = AgentPageContext(
         page_key=page.page_key,
@@ -128,6 +131,7 @@ async def test_hermes_request_forwards_page_hints_separately_from_trusted_subjec
         await agent._call_hermes(**kwargs)
     assert captured[0]["page_context"]["page_key"] == page.page_key
     assert captured[0]["subject"]["user_id"] == str(user.id)
+    assert captured[0]["subject"]["delegation_token"]
     assert "page_context" not in captured[0]["subject"]
 
 
@@ -154,7 +158,11 @@ async def test_live_tool_descriptor_http_exposes_source_semantics_and_denies_rev
         idempotent=False,
     )
     user = SimpleNamespace(
-        id=uuid4(), status="active", is_deleted=False, tenant_key="tenant"
+        id=uuid4(),
+        status="active",
+        is_deleted=False,
+        tenant_key="tenant",
+        session_version=1,
     )
     db = SimpleNamespace(
         scalar=AsyncMock(return_value=row),
@@ -169,9 +177,12 @@ async def test_live_tool_descriptor_http_exposes_source_semantics_and_denies_rev
     app = FastAPI()
     app.include_router(api.router, prefix="/api/v1/agent")
     app.dependency_overrides[get_db] = lambda: db
-    app.dependency_overrides[get_settings] = lambda: Settings(
-        _env_file=None, AGENT_TOOL_TOKEN="test-only"
-    )
+    settings = Settings(_env_file=None, AGENT_TOOL_TOKEN="test-only")
+    app.dependency_overrides[get_settings] = lambda: settings
+    headers = {
+        "Authorization": "Bearer test-only",
+        "X-Dazah-Delegation": issue_agent_delegation(settings, user, source="web"),
+    }
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app), base_url="http://test"
     ) as client:
@@ -183,7 +194,7 @@ async def test_live_tool_descriptor_http_exposes_source_semantics_and_denies_rev
         response = await client.get(
             f"/api/v1/agent/tools/{spec.name}",
             params=params,
-            headers={"Authorization": "Bearer test-only"},
+            headers=headers,
         )
         assert response.status_code == 200
         descriptor = response.json()["data"]
@@ -194,7 +205,7 @@ async def test_live_tool_descriptor_http_exposes_source_semantics_and_denies_rev
         denied = await client.get(
             f"/api/v1/agent/tools/{spec.name}",
             params=params,
-            headers={"Authorization": "Bearer test-only"},
+            headers=headers,
         )
         assert denied.status_code == 403
 

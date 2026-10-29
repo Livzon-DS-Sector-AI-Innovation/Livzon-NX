@@ -2,6 +2,7 @@ name: dazah-dev
 
 # Local development orchestration. Invoke with:
 # docker compose --env-file .env.local -f compose.dev.yml up -d --build
+# Startup checks revisions only. Explicit upgrades use scripts/dev.ps1 -Migrate.
 
 x-logging: &default-logging
   driver: local
@@ -96,6 +97,7 @@ services:
     logging: *default-logging
 
   migrate:
+    profiles: ["migration"]
     build:
       context: .
       dockerfile: Dockerfile.dev
@@ -111,7 +113,9 @@ services:
       - ./dazah-backend/app:/app/app:ro
       - ./dazah-backend/alembic:/app/alembic
       - ./dazah-backend/alembic.ini:/app/alembic.ini:ro
-    command: [".venv/bin/alembic", "upgrade", "head"]
+    entrypoint: [".venv/bin/python", "-m", "app.core.dev_migration"]
+    command: ["check"]
+    stdin_open: false
     depends_on:
       db:
         condition: service_healthy
@@ -126,6 +130,7 @@ services:
       dockerfile: Dockerfile.dev
       target: backend
     image: dazah/backend:dev
+    command: [".venv/bin/python", "-m", "app.core.dev_migration", "serve"]
     restart: unless-stopped
     env_file:
       - ${DAZAH_ENV_FILE:-.env.local}
@@ -152,8 +157,8 @@ services:
     networks:
       - backend
     depends_on:
-      migrate:
-        condition: service_completed_successfully
+      db:
+        condition: service_healthy
       redis:
         condition: service_healthy
       minio:
@@ -235,7 +240,7 @@ services:
       - frontend_node_modules:/app/node_modules
       - frontend_next_cache:/app/.next
     ports:
-      - "${FRONTEND_BIND_HOST:-0.0.0.0}:${FRONTEND_PORT:-3000}:3000"
+      - "${FRONTEND_BIND_HOST:-127.0.0.1}:${FRONTEND_PORT:-3000}:3000"
     networks:
       - backend
     depends_on:

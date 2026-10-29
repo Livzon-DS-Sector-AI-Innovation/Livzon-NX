@@ -12,6 +12,8 @@ from dotenv import load_dotenv
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from app.core.sql_safety import quote_literal
+
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 logger = logging.getLogger(__name__)
 
@@ -107,12 +109,12 @@ def _p(v: str) -> str:
     try:
         n = float(v)
         if 0 < n < 1:
-            return f"'{round(n * 100)}%'"
+            return quote_literal(f"{round(n * 100)}%")
         if n > 1:
-            return f"'{round(n)}%'"
-        return f"'{v}'"
+            return quote_literal(f"{round(n)}%")
+        return quote_literal(v)
     except Exception:
-        return f"'{v}'"
+        return quote_literal(v)
 
 
 async def run(session: AsyncSession) -> Any:
@@ -151,9 +153,10 @@ async def run(session: AsyncSession) -> Any:
             if name in PCT_COLS:
                 rec[name] = _p(v) if v else "NULL"
             elif name == "日期":
-                rec[name] = f"'{_pd(cur_date)}'" if cur_date else "NULL"
+                date_value = _pd(cur_date) if cur_date else None
+                rec[name] = quote_literal(date_value) if date_value else "NULL"
             elif name == "批号":
-                rec[name] = f"'{cur_batch}'" if cur_batch else "NULL"
+                rec[name] = quote_literal(cur_batch) if cur_batch else "NULL"
             else:
                 rec[name] = _n(v) if v else "NULL"
         records.append(rec)

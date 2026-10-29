@@ -3190,6 +3190,18 @@
       "AgentTrustedSubject": {
         "additionalProperties": false,
         "properties": {
+          "delegation_token": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Delegation Token"
+          },
           "display_name": {
             "anyOf": [
               {
@@ -37801,7 +37813,7 @@
         "type": "object"
       },
       "EmployeeUpdate": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "age": {
             "anyOf": [
@@ -37813,6 +37825,19 @@
               }
             ],
             "title": "Age"
+          },
+          "archive_number": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "档案编号",
+            "title": "Archive Number"
           },
           "bank_account": {
             "anyOf": [
@@ -37858,6 +37883,32 @@
               }
             ],
             "title": "Birth Year"
+          },
+          "certificate_number": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "证书编号",
+            "title": "Certificate Number"
+          },
+          "certificate_review_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "技能证书复审时间",
+            "title": "Certificate Review Date"
           },
           "classification": {
             "anyOf": [
@@ -37919,6 +37970,32 @@
             ],
             "title": "Contract End 4"
           },
+          "contract_end_5": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "合同截止日期5",
+            "title": "Contract End 5"
+          },
+          "contract_end_6": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "合同截止日期6",
+            "title": "Contract End 6"
+          },
           "contract_end_date": {
             "anyOf": [
               {
@@ -37979,6 +38056,32 @@
             ],
             "title": "Contract Start 4"
           },
+          "contract_start_5": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "第五次续签合同日期",
+            "title": "Contract Start 5"
+          },
+          "contract_start_6": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "第六次续签合同日期",
+            "title": "Contract Start 6"
+          },
           "contract_start_date": {
             "anyOf": [
               {
@@ -38013,6 +38116,19 @@
               }
             ],
             "title": "Current Address"
+          },
+          "degree": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "学位",
+            "title": "Degree"
           },
           "department": {
             "anyOf": [
@@ -38122,6 +38238,32 @@
             ],
             "title": "Employee Number"
           },
+          "employment_type": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "人员就业方式",
+            "title": "Employment Type"
+          },
+          "ethnic_group": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "民族",
+            "title": "Ethnic Group"
+          },
           "factory_entry_date": {
             "anyOf": [
               {
@@ -38169,6 +38311,19 @@
               }
             ],
             "title": "Graduation Date"
+          },
+          "health_status": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "健康状况",
+            "title": "Health Status"
           },
           "hire_date": {
             "anyOf": [
@@ -38240,6 +38395,19 @@
               }
             ],
             "title": "Job Category"
+          },
+          "last_working_day": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "最后工作日",
+            "title": "Last Working Day"
           },
           "level": {
             "anyOf": [
@@ -38313,6 +38481,32 @@
             ],
             "title": "Native Place"
           },
+          "offboarding_reason": {
+            "anyOf": [
+              {
+                "maxLength": 512,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "离职原因",
+            "title": "Offboarding Reason"
+          },
+          "offboarding_type": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "离职类型",
+            "title": "Offboarding Type"
+          },
           "phone": {
             "anyOf": [
               {
@@ -38324,6 +38518,19 @@
               }
             ],
             "title": "Phone"
+          },
+          "planned_probation_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "拟转正日期",
+            "title": "Planned Probation Date"
           },
           "political_status": {
             "anyOf": [
@@ -38348,6 +38555,32 @@
               }
             ],
             "title": "Position"
+          },
+          "probation_effective_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "转正生效日期",
+            "title": "Probation Effective Date"
+          },
+          "probation_status": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "转正状态",
+            "title": "Probation Status"
           },
           "qualification_type": {
             "anyOf": [
@@ -38401,6 +38634,18 @@
             ],
             "title": "School"
           },
+          "seq_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "序号（飞书自动编号）",
+            "title": "Seq Number"
+          },
           "status": {
             "anyOf": [
               {
@@ -38424,6 +38669,19 @@
               }
             ],
             "title": "Status Category"
+          },
+          "sub_department": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "二级部门",
+            "title": "Sub Department"
           },
           "team": {
             "anyOf": [
@@ -38459,6 +38717,54 @@
               }
             ],
             "title": "Transfer History"
+          },
+          "work_experience_1": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "工作经验一",
+            "title": "Work Experience 1"
+          },
+          "work_experience_2": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "工作经验二",
+            "title": "Work Experience 2"
+          },
+          "work_experience_3": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "工作经验三",
+            "title": "Work Experience 3"
+          },
+          "work_experience_4": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "工作经验四",
+            "title": "Work Experience 4"
           },
           "work_start_date": {
             "anyOf": [
@@ -66602,7 +66908,7 @@
         "type": "object"
       },
       "ProductUpdate": {
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "capacity_range": {
             "anyOf": [
@@ -100585,6 +100891,22 @@
               ],
               "title": "Authorization"
             }
+          },
+          {
+            "in": "header",
+            "name": "x-dazah-delegation",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Dazah-Delegation"
+            }
           }
         ],
         "requestBody": {
@@ -103208,6 +103530,22 @@
               ],
               "title": "Authorization"
             }
+          },
+          {
+            "in": "header",
+            "name": "x-dazah-delegation",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Dazah-Delegation"
+            }
           }
         ],
         "requestBody": {
@@ -103264,6 +103602,22 @@
                 }
               ],
               "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-dazah-delegation",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Dazah-Delegation"
             }
           }
         ],
@@ -103361,6 +103715,22 @@
                 }
               ],
               "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-dazah-delegation",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Dazah-Delegation"
             }
           }
         ],
@@ -139900,7 +140270,7 @@
     },
     "/api/v1/identity/personnel": {
       "get": {
-        "description": "分页获取所有人员名单，支持按部门和姓名筛选。",
+        "description": "分页获取人员名单；联系方式仅对平台/HR 读者返回。",
         "operationId": "list_personnel_api_v1_identity_personnel_get",
         "parameters": [
           {
@@ -139960,6 +140330,22 @@
               "minimum": 1,
               "title": "Limit",
               "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
             }
           }
         ],
@@ -155427,20 +155813,26 @@
         "operationId": "analyze_label_verification_video_api_v1_production_label_verifications_analyze_video_post",
         "parameters": [
           {
+            "description": "上传接口返回的文件 key",
             "in": "query",
             "name": "file_key",
             "required": true,
             "schema": {
+              "description": "上传接口返回的文件 key",
               "title": "File Key",
               "type": "string"
             }
           },
           {
+            "description": "抽帧频率",
             "in": "query",
             "name": "fps",
             "required": false,
             "schema": {
               "default": 1.0,
+              "description": "抽帧频率",
+              "exclusiveMinimum": 0,
+              "maximum": 10,
               "title": "Fps",
               "type": "number"
             }
@@ -236389,6 +236781,7 @@
     },
     "/api/v1/uploads/{module}/{object_key}": {
       "get": {
+        "description": "Object keys never prove ownership; use the owning module's record API.\n\nThis legacy route cannot recover a record/page scope reliably from a key.\nFail closed for every caller, including admins, before touching storage.",
         "operationId": "download_module_file_api_v1_uploads__module___object_key__get",
         "parameters": [
           {
@@ -236446,7 +236839,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "授权下载模块文件",
+        "summary": "拒绝无业务记录上下文的附件下载",
         "tags": [
           "文件访问"
         ]

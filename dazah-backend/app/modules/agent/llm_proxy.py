@@ -1,5 +1,6 @@
+import json
 from collections.abc import AsyncIterator
-from contextlib import AbstractAsyncContextManager
+from contextlib import AbstractAsyncContextManager, AsyncExitStack
 from typing import Any
 
 import httpx
@@ -10,16 +11,35 @@ from starlette.types import Receive, Scope, Send
 from app.core.llm.capacity import hold_capacity
 from app.core.llm.config import get_config
 from app.core.llm.exceptions import LLMConfigError, LLMRateLimitError
+from app.core.llm.http_security import provider_client, validate_provider_url
 
 
 class _CapacityStream(StreamingResponse):
     """Release admission even when the client disconnects before the first byte."""
 
     def __init__(
-        self, content: AsyncIterator[bytes], lease: AbstractAsyncContextManager[None]
+        self, content: AsyncIterator[bytes], lease: AbstractAsyncContextManager[object]
     ) -> None:
-        super().__init__(content, media_type="text/event-stream")
         self.lease = lease
+        self._released = False
+        super().__init__(self._iterate(content), media_type="text/event-stream")
+
+    async def _release(self) -> None:
+        if not self._released:
+            self._released = True
+            await self.lease.__aexit__(None, None, None)
+
+    async def _iterate(self, content: AsyncIterator[bytes]) -> AsyncIterator[bytes]:
+        try:
+            async for chunk in content:
+                yield chunk
+        finally:
+            try:
+                close = getattr(content, "aclose", None)
+                if close is not None:
+                    await close()
+            finally:
+                await self._release()
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         try:
@@ -30,7 +50,8 @@ class _CapacityStream(StreamingResponse):
                 if close is not None:
                     await close()
             finally:
-                await self.lease.__aexit__(None, None, None)
+                await self._release()
+
 
 SUPPORTED_FIELDS = {
     "messages",
@@ -94,6 +115,7 @@ async def forward_chat_completion(payload: dict[str, Any]) -> Any:
             status.HTTP_503_SERVICE_UNAVAILABLE,
             detail,
         ) from exc
+    validate_provider_url(config.api_base_url)
     body = build_provider_body(payload, config.model_name, config.temperature)
     retry_without_thinking = should_retry_without_auto_thinking(
         payload, body, config.model_name
@@ -105,17 +127,39 @@ async def forward_chat_completion(payload: dict[str, Any]) -> Any:
     }
     timeout = httpx.Timeout(config.timeout_seconds)
     if body.get("stream"):
-        lease = hold_capacity()
+        resources = AsyncExitStack()
         try:
-            await lease.__aenter__()
+            await resources.enter_async_context(hold_capacity())
+            client = await resources.enter_async_context(
+                provider_client(timeout=timeout)
+            )
+            response = await resources.enter_async_context(
+                client.stream("POST", url, headers=headers, json=body)
+            )
+            if response.status_code >= 400 and retry_without_thinking:
+                await response.aclose()
+                response = await resources.enter_async_context(
+                    client.stream(
+                        "POST", url, headers=headers, json=body_without_thinking(body)
+                    )
+                )
+            if response.status_code >= 300:
+                raise _upstream_http_error(response.status_code)
         except LLMRateLimitError as exc:
+            await resources.aclose()
             raise HTTPException(429, "AI 服务繁忙，请稍后重试") from exc
-        return _CapacityStream(
-            _stream_chat(url, headers, body, timeout, retry_without_thinking),
-            lease,
-        )
+        except httpx.TimeoutException as exc:
+            await resources.aclose()
+            raise HTTPException(504, "LLM 上游服务响应超时，请稍后重试。") from exc
+        except httpx.HTTPError as exc:
+            await resources.aclose()
+            raise HTTPException(502, "LLM 上游服务暂不可用，请稍后重试。") from exc
+        except BaseException:
+            await resources.aclose()
+            raise
+        return _CapacityStream(_stream_chat(response), resources)
     try:
-        async with hold_capacity(), httpx.AsyncClient(timeout=timeout) as client:
+        async with hold_capacity(), provider_client(timeout=timeout) as client:
             response = await client.post(url, headers=headers, json=body)
             if response.status_code >= 400 and retry_without_thinking:
                 response = await client.post(
@@ -135,10 +179,18 @@ async def forward_chat_completion(payload: dict[str, Any]) -> Any:
             status.HTTP_502_BAD_GATEWAY,
             "LLM 上游服务暂不可用，请稍后重试。",
         ) from exc
-    if response.status_code >= 400:
-        raise HTTPException(status.HTTP_502_BAD_GATEWAY, response.text[:1000])
+    if response.status_code >= 300:
+        raise _upstream_http_error(response.status_code)
     try:
-        return response.json()
+        data = response.json()
+        if (
+            not isinstance(data, dict)
+            or data.get("error") is not None
+            or not isinstance(data.get("choices"), list)
+            or not data["choices"]
+        ):
+            raise HTTPException(502, "LLM 上游返回了无效响应，请稍后重试。")
+        return data
     except ValueError as exc:
         raise HTTPException(
             status.HTTP_502_BAD_GATEWAY,
@@ -190,9 +242,7 @@ def build_provider_body(
     ):
         body["max_completion_tokens"] = body.pop("max_tokens")
     if "messages" in body:
-        body["messages"] = _normalize_multimodal_messages(
-            body["messages"], model_name
-        )
+        body["messages"] = _normalize_multimodal_messages(body["messages"], model_name)
     if temperature > 0 and not _model_name_uses_completion_tokens(model_name):
         body.setdefault("temperature", temperature)
     apply_model_compatibility_defaults(body, model_name)
@@ -294,36 +344,84 @@ def body_without_thinking(body: dict[str, Any]) -> dict[str, Any]:
     return retry_body
 
 
-async def _stream_chat(
-    url: str,
-    headers: dict[str, str],
-    body: dict[str, Any],
-    timeout: httpx.Timeout,
-    retry_without_thinking: bool = False,
-) -> AsyncIterator[bytes]:
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        async with client.stream("POST", url, headers=headers, json=body) as response:
-            if response.status_code >= 400 and retry_without_thinking:
-                await response.aread()
-                async with client.stream(
-                    "POST",
-                    url,
-                    headers=headers,
-                    json=body_without_thinking(body),
-                ) as retry_response:
-                    if retry_response.status_code >= 400:
-                        detail = await retry_response.aread()
-                        raise HTTPException(
-                            status.HTTP_502_BAD_GATEWAY,
-                            detail.decode(errors="ignore")[:1000],
-                        )
-                    async for chunk in retry_response.aiter_bytes():
-                        yield chunk
+def _upstream_http_error(status_code: int) -> HTTPException:
+    if status_code == 429:
+        return HTTPException(429, "AI 服务繁忙，请稍后重试")
+    if status_code in {408, 504}:
+        return HTTPException(504, "LLM 上游服务响应超时，请稍后重试。")
+    return HTTPException(502, "LLM 上游服务暂不可用，请稍后重试。")
+
+
+def _stream_error_frame() -> bytes:
+    payload = {
+        "error": {
+            "message": "LLM 上游流式响应失败，请稍后重试。",
+            "type": "upstream_error",
+            "code": "upstream_error",
+        }
+    }
+    return ("data: " + json.dumps(payload, ensure_ascii=False) + "\n\n").encode()
+
+
+def _safe_stream_frame(lines: list[str]) -> tuple[bytes, bool]:
+    data = "\n".join(line[5:].lstrip(" ") for line in lines if line.startswith("data:"))
+    if any(line.startswith("event:") and line[6:].strip() == "error" for line in lines):
+        return _stream_error_frame(), True
+    if not data:
+        if any(
+            not line.startswith((":", "event:", "id:", "retry:")) for line in lines
+        ):
+            return _stream_error_frame(), True
+        return b": keepalive\n\n", False
+    if data.strip() == "[DONE]":
+        return b"data: [DONE]\n\n", True
+    try:
+        payload = json.loads(data)
+    except ValueError:
+        return _stream_error_frame(), True
+    if (
+        not isinstance(payload, dict)
+        or payload.get("error") is not None
+        or payload.get("type") == "error"
+        or not isinstance(payload.get("choices"), list)
+    ):
+        return _stream_error_frame(), True
+    return ("data: " + data + "\n\n").encode(), False
+
+
+async def _stream_chat(response: httpx.Response) -> AsyncIterator[bytes]:
+    """Bound frame buffering and replace errors before forwarding SSE data."""
+    lines: list[str] = []
+    frame_size = 0
+    pending = b""
+    try:
+        async for chunk in response.aiter_bytes():
+            pending += chunk
+            while b"\n" in pending:
+                raw_line, pending = pending.split(b"\n", 1)
+                frame_size += len(raw_line)
+                if frame_size > 256 * 1024:
+                    yield _stream_error_frame()
+                    return
+                line = raw_line.rstrip(b"\r").decode("utf-8", errors="replace")
+                if line:
+                    lines.append(line)
+                    if len(lines) > 1024:
+                        yield _stream_error_frame()
+                        return
+                elif lines:
+                    frame, finished = _safe_stream_frame(lines)
+                    yield frame
+                    if finished:
+                        return
+                    lines, frame_size = [], 0
+            if len(pending) + frame_size > 256 * 1024:
+                yield _stream_error_frame()
                 return
-            if response.status_code >= 400:
-                detail = await response.aread()
-                raise HTTPException(
-                    status.HTTP_502_BAD_GATEWAY, detail.decode(errors="ignore")[:1000]
-                )
-            async for chunk in response.aiter_bytes():
-                yield chunk
+        if pending:
+            lines.append(pending.decode("utf-8", errors="replace"))
+        if lines:
+            frame, _ = _safe_stream_frame(lines)
+            yield frame
+    except httpx.HTTPError:
+        yield _stream_error_frame()

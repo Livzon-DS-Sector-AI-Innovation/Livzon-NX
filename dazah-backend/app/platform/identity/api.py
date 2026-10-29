@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime
+from typing import Any
 from urllib.parse import parse_qs, urlencode, urlsplit
 from uuid import UUID
 
@@ -1000,6 +1001,44 @@ async def get_department(
 
 # ── Personnel ───────────────────────────────────────────────────────
 
+_PERSONNEL_CONTACT_FIELDS = (
+    "email",
+    "enterprise_email",
+    "mobile",
+    "feishu_user_id",
+    "feishu_open_id",
+    "feishu_union_id",
+    "feishu_department_ids",
+)
+
+
+def serialize_personnel_item(user: Any, *, include_contact: bool) -> dict[str, Any]:
+    """Return the personnel payload visible to the current caller.
+
+    The directory stays usable for pickers, but contact identifiers and Feishu
+    user IDs are only returned to platform/HR readers.
+    """
+    payload = PersonnelItem.model_validate(user).model_dump()
+    if not include_contact:
+        for field in _PERSONNEL_CONTACT_FIELDS:
+            payload[field] = None
+    return payload
+
+
+async def _can_view_personnel_contact(
+    db: AsyncSession, user: Any
+) -> bool:
+    if user is None:
+        return False
+    if getattr(user, "role", None) == "admin":
+        return True
+    permissions = await resolve_user_permissions(db, user.id)
+    return bool(
+        "*" in permissions
+        or "identity:read" in permissions
+        or "hr:read" in permissions
+    )
+
 
 @personnel_router.get("", summary="获取人员名单")
 async def list_personnel(
@@ -1008,8 +1047,9 @@ async def list_personnel(
     offset: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
 ) -> JSONResponse:
-    """分页获取所有人员名单，支持按部门和姓名筛选。"""
+    """分页获取人员名单；联系方式仅对平台/HR 读者返回。"""
     repo = UserRepository()
     users, total = await repo.list_all(
         db,
@@ -1019,7 +1059,11 @@ async def list_personnel(
         limit=limit,
     )
 
-    items = [PersonnelItem.model_validate(u).model_dump() for u in users]
+    include_contact = await _can_view_personnel_contact(db, current_user)
+    items = [
+        serialize_personnel_item(user, include_contact=include_contact)
+        for user in users
+    ]
     resp = PersonnelListResponse(
         items=items,
         total=total,

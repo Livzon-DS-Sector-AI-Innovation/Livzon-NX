@@ -36,6 +36,7 @@ def expected_jobs(scopes: dict[str, bool]) -> dict[str, bool]:
         "change-scope": True,
         "source-security": True,
         "frontend-quality": frontend,
+        "frontend-image-verify": frontend,
         "frontend-e2e": frontend,
         "backend-quality": backend,
         "backend-integration": backend,

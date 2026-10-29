@@ -59,4 +59,42 @@ describe('API proxy user feedback', () => {
       detail: [{ loc: ['body', 'name'], msg: '填写内容有误，请检查后重试', type: 'missing' }],
     })
   })
+
+  it('forwards only allowlisted request headers to the backend', async () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response(
+      JSON.stringify({ data: [] }),
+      { headers: { 'content-type': 'application/json' } },
+    ))
+    vi.stubGlobal('fetch', fetcher)
+
+    await GET(new NextRequest('http://localhost/api/v1/example', {
+      headers: {
+        cookie: 'auth_token=secret',
+        'x-forwarded-host': 'evil.example',
+        'x-dazah-operation-id': 'operation-1',
+      },
+    }))
+
+    const forwarded = new Headers(fetcher.mock.calls[0][1].headers)
+    expect(forwarded.get('cookie')).toBe('auth_token=secret')
+    expect(forwarded.get('x-dazah-operation-id')).toBe('operation-1')
+    expect(forwarded.get('x-forwarded-host')).toBeNull()
+  })
+
+  it('preserves browser source evidence for backend cookie and CSRF checks', async () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response('{}', {
+      headers: { 'content-type': 'application/json' },
+    }))
+    vi.stubGlobal('fetch', fetcher)
+    await POST(new NextRequest('https://factory.test/api/v1/example', {
+      method: 'POST', body: '{}', headers: {
+        cookie: 'auth_token=synthetic', origin: 'https://factory.test',
+        referer: 'https://factory.test/production', 'sec-fetch-site': 'same-origin',
+      },
+    }))
+    const headers = new Headers(fetcher.mock.calls[0][1].headers)
+    expect(headers.get('origin')).toBe('https://factory.test')
+    expect(headers.get('referer')).toBe('https://factory.test/production')
+    expect(headers.get('sec-fetch-site')).toBe('same-origin')
+  })
 })

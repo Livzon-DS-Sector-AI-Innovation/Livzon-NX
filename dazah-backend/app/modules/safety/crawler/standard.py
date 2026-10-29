@@ -112,7 +112,7 @@ async def search_standard(standard_no: str) -> list[CrawledRegulation]:
         "Referer": "https://openstd.samr.gov.cn/bzgk/gb/",
     }
     try:
-        async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT, verify=False) as client:
+        async with httpx.AsyncClient(timeout=REQUEST_TIMEOUT) as client:
             resp = await client.get(
                 SEARCH_URL, params={"p.p1": "0", "p.p2": keyword}, headers=headers
             )

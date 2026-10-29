@@ -23,6 +23,30 @@ export async function PATCH(request: NextRequest) {
   return proxyRequest(request)
 }
 
+const FORWARDED_REQUEST_HEADERS = [
+  'accept',
+  'accept-language',
+  'authorization',
+  'content-type',
+  'cookie',
+  'origin',
+  'referer',
+  'sec-fetch-site',
+  'user-agent',
+  'x-dazah-operation-id',
+  'x-dazah-page-key',
+  'x-dazah-page-path',
+]
+
+function buildForwardHeaders(request: NextRequest): Headers {
+  const headers = new Headers()
+  for (const name of FORWARDED_REQUEST_HEADERS) {
+    const value = request.headers.get(name)
+    if (value) headers.set(name, value)
+  }
+  return headers
+}
+
 async function proxyRequest(request: NextRequest) {
   const pathname = request.nextUrl.pathname
   const searchParams = request.nextUrl.searchParams.toString()
@@ -34,9 +58,9 @@ async function proxyRequest(request: NextRequest) {
 
   const fetchOptions: RequestInit = {
     method: request.method,
-    headers: request.headers,
+    headers: buildForwardHeaders(request),
     body,
-    redirect: 'follow',
+    redirect: 'error',
   }
 
   let lastError: unknown

@@ -107,7 +107,8 @@ def test_is_public_path() -> None:
     assert is_public_path("/openapi.json")
     assert is_public_path("/api/v1/identity/auth/login")
     assert is_public_path("/api/v1/identity/auth/callback")
-    assert is_public_path("/mcp")
+    assert not is_public_path("/mcp")
+    assert not is_public_path("/mcp/tools")
     assert is_public_path("/uploads/x.png")
     assert not is_public_path("/api/v1/hr/employees")
 

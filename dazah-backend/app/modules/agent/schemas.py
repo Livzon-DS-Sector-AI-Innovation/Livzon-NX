@@ -60,6 +60,9 @@ class AgentTrustedSubject(BaseModel):
     display_name: str | None = Field(default=None, max_length=200)
     source: Literal["web", "feishu", "automation", "internal"]
     external_binding_id: uuid.UUID | None = None
+    delegation_token: str | None = Field(
+        default=None, max_length=4096, exclude=True, repr=False
+    )
 
 
 class AgentBackendSource(BaseModel):

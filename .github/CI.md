@@ -11,17 +11,18 @@ flowchart LR
   trigger["PR / dev / main"] --> scope["Change Scope"]
   scope --> security["Source Security"]
   scope --> frontend["Frontend Quality"]
+  scope --> frontendImage["Frontend Image Verify"]
   frontend --> e2e["Stable Frontend E2E"]
   frontend --> flaky["Frontend Flaky Quarantine"]
   scope --> backend["Backend Quality"]
-  backend --> integration["Backend Integration"]
-  backend --> image["Backend Image Verify"]
+  scope --> integration["Backend Integration"]
+  scope --> image["Backend Image Verify"]
   scope --> hermes["Hermes Quality"]
-  backend --> contract["Hermes Contract"]
-  hermes --> contract
+  scope --> contract["Hermes Contract"]
   scope --> gate["CI Gate"]
   security --> gate
   frontend --> gate
+  frontendImage --> gate
   e2e --> gate
   backend --> gate
   integration --> gate
@@ -31,8 +32,11 @@ flowchart LR
   flaky -. non-blocking .-> report["Quarantine report"]
 ```
 
-`Backend Integration` 和 `Backend Image Verify` 在 `Backend Quality` 成功后
-并行。镜像构建、Trivy 镜像扫描、迁移、容器启动、健康检查和 smoke test
+`Frontend Image Verify`、`Backend Quality`、`Backend Integration`、
+`Backend Image Verify` 和 `Hermes Contract` 按 scope 在 `Change Scope` 成功后
+独立启动。稳定 E2E 和 quarantine 只等待 `Frontend Quality` 的 bundle，
+不等待前端镜像。所有适用的阻塞检查仍必须成功才能通过 `CI Gate`。
+后端镜像构建、Trivy 镜像扫描、迁移、容器启动、健康检查和 smoke test
 位于同一个 runner，不依赖跨 Job 的本地镜像或服务。
 
 ## Change Scope
@@ -64,9 +68,15 @@ Change Scope 同时检查每个 `AGENTS.md` 都有同目录 `CLAUDE.md` 导入�
 
 `Frontend Quality` 一次安装依赖后执行生成 API 契约漂移、ESLint、
 TypeScript、Vitest coverage、80% 变更行覆盖率、Next.js production build、
-Compose 校验和前端 Docker build。
+构建失败边界测试，并上传 production standalone/static bundle 供 E2E 复用。
+全量单测、覆盖率和构建命令均保留，覆盖率报告仍在失败时上传。
 
-`Stable Frontend E2E` 重新构建 production bundle，通过 standalone server 调用
+`Frontend Image Verify` 独立执行 Compose 校验与前端 Docker build；保留根目录
+`Dockerfile`、`frontend` target、`${GITHUB_SHA}` 镜像标签、load 和
+`type=gha,scope=frontend` 持久缓存。它与前端质量检查并行，仍是 CI Gate 的
+阻塞项；镜像失败不会阻止独立的 E2E 收集结果，也不会被 E2E 成功抵消。
+
+`Stable Frontend E2E` 下载本次运行的 production bundle，通过 standalone server 调用
 `pnpm test:e2e:critical`，运行身份与模块权限、采购、Livzon Agent 治理台和助手
 关键交互测试，且排除 `@flaky`。CI 只允许一次测试级重试；失败时上传 Playwright
 HTML、trace、截图和视频。
@@ -96,14 +106,15 @@ FastAPI 路由。后端下一轮基线提升前，先确保主分支至少连续
 ### Backend
 
 `Backend Quality` 执行 AgentBackend V2 残留检查、变更 Python 文件 Ruff、
-compileall、现有 `mypy app/core` 基线和 unit/core 测试。
+compileall、现有 `mypy app/core` 基线及变更运行文件与依赖链的 Mypy。
+unit/core 测试包含在 Integration 全量覆盖率套件中，不重复运行。
 
 `Backend Integration` 使用独立 PostgreSQL 17 和 Redis 8，检查唯一 Alembic
 head、空库 upgrade、model/migration drift、FastAPI import、OpenAPI 漂移，
 然后运行全量 Pytest、60% 行覆盖率、33.5% 分支覆盖率和 80% 变更行覆盖率。
 
 `Backend Image Verify` 使用 `${GITHUB_SHA}` 标记镜像并通过 Buildx/GHA cache
-只构建一次。完整漏洞报告作为 artifact；存在有修复版本的 High/Critical
+构建交付镜像及开发镜像，并验证两者的 app 用户 Chromium 能力。完整漏洞报告作为 artifact；存在有修复版本的 High/Critical
 漏洞时阻塞。容器使用隔离 Docker network 和临时 PostgreSQL/Redis。
 
 ### Hermes
@@ -124,7 +135,43 @@ search/describe/execute adapter、OpenAPI 路径、超时和服务不可用契�
 `.trivyignore`。
 
 所有外部 Action 使用完整 commit SHA，Workflow 默认权限只有
-`contents: read`。PR 不推送正式镜像。
+`contents: read`。只有 CI Gate 为统计当前运行获得额外的 `actions: read`，
+构建和测试 Job 不增加权限。PR 不推送正式镜像。
+
+## 耗时与缓存观测
+
+CI Gate 在执行门禁判定之后，通过 `.github/scripts/ci_metrics.py` 将观测结果
+写入 Step Summary，并上传 `ci-metrics-<run_attempt>` JSON artifact，保留 14 天。
+两个统计/上传步骤均使用 `always()` 且非阻塞：即使门禁失败也尝试记录，统计
+失败不覆盖原门禁结果，也不能让失败的必需检查变绿。
+
+- 耗时从 GitHub Actions 当前 **run ID + attempt** 的 API 读取，支持分页，
+  不混用之前重跑的数据。记录各 Job、各步骤的开始到结束耗时与实际结论，
+  Summary 展示最长的 15 个已完成步骤，JSON 保留全部步骤。
+- `elapsed_to_report_seconds` 是本次 attempt 启动到采集时的时间，包含等待；
+  采集时 CI Gate 本身尚未结束，因此不是 workflow 最终耗时。Job 耗时包含
+  初始化和清理，并行 Job 耗时不可相加当作墙钟时间。Quarantine 不阻塞 Gate，
+  采集时可能尚未完成；中断整个 workflow 时统计也可能来不及执行。
+- pnpm 统计来自 Frontend Quality 和 Stable Frontend E2E 的 setup-node
+  `cache-hit` 输出，表示锁文件对应的 store 缓存恢复；不代表 node_modules
+  可以跳过安装。单次报告的命中率仅以这两个 Job 中有观测值的项为分母。
+- Docker 统计来自本次前端镜像的 Buildx build ref，通过
+  `docker buildx history inspect --format json` 读取
+  `NumCachedSteps / NumTotalSteps`。这是 BuildKit 构建步骤复用比例，
+  不表示 GHA 缓存下载成功率，也不保存原始构建参数、日志或 provenance。
+  Action 的 `builder/node/record` 复合引用需拆为显式 builder 和 record ID，
+  不能直接作为 history 的 record 参数。
+- 跳过、API 不可访问、构建未完成、Buildx history 不可用或输出缺失时，
+  对应观测明确显示 `unavailable`，不伪造为零耗时或缓存 miss。
+
+统计使用 GitHub 临时 token、Action 输出及 CI 进程变量，不引入应用环境配置。
+比较优化效果时，按变更范围、attempt 和缓存状态分别比较成功运行，避免将失败
+提前结束的耗时或部分 Job 重跑的耗时当作加速结果。尚无本次新 DAG 的线上测量
+结果；首轮 PR CI 需要验证 E2E 在镜像未结束时可启动、缓存计数及 artifact 均正常。
+
+本地回归命令：`python -m pytest .github/scripts/tests -q`。测试覆盖独立镜像
+依赖、E2E bundle 复用、必需 Job 到 Gate 的完整映射，以及镜像失败/取消/缺失/
+意外跳过必须阻塞、统计分页与 attempt 隔离、缓存不可用语义和敏感元数据过滤。
 
 ## CI Gate 语义
 

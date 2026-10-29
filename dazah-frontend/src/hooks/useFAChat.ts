@@ -10,7 +10,6 @@ import {
   type ProductionPageKey,
 } from '@/components/production/useProductionPermissions'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'
 const BASE = '/api/v1/production/fa'
 
 export interface UseFAChatOptions {
@@ -51,7 +50,7 @@ export function useFAChat({ stage, batchNo, pageKey }: UseFAChatOptions) {
 
     try {
       const r = await fetch(
-        `${API_BASE}${BASE}/lineage/ai-analysis-stream?stage=${encodeURIComponent(stage)}&batch_no=${encodeURIComponent(batchNo.trim())}`,
+        `${BASE}/lineage/ai-analysis-stream?stage=${encodeURIComponent(stage)}&batch_no=${encodeURIComponent(batchNo.trim())}`,
         { signal: AbortSignal.timeout(240000) }
       )
       const reader = r.body?.getReader()
@@ -118,7 +117,7 @@ export function useFAChat({ stage, batchNo, pageKey }: UseFAChatOptions) {
     setChatMessages(prev => [...prev, { role: 'user', content: msg }, { role: 'assistant', content: '' }])
     setChatSending(true)
     try {
-      const r = await fetch(`${API_BASE}${BASE}/chat/send`, {
+      const r = await fetch(`${BASE}/chat/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: currentResult.session_id, message: msg }),
@@ -169,7 +168,7 @@ export function useFAChat({ stage, batchNo, pageKey }: UseFAChatOptions) {
   const loadHistory = useCallback(async () => {
     setHistoryLoading(true)
     try {
-      const r = await fetch(`${API_BASE}${BASE}/lineage/ai-history?stage=${encodeURIComponent(stage)}&batch_no=${encodeURIComponent(batchNo.trim())}`)
+      const r = await fetch(`${BASE}/lineage/ai-history?stage=${encodeURIComponent(stage)}&batch_no=${encodeURIComponent(batchNo.trim())}`)
       const json = await r.json()
       if (json.code === 200) setHistoryRecords(json.data.records || [])
     } catch { /* ignore */ }

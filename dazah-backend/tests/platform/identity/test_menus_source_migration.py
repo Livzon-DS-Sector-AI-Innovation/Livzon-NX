@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from uuid import uuid4
 
 import pytest
+from httpx import AsyncClient
 from pydantic import ValidationError
-from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.database import get_db
 from app.main import app
 from app.platform.identity.deps import get_current_user
 from app.platform.identity.menu_seed_data import SEED_MENUS
@@ -26,30 +29,50 @@ from app.platform.identity.schemas import (
 )
 
 
-@pytest.fixture(autouse=True)
-async def _authenticate_menu_api(db_session):
-    """Use an explicit admin identity for the current RBAC API contract."""
+@pytest.fixture
+async def db_session(db_session: AsyncSession) -> AsyncIterator[AsyncSession]:
+    """Seed helpers and API commits release savepoints, not the outer transaction."""
+    connection = await db_session.connection()
+    async with AsyncSession(
+        bind=connection, join_transaction_mode="create_savepoint",
+        expire_on_commit=False,
+    ) as session:
+        yield session
 
-    user = (
-        (
-            await db_session.execute(
-                select(User)
-                .where(User.role == "admin", User.is_deleted.is_(False))
-                .limit(1)
-            )
-        )
-        .scalars()
-        .first()
+
+@pytest.fixture(autouse=True)
+async def _authenticate_menu_api(
+    db_session: AsyncSession, client: AsyncClient,
+) -> AsyncIterator[User]:
+    """Own the active administrator instead of selecting an existing account."""
+    user = User(
+        name="菜单测试管理员", username=f"menu-test-{uuid4().hex}",
+        role="admin", status="active", auth_source="local",
+        tenant_key="menu-test", is_deleted=False,
     )
-    if user is None:
-        pytest.skip("当前测试数据库未提供可用于审计的管理员账号")
+    db_session.add(user)
+    await db_session.flush()
 
     async def _current_user() -> User:
         return user
 
+    async def _get_db() -> AsyncIterator[AsyncSession]:
+        yield db_session
+
+    previous_db = app.dependency_overrides.get(get_db)
+    previous_user = app.dependency_overrides.get(get_current_user)
+    app.dependency_overrides[get_db] = _get_db
     app.dependency_overrides[get_current_user] = _current_user
-    yield
-    app.dependency_overrides.pop(get_current_user, None)
+    try:
+        yield user
+    finally:
+        for dependency, previous in (
+            (get_db, previous_db), (get_current_user, previous_user),
+        ):
+            if previous is None:
+                app.dependency_overrides.pop(dependency, None)
+            else:
+                app.dependency_overrides[dependency] = previous
 
 
 # ─── 种子数据 ────────────────────────────────────────────────────────
@@ -332,7 +355,23 @@ async def test_resolve_user_menu_ids_ancestors(db_session) -> None:
         await db_session.flush()
 
 
-# ─── 菜单 API（DEV_BYPASS_AUTH 免登录全链路）────────────────────────
+# ─── 菜单 API（显式启用的测试管理员）─────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_menu_api_does_not_reuse_a_disabled_administrator(
+    client: AsyncClient, db_session: AsyncSession,
+    _authenticate_menu_api: User,
+) -> None:
+    disabled = User(name="停用管理员夹具", role="admin", status="disabled")
+    db_session.add(disabled)
+    await db_session.flush()
+    response = await client.get("/api/v1/identity/admin/menus")
+    assert response.status_code == 200, response.text
+    assert _authenticate_menu_api.id != disabled.id
+    assert _authenticate_menu_api.status == "active"
+    await db_session.refresh(disabled)
+    assert disabled.status == "disabled"
 
 
 @pytest.mark.asyncio
@@ -409,7 +448,8 @@ async def test_role_menus_api_and_user_menus(client, db_session) -> None:
     # flow; keep the fixture self-contained instead of relying on app startup.
     await seed_permissions(db_session)
     await seed_menus(db_session)
-    await db_session.commit()
+    # The API uses a savepoint on this connection; keep the outer test rollback.
+    await db_session.flush()
 
     role_code = f"api_menu_role_{uuid4().hex[:8]}"
     # 角色

@@ -3,10 +3,13 @@
 from typing import Any
 
 import pytest
+from cryptography.fernet import Fernet
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.exceptions import AppException
+from app.core.llm.encryption import decrypt_api_key
 from app.modules.equipment.models.feishu_app import EquipmentFeishuApp
 from app.modules.equipment.models.inspection_feishu_config import (
     EquipmentInspectionFeishuConfig,
@@ -17,6 +20,14 @@ from app.modules.equipment.schemas.inspection import (
     FeishuAppUpdateRequest,
 )
 from app.modules.equipment.service import feishu_app as app_service
+
+
+@pytest.fixture(autouse=True)
+def _test_encryption_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Credential tests use an ephemeral key instead of local configuration."""
+    monkeypatch.setattr(
+        get_settings(), "LLM_ENCRYPTION_KEY", Fernet.generate_key().decode()
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -51,6 +62,10 @@ async def test_create_and_list_apps(db_session: AsyncSession) -> None:
     assert created.app_secret_masked
     assert "secret_a" not in created.model_dump_json()
     assert created.in_use_workshops == []
+    stored = await app_service.get_app_by_id(db_session, created.id)
+    assert stored is not None
+    assert stored.app_secret != "secret_a"
+    assert decrypt_api_key(stored.app_secret) == "secret_a"
 
     apps = await app_service.list_apps(db_session)
     assert [a.app_id for a in apps] == ["cli_a"]
