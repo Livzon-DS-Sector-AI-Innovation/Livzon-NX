@@ -18,7 +18,7 @@ _SETTINGS_PAGE = "safety:system-config:safety-feishu-settings"
 
 def test_page_table_registry_matches_registered_page_definition() -> None:
     """注册表里的页面标识必须与菜单派生的页面定义一致，否则权限绑定无从生效。"""
-    assert len(PAGE_TABLE_DEFINITIONS) == 11
+    assert len(PAGE_TABLE_DEFINITIONS) == 12
     definition = get_page_table(_PAGE)
     assert definition is not None
     assert definition.page_name == "24小时值班隐患"

@@ -1391,13 +1391,13 @@ SAFETY_PAGE_TABLE_PAGES = (
     "safety:ops-safety:risk-work-registration",
     "safety:ops-safety:feeding-inspection",
     "safety:ops-safety:hazchem-unloading-inspection",
+    "safety:site-mgmt:hazchem-msds",
     "safety:ops-safety:centrifuge-discharge-inspection",
     "safety:risk-hazard:hazard-inspection:hazard-duty",
     "safety:risk-hazard:hazard-inspection:hazard-quick-report",
     "safety:emergency-accident:fire-equipment-inspection",
     "safety:risk-hazard:ehs-change:ehs-change-review",
     "safety:risk-hazard:ehs-change:ehs-change-acceptance",
-    "safety:site-mgmt:hazchem-msds",
 )
 
 PAGE_API_BINDINGS += _module_api_bindings(
