@@ -116,6 +116,8 @@ jobs:
           needs.change-scope.outputs.shared_changed == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    outputs:
+      pnpm_cache_hit: ${{ steps.node.outputs.cache-hit }}
     defaults:
       run:
         working-directory: dazah-frontend
@@ -135,6 +137,7 @@ jobs:
           version: ${{ env.PNPM_VERSION }}
 
       - name: Set up Node.js
+        id: node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -186,13 +189,38 @@ jobs:
           retention-days: 1
           compression-level: 0
 
+      - name: Upload frontend coverage
+        if: ${{ always() && hashFiles('dazah-frontend/coverage/**') != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: frontend-coverage
+          path: dazah-frontend/coverage
+          if-no-files-found: ignore
+          retention-days: 14
+
+  frontend-image-verify:
+    name: Frontend Image Verify
+    needs: change-scope
+    if: >-
+      ${{ needs.change-scope.outputs.frontend_changed == 'true' ||
+          needs.change-scope.outputs.shared_changed == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    outputs:
+      cached_steps: ${{ steps.cache.outputs.cached_steps }}
+      total_steps: ${{ steps.cache.outputs.total_steps }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
 
       - name: Validate Compose
-        run: docker compose --env-file /dev/null -f ../compose.dev.yml config --no-interpolate --quiet
+        run: docker compose --env-file /dev/null -f compose.dev.yml config --no-interpolate --quiet
 
       - name: Build frontend image with persistent cache
+        id: build
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
         with:
           context: .
@@ -203,14 +231,13 @@ jobs:
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
 
-      - name: Upload frontend coverage
-        if: ${{ always() && hashFiles('dazah-frontend/coverage/**') != '' }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: frontend-coverage
-          path: dazah-frontend/coverage
-          if-no-files-found: ignore
-          retention-days: 14
+      - name: Collect frontend image cache statistics
+        id: cache
+        if: ${{ always() }}
+        continue-on-error: true
+        env:
+          BUILD_METADATA: ${{ steps.build.outputs.metadata }}
+        run: python3 .github/scripts/ci_metrics.py build-cache
 
   frontend-e2e:
     name: Stable Frontend E2E
@@ -222,6 +249,8 @@ jobs:
           needs.change-scope.outputs.shared_changed == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    outputs:
+      pnpm_cache_hit: ${{ steps.node.outputs.cache-hit }}
     defaults:
       run:
         working-directory: dazah-frontend
@@ -237,6 +266,7 @@ jobs:
           version: ${{ env.PNPM_VERSION }}
 
       - name: Set up Node.js
+        id: node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -813,6 +843,7 @@ jobs:
       - change-scope
       - source-security
       - frontend-quality
+      - frontend-image-verify
       - frontend-e2e
       - backend-quality
       - backend-integration
@@ -821,6 +852,9 @@ jobs:
       - hermes-contract
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
     steps:
       - name: Check out gate evaluator
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -836,6 +870,7 @@ jobs:
           CHANGE_SCOPE_RESULT: ${{ needs.change-scope.result }}
           SOURCE_SECURITY_RESULT: ${{ needs.source-security.result }}
           FRONTEND_QUALITY_RESULT: ${{ needs.frontend-quality.result }}
+          FRONTEND_IMAGE_VERIFY_RESULT: ${{ needs.frontend-image-verify.result }}
           FRONTEND_E2E_RESULT: ${{ needs.frontend-e2e.result }}
           BACKEND_QUALITY_RESULT: ${{ needs.backend-quality.result }}
           BACKEND_INTEGRATION_RESULT: ${{ needs.backend-integration.result }}
@@ -843,4 +878,22 @@ jobs:
           HERMES_QUALITY_RESULT: ${{ needs.hermes-quality.result }}
           HERMES_CONTRACT_RESULT: ${{ needs.hermes-contract.result }}
         run: python3 .github/scripts/ci_gate.py
+
+      - name: Report CI timing and cache statistics
+        if: ${{ always() }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CI_NEEDS_JSON: ${{ toJSON(needs) }}
+        run: python3 .github/scripts/ci_metrics.py report --output "$RUNNER_TEMP/ci-metrics.json"
+
+      - name: Upload CI metrics
+        if: ${{ always() }}
+        continue-on-error: true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ci-metrics-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ci-metrics.json
+          if-no-files-found: warn
+          retention-days: 14
 
