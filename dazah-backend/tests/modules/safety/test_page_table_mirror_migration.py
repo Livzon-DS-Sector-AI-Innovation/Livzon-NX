@@ -127,7 +127,8 @@ def test_single_head_retains_the_safety_reminder_history() -> None:
     cfg.set_main_option("script_location", str(_VERSIONS.parent))
     script = ScriptDirectory.from_config(cfg)
     heads = script.get_heads()
-    assert len(heads) == 1
+    # ada9041499a5：车间维修群链（da5f78a06d60）与主线的合并点（单 head）
+    assert heads == ["ada9041499a5"]
     history = {
         revision.revision for revision in script.walk_revisions(head=heads[0])
     }
@@ -136,6 +137,8 @@ def test_single_head_retains_the_safety_reminder_history() -> None:
     assert "d1f2a3b4c5d6" in history
     assert "f4a6c8e0b2d5" in history
     assert "a7c3e5f1b8d2" in history
+    assert "da5f78a06d60" in history
+    assert "b8d2f4a6c0e9" in history
 
 
 def test_multi_table_tabs_upgrade_adds_columns_and_upgrades_index(monkeypatch) -> None:
