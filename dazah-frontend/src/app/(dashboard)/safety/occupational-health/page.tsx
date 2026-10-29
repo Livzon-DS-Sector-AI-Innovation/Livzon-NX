@@ -72,6 +72,7 @@ import {
   addExamAbnormality,
   updateExamAbnormalityStatus,
 } from '@/actions/safety'
+import OhDetectionReportPanel from '@/components/safety/OhDetectionReportPanel'
 import {
   MonitorStatus,
   MONITOR_STATUS_OPTIONS,
@@ -114,6 +115,21 @@ const monitorStatusLabelMap: Record<string, string> = {
   verified: '已验证',
 }
 
+// 检测报告导入生成的结果行带有岗位/采样点扩展字段
+type MonitorResultRow = DetectionResultItem & {
+  post?: string
+  sample_point?: string
+}
+
+const resultCategoryLabel = (value: string) =>
+  HAZARD_FACTOR_CATEGORY_OPTIONS.find((o) => o.value === value)?.label || value
+
+const resultComplianceTag = (value?: string) => {
+  if (!value) return <Tag>-</Tag>
+  const option = OEL_COMPLIANCE_STATUS_OPTIONS.find((o) => o.value === value)
+  return <Tag color={option?.color || 'default'}>{option?.label || value}</Tag>
+}
+
 const examStatusColorMap: Record<string, string> = {
   scheduled: 'default',
   in_progress: 'processing',
@@ -147,6 +163,7 @@ export default function OccupationalHealthPage() {
   const [monitorForm] = Form.useForm()
   const [monitorDrawerOpen, setMonitorDrawerOpen] = useState(false)
   const [selectedMonitor, setSelectedMonitor] = useState<OhHazardMonitor | null>(null)
+  const [resultsModalMonitor, setResultsModalMonitor] = useState<OhHazardMonitor | null>(null)
   const [monitorFilters, setMonitorFilters] = useState({
     status: undefined as string | undefined,
     detection_type: undefined as string | undefined,
@@ -456,17 +473,23 @@ export default function OccupationalHealthPage() {
         </Tag>
       ),
     },
-    { title: '检测人员', dataIndex: 'inspector_name', width: 100 },
     {
       title: '检测结果',
       dataIndex: 'detection_results',
-      width: 120,
-      render: (v: DetectionResultItem[] | undefined) => {
+      width: 140,
+      render: (v: DetectionResultItem[] | undefined, record: OhHazardMonitor) => {
         if (!v || v.length === 0) return <Text type="secondary">暂无</Text>
         const exceeding = v.filter((r) => r.compliance_status === 'exceeding').length
         return (
           <Space>
-            <Text>{v.length} 项</Text>
+            <Button
+              type="link"
+              size="small"
+              style={{ padding: 0 }}
+              onClick={() => setResultsModalMonitor(record)}
+            >
+              {v.length} 项
+            </Button>
             {exceeding > 0 && <Tag color="red">{exceeding} 项超标</Tag>}
           </Space>
         )
@@ -709,6 +732,11 @@ export default function OccupationalHealthPage() {
               </>
             ),
           },
+          {
+            key: 'detection-reports',
+            label: '检测报告台账',
+            children: <OhDetectionReportPanel />,
+          },
         ]}
       />
 
@@ -849,6 +877,72 @@ export default function OccupationalHealthPage() {
           />
         )}
       </Drawer>
+
+      {/* ========================= 检测结果明细 Modal ========================= */}
+      <Modal
+        title={`检测结果明细 — ${resultsModalMonitor?.workplace || ''}（${resultsModalMonitor?.monitor_no || ''}）`}
+        open={!!resultsModalMonitor}
+        onCancel={() => setResultsModalMonitor(null)}
+        footer={null}
+        width={960}
+        destroyOnHidden
+      >
+        <Table
+          size="small"
+          rowKey={(_, index) => String(index)}
+          dataSource={(resultsModalMonitor?.detection_results || []) as MonitorResultRow[]}
+          scroll={{ x: 920 }}
+          pagination={false}
+          columns={[
+            { title: '#', width: 50, render: (_, __, i) => i + 1 },
+            {
+              title: '危害因素',
+              dataIndex: 'factor_name',
+              width: 130,
+              render: (v: string) => <Text strong>{v}</Text>,
+            },
+            {
+              title: '类别',
+              dataIndex: 'factor_category',
+              width: 80,
+              render: (v: string) => resultCategoryLabel(v),
+            },
+            { title: '岗位', dataIndex: 'post', width: 90, render: (v: string) => v || '-' },
+            {
+              title: '采样点/点位',
+              dataIndex: 'sample_point',
+              width: 140,
+              ellipsis: true,
+              render: (v: string) => v || '-',
+            },
+            {
+              title: '检测值',
+              key: 'detection_value',
+              width: 110,
+              render: (_, r: MonitorResultRow) => `${r.detection_value} ${r.unit || ''}`,
+            },
+            {
+              title: '限值(OEL)',
+              key: 'oel_limit',
+              width: 100,
+              render: (_, r: MonitorResultRow) => (r.oel_limit != null ? `${r.oel_limit} ${r.unit || ''}` : '-'),
+            },
+            {
+              title: '判定',
+              dataIndex: 'compliance_status',
+              width: 90,
+              render: (v: string) => resultComplianceTag(v),
+            },
+            {
+              title: '来源',
+              dataIndex: 'standard_ref',
+              width: 150,
+              ellipsis: true,
+              render: (v: string) => v || '-',
+            },
+          ]}
+        />
+      </Modal>
 
       {/* =============================== Exam Modal =============================== */}
       <Modal

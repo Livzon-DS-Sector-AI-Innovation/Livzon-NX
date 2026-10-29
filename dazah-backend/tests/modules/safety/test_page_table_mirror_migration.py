@@ -127,12 +127,13 @@ def test_single_head_retains_the_safety_reminder_history() -> None:
     cfg.set_main_option("script_location", str(_VERSIONS.parent))
     script = ScriptDirectory.from_config(cfg)
     heads = script.get_heads()
-    # a7c3e5f1b8d2：目标责任书/责任制考核批次接在安全治理（d7f3b9c1e5a2）
-    # 与厂区矢量底图（c5d7e9f1a3b6）之后的单 head
-    assert heads == ["a7c3e5f1b8d2"]
+    # 单 head 链：目标责任书（a7c3e5f1b8d2）→ 职业病检测报告（b2e9d4f7a6c3）
+    # → 危化品统计表镜像+MSDS 多附件（b9e4f7a2c5d1）
+    assert len(heads) == 1, f"迁移必须保持单 head，当前: {heads}"
     history = {
         revision.revision for revision in script.walk_revisions(head=heads[0])
     }
+    assert "a7c3e5f1b8d2" in history
     assert "c8e4a2f6d9b3" in history
     assert "d4e7f1a9c3b5" in history
 

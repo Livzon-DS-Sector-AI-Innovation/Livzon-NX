@@ -16,6 +16,7 @@ vi.mock('@ant-design/icons', () => {
     CheckCircleOutlined: Icon,
     ClockCircleOutlined: Icon,
     EnvironmentOutlined: Icon,
+    ExperimentOutlined: Icon,
     FireOutlined: Icon,
     RobotOutlined: Icon,
     TeamOutlined: Icon,
@@ -41,9 +42,29 @@ vi.mock('antd', async () => {
   const Text = ({ children, style }: Props) => createElement('span', { style }, children)
   const Title = ({ children, style }: Props) => createElement('h1', { style }, children)
 
+  const Segmented = ({ options, value, onChange }: Record<string, unknown>) =>
+    createElement(
+      'span',
+      null,
+      ((options as Array<{ label: string; value: string }>) ?? []).map((option) =>
+        createElement(
+          'button',
+          {
+            key: option.value,
+            type: 'button',
+            'data-segmented': String(option.value),
+            onClick: () => (onChange as (v: string) => void)?.(option.value),
+          },
+          option.label
+        )
+      )
+    )
+
   return {
     Alert: Box,
+    Button: Box,
     Card: Box,
+    Segmented,
     Col: Box,
     Drawer: Box,
     Row: Box,
@@ -64,6 +85,7 @@ const dashboardData: DashboardData = {
   todaySpecialOps: [],
   todayDailyRisks: [],
   overview: null,
+  chemicalInventories: [],
 }
 
 describe('SafetyDashboard font contract', () => {

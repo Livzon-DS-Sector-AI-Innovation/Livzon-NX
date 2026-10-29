@@ -22,6 +22,7 @@ export const SAFETY_PAGE_TABLE_KEYS = {
     'safety:emergency-accident:fire-equipment-inspection',
   ehsChangeReview: 'safety:risk-hazard:ehs-change:ehs-change-review',
   ehsChangeAcceptance: 'safety:risk-hazard:ehs-change:ehs-change-acceptance',
+  hazchemMsds: 'safety:site-mgmt:hazchem-msds',
 } as const
 
 /**
@@ -89,6 +90,8 @@ export type PageTableColumn = components['schemas']['PageTableColumn']
 export type PageTableAttachment = components['schemas']['PageTableAttachmentItem']
 export type PageTableStatGroup = components['schemas']['PageTableStatGroup']
 export type PageTableTab = components['schemas']['PageTableTab']
+export type PageTableOverLimitFields =
+  components['schemas']['PageTableOverLimitFields']
 
 /** 多页签页面的子表清单（normalize 后供组件使用）。 */
 export function toPageTableTabs(
@@ -194,6 +197,9 @@ export type PageTableUrl = { link: string; text: string }
 export type PageTableRecordRow = {
   record_id: string
   fields: Record<string, unknown>
+  /** 绑定页配置了超储计算列时后端附带的派生标记；未配置为 null。 */
+  over_limit?: boolean | null
+  over_pct?: number | null
 }
 
 /** 后端 field_codec 使用的控件类型（`PageTableColumn.kind` 的取值）。 */
@@ -214,12 +220,26 @@ export type PageTableFieldKind =
 export function toRecordRow(row: {
   record_id: string
   fields?: Record<string, unknown> | null
+  over_limit?: boolean | null
+  over_pct?: number | null
 }): PageTableRecordRow {
-  return { record_id: row.record_id, fields: row.fields ?? {} }
+  return {
+    record_id: row.record_id,
+    fields: row.fields ?? {},
+    over_limit: row.over_limit ?? null,
+    over_pct: row.over_pct ?? null,
+  }
 }
 
 export function toRecordRows(
-  rows: ReadonlyArray<{ record_id: string; fields?: Record<string, unknown> | null }> | undefined
+  rows:
+    | ReadonlyArray<{
+        record_id: string
+        fields?: Record<string, unknown> | null
+        over_limit?: boolean | null
+        over_pct?: number | null
+      }>
+    | undefined
 ): PageTableRecordRow[] {
   return (rows ?? []).map(toRecordRow)
 }

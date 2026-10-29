@@ -115,3 +115,50 @@ class HazchemStatsResponse(BaseModel):
     chemicals_total: int
     msds_uploaded: int
     inventory: ChemicalInventoryStatsResponse
+
+
+# ── MSDS 多附件 ──
+
+
+class ChemicalMsdsFileItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    chemical_id: UUID
+    file_name: str
+    content_type: str
+    size_bytes: int
+    created_at: datetime
+    created_by: UUID | None = None
+
+
+class ChemicalMsdsFileListResponse(BaseModel):
+    items: list[ChemicalMsdsFileItem]
+
+
+class MsdsExtractionSuggestion(BaseModel):
+    """MSDS 附件 AI 识别出的档案字段建议值（人工确认后才写入档案）。
+
+    各字段为「识别到则填、未识别为 None」；不覆盖档案必填项 name 之外的
+    任何空值以外的语义由前端确认弹窗决定。
+    """
+
+    name: str | None = Field(default=None, max_length=200)
+    alias: str | None = Field(default=None, max_length=200)
+    cas_no: str | None = Field(default=None, max_length=60)
+    category: str | None = Field(default=None, max_length=40)
+    category_label: str = Field(default="", description="危险性类别中文名")
+    hazard_statements: str | None = Field(default=None, max_length=8000)
+    storage_requirements: str | None = Field(default=None, max_length=8000)
+    remark: str | None = Field(default=None, max_length=8000)
+
+
+class ChemicalMsdsUploadResponse(BaseModel):
+    """上传 MSDS 成功后的响应：附件 + 更新后的档案 + AI 识别建议。"""
+
+    file: ChemicalMsdsFileItem
+    chemical: HazardousChemicalResponse
+    ai_suggestion: MsdsExtractionSuggestion | None = None
+    ai_error: str | None = Field(
+        default=None, description="AI 识别未执行/失败的原因（附件已保存成功）"
+    )

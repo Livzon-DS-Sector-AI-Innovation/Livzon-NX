@@ -11,7 +11,11 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppException, NotFoundException
-from app.modules.safety.models import ChemicalInventory, HazardousChemical
+from app.modules.safety.models import (
+    ChemicalInventory,
+    ChemicalMsdsAttachment,
+    HazardousChemical,
+)
 from app.modules.safety.schemas.hazchem import (
     ChemicalInventoryCreate,
     ChemicalInventoryUpdate,
@@ -26,13 +30,17 @@ from app.modules.safety.service.hazchem import (
 @pytest.fixture(autouse=True)
 async def _cleanup_hazchem(db_session: AsyncSession) -> AsyncIterator[None]:
     yield
+    chemical_ids = select(HazardousChemical.id).where(
+        HazardousChemical.name.like("测试化学品-%")
+    )
+    await db_session.execute(
+        delete(ChemicalMsdsAttachment).where(
+            ChemicalMsdsAttachment.chemical_id.in_(chemical_ids)
+        )
+    )
     await db_session.execute(
         delete(ChemicalInventory).where(
-            ChemicalInventory.chemical_id.in_(
-                select(HazardousChemical.id).where(
-                    HazardousChemical.name.like("测试化学品-%")
-                )
-            )
+            ChemicalInventory.chemical_id.in_(chemical_ids)
         )
     )
     await db_session.execute(
