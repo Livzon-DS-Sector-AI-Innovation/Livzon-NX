@@ -279,18 +279,40 @@ async def test_equipment_timeout_scan_notifies_only_expired_orders(
         priority="紧急",
         reported_at=datetime.now(UTC) - timedelta(minutes=20),
         work_order_no="WO-1",
+        equipment_id="eq-1",
+        completed_at=None,
     )
     current: Any = SimpleNamespace(
         priority="低",
         reported_at=datetime.now(UTC),
         work_order_no="WO-2",
+        equipment_id="eq-2",
+        completed_at=None,
     )
-    result: Any = SimpleNamespace(
+    # 车间维修群路由：scan 内部按序查询 工单列表 → 超时工单的设备 → 所属车间
+    equipment: Any = SimpleNamespace(
+        id="eq-1", workshop_code="201-1"
+    )
+    workshop: Any = SimpleNamespace(code="201-1", feishu_chat_id=None)
+    wo_result: Any = SimpleNamespace(
         scalars=lambda: SimpleNamespace(all=lambda: [expired, current])
     )
+    eq_result: Any = SimpleNamespace(
+        scalars=lambda: SimpleNamespace(first=lambda: equipment)
+    )
+    ws_result: Any = SimpleNamespace(
+        scalars=lambda: SimpleNamespace(first=lambda: workshop)
+    )
+    # 第 4 次查询：待验收超时扫描（返回空列表 → 不触发自动结单）
+    empty_result: Any = SimpleNamespace(
+        scalars=lambda: SimpleNamespace(all=lambda: [])
+    )
     session: Any = SimpleNamespace(
-        execute=AsyncMock(return_value=result),
+        execute=AsyncMock(
+            side_effect=[wo_result, eq_result, ws_result, empty_result]
+        ),
         rollback=AsyncMock(),
+        commit=AsyncMock(),
     )
 
     class SessionContext:
@@ -303,6 +325,7 @@ async def test_equipment_timeout_scan_notifies_only_expired_orders(
     monkeypatch.setattr(
         "app.core.database.async_session_factory",
         SessionContext,
+        # scan 在函数内延迟导入，patch 需作用于源模块属性本身
     )
     monkeypatch.setattr(
         "app.modules.equipment.service.maintenance_config.get_claim_timeout_config",
@@ -324,9 +347,16 @@ async def test_equipment_timeout_scan_notifies_only_expired_orders(
         "app.modules.equipment.feishu.message.send_timeout_notification",
         notify,
     )
+    # 车间维修群解析：与 mock 的 工单→设备→车间 查询链配合，返回空回落默认群
+    monkeypatch.setattr(
+        "app.modules.equipment.service.work_order_feishu."
+        "resolve_repair_chat_id",
+        AsyncMock(return_value=""),
+    )
 
     await equipment_scheduler.scan_timeout_work_orders()
-    notify.assert_awaited_once_with("WO-1", "设备", "主管")
+    # 车间未配置维修群 → chat_id 为空串（发送侧回落全局默认群）
+    notify.assert_awaited_once_with("WO-1", "设备", "主管", chat_id="")
     session.rollback.assert_awaited_once()
 
 
