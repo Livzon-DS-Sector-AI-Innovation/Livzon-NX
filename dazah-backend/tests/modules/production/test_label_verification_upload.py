@@ -9,6 +9,8 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from fastapi import FastAPI, HTTPException
+from httpx import ASGITransport, AsyncClient
 from starlette.datastructures import UploadFile
 
 from app.core.exceptions import AppException
@@ -27,15 +29,28 @@ def _video_upload(
 
 
 def test_resolve_upload_path_rejects_traversal(tmp_path: Path) -> None:
-    with pytest.raises(Exception) as exc_info:
+    with pytest.raises(HTTPException) as exc_info:
         api.resolve_upload_path(str(tmp_path), "../../etc/passwd")
 
     assert getattr(exc_info.value, "status_code", None) == 400
 
 
-def test_resolve_upload_path_rejects_absolute_path(tmp_path: Path) -> None:
-    with pytest.raises(Exception) as exc_info:
-        api.resolve_upload_path(str(tmp_path), "C:\\Windows\\win.ini")
+@pytest.mark.parametrize(
+    "file_key",
+    [
+        "C:\\Windows\\win.ini",
+        "C:/Windows/win.ini",
+        "/etc/passwd",
+        "\\\\server\\share\\clip.mp4",
+        "\\Windows\\win.ini",
+        "C:clip.mp4",
+    ],
+)
+def test_resolve_upload_path_rejects_absolute_path(
+    tmp_path: Path, file_key: str
+) -> None:
+    with pytest.raises(HTTPException) as exc_info:
+        api.resolve_upload_path(str(tmp_path), file_key)
 
     assert getattr(exc_info.value, "status_code", None) == 400
 
@@ -48,6 +63,35 @@ def test_resolve_upload_path_accepts_relative_key(tmp_path: Path) -> None:
     resolved = api.resolve_upload_path(str(tmp_path), "label-verification/clip.mp4")
 
     assert resolved == target.resolve()
+
+
+@pytest.mark.anyio
+async def test_analysis_route_rejects_absolute_keys_before_file_processing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        api, "get_settings", lambda: SimpleNamespace(UPLOAD_DIR=str(tmp_path))
+    )
+    application = FastAPI()
+    application.include_router(api.router, prefix="/api/v1/production")
+    application.dependency_overrides[api.get_label_verification_service] = object
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        for key, status in (
+            ("C:\\Windows\\win.ini", 400),
+            ("/etc/passwd", 400),
+            ("\\\\server\\share\\clip.mp4", 400),
+            ("label-verification/missing.mp4", 404),
+        ):
+            response = await client.post(
+                "/api/v1/production/label-verifications/analyze-video",
+                params={"file_key": key},
+            )
+            assert response.status_code == status
+            assert response.json() == {
+                "detail": "文件路径非法" if status == 400 else "视频文件不存在"
+            }
 
 
 @pytest.mark.anyio

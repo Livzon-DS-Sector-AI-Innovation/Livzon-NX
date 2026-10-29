@@ -1,7 +1,7 @@
 import logging
 import uuid
 from datetime import date, datetime
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
 from uuid import UUID
 
@@ -146,6 +146,9 @@ async def delete_label_verification(
 
 def resolve_upload_path(upload_dir: str, file_key: str) -> Path:
     """Resolve a client-provided file key strictly inside ``upload_dir``."""
+    # Windows drive/UNC/rooted keys must be rejected on Linux hosts as well.
+    if PureWindowsPath(file_key).anchor:
+        raise HTTPException(status_code=400, detail="文件路径非法")
     root = Path(upload_dir).resolve()
     candidate = (root / file_key).resolve()
     if not candidate.is_relative_to(root):

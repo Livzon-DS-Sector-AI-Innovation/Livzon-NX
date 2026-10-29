@@ -10,6 +10,7 @@
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from cryptography.fernet import Fernet
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,6 +24,13 @@ from app.modules.hr.feishu_settings_service import (
 from app.modules.hr.models import HrFeishuAppSettings
 from app.platform.integrations.feishu import notification
 from app.platform.integrations.feishu.ws_client import FeishuWsClient
+
+
+@pytest.fixture(autouse=True)
+def _test_encryption_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        get_settings(), "LLM_ENCRYPTION_KEY", Fernet.generate_key().decode()
+    )
 
 
 async def _get_or_create_row(db: AsyncSession) -> HrFeishuAppSettings:
