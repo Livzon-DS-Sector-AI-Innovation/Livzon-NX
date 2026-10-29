@@ -51,11 +51,13 @@ class MetricsTests(unittest.TestCase):
             [
                 "docker",
                 "buildx",
+                "--builder",
+                "builder",
                 "history",
                 "inspect",
                 "--format",
                 "json",
-                "builder/node/ref",
+                "ref",
             ],
         )
         self.assertEqual(command.call_args.kwargs["timeout"], 30)
@@ -94,13 +96,38 @@ class MetricsTests(unittest.TestCase):
                 self.assertIsNone(
                     metrics.build_cache('{"buildx.build.ref":"ref"}')["cached_steps"]
                 )
-        for metadata in ("", "not-json", "[]", '{"buildx.build.ref":"--help"}'):
+        for metadata in (
+            "",
+            "not-json",
+            "[]",
+            '{"buildx.build.ref":"--help"}',
+            '{"buildx.build.ref":"builder/record"}',
+            '{"buildx.build.ref":"builder/node/--help"}',
+            '{"buildx.build.ref":"/node/ref"}',
+        ):
             with (
                 self.subTest(metadata=metadata),
                 patch.object(metrics.subprocess, "run") as command,
             ):
                 self.assertIsNone(metrics.build_cache(metadata)["cached_steps"])
                 command.assert_not_called()
+
+    def test_native_record_id_uses_current_builder(self) -> None:
+        with patch.object(
+            metrics.subprocess,
+            "run",
+            return_value=subprocess.CompletedProcess(
+                [], 0, '{"Status":"completed","NumCachedSteps":0,"NumTotalSteps":10}'
+            ),
+        ) as command:
+            self.assertEqual(
+                metrics.build_cache('{"buildx.build.ref":"record"}'),
+                {"cached_steps": 0, "total_steps": 10},
+            )
+        self.assertEqual(
+            command.call_args.args[0],
+            ["docker", "buildx", "history", "inspect", "--format", "json", "record"],
+        )
 
     def test_cache_hits_misses_and_missing_outputs_have_distinct_denominators(
         self,

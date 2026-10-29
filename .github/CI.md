@@ -159,6 +159,8 @@ CI Gate 在执行门禁判定之后，通过 `.github/scripts/ci_metrics.py` 将
   `docker buildx history inspect --format json` 读取
   `NumCachedSteps / NumTotalSteps`。这是 BuildKit 构建步骤复用比例，
   不表示 GHA 缓存下载成功率，也不保存原始构建参数、日志或 provenance。
+  Action 的 `builder/node/record` 复合引用需拆为显式 builder 和 record ID，
+  不能直接作为 history 的 record 参数。
 - 跳过、API 不可访问、构建未完成、Buildx history 不可用或输出缺失时，
   对应观测明确显示 `unavailable`，不伪造为零耗时或缓存 miss。
 

@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -29,8 +30,19 @@ def build_cache(metadata: str) -> dict[str, int | None]:
         ref = json.loads(metadata).get("buildx.build.ref")
         if not isinstance(ref, str) or not ref or ref.startswith("-"):
             return unknown
+        # build-push-action emits builder/node/record; history expects a record ID
+        # on the selected builder, not the composite metadata reference.
+        parts = ref.split("/")
+        if len(parts) not in (1, 3) or any(
+            not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]*", part) for part in parts
+        ):
+            return unknown
+        command = ["docker", "buildx"]
+        if len(parts) == 3:
+            command += ["--builder", parts[0]]
+        command += ["history", "inspect", "--format", "json", parts[-1]]
         result = subprocess.run(
-            ["docker", "buildx", "history", "inspect", "--format", "json", ref],
+            command,
             check=True,
             capture_output=True,
             text=True,
