@@ -56,11 +56,14 @@ def _tool_environment() -> dict[str, str]:
 def test_rendered_dev_stack_cannot_start_an_implicit_migration(tmp_path):
     env_file = tmp_path / "synthetic.env"
     env_file.write_text("", encoding="utf-8")
+    env = _tool_environment()
+    # --env-file controls interpolation; service env_file needs its own override.
+    env["DAZAH_ENV_FILE"] = str(env_file)
     result = subprocess.run([
         "docker", "compose", "--env-file", str(env_file), "-f",
         str(ROOT / "compose.dev.yml"), "config", "--no-env-resolution",
         "--format", "json",
-    ], cwd=ROOT, env=_tool_environment(), capture_output=True, text=True, timeout=30)
+    ], cwd=ROOT, env=env, capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, "Synthetic development Compose failed"
     services = json.loads(result.stdout)["services"]
     assert "migrate" not in services
@@ -68,7 +71,7 @@ def test_rendered_dev_stack_cannot_start_an_implicit_migration(tmp_path):
         "docker", "compose", "--env-file", str(env_file), "-f",
         str(ROOT / "compose.dev.yml"), "--profile", "migration", "config",
         "--no-env-resolution", "--format", "json",
-    ], cwd=ROOT, env=_tool_environment(), capture_output=True, text=True, timeout=30)
+    ], cwd=ROOT, env=env, capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, "Synthetic migration Compose profile failed"
     services = json.loads(result.stdout)["services"]
     migrate = services["migrate"]

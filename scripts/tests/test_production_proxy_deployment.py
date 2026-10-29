@@ -232,6 +232,8 @@ def test_rendered_production_ports_ignore_legacy_wildcard_env(tmp_path, legacy_h
         if name in os.environ
     }
     env["FRONTEND_BIND_HOST"] = legacy_host
+    # --env-file controls interpolation; service env_file needs its own override.
+    env["DAZAH_ENV_FILE"] = str(env_file)
     result = subprocess.run(
         [
             "docker",
