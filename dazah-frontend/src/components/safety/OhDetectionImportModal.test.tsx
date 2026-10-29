@@ -121,7 +121,10 @@ vi.mock('antd', async () => {
             type: 'button',
             'data-testid': 'upload-trigger',
             onClick: () => {
-              const fake = { name: 'report.pdf', size: 2048 }
+              const injected = (
+                globalThis as { __uploadFile?: { name: string; size: number } }
+              ).__uploadFile
+              const fake = injected ?? { name: 'report.pdf', size: 2048 }
               beforeUpload?.(fake, [fake])
             },
           },
@@ -192,6 +195,7 @@ describe('OhDetectionImportModal', () => {
   afterEach(() => {
     act(() => root.unmount())
     container.remove()
+    delete (globalThis as { __uploadFile?: unknown }).__uploadFile
   })
 
   function renderModal() {
@@ -299,5 +303,27 @@ describe('OhDetectionImportModal', () => {
     expect(ui.message.error).toHaveBeenCalled()
     expect(container.textContent).toContain('确认导入')
     expect(onImported).not.toHaveBeenCalled()
+  })
+
+  it('非 PDF 文件直接拒绝', async () => {
+    renderModal()
+    ;(globalThis as { __uploadFile?: { name: string; size: number } }).__uploadFile = {
+      name: 'report.doc',
+      size: 2048,
+    }
+    await upload()
+    expect(ui.message.error).toHaveBeenCalledWith('仅支持 PDF 格式的检测报告')
+    expect(actions.parseOhDetectionReport).not.toHaveBeenCalled()
+  })
+
+  it('超过 30MB 的 PDF 拒绝解析', async () => {
+    renderModal()
+    ;(globalThis as { __uploadFile?: { name: string; size: number } }).__uploadFile = {
+      name: 'report.pdf',
+      size: 31 * 1024 * 1024,
+    }
+    await upload()
+    expect(ui.message.error).toHaveBeenCalledWith('检测报告文件不能超过 30MB')
+    expect(actions.parseOhDetectionReport).not.toHaveBeenCalled()
   })
 })

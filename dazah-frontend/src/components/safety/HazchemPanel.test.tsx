@@ -380,7 +380,7 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
-async function renderPanel() {
+async function renderPanel(overrides: Record<string, unknown> = {}) {
   root = createRoot(container)
   await act(async () => {
     root!.render(
@@ -388,6 +388,7 @@ async function renderPanel() {
         pageKey: PAGE_KEY,
         initialChemicals: CHEMICALS,
         initialError: null,
+        ...overrides,
       })
     )
   })
@@ -596,5 +597,55 @@ describe('HazchemPanel', () => {
       await new Promise((resolve) => setTimeout(resolve, 30))
     })
     expect(mocks.deleteHazardousChemical).toHaveBeenCalled()
+  })
+
+  it('MSDS 上传失败提示错误', async () => {
+    mocks.uploadChemicalMsdsFile.mockResolvedValue({
+      code: 500,
+      message: '附件保存失败',
+    })
+    await renderPanel()
+    const msdsModal = await openMsdsManager()
+    const trigger = msdsModal.querySelector<HTMLButtonElement>(
+      '[data-upload-trigger]'
+    )
+    expect(trigger).toBeDefined()
+    await act(async () => {
+      trigger!.click()
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    expect(mocks.message.error).toHaveBeenCalledWith('附件保存失败')
+  })
+
+  it('MSDS 下载失败提示错误', async () => {
+    mocks.fetchChemicalMsdsBytes.mockRejectedValue(new Error('网络中断'))
+    await renderPanel()
+    const msdsModal = await openMsdsManager()
+    const download = [...msdsModal.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent === '下载'
+    )
+    await act(async () => {
+      download!.click()
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    expect(mocks.message.error).toHaveBeenCalledWith('网络中断')
+  })
+
+  it('MSDS 重新识别失败提示错误', async () => {
+    mocks.reextractChemicalMsdsFile.mockResolvedValue({
+      code: 500,
+      message: '识别服务不可用',
+    })
+    await renderPanel()
+    const msdsModal = await openMsdsManager()
+    const extract = [...msdsModal.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent?.includes('重新识别')
+    )
+    expect(extract).toBeDefined()
+    await act(async () => {
+      extract!.click()
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    expect(mocks.message.error).toHaveBeenCalledWith('识别服务不可用')
   })
 })

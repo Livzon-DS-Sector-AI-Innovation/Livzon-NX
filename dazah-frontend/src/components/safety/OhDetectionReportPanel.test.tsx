@@ -316,4 +316,149 @@ describe('OhDetectionReportPanel', () => {
       expect.objectContaining({ factor_category: 'noise' }),
     )
   })
+
+  const RESULT_ROW = {
+    id: 'res-1',
+    report_id: 'r-1',
+    seq: 1,
+    table_ref: 'T1',
+    table_title: '噪声检测',
+    factor_category: 'noise',
+    factor_name: '噪声',
+    record_type: 'point',
+    workshop: '合成车间',
+    post: '投料工',
+    sample_point: 'P-01',
+    measured_value: '82.3',
+    measured_value_num: 82.3,
+    unit: 'dB(A)',
+    limit_type: 'LEX-8h',
+    limit_value_num: 85,
+    verdict: 'pass',
+    is_noise_post: true,
+    verdict_raw: '合格',
+  } as never
+
+  it('明细抽屉渲染结果行并响应全部筛选控件', async () => {
+    actions.getOhDetectionResults.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: [RESULT_ROW],
+      meta: { total: 1 },
+    })
+    await act(async () => {
+      root.render(<OhDetectionReportPanel />)
+    })
+    await flushLoad()
+    await act(async () => {
+      findButton('NZXZW-J-2026-141').click()
+    })
+    await flushLoad()
+    // 结果明细列渲染：危害因素/检测值/限值/判定
+    expect(container.textContent).toContain('噪声')
+    expect(container.textContent).toContain('82.3')
+    expect(container.textContent).toContain('LEX-8h 85')
+    // 抽屉内 4 个筛选 Select 与关键词搜索逐一触发
+    const selects = Array.from(container.querySelectorAll('select'))
+    expect(selects.length).toBe(4)
+    for (const select of selects) {
+      await act(async () => {
+        select.dispatchEvent(new Event('change', { bubbles: true }))
+      })
+    }
+    await flushLoad()
+    expect(actions.getOhDetectionResults).toHaveBeenLastCalledWith(
+      'r-1',
+      expect.objectContaining({
+        factor_category: 'noise',
+        record_type: 'noise',
+        verdict: 'noise',
+        is_noise_post: false,
+      }),
+    )
+    // 抽屉内关键词搜索（第二个 Input.Search）
+    const inputs = Array.from(container.querySelectorAll('input'))
+    await act(async () => {
+      inputs[inputs.length - 1]?.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }),
+      )
+    })
+    await flushLoad()
+    expect(actions.getOhDetectionResults).toHaveBeenLastCalledWith(
+      'r-1',
+      expect.objectContaining({ keyword: '关键词' }),
+    )
+  })
+
+  it('明细加载失败提示错误', async () => {
+    actions.getOhDetectionResults.mockResolvedValue({
+      code: 500,
+      message: '明细不可用',
+    })
+    await act(async () => {
+      root.render(<OhDetectionReportPanel />)
+    })
+    await flushLoad()
+    await act(async () => {
+      findButton('NZXZW-J-2026-141').click()
+    })
+    await flushLoad()
+    expect(ui.message.error).toHaveBeenCalledWith('明细不可用')
+  })
+
+  it('删除失败提示错误且不刷新列表', async () => {
+    actions.deleteOhDetectionReport.mockResolvedValue({
+      code: 500,
+      message: '删除被拒绝',
+    })
+    await act(async () => {
+      root.render(<OhDetectionReportPanel />)
+    })
+    await flushLoad()
+    const del = container.querySelector<HTMLButtonElement>(
+      '[data-testid="popconfirm"] button',
+    )
+    await act(async () => {
+      del?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await flushLoad()
+    expect(ui.message.error).toHaveBeenCalledWith('删除被拒绝')
+    expect(actions.getOhDetectionReports).toHaveBeenCalledTimes(1)
+  })
+
+  it('下载原报告走 /file 接口并触发浏览器下载', async () => {
+    const downloadFetch = vi.fn(() =>
+      Promise.resolve(
+        new Response(Uint8Array.from([1, 2, 3]), { status: 200 }),
+      ),
+    )
+    vi.stubGlobal('fetch', downloadFetch)
+    vi.stubGlobal('URL', {
+      ...URL,
+      createObjectURL: () => 'blob:report',
+      revokeObjectURL: () => {},
+    })
+    await act(async () => {
+      root.render(<OhDetectionReportPanel />)
+    })
+    await flushLoad()
+    // 操作列：明细/下载为无文本图标按钮，删除按钮包在 Popconfirm 内
+    const actionButtons = Array.from(container.querySelectorAll('button')).filter(
+      (btn) => !btn.textContent,
+    )
+    expect(actionButtons.length).toBeGreaterThanOrEqual(2)
+    await act(async () => {
+      actionButtons[1].click()
+    })
+    await flushLoad()
+    expect(downloadFetch).toHaveBeenCalledWith(
+      '/api/v1/safety/oh-detection-reports/r-1/file',
+      expect.objectContaining({
+        headers: {
+          'X-Dazah-Page-Key': 'safety:occupational-health-group:oh-monitor',
+        },
+      }),
+    )
+    vi.unstubAllGlobals()
+  })
 })
