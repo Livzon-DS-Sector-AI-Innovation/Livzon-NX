@@ -6,8 +6,8 @@ param(
   # Synchronize the native Python and Node dependencies before starting.
   [switch]$Sync,
 
-  # Skip the native Alembic migration. Use only when the schema is already up
-  # to date; the default is to migrate before starting the backend.
+  # Retained for compatibility. Startup always performs a read-only check;
+  # migration is a separate explicitly confirmed operation.
   [switch]$SkipMigrations,
 
   # Use the existing Webpack development command if Turbopack is unsuitable
@@ -591,6 +591,7 @@ $ExitCode = 0
 try {
   Write-Host "停止已有的 Docker 应用容器（保留数据卷）..."
   Invoke-Compose -Arguments @("stop", "app", "frontend", "hermes-lite", "migrate", "frontend-cache-init")
+  Invoke-Compose -Arguments @("rm", "--force", "migrate")
 
 $ComposeUpArguments = @("up", "-d")
 if (-not $NoBuild) {
@@ -607,13 +608,11 @@ $ComposeUpArguments += @("db", "redis", "minio")
     Test-HttpEndpoint -Url "http://$(Convert-BindHostToProbeHost $MinioBindHost):$MinioPort/minio/health/live"
   }
 
-  if (-not $SkipMigrations) {
-    Write-Host "执行本机 Alembic 数据库迁移..."
-    Invoke-ExternalCommand -FilePath $UvCommand -Arguments @("run", "--frozen", "alembic", "upgrade", "head") -WorkingDirectory $BackendDir
+  if ($SkipMigrations) {
+    Write-Warning "SkipMigrations 已不再跳过版本检查；启动流程不会执行迁移。"
   }
-  else {
-    Write-Warning "已跳过 Alembic 迁移；请确认开发数据库结构已是最新版本。"
-  }
+  Write-Host "只读检查开发库迁移版本..."
+  Invoke-ExternalCommand -FilePath $UvCommand -Arguments @("run", "--frozen", "python", "-m", "app.core.dev_migration", "check") -WorkingDirectory $BackendDir
 
   $BackendProcess = Start-NativeProcess `
     -Name "Backend" `

@@ -7,9 +7,11 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
+from cryptography.fernet import Fernet
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.exceptions import AppException
 from app.core.llm.encryption import decrypt_api_key
 from app.modules.quality import repository
@@ -33,6 +35,13 @@ from app.modules.quality.service import quality_feishu_sync as feishu_sync_servi
 from app.modules.quality.service import quality_management as service
 from app.platform.integrations.feishu import bitable as feishu_bitable
 from tests.modules.quality.ddl_lock_guard import execute_ddl_with_lock_timeout
+
+
+@pytest.fixture(autouse=True)
+def _credential_encryption(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        get_settings(), "LLM_ENCRYPTION_KEY", Fernet.generate_key().decode()
+    )
 
 
 @pytest.fixture(autouse=True)

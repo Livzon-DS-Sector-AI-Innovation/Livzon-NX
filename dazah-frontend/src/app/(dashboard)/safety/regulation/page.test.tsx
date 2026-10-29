@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
+  message: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
   getRegulations: vi.fn(),
   createRegulation: vi.fn(),
   updateRegulation: vi.fn(),
@@ -20,6 +21,13 @@ const mocks = vi.hoisted(() => ({
   getRegulationDocumentPreview: vi.fn(),
   downloadRegulationDocument: vi.fn(),
 }))
+
+// Static messages own a separate React root and dismissal timers. Keep that
+// notification boundary isolated while retaining the real page components.
+vi.mock('antd', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('antd')>()
+  return { ...actual, message: mocks.message }
+})
 
 vi.mock('@/actions/safety', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/actions/safety')>()
@@ -88,7 +96,9 @@ describe('RegulationPage（安全操规台账）', () => {
   })
 
   afterEach(() => {
-    act(() => root?.unmount())
+    act(() => {
+      root?.unmount()
+    })
     container?.remove()
     root = undefined
     container = undefined
@@ -96,6 +106,9 @@ describe('RegulationPage（安全操规台账）', () => {
   })
 
   function renderPage() {
+    // A test may render twice; release the previous root before replacing it.
+    act(() => root?.unmount())
+    container?.remove()
     container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
@@ -296,6 +309,7 @@ describe('RegulationPage（安全操规台账）', () => {
       await flush()
     })
     expect(mocks.batchUploadRegulations).toHaveBeenCalled()
+    expect(mocks.message.success).toHaveBeenCalled()
   })
 
   it('空台账走最近评审空分支；已审核状态徽标渲染', async () => {
@@ -305,8 +319,10 @@ describe('RegulationPage（安全操规台账）', () => {
     expect(mocks.getLatestRegulationReviews).not.toHaveBeenCalled()
 
     // 已审核状态行 + 预览抽屉内下载按钮
+    const previousContainer = container
     mocks.getRegulations.mockResolvedValue({ code: 200, message: 'success', data: [{ ...ROW, status: 'reviewed', has_document: true }] })
     renderPage()
+    expect(previousContainer?.isConnected).toBe(false)
     await act(flush)
     const preview = buttons('查看文档')[0]
     if (preview) {

@@ -4,10 +4,12 @@ import uuid
 from typing import Any
 
 import pytest
+from cryptography.fernet import Fernet
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppException
+from app.core.llm.encryption import encrypt_api_key
 from app.modules.equipment.models.feishu_app import EquipmentFeishuApp
 from app.modules.equipment.models.inspection_feishu_config import (
     EquipmentInspectionFeishuConfig,
@@ -18,6 +20,13 @@ from app.modules.equipment.schemas.inspection import (
 )
 from app.modules.equipment.service import feishu_app as feishu_app_service
 from app.modules.equipment.service import inspection_feishu_config as config_service
+
+
+@pytest.fixture(autouse=True)
+def _test_encryption_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        config_service.settings, "LLM_ENCRYPTION_KEY", Fernet.generate_key().decode()
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -57,7 +66,7 @@ async def _add_config_with_app(
 ) -> EquipmentInspectionFeishuConfig:
     """直接落库一条应用 + 车间配置引用（绕过 update_config 的解析逻辑）。"""
     app = EquipmentFeishuApp(
-        name=app_id, app_id=app_id, app_secret=app_secret
+        name=app_id, app_id=app_id, app_secret=encrypt_api_key(app_secret)
     )
     db_session.add(app)
     await db_session.flush()

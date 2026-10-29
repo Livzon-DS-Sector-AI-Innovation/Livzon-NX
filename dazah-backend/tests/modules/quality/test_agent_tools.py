@@ -122,6 +122,7 @@ class FakeDb:
             status="active",
             is_deleted=False,
             role="user",
+            tenant_key="test",
         )
 
 

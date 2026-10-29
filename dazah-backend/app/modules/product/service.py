@@ -122,7 +122,9 @@ class ProductService:
 
     async def update_product(self, product_id: UUID, data: ProductUpdate) -> Product:
         product = await self.get_product(product_id)
-        update_data = data.model_dump(exclude_unset=True)
+        update_data = data.model_dump(
+            exclude_unset=True, include=set(ProductUpdate.model_fields)
+        )
 
         for field, value in update_data.items():
             setattr(product, field, value)

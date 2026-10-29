@@ -7,11 +7,14 @@
 //    调度回调，该回调会读取 window.event。用例在提交后立即结束时，回调可能晚于
 //    happy-dom 环境销毁才执行，抛出 "ReferenceError: window is not defined"。
 //    此时所有用例都是通过的，失败只来自这个未处理错误，表现为随机红灯。
-//    下面的收尾在环境销毁前让出一轮宏任务，把已排队的回调跑完。
+//    调度器可跨多轮宏任务继续工作；收尾使用低于这些副作用优先级的空闲屏障，
+//    等待已排队的回调及其 continuation 完成，再允许 DOM 销毁。
 //    顺序很重要：Vitest 逆序执行 afterEach，setup 文件先注册，因此本钩子运行在
 //    测试文件自己的 afterEach（通常在其中 unmount 组件）之后。
 
-import { afterEach } from 'vitest'
+import { afterAll, afterEach } from 'vitest'
+import { act } from 'react'
+import { drainReactScheduler } from './test/react-scheduler-teardown'
 
 export {}
 
@@ -22,22 +25,19 @@ declare global {
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
-// 先捕获真实定时器：用例启用 fake timers 时，这里仍要能真正让出事件循环，
-// 否则收尾会被冻结到用例超时。
-const realSetTimeout = globalThis.setTimeout.bind(globalThis)
-const realSetImmediate: ((callback: () => void) => void) | undefined =
-  typeof globalThis.setImmediate === 'function'
-    ? (globalThis.setImmediate.bind(globalThis) as (callback: () => void) => void)
-    : undefined
-
-afterEach(async () => {
-  // Node 环境下 React 调度器走 setImmediate；浏览器环境走 MessageChannel/
-  // 定时器。两种都让出一轮，确保被动副作用回调在 window 仍然存在时执行。
-  if (realSetImmediate) {
-    await new Promise<void>((resolve) => realSetImmediate(resolve))
+async function settleReactWork(): Promise<void> {
+  if (typeof window === 'undefined') {
+    await drainReactScheduler()
+    return
   }
-  await new Promise<void>((resolve) => realSetTimeout(resolve, 0))
-})
+  await act(async () => {
+    await drainReactScheduler()
+  })
+}
+
+afterEach(settleReactWork)
+// Also cover roots/effects released by a test file's own afterAll hook.
+afterAll(settleReactWork)
 
 if (
   typeof window !== 'undefined' &&

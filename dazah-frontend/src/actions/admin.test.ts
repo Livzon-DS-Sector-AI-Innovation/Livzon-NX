@@ -14,6 +14,18 @@ import * as adminActions from './admin'
 import { createRole } from './admin'
 
 describe('system permission server actions', () => {
+  it.each([undefined, { value: '' }])('blocks unauthenticated writes and exports before contacting the backend (%j)', async (token) => {
+    mocks.cookies.mockResolvedValueOnce({ get: vi.fn().mockReturnValue(token) })
+      .mockResolvedValueOnce({ get: vi.fn().mockReturnValue(token) })
+    const request = vi.fn()
+    vi.stubGlobal('fetch', request)
+
+    await expect(adminActions.deleteRole('role-1')).rejects.toThrow('未登录或登录已过期')
+    await expect(adminActions.exportPermissions()).rejects.toThrow('未登录或登录已过期')
+    expect(request).not.toHaveBeenCalled()
+    expect(mocks.revalidatePath).not.toHaveBeenCalled()
+  })
+
   it('replaces manual roles with an authorization version and audit reason', async () => {
     const request = vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: { message: '角色分配已更新', grant_version: 8 } })))
     vi.stubGlobal('fetch', request)

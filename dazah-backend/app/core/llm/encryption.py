@@ -1,36 +1,32 @@
 """Fernet encryption for API keys."""
 
-import os
-
 from cryptography.fernet import Fernet, InvalidToken
+
+from app.core.config import get_settings
 
 from .exceptions import LLMConfigError
 
 
-def _get_fernet() -> Fernet | None:
-    """Get Fernet instance if encryption key is configured."""
-    key = os.getenv("LLM_ENCRYPTION_KEY")
+def _get_fernet() -> Fernet:
+    """Resolve the configured key; never fall back to plaintext credentials."""
+    key = get_settings().LLM_ENCRYPTION_KEY
     if not key:
-        return None
+        raise LLMConfigError("LLM_ENCRYPTION_KEY is required for credential encryption")
     try:
-        return Fernet(key.encode() if isinstance(key, str) else key)
-    except Exception as e:
-        raise LLMConfigError(f"Invalid LLM_ENCRYPTION_KEY: {e}")
+        return Fernet(key.encode())
+    except (ValueError, TypeError) as exc:
+        raise LLMConfigError("Invalid LLM_ENCRYPTION_KEY") from exc
 
 
 def encrypt_api_key(plain_key: str) -> str:
-    """Encrypt API key. Returns plain text if encryption not configured."""
+    """Encrypt a credential, refusing writes when encryption is unavailable."""
     fernet = _get_fernet()
-    if not fernet:
-        return plain_key
     return fernet.encrypt(plain_key.encode()).decode()
 
 
 def decrypt_api_key(encrypted_key: str) -> str:
-    """Decrypt API key. Returns as-is if encryption not configured."""
+    """Decrypt a credential; plaintext and incompatible ciphertext are rejected."""
     fernet = _get_fernet()
-    if not fernet:
-        return encrypted_key
     try:
         return fernet.decrypt(encrypted_key.encode()).decode()
     except InvalidToken:

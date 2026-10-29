@@ -1,9 +1,9 @@
 """研发项目 API 路由."""
 
-import os
 import uuid
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 from fastapi import Body, Depends, File, HTTPException, Query, UploadFile
@@ -1320,11 +1320,24 @@ async def upload_pilot_workflow_document(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:
+    from tempfile import gettempdir
+
     from sqlalchemy import select
+
+    from app.core.config import get_settings
+    from app.core.upload_security import (
+        stream_upload_to_path,
+        validate_upload_metadata,
+    )
+
+    try:
+        workflow_uuid = uuid.UUID(workflow_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="工作流不存在") from exc
 
     result = await db.execute(
         select(PilotWorkflow).where(
-            PilotWorkflow.id == workflow_id,
+            PilotWorkflow.id == workflow_uuid,
             PilotWorkflow.is_deleted.is_(False),
         )
     )
@@ -1332,15 +1345,18 @@ async def upload_pilot_workflow_document(
     if not workflow:
         raise HTTPException(status_code=404, detail="工作流不存在")
 
-    # Save file
-    upload_dir = "/tmp/pilot_uploads"
-    os.makedirs(upload_dir, exist_ok=True)
-    file_path = os.path.join(upload_dir, f"{workflow_id}_{file.filename}")
-    content = await file.read()
-    with open(file_path, "wb") as f:
-        f.write(content)
+    filename = validate_upload_metadata(file)
+    suffix = Path(filename).suffix.lower()
+    upload_dir = Path(gettempdir()) / "pilot_uploads"
+    destination = upload_dir / f"{workflow_uuid}_{uuid.uuid4().hex}{suffix}"
+    await stream_upload_to_path(
+        file,
+        destination,
+        max_bytes=get_settings().MAX_UPLOAD_SIZE_MB * 1024 * 1024,
+        what="中试文档",
+    )
 
-    workflow.input_document_path = file_path
+    workflow.input_document_path = str(destination)
     await db.commit()
 
-    return success_response(data={"path": file_path, "filename": file.filename})
+    return success_response(data={"path": destination.name, "filename": filename})

@@ -7,9 +7,11 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
+from cryptography.fernet import Fernet
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.modules.equipment.models.inspection_feishu_config import (
     EquipmentInspectionFeishuConfig,
 )
@@ -19,6 +21,13 @@ from app.modules.equipment.models.inspection_feishu_mirror import (
 )
 from app.modules.equipment.service import inspection_feishu_config as feishu_config
 from app.modules.equipment.service import inspection_feishu_mirror as mirror
+
+
+@pytest.fixture(autouse=True)
+def _test_encryption_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        get_settings(), "LLM_ENCRYPTION_KEY", Fernet.generate_key().decode()
+    )
 
 
 @pytest.mark.parametrize("sorted_search", [False, True])

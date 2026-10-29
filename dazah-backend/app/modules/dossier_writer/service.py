@@ -4,9 +4,9 @@ import os
 import re
 import shutil
 from datetime import datetime
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from docx import Document
 
@@ -15,6 +15,8 @@ from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
+from app.core.exceptions import AppException, NotFoundException
+from app.core.upload_security import safe_upload_filename
 
 from .m3_structure import M3_CHAPTERS, match_file_to_chapter
 from .models import ChapterAsset, DossierChapter, DossierTemplate, ProductDossier
@@ -152,18 +154,28 @@ class DossierService:
         self, dossier_id: UUID, filename: str, file_content: bytes
     ) -> DossierTemplate:
         """保存模板文件（同名文件覆盖更新）"""
+        filename = safe_upload_filename(filename)
+        if PureWindowsPath(filename).drive or Path(filename).suffix.lower() != ".docx":
+            raise AppException(message="仅支持不含路径的 .docx 文件名", status_code=400)
         dossier = await self.repo.get_product_dossier(dossier_id)
         if not dossier:
-            raise ValueError(f"品种资料不存在: {dossier_id}")
+            raise NotFoundException("品种资料", str(dossier_id))
 
-        # 保存文件（覆盖同名文件）
-        source_dir = self._required_path(dossier.source_templates_path, "原始模板目录")
+        source_dir = self._required_path(
+            dossier.source_templates_path, "原始模板目录"
+        ).resolve()
         source_dir.mkdir(parents=True, exist_ok=True)
-        file_path = source_dir / filename
-        file_path.write_bytes(file_content)
-
-        # 查找是否已有同名模板
         existing = await self.repo.get_template_by_filename(dossier_id, filename)
+        # Preserve same-name replacement without using client names as storage keys.
+        file_path = (
+            Path(existing.file_path).resolve()
+            if existing
+            else source_dir / f"{uuid4().hex}.docx"
+        )
+        if file_path.parent != source_dir or file_path.suffix.lower() != ".docx":
+            raise AppException(message="模板存储路径非法", status_code=400)
+        with file_path.open("wb" if existing else "xb") as handle:
+            handle.write(file_content)
 
         if existing:
             # 更新已有记录

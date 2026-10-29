@@ -18,6 +18,8 @@ from dotenv import load_dotenv
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from app.core.sql_safety import quote_literal
+
 # 加载 .env（仅用于独立运行时 DATABASE_URL）
 env_path = Path(__file__).resolve().parents[1] / ".env"
 load_dotenv(env_path)
@@ -112,10 +114,10 @@ def _safe_pct(val: str) -> str:
     try:
         n = float(val)
         if 0 < n < 1:
-            return f"'{round(n * 100)}%'"
-        return f"'{val}'"
+            return quote_literal(f"{round(n * 100)}%")
+        return quote_literal(val)
     except ValueError:
-        return f"'{val}'"
+        return quote_literal(val)
 
 
 async def sync_fermentation(
@@ -205,13 +207,14 @@ async def sync_fermentation(
     # 3. 写入数据库（UPSERT）
     created_b, updated_b = 0, 0
     for b in batches:
-        date_val = f"'{b['日期']}'" if b["日期"] else "NULL"
+        date_val = quote_literal(b["日期"]) if b["日期"] else "NULL"
+        tank_val = quote_literal(b["罐号"])
         sql = text(f"""
             INSERT INTO production.fa_fermentation_batches
                 ("发酵罐号", "放罐日期", "放罐体积_kl", "放罐含量_gL",
                  "主批自身总量_kg", "汇总总量_kg", "电导_uscm", "调酸量_L",
                  "酸化液滤速_ml10min", "发酵液湿固", "产量", "收率")
-            VALUES ('{b["罐号"]}', {date_val}, {b["体积"]}, {b["含量"]},
+            VALUES ({tank_val}, {date_val}, {b["体积"]}, {b["含量"]},
                     {b["自身总量"]}, {b["汇总总量"]}, {b["电导"]}, {b["调酸"]},
                     {b["滤速"]}, {b["湿固"]}, {b["产量"]}, {b["收率"]})
             ON CONFLICT ("发酵罐号") DO UPDATE SET
@@ -237,11 +240,14 @@ async def sync_fermentation(
 
     created_s, updated_s = 0, 0
     for s in sub_batches:
+        batch_val = quote_literal(s["批号"])
+        parent_val = quote_literal(s["父罐号"])
+        suffix_val = quote_literal(s["后缀"])
         sql = text(f"""
             INSERT INTO production.fa_fermentation_sub_batches
                 ("发酵批号", "父发酵罐号", "子批后缀", "放罐体积_kl", "放罐含量_gL",
         "批总量_kg")
-            VALUES ('{s["批号"]}', '{s["父罐号"]}', '{s["后缀"]}',
+            VALUES ({batch_val}, {parent_val}, {suffix_val},
                     {s["体积"]}, {s["含量"]}, {s["批总量"]})
             ON CONFLICT ("父发酵罐号", "子批后缀") DO UPDATE SET
                 "发酵批号" = EXCLUDED."发酵批号",

@@ -10,7 +10,7 @@ const deps = vi.hoisted(() => ({
 
 vi.mock('next/cache', () => ({ revalidatePath: deps.revalidatePath }))
 vi.mock('next/headers', () => ({
-  cookies: vi.fn(async () => ({ get: () => undefined })),
+  cookies: vi.fn(async () => ({ get: () => ({ value: 'synthetic-session' }) })),
   headers: vi.fn(async () => new Headers()),
 }))
 vi.mock('@/lib/auth', () => ({ getAuthHeaders: deps.getAuthHeaders }))
@@ -107,6 +107,11 @@ describe('migration server action coverage', () => {
     }))
     const exported = await admin.exportPermissions()
     expect(exported.filename).toBe('permissions.csv')
+    const adminRequests = deps.fetch.mock.calls.filter(([url]) => String(url).includes('/identity/admin/'))
+    expect(adminRequests.length).toBeGreaterThan(0)
+    for (const [, init] of adminRequests) {
+      expect(init.headers).toEqual(expect.objectContaining({ Authorization: 'Bearer synthetic-session' }))
+    }
   })
 
   it('maps backend action failures without leaking raw responses', async () => {

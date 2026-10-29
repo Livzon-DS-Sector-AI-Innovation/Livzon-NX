@@ -13,6 +13,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.secrets import decrypt_secret
+from app.core.sql_safety import quote_literal
 from app.modules.production.production_feishu_models import ProductionFeishuConfig
 
 load_dotenv(Path(__file__).resolve().parents[3] / ".env")
@@ -146,9 +147,10 @@ def _p(v: str) -> str:
     try:
         n = float(v)
         pct = round(n * 100, 2)
-        return f"'{int(pct)}%'" if pct == int(pct) else f"'{pct}%'"
+        text_value = f"{int(pct)}%" if pct == int(pct) else f"{pct}%"
+        return quote_literal(text_value)
     except Exception:
-        return f"'{v}'"
+        return quote_literal(v)
 
 
 # ========== 模块同步函数 ==========
@@ -331,9 +333,10 @@ async def _sync_acidification(session: AsyncSession, cfg: dict[str, Any]) -> Any
             if name in pct:
                 rec[name] = _p(v) if v else "NULL"
             elif name == "日期":
-                rec[name] = f"'{_pd(cur_date)}'" if cur_date else "NULL"
+                date_value = _pd(cur_date) if cur_date else None
+                rec[name] = quote_literal(date_value) if date_value else "NULL"
             elif name == "批号":
-                rec[name] = f"'{cur_batch}'" if cur_batch else "NULL"
+                rec[name] = quote_literal(cur_batch) if cur_batch else "NULL"
             else:
                 rec[name] = _n(v) if v else "NULL"
         rec["id"] = f"'a{len(records):05d}'"
@@ -516,7 +519,7 @@ async def run_fa_sync(modules: list[str], session: AsyncSession) -> dict[str, An
                             d = _pd(v)
                         else:
                             d = _pd(v)
-                    rec[name] = f"'{d}'" if d else "NULL"
+                    rec[name] = quote_literal(d) if d else "NULL"
                 elif name == "顶洗时长（min）":
                     m = re.match(r"(\d+)min(\d+)s", v.strip())
                     rec[name] = (
@@ -533,7 +536,7 @@ async def run_fa_sync(modules: list[str], session: AsyncSession) -> dict[str, An
                     "活性炭品牌",
                     "二次离心_批号",
                 ):
-                    rec[name] = f"'{v}'" if v and v != "-" else "NULL"
+                    rec[name] = quote_literal(v) if v and v != "-" else "NULL"
                 else:
                     rec[name] = _n(v) if v else "NULL"
             return rec, False

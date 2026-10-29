@@ -11,11 +11,6 @@ for (const width of [1280, 768, 390, 320]) {
       await page.emulateMedia({ colorScheme: mode })
       await context.addCookies([{ name: 'auth_token', value: `production-overlays-${randomUUID()}`, url: baseURL! }])
       await page.route('**/__dazah_maintenance_status', route => route.fulfill({ json: { phase: 'normal' } }))
-      // The legacy FA history hook can use an absolute backend URL. Keep it
-      // inside the same deterministic fixture boundary as the relative APIs.
-      await page.route('**/api/v1/production/fa/lineage/ai-history?**', async route => {
-        await route.fulfill({ response: await context.request.get('/api/v1/production/fa/lineage/ai-history') })
-      })
       const errors: string[] = []
       page.on('pageerror', error => errors.push(error.message))
 

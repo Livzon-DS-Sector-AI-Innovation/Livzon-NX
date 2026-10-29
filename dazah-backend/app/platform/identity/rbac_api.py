@@ -306,6 +306,13 @@ async def _raise_page_grant_conflict(
     raise HTTPException(status.HTTP_409_CONFLICT, detail)
 
 
+def _csv_safe_cell(value: Any) -> Any:
+    """Prevent spreadsheet formula injection in exported CSV cells."""
+    if isinstance(value, str) and value.lstrip().startswith(("=", "+", "-", "@")):
+        return "'" + value
+    return value
+
+
 def _page_permission_history_csv(
     items: list[PagePermissionHistoryItemOut], *, target_name: str
 ) -> Response:
@@ -324,15 +331,15 @@ def _page_permission_history_csv(
         for change in changes:
             writer.writerow(
                 [
-                    item.created_at.isoformat(),
-                    target_name,
-                    item.grant_version or "",
-                    source_labels[item.source],
-                    item.actor_name or "系统",
-                    item.reason or "",
-                    change.page_name if change else "",
-                    change.kind if change else "",
-                    change.summary if change else "",
+                    _csv_safe_cell(item.created_at.isoformat()),
+                    _csv_safe_cell(target_name),
+                    _csv_safe_cell(item.grant_version or ""),
+                    _csv_safe_cell(source_labels[item.source]),
+                    _csv_safe_cell(item.actor_name or "系统"),
+                    _csv_safe_cell(item.reason or ""),
+                    _csv_safe_cell(change.page_name if change else ""),
+                    _csv_safe_cell(change.kind if change else ""),
+                    _csv_safe_cell(change.summary if change else ""),
                 ]
             )
     filename = f"page-permission-history-{datetime.now().strftime('%Y%m%d-%H%M%S')}.csv"
@@ -2179,17 +2186,8 @@ async def export_permissions(
                     "",
                 ]
             )
-        # User-controlled names must not become spreadsheet formulas on open.
         writer.writerows(
-            [
-                [
-                    "'" + cell
-                    if cell.lstrip().startswith(("=", "+", "-", "@"))
-                    else cell
-                    for cell in row
-                ]
-                for row in rows
-            ]
+            [[_csv_safe_cell(cell) for cell in row] for row in rows]
         )
     return Response(
         content="\ufeff" + output.getvalue(),

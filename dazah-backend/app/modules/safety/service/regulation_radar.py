@@ -365,7 +365,7 @@ async def run_radar(
         # 顺序编号：沿用表格现有「法规编号」递进（如 163 → 164）
         seq_nos = _next_sequential_nos(table_rows, len(candidates))
 
-        enrichment = httpx.AsyncClient(timeout=40, verify=False)
+        enrichment = httpx.AsyncClient(timeout=40)
         try:
             for (item, _meta), seq_no in zip(candidates, seq_nos):
                 analysis = await _analyze_regulation(enrichment, item)

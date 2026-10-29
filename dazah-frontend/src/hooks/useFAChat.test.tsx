@@ -88,6 +88,10 @@ describe('useFAChat', () => {
       await new Promise((r) => setTimeout(r, 50))
     })
     expect(container.querySelector('[data-testid=ai]')?.textContent).toBe('has-result')
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/v1/production/fa/lineage/ai-analysis-stream?stage=fermentation&batch_no=FA-1',
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    )
   })
 
   it('loadHistory sets records when code is 200', async () => {
@@ -115,6 +119,9 @@ describe('useFAChat', () => {
       await new Promise((r) => setTimeout(r, 50))
     })
     expect(container.querySelector('[data-testid=history]')?.textContent).toBe('2')
+    expect(fetch).toHaveBeenCalledExactlyOnceWith(
+      '/api/v1/production/fa/lineage/ai-history?stage=fermentation&batch_no=FA-2',
+    )
   })
 
   it('doAiAnalysis with empty batchNo does nothing', async () => {
@@ -261,6 +268,11 @@ describe('useFAChat', () => {
       await new Promise((r) => setTimeout(r, 60))
     })
     expect(container.querySelector('[data-testid=msgs]')?.textContent).toBe('追问一下|回答内容')
+    expect(fetch).toHaveBeenLastCalledWith('/api/v1/production/fa/chat/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: 's2', message: '追问一下' }),
+    })
   })
 
   it('doChatSend warns when a session is missing even after typing', async () => {

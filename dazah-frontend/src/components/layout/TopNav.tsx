@@ -25,6 +25,8 @@ export function TopNav({ user, modules }: TopNavProps) {
     fromHref: string
     moduleKey: string
   } | null>(null)
+  const [failedAvatarUrl, setFailedAvatarUrl] = useState<string | null>(null)
+  const avatarFailed = failedAvatarUrl !== null && failedAvatarUrl === user.avatar_url
   const pendingModule = pendingNavigation?.fromHref === currentHref &&
     pendingNavigation.moduleKey !== activeModule
     ? pendingNavigation.moduleKey
@@ -86,8 +88,12 @@ export function TopNav({ user, modules }: TopNavProps) {
         <div className="ml-2 flex items-center gap-2 h-8 px-2 rounded-[var(--rounded-md)]">
           <Avatar
             size={28}
-            src={user.avatar_url || undefined}
+            src={avatarFailed ? undefined : user.avatar_url || undefined}
             icon={<UserOutlined />}
+            onError={() => {
+              setFailedAvatarUrl(user.avatar_url ?? null)
+              return false
+            }}
           />
           <span className="text-[13px] text-[var(--color-ink)] hidden md:inline">
             {displayName}
