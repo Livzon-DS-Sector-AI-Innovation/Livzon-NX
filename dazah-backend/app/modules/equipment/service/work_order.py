@@ -6,6 +6,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -71,6 +72,27 @@ async def _update_equipment_status(
         await db.flush()
 
 
+async def auto_finish_pending_verify(
+    db: AsyncSession, prior: WorkOrder, *, reason: str
+) -> None:
+    """待验收工单自动结单：系统管理员验收合格并关闭，恢复设备状态。
+
+    用于两类场景：重复报修时解锁设备、完成超时无人验收兜底。
+    验收人记系统管理员，备注写明自动原因，保留完整轨迹。
+    """
+    from app.platform.identity.service import get_or_create_system_admin
+
+    admin = await get_or_create_system_admin(db)
+    await verify_work_order(
+        db,
+        prior.id,
+        admin.id,
+        WorkOrderVerify(result="合格", remark=reason),
+    )
+    await close_work_order(db, prior.id)
+    logger.info("待验收工单自动结单: %s（%s）", prior.work_order_no, reason)
+
+
 async def create_work_order(
     db: AsyncSession,
     data: WorkOrderCreate,
@@ -81,9 +103,63 @@ async def create_work_order(
     if not equipment:
         raise NotFoundException("设备", str(data.equipment_id))
 
-    # 校验设备状态
+    # 校验设备状态。「维修中」且旧单已提交完成待验收 → 自动结旧单解锁：
+    # 刚修好又坏、旧单无人验收的重复故障场景，师傅无需找人验收即可再报修
     if equipment.status not in ("在用", "备用"):
-        raise AppException(message=f"设备当前状态为 '{equipment.status}'，不能创建工单")
+        hold: WorkOrder | None = None
+        if equipment.status == "维修中":
+            hold = (
+                (
+                    await db.execute(
+                        select(WorkOrder)
+                        .where(
+                            WorkOrder.equipment_id == data.equipment_id,
+                            WorkOrder.status.in_(
+                                ["待处理", "执行中", "待验收"]
+                            ),
+                            WorkOrder.is_deleted == False,  # noqa: E712
+                        )
+                        .order_by(WorkOrder.created_at.desc())
+                        .limit(1)
+                    )
+                )
+                .scalars()
+                .first()
+            )
+        if hold is not None and hold.status == "待验收":
+            await auto_finish_pending_verify(
+                db, hold, reason="重复报修自动验收"
+            )
+            # 重复故障标注：第 N 次报修 + 关联前单，供报表与追溯
+            prior_count = (
+
+                    await db.execute(
+                        select(func.count())
+                        .select_from(WorkOrder)
+                        .where(
+                            WorkOrder.equipment_id == data.equipment_id,
+                            WorkOrder.is_deleted == False,  # noqa: E712
+                        )
+                    )
+
+            ).scalar() or 0
+            prefix = f"[第{prior_count + 1}次报修·前单{hold.work_order_no}] "
+            data = data.model_copy(
+                update={
+                    "fault_description": prefix + (data.fault_description or "")
+                }
+            )
+        elif hold is not None:
+            raise AppException(
+                message=(
+                    f"设备维修中（工单 {hold.work_order_no} 尚未完成），"
+                    "不能重复报修"
+                )
+            )
+        else:
+            raise AppException(
+                message=f"设备当前状态为 '{equipment.status}'，不能创建工单"
+            )
 
     original_status = equipment.status
 
@@ -213,12 +289,12 @@ async def complete_work_order(
         responsible = wo.responsible_person
         equipment = wo.equipment
         feishu_uid = (
-            getattr(responsible, "feishu_user_id", None) if responsible else None
+            getattr(responsible, "feishu_union_id", None) if responsible else None
         )
         if feishu_uid:
             asyncio.ensure_future(
                 _notify_verification(
-                    feishu_user_id=feishu_uid,
+                    feishu_union_id=feishu_uid,
                     work_order_no=wo.work_order_no,
                     equipment_name=equipment.name if equipment else "",
                     assignee_name=wo.assignee.name if wo.assignee else "",
@@ -256,8 +332,65 @@ async def _update_maintenance_plan_on_completion(
     await db.flush()
 
 
+async def _notify_rework(
+    *,
+    feishu_union_id: str,
+    work_order_no: str,
+    equipment_name: str,
+    remark: str,
+) -> None:
+    """工单验收不合格被打回时，飞书通知维修人返修。非关键路径。"""
+    try:
+        from app.modules.equipment.feishu.notification import send_user_card
+
+        lines = [
+            f"**工单编号：**{work_order_no}",
+            f"**关联设备：**{equipment_name or '-'}",
+        ]
+        if remark:
+            lines.append(f"**验收备注：**{remark}")
+        lines.extend(
+            [
+                "",
+                "工单已退回「执行中」。返修完成后任选一种方式提交：",
+                "① 点下方按钮一键提交",
+                f"② 回复我：`完成 {work_order_no} 更换情况`",
+                "③ 平台「设备管理 → 维修」页提交",
+            ]
+        )
+        elements = [
+            {
+                "tag": "action",
+                "actions": [
+                    {
+                        "tag": "button",
+                        "text": {
+                            "tag": "plain_text",
+                            "content": "✅ 返修完成，提交验收",
+                        },
+                        "type": "primary",
+                        "value": {"act": "complete", "oid": work_order_no},
+                    }
+                ],
+            }
+        ]
+        ok = await send_user_card(
+            open_id=feishu_union_id,
+            title=f"⚠️ 验收不合格已打回 - {work_order_no}",
+            content="\n".join(lines),
+            elements=elements,
+            receive_id_type="union_id",
+        )
+        if not ok:
+            logger.warning(
+                "打回重修通知发送失败: %s -> %s", work_order_no, feishu_union_id
+            )
+    except Exception:
+        logger.exception("打回重修通知异常: %s", work_order_no)
+
+
 async def _notify_verification(
-    feishu_user_id: str,
+    feishu_union_id: str,
     work_order_no: str,
     equipment_name: str,
     assignee_name: str,
@@ -287,27 +420,28 @@ async def _notify_verification(
         content = "\n".join(lines)
 
         ok = await send_user_card(
-            open_id=feishu_user_id,
+            open_id=feishu_union_id,
             title=title,
             content=content,
+            receive_id_type="union_id",
         )
         if ok:
             logger.info(
                 "验收通知已发送: %s -> %s",
                 work_order_no,
-                feishu_user_id,
+                feishu_union_id,
             )
         else:
             logger.warning(
                 "验收通知发送失败: %s -> %s",
                 work_order_no,
-                feishu_user_id,
+                feishu_union_id,
             )
     except Exception:
         logger.exception(
             "验收通知异常: %s -> %s",
             work_order_no,
-            feishu_user_id,
+            feishu_union_id,
         )
 
 
@@ -337,6 +471,20 @@ async def verify_work_order(
         wo.started_at = None
         wo.completed_at = None
         wo.actual_duration = None
+        # 飞书通知维修人返修（非关键路径，失败只记日志）
+        assignee = wo.assignee
+        feishu_uid = (
+            getattr(assignee, "feishu_union_id", None) if assignee else None
+        )
+        if feishu_uid:
+            asyncio.ensure_future(
+                _notify_rework(
+                    feishu_union_id=feishu_uid,
+                    work_order_no=wo.work_order_no,
+                    equipment_name=wo.equipment.name if wo.equipment else "",
+                    remark=data.remark or "",
+                )
+            )
 
     await db.flush()
     await db.refresh(wo)
@@ -369,6 +517,26 @@ async def close_work_order(
 
     schedule_ledger_sync(wo.work_order_no)
 
+    return wo
+
+
+async def delete_work_order(
+    db: AsyncSession,
+    work_order_id: uuid.UUID,
+) -> WorkOrder:
+    """删除工单（软删除）。
+
+    开放状态（待处理/执行中/待验收）的工单把设备占用为「维修中」，
+    删除时必须同步恢复设备到建单前的原始状态——否则设备会永久卡在
+    「维修中」，无法再次报修。
+    """
+    wo = await _get_work_order(db, work_order_id)
+    if wo.status in ("待处理", "执行中", "待验收"):
+        restore_status = wo.original_equipment_status or "在用"
+        await _update_equipment_status(db, wo.equipment_id, restore_status)
+
+    wo.is_deleted = True
+    await db.flush()
     return wo
 
 

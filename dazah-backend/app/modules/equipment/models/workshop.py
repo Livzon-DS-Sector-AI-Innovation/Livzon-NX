@@ -34,6 +34,10 @@ class EquipmentWorkshop(BaseModel):
     name: Mapped[str] = mapped_column(
         String(50), comment="车间显示名（如 101一车间）"
     )
+    feishu_chat_id: Mapped[str | None] = mapped_column(
+        String(64),
+        comment="车间维修群 chat_id；派单卡按此路由，空则回落全局默认群",
+    )
     is_enabled: Mapped[bool] = mapped_column(
         Boolean,
         default=True,

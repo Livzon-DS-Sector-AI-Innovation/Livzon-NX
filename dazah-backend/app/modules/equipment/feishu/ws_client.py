@@ -320,13 +320,119 @@ async def _handle_card_trigger_event(event_data: dict[str, Any]) -> None:
     action = event_data.get("action") or {}
     value = action.get("value") or {}
     act = value.get("act", "")
-    if act not in ("accept", "complete"):
+    if act not in ("accept", "complete", "photo_repair", "photo_cancel"):
         logger.info("忽略非维修卡片动作: %s", event_data.get("action", {}).get("tag"))
         return
     try:
-        await handle_card_action(event_data)
+        # 事件通道下"被点击卡片"的 message_id 在 context 里；提升到顶层，
+        # 让 handle_card_action 更新被点的那张卡（私聊打回卡也有视觉反馈）
+        payload = dict(event_data)
+        context = event_data.get("context") or {}
+        if not payload.get("open_message_id"):
+            msg_id = str(context.get("open_message_id") or "")
+            if msg_id:
+                payload["open_message_id"] = msg_id
+        await handle_card_action(payload)
     except Exception:
         logger.exception("卡片按钮处理失败")
+
+
+def _mentions_bot(event_data: dict[str, Any]) -> bool:
+    """群消息是否 @ 了机器人。
+
+    飞书把被 @ 的实体放在 message.mentions，机器人 @ 也在此列。
+    以「文本以首个 mention 占位符开头」判定指向机器人（"@机器人 指令"
+    的常见形态）；@同事 开头还带指令文本的场景极少，可接受。
+    """
+    message = event_data.get("message", {})
+    mentions = message.get("mentions") or []
+    if not mentions:
+        return False
+    try:
+        text = (json.loads(message.get("content") or "{}")).get("text", "")
+    except (json.JSONDecodeError, TypeError):
+        return False
+    first_key = str(mentions[0].get("key", ""))
+    return bool(first_key) and text.strip().startswith(first_key)
+
+
+_GROUP_PHOTO_BUFFER_TTL_SECONDS = 5 * 60
+_GROUP_PHOTO_BUFFER_KEY = "repair:photo:gbuf:{chat_id}:{open_id}"
+
+
+async def _buffer_group_photo(
+    chat_id: str, open_id: str, message_id: str, content: str
+) -> None:
+    """群内未 @机器人 的照片进入短时缓冲（每群每人保留最新一张）。
+
+    照片消息无法携带 @，拍照报修在群里的触发方式为：
+    先发照片，随后 @机器人 发「报修」（可带故障描述），两步配对。
+    """
+    try:
+        image_key = json.loads(content).get("image_key", "")
+    except (json.JSONDecodeError, TypeError):
+        return
+    if not image_key:
+        return
+    from app.core.redis import redis_client
+
+    await redis_client.set(
+        _GROUP_PHOTO_BUFFER_KEY.format(chat_id=chat_id, open_id=open_id),
+        json.dumps({"message_id": message_id, "image_key": image_key}),
+        ex=_GROUP_PHOTO_BUFFER_TTL_SECONDS,
+    )
+
+
+async def _take_buffered_group_photo(
+    chat_id: str, open_id: str
+) -> dict[str, Any] | None:
+    """取出（并清除）群内照片缓冲；无缓冲返回 None。"""
+    from app.core.redis import redis_client
+
+    key = _GROUP_PHOTO_BUFFER_KEY.format(chat_id=chat_id, open_id=open_id)
+    raw = await redis_client.get(key)
+    if not raw:
+        return None
+    await redis_client.delete(key)
+    try:
+        data: dict[str, Any] = json.loads(raw)
+        return data
+    except (json.JSONDecodeError, TypeError):
+        return None
+
+
+_GROUP_TEXT_COMMAND_PREFIXES = ("报修", "拍照报修", "完成")
+_GROUP_TEXT_COMMAND_EXACT = {
+    "工单", "我的工单", "开始", "开始巡检", "提交", "确认提交",
+    "跳过", "进度", "状态", "继续", "下一台", "下一个",
+    "取消", "放弃", "退出", "返回", "帮助", "help", "?", "？",
+}
+
+
+async def _group_text_directed(
+    event_data: dict[str, Any], open_id: str
+) -> bool:
+    """群内文字是否指向机器人（方案 Y：指令前缀天然过滤，正常聊天零误触）。
+
+    满足其一即处理：@机器人；以「报修/完成」等指令开头；命中精确指令词；
+    或发送人正处于选择会话中（机器人引导的多步对话不能被群门槛打断）。
+    """
+    if _mentions_bot(event_data):
+        return True
+    try:
+        text = (
+            json.loads(event_data.get("message", {}).get("content") or "{}")
+        ).get("text", "")
+    except (json.JSONDecodeError, TypeError):
+        return False
+    text = re.sub(r"@_user_\d+", "", text).strip()
+    if text.startswith(_GROUP_TEXT_COMMAND_PREFIXES):
+        return True
+    if text in _GROUP_TEXT_COMMAND_EXACT:
+        return True
+    from app.modules.equipment.service.inspection_session import get_selection
+
+    return bool(await get_selection(open_id))
 
 
 async def _handle_message_event(event_data: dict[str, Any]) -> None:
@@ -350,6 +456,23 @@ async def _handle_message_event(event_data: dict[str, Any]) -> None:
         open_id,
         message_id,
     )
+
+    # 群消息门槛（方案 Y）：
+    # - 图片无法携带 @：一律进 5 分钟缓冲，等发送人「@机器人 报修」配对
+    # - 文字由指令前缀天然过滤（报修/完成/工单等），正常聊天零误触、
+    #   零消耗；扫码粘贴的「报修 …」文本一步直达，无需再打 @
+    if chat_type == "group":
+        if msg_type == "image":
+            await _buffer_group_photo(chat_id, open_id, message_id, content)
+            logger.info("群图片进入配对缓冲: message_id=%s", message_id)
+            return
+        if msg_type == "text" and not await _group_text_directed(
+            event_data, open_id
+        ):
+            logger.info(
+                "群消息非指令且未 @机器人，忽略: message_id=%s", message_id
+            )
+            return
 
     # 消息去重
     from app.core.redis import redis_client
@@ -558,7 +681,8 @@ async def _handle_text_command(
             content=(
                 "**报修功能**\n"
                 "发送「报修 车间 设备 故障情况」直接建单\n"
-                "示例：`报修 201一车间 离心泵 密封漏了 紧急`\n\n"
+                "示例：`报修 201一车间 离心泵 密封漏了 紧急`\n"
+                "群里先发设备照片，再发「拍照报修 故障情况」即可拍照报修\n\n"
                 "**巡检功能**\n"
                 "发送巡检照片可直接 AI 分析。\n"
                 "发送「开始」进入逐台引导巡检。\n\n"
@@ -572,7 +696,29 @@ async def _handle_text_command(
                 "`完成 1 更换了密封圈`"
             ),
         )
-    elif text.startswith("报修"):
+    elif text.startswith(("报修", "拍照报修")):
+        # 「拍照报修」归一化为「报修」前缀，配对/文字报修共用下游逻辑
+        if text.startswith("拍照报修"):
+            text = "报修" + text.removeprefix("拍照报修")
+        # 群内「照片 + 报修」配对：5 分钟内发过的照片优先走拍照报修，
+        # 文字剩余部分作为故障描述提示（视觉未识别到现象时兜底）
+        if chat_type == "group":
+            photo = await _take_buffered_group_photo(chat_id, open_id)
+            if photo is not None:
+                from app.modules.equipment.service.repair_photo import (
+                    process_repair_photo,
+                )
+
+                await process_repair_photo(
+                    user_id=user_id,
+                    open_id=open_id,
+                    message_id=photo["message_id"],
+                    image_key=photo["image_key"],
+                    chat_id=chat_id,
+                    chat_type=chat_type,
+                    fault_hint=text.removeprefix("报修").strip(),
+                )
+                return
         from app.modules.equipment.service.work_order_feishu import (
             create_repair_by_text,
         )

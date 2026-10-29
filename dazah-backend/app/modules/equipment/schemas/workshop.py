@@ -23,6 +23,10 @@ class WorkshopAdminSummary(BaseModel):
     code: str = Field(description="车间代码（创建后不可改）")
     name: str = Field(description="车间显示名")
     is_enabled: bool = Field(description="是否启用")
+    feishu_chat_id: str | None = Field(
+        default=None,
+        description="车间维修群 chat_id；派单卡按此路由，空则回落全局默认群",
+    )
     created_at: datetime = Field(description="登记时间")
 
 
@@ -45,12 +49,22 @@ class WorkshopCreateRequest(BaseModel):
         max_length=50,
         description="车间显示名（如 204一车间 / 动力站）",
     )
+    feishu_chat_id: str | None = Field(
+        default=None,
+        max_length=64,
+        description="车间维修群 chat_id（oc_ 开头，可后补）",
+    )
 
 
 class WorkshopUpdateRequest(BaseModel):
-    """更新车间请求（改名/启停；代码不可改）"""
+    """更新车间请求（改名/启停/维修群；代码不可改）"""
 
     name: str | None = Field(
         default=None, min_length=1, max_length=50, description="车间显示名"
     )
     is_enabled: bool | None = Field(default=None, description="启用/停用")
+    feishu_chat_id: str | None = Field(
+        default=None,
+        max_length=64,
+        description="车间维修群 chat_id；传空字符串清除",
+    )

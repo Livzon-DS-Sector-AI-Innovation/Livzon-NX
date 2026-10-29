@@ -103,9 +103,18 @@ async def process_feishu_image(
 
     新流程：查用户 → 查活跃任务 → 确定当前设备 → 下载 → AI分析 → 发确认卡片 → 存会话。
     如果用户没有活跃会话，自动创建引导会话并定位到第一个未提交设备。
+    巡检强依赖 user_id；user_id 缺失（未开通 user_id 权限的企业）或账号未绑定的
+    图片一律转交拍照报修（后者只用 open_id 即可建单）。
     """
     if not user_id:
-        logger.warning("消息缺少 sender user_id，忽略")
+        await _handoff_to_repair_photo(
+            user_id=user_id,
+            open_id=open_id,
+            message_id=message_id,
+            image_key=image_key,
+            chat_id=chat_id,
+            chat_type=chat_type,
+        )
         return
 
     async with async_session_factory() as db:

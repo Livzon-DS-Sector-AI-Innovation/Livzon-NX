@@ -471,3 +471,70 @@ async def test_card_photo_cancel_is_ack_only(monkeypatch):
     create_mock.assert_not_awaited()
     dispatch.assert_not_awaited()
     assert sends == []
+
+
+@pytest.mark.asyncio
+async def test_dispatch_routes_to_workshop_chat(monkeypatch):
+    """派单卡按车间维修群路由：车间已配 → 车间群；未配 → 全局默认群。"""
+    import app.modules.equipment.service.work_order_feishu as wof_mod
+
+    sent_chats: list[str] = []
+
+    async def _fake_send(chat_id, card):
+        sent_chats.append(chat_id)
+        return "om_x"
+
+    monkeypatch.setattr(
+        "app.modules.equipment.feishu.repair_card.send_card_to_chat", _fake_send
+    )
+
+    class _Redis:
+        async def set(self, *a, **kw):
+            return True
+
+    monkeypatch.setattr("app.core.redis.redis_client", _Redis(), raising=False)
+
+    ws_with_chat = SimpleNamespace(code="201-1", name="201一车间",
+                                   feishu_chat_id="oc_ws_201")
+    db_ws = SimpleNamespace(
+        execute=AsyncMock(return_value=_Result([ws_with_chat]))
+    )
+    monkeypatch.setattr(
+        wof_mod, "async_session_factory", _factory(db_ws), raising=False
+    )
+    await wof_mod.dispatch_repair_card(
+        work_order_no="WO-R1",
+        equipment_label="离心泵A（LB-1）",
+        workshop_name="201一车间",
+        fault="漏了",
+        priority="高",
+        reporter_name="张三",
+        workshop_code="201-1",
+    )
+    assert sent_chats == ["oc_ws_201"]
+
+    # 未配置维修群的车间 → 回落全局默认
+    ws_no_chat = SimpleNamespace(code="202-1", name="202一车间",
+                                 feishu_chat_id=None)
+    db_ws2 = SimpleNamespace(
+        execute=AsyncMock(return_value=_Result([ws_no_chat]))
+    )
+    monkeypatch.setattr(
+        wof_mod, "async_session_factory", _factory(db_ws2), raising=False
+    )
+    import app.core.config as cfg
+
+    monkeypatch.setattr(
+        cfg.get_settings(), "FEISHU_EQUIPMENT_CHAT_ID", "oc_global",
+        raising=False,
+    )
+    await wof_mod.dispatch_repair_card(
+        work_order_no="WO-R2",
+        equipment_label="离心泵B（LB-2）",
+        workshop_name="202一车间",
+        fault="异响",
+        priority="高",
+        reporter_name="李四",
+        workshop_code="202-1",
+    )
+    assert sent_chats == ["oc_ws_201", "oc_global"]

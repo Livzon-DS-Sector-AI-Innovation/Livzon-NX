@@ -64,6 +64,7 @@ async def list_all(db: AsyncSession) -> list[WorkshopAdminSummary]:
             code=row.code,
             name=row.name,
             is_enabled=row.is_enabled,
+            feishu_chat_id=row.feishu_chat_id,
             created_at=row.created_at,
         )
         for row in rows
@@ -82,13 +83,19 @@ async def create_workshop(
         raise AppException(
             message=f"车间代码 {code} 已存在（{existing.name}），请换一个代码"
         )
-    row = EquipmentWorkshop(code=code, name=name, is_enabled=True)
+    row = EquipmentWorkshop(
+        code=code,
+        name=name,
+        is_enabled=True,
+        feishu_chat_id=(data.feishu_chat_id or "").strip() or None,
+    )
     db.add(row)
     await db.commit()
     return WorkshopAdminSummary(
         code=row.code,
         name=row.name,
         is_enabled=row.is_enabled,
+        feishu_chat_id=row.feishu_chat_id,
         created_at=row.created_at,
     )
 
@@ -106,10 +113,13 @@ async def update_workshop(
         row.name = name
     if data.is_enabled is not None:
         row.is_enabled = data.is_enabled
+    if data.feishu_chat_id is not None:
+        row.feishu_chat_id = data.feishu_chat_id.strip() or None
     await db.commit()
     return WorkshopAdminSummary(
         code=row.code,
         name=row.name,
         is_enabled=row.is_enabled,
+        feishu_chat_id=row.feishu_chat_id,
         created_at=row.created_at,
     )

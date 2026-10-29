@@ -2857,7 +2857,11 @@ export interface paths {
         /** 更新工单 */
         put: operations["update_work_order_api_v1_equipment_maintenance_work_orders__work_order_id__put"];
         post?: never;
-        delete?: never;
+        /**
+         * 删除工单
+         * @description 软删除工单；开放状态工单删除时同步恢复设备到建单前状态。
+         */
+        delete: operations["delete_work_order_api_v1_equipment_maintenance_work_orders__work_order_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -66609,6 +66613,11 @@ export interface components {
              */
             code: string;
             /**
+             * Feishu Chat Id
+             * @description 车间维修群 chat_id（oc_ 开头，可后补）
+             */
+            feishu_chat_id?: string | null;
+            /**
              * Name
              * @description 车间显示名（如 204一车间 / 动力站）
              */
@@ -66616,9 +66625,14 @@ export interface components {
         };
         /**
          * WorkshopUpdateRequest
-         * @description 更新车间请求（改名/启停；代码不可改）
+         * @description 更新车间请求（改名/启停/维修群；代码不可改）
          */
         WorkshopUpdateRequest: {
+            /**
+             * Feishu Chat Id
+             * @description 车间维修群 chat_id；传空字符串清除
+             */
+            feishu_chat_id?: string | null;
             /**
              * Is Enabled
              * @description 启用/停用
@@ -74457,6 +74471,39 @@ export interface operations {
                 "application/json": components["schemas"]["WorkOrderUpdate"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_work_order_api_v1_equipment_maintenance_work_orders__work_order_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                work_order_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
