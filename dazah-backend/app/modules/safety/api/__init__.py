@@ -10,12 +10,16 @@ from app.modules.safety.api.ai_workflow import ai_workflow_router
 from app.modules.safety.api.checks import checks_router
 from app.modules.safety.api.contractors import contractors_router
 from app.modules.safety.api.daily_risk_reports import daily_risk_reports_router
-from app.modules.safety.api.ehs_changes import ehs_changes_router
+from app.modules.safety.api.dashboard import safety_dashboard_router
+from app.modules.safety.api.emergency_cards import emergency_cards_router
+from app.modules.safety.api.emergency_mgmt import emergency_mgmt_router
 from app.modules.safety.api.enums import enums_router
+from app.modules.safety.api.facilities import safety_facilities_router
 from app.modules.safety.api.feishu_settings import feishu_settings_router
 from app.modules.safety.api.fire_equipment import fire_equipment_router
 from app.modules.safety.api.hazard_identifications import hazard_identifications_router
 from app.modules.safety.api.hazards import hazards_router
+from app.modules.safety.api.hazchem import hazchem_router
 from app.modules.safety.api.knowledge import knowledge_router
 from app.modules.safety.api.oh_hazard_monitors import oh_hazard_monitors_router
 from app.modules.safety.api.oh_health_exams import oh_health_exams_router
@@ -27,6 +31,7 @@ from app.modules.safety.api.special_operation_reports import (
 )
 from app.modules.safety.api.special_ops_permits import special_ops_permits_router
 from app.modules.safety.api.special_ops_personnel import special_ops_personnel_router
+from app.modules.safety.api.targets import safety_targets_router
 from app.modules.safety.api.trainings import trainings_router
 
 router = APIRouter()
@@ -36,9 +41,13 @@ router.include_router(ai_workflow_router)
 router.include_router(checks_router)
 router.include_router(contractors_router)
 router.include_router(daily_risk_reports_router)
-router.include_router(ehs_changes_router)
+router.include_router(safety_dashboard_router)
+router.include_router(emergency_cards_router)
+router.include_router(emergency_mgmt_router)
 router.include_router(feishu_settings_router)
+router.include_router(safety_facilities_router)
 router.include_router(fire_equipment_router)
+router.include_router(hazchem_router)
 router.include_router(enums_router)
 router.include_router(hazard_identifications_router)
 router.include_router(hazards_router)
@@ -47,6 +56,7 @@ router.include_router(oh_hazard_monitors_router)
 router.include_router(oh_health_exams_router)
 router.include_router(page_table_router)
 router.include_router(regulations_router)
+router.include_router(safety_targets_router)
 router.include_router(scheduled_tasks_router)
 router.include_router(special_operation_reports_router)
 router.include_router(special_ops_permits_router)

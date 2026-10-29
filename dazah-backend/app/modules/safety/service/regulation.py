@@ -59,9 +59,12 @@ class RegulationService:
         position: str | None = None,
         keyword: str | None = None,
         status: str | None = None,
+        workshop: str | None = None,
     ) -> tuple[list[Any], int]:
         """获取操规列表"""
-        return await self.repo.get_regulations(skip, limit, position, keyword, status)
+        return await self.repo.get_regulations(
+            skip, limit, position, keyword, status, workshop
+        )
 
     async def get_regulation(self, regulation_id: uuid.UUID) -> Any:
         """获取操规详情"""

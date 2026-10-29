@@ -408,10 +408,11 @@ async def run_radar(
             await enrichment.aclose()
 
         # 通知：仅定时扫描推送（手动扫描是用户主动查看，不再打扰）；
-        # 真实扫描且确有发现时才推
-        if not dry_run and trigger == "schedule" and (
-            outcome.new_count or outcome.revised_count
-        ):
+        # 真实扫描且确有新法规/废止时才推——纯修订只回写表格、不推送
+        notify_items = [
+            it for it in outcome.items if it.get("action") in ("new", "obsolete")
+        ]
+        if not dry_run and trigger == "schedule" and notify_items:
             summary_lines = _build_summary_lines(outcome.items)
             sent, notify_errors = await send_radar_notifications(
                 db,
@@ -462,9 +463,9 @@ async def run_radar(
 
 
 RELEVANCE_SYSTEM_PROMPT = (
-    "你是「原料药中间体」生产工厂的 EHS 合规专家，负责判断上级部门发布"
-    "的法规/通知是否与本工厂相关。\n"
-    "【工厂画像】化学合成类原料药（API）生产：反应釜、发酵、提炼、结晶、"
+    "你是「危险化学品生产经营企业（化学合成类原料药/API 生产）」的 EHS 合规"
+    "专家，负责判断上级部门发布的法规/通知是否与本工厂相关。\n"
+    "【工厂画像】化学合成类原料药（API）生产经营：反应釜、发酵、提炼、结晶、"
     "干燥、GMP 洁净区；使用有机溶剂和危险化学品（仓储/转运/使用）；"
     "有 RTO 废气处理、污水站、锅炉/导热油炉/压力容器、制冷系统、"
     "消火栓/喷淋/泡沫消防、双电源/柴油发电机、危废暂存间；"
@@ -919,13 +920,15 @@ async def send_radar_notifications(
         title = "EHS 法规雷达 · 通知测试"
         content = (
             "这是一条**测试通知**。\n\n"
-            "配置验证成功后，每周一 08:00 自动扫描发现新法规/修订时，"
+            "配置验证成功后，每周一 08:00 自动扫描发现新法规时，"
             "会按本配置推送到这里。"
         )
     else:
-        title = (
-            f"EHS 法规动态 · 新增 {new_count} 部、修订 {revised_count} 部"
-        )
+        title = f"EHS 法规动态 · 新增 {new_count} 部"
+        if revised_count:
+            logger.info(
+                "法规雷达本次另有 %s 部修订（仅回写表格，不进推送）", revised_count
+            )
         content = "\n".join(summary_lines[:10])
         if len(summary_lines) > 10:
             content += f"\n…… 共 {len(summary_lines)} 条，详见 安全管理 → 安全知识库"
@@ -951,7 +954,10 @@ async def send_radar_notifications(
 
 
 def _build_summary_lines(items: list[dict[str, Any]]) -> list[str]:
-    """把批次明细转成卡片里的 Markdown 行（新增在前，带链接）。"""
+    """把批次明细转成卡片里的 Markdown 行。
+
+    修订（日期回写）只更新表格、不进推送，避免打扰；推送仅含新增与废止。
+    """
     lines: list[str] = []
     for it in items:
         if it.get("action") == "new":
@@ -962,11 +968,6 @@ def _build_summary_lines(items: list[dict[str, Any]]) -> list[str]:
             if date:
                 line += f"（{date}）"
             lines.append(line)
-        elif it.get("action") == "revised":
-            lines.append(
-                f"**已修订** {it.get('name') or ''}"
-                f"（{it.get('old_date') or ''} → {it.get('new_date') or ''}）"
-            )
         elif it.get("action") == "obsolete":
             lines.append(f"**已废止** {it.get('name') or ''}")
     return lines

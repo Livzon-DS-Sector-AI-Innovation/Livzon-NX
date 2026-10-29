@@ -119,9 +119,18 @@ def test_upstream_errors_never_print_connection_secrets(pending, monkeypatch, ca
         ("development", "postgresql+asyncpg://u:synthetic-secret@remote.example/dev"),
         ("development", "sqlite:///dev.db"),
         ("development", "postgresql+asyncpg://u:synthetic-secret@db/"),
-        ("development", "postgresql+asyncpg://u:synthetic-secret@db/dev?host=remote.invalid"),
-        ("development", "postgresql+asyncpg://u:synthetic-secret@db/dev?database=shared"),
-        ("development", "postgresql+asyncpg://u:synthetic-secret@db/dev?unix_sock=/tmp/pg"),
+        (
+            "development",
+            "postgresql+asyncpg://u:synthetic-secret@db/dev?host=remote.invalid",
+        ),
+        (
+            "development",
+            "postgresql+asyncpg://u:synthetic-secret@db/dev?database=shared",
+        ),
+        (
+            "development",
+            "postgresql+asyncpg://u:synthetic-secret@db/dev?unix_sock=/tmp/pg",
+        ),
     ],
 )
 def test_nonlocal_or_production_configuration_fails_before_connect(
@@ -212,7 +221,7 @@ def test_invalid_migration_chain_never_produces_an_approved_plan(
 def test_plan_binds_target_database_and_lists_pending_revisions(monkeypatch):
     script = SimpleNamespace(
         get_heads=lambda: ["target"],
-        iterate_revisions=lambda *_: [
+        iterate_revisions=lambda *_, **__: [
             SimpleNamespace(revision="target"),
             SimpleNamespace(revision="middle"),
         ],
@@ -249,7 +258,9 @@ def test_unversioned_database_plan_is_read_only(monkeypatch):
     )
     plan = guard._read_plan(object(), connection)
     assert plan.current_revision == "base"
-    script.iterate_revisions.assert_called_once_with("target", "base")
+    script.iterate_revisions.assert_called_once_with(
+        "target", "base", implicit_base=True
+    )
 
 
 def test_actual_database_mismatch_is_refused(monkeypatch):

@@ -4,6 +4,7 @@ import {
   getExpiringCertificates,
   getSpecialOperationReports,
   getDailyRiskReports,
+  getSafetyOverview,
 } from '@/actions/safety'
 import { SafetyDashboard } from '@/components/safety'
 import type { SpecialOperationReport, DailyRiskReport, TrainingRecord } from '@/types/safety'
@@ -22,6 +23,13 @@ function isToday(dateStr?: string): boolean {
   )
 }
 
+// 驾驶舱口径与后端 overview 一致：驳回/草稿的作业未实际发生，不计入当日
+const COCKPIT_EXCLUDED_STATUSES = new Set(['draft', 'rejected'])
+
+function isCockpitVisible(status?: string): boolean {
+  return !status || !COCKPIT_EXCLUDED_STATUSES.has(status)
+}
+
 async function fetchDashboardData() {
   const now = new Date()
   const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
@@ -32,12 +40,14 @@ async function fetchDashboardData() {
     expiringCertsRes,
     specialOpReportsRes,
     dailyRiskReportsRes,
+    overviewRes,
   ] = await Promise.all([
     getHazards({ page_size: 200 }),
     getHazardIdentifications({ page_size: 200 }),
     getExpiringCertificates().catch(() => ({ data: [] })),
     getSpecialOperationReports({ page_size: 50 }).catch(() => ({ data: [], meta: { total: 0 } })),
     getDailyRiskReports({ page_size: 50, report_date: todayStr }).catch(() => ({ data: [], meta: { total: 0 } })),
+    getSafetyOverview().catch(() => null),
   ])
 
   // 未关闭隐患：过滤 status != closed && != verified
@@ -59,23 +69,29 @@ async function fetchDashboardData() {
   // 即将到期证书
   const expiringCerts = (Array.isArray(expiringCertsRes?.data) ? expiringCertsRes.data : []) as TrainingRecord[]
 
-  // 当天特殊作业报备
+  // 当天特殊作业报备（排除驳回/草稿，与驾驶舱地图口径一致）
   const specialOpReports = (Array.isArray((specialOpReportsRes as { data?: SpecialOperationReport[] }).data)
     ? (specialOpReportsRes as { data: SpecialOperationReport[] }).data
     : []) as SpecialOperationReport[]
-  const todaySpecialOps = specialOpReports.filter((r) => isToday(r.planned_start_time))
+  const todaySpecialOps = specialOpReports.filter(
+    (r) => isToday(r.planned_start_time) && isCockpitVisible(r.status)
+  )
 
-  // 每日风险作业报备
+  // 每日风险作业报备（同样排除驳回/草稿）
   const dailyRiskReports = (Array.isArray((dailyRiskReportsRes as { data?: DailyRiskReport[] }).data)
     ? (dailyRiskReportsRes as { data: DailyRiskReport[] }).data
     : []) as DailyRiskReport[]
+  const todayDailyRisks = dailyRiskReports.filter(
+    (r) => isToday(r.report_date) && isCockpitVisible(r.status)
+  )
 
   return {
     openHazardCount,
     unfinishedIdentCount,
     expiringCerts,
     todaySpecialOps,
-    todayDailyRisks: dailyRiskReports,
+    todayDailyRisks,
+    overview: overviewRes && 'data' in overviewRes ? overviewRes.data : null,
   }
 }
 

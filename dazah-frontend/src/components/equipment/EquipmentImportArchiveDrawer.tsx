@@ -321,8 +321,8 @@ export function EquipmentImportArchiveDrawer({
       }
       open={open}
       onClose={handleClose}
-      width="80%"
-      destroyOnClose
+      size="80%"
+      destroyOnHidden
     >
       {active ? (
         <Space direction="vertical" size={12} style={{ width: '100%' }}>

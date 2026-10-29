@@ -1,4 +1,5 @@
 import {
+  getFireEquipmentDashboard,
   getFireEquipmentList,
   getFireEquipmentStats,
   getFireInspectionRecords,
@@ -12,12 +13,15 @@ const PAGE_NAME = '灭火器及消防栓点检'
 
 export default async function SafetyFireInspectionPage() {
   const pageKey = SAFETY_PAGE_TABLE_KEYS.fireEquipmentInspection
-  const [statsRes, listRes, recordsRes] = await Promise.all([
+  const [statsRes, dashboardRes, listRes, recordsRes] = await Promise.all([
     getFireEquipmentStats({ pageKey }),
+    getFireEquipmentDashboard({ pageKey }),
     getFireEquipmentList({ pageKey, page: 1, pageSize: 20 }),
     getFireInspectionRecords({ pageKey, page: 1, pageSize: 20 }),
   ])
   const stats = statsRes.code === 200 && statsRes.data ? statsRes.data : null
+  const dashboard =
+    dashboardRes.code === 200 && dashboardRes.data ? dashboardRes.data : null
   const equipmentList =
     listRes.code === 200 && listRes.data ? listRes.data : null
   const records = recordsRes.code === 200 && recordsRes.data ? recordsRes.data : null
@@ -35,6 +39,7 @@ export default async function SafetyFireInspectionPage() {
       <FireEquipmentPanel
         pageKey={pageKey}
         initialStats={stats}
+        initialDashboard={dashboard}
         initialEquipment={equipmentList}
         initialRecords={records}
         initialError={initialError}

@@ -310,6 +310,14 @@
         "permission_code": null,
         "disabled": false,
         "children": null
+      },
+      {
+        "key": "workshop-admin",
+        "name": "车间管理",
+        "path": "/equipment/workshop-admin",
+        "permission_code": null,
+        "disabled": false,
+        "children": null
       }
     ]
   },

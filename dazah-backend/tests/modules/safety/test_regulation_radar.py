@@ -460,3 +460,29 @@ async def test_test_notification_requires_targets(db_session, monkeypatch):
     with pytest.raises(AppException) as exc_info:
         await regulation_radar.send_test_notification(db_session)
     assert "未配置通知目标" in str(exc_info.value.message)
+
+
+def test_relevance_prompt_covers_chemical_plant_identity_and_exclusions():
+    """提示词画像必须是危化品生产经营企业，且排除清单覆盖用户投诉过的行业。"""
+    prompt = regulation_radar.RELEVANCE_SYSTEM_PROMPT
+    assert "危险化学品生产经营企业" in prompt
+    for banned in ("烟花爆竹", "矿山", "隧道", "海洋石油", "救灾物资", "森林草原防灭火",
+                   "统计调查", "典型案例通报", "表彰"):
+        assert banned in prompt, f"排除清单缺少关键词：{banned}"
+    # 相关示例里必须保留危化品经营、硝化等强相关锚点
+    assert "危化品经营许可" in prompt and "硝化" in prompt
+
+
+def test_summary_lines_exclude_revised():
+    """修订只回写表格，不进推送内容；新增与废止保留。"""
+    lines = regulation_radar._build_summary_lines([
+        {"action": "new", "name": "危化品办法", "url": "https://e/x",
+         "date": "2026-10-01"},
+        {"action": "revised", "name": "安全生产法",
+         "old_date": "2021-06-09", "new_date": "2024-07-15"},
+        {"action": "obsolete", "name": "废止标准"},
+    ])
+    assert len(lines) == 2
+    assert all("已修订" not in ln for ln in lines)
+    assert any("危化品办法" in ln for ln in lines)
+    assert any("废止标准" in ln for ln in lines)

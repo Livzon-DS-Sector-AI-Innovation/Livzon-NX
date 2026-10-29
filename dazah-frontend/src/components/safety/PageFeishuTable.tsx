@@ -50,6 +50,7 @@ import {
   toPageTableStats,
   toRecordRows,
   type PageTableColumn,
+  type PageTableFieldKind,
   type PageTableRecordRow,
   type PageTableStats,
   type PageTableTab,
@@ -65,6 +66,21 @@ const LONG_TEXT_THRESHOLD = 80
 const LONG_OPTION_THRESHOLD = 20
 /** 换行列的固定宽度（约每行 10 个汉字，超长内容折行而不是撑宽表格）。 */
 const WRAPPED_COLUMN_WIDTH = 150
+
+/**
+ * 窄内容列的基准宽度（日期/状态/人员等）：不设宽度的列会被表格均分剩余
+ * 空间拉得很宽，固定紧凑宽度后剩余空间留给名称/长文本等主要内容列。
+ */
+const KIND_BASE_WIDTHS: Partial<Record<PageTableFieldKind, number>> = {
+  date: 112,
+  select: 110,
+  multi_select: 140,
+  person: 110,
+  number: 90,
+  checkbox: 80,
+  phone: 120,
+  url: 130,
+}
 
 /** 状态列（申请状态/巡查状态等）：始终保留在摘要列，方便一眼看到结果。 */
 function isStatusColumn(column: PageTableColumn): boolean {
@@ -122,6 +138,22 @@ function buildSummaryColumns(
     ...others.slice(0, Math.max(0, MAX_SUMMARY_COLUMNS - statusColumns.length)),
     ...statusColumns,
   ]
+}
+
+/**
+ * 关键列模式：按页面声明的关键列名取实际存在的列（保持声明顺序），
+ * 未命中的字段一律收进详情抽屉。实际字段与声明基本对不上（换绑子表
+ * 或飞书字段改名）时返回 null，回退自动摘要，避免表格只剩零星列。
+ */
+function buildPreferredSummaryColumns(
+  columns: PageTableColumn[],
+  preferredNames: readonly string[]
+): PageTableColumn[] | null {
+  const byName = new Map(columns.map((column) => [column.name, column]))
+  const matched = preferredNames
+    .map((name) => byName.get(name))
+    .filter((column): column is PageTableColumn => Boolean(column))
+  return matched.length >= Math.min(3, preferredNames.length) ? matched : null
 }
 
 function attachmentUrl(
@@ -273,6 +305,8 @@ export default function PageFeishuTable({
   dueField,
   closeField = '关闭状态',
   allowCreate = false,
+  preferredColumnNames,
+  createUrl,
 }: {
   pageKey: string
   pageName: string
@@ -293,6 +327,12 @@ export default function PageFeishuTable({
    * 仅作业安全镜像页启用；不传保持全列展示的原有行为。
    */
   summarizeColumns?: boolean
+  /**
+   * 关键列模式：按名称声明表格优先展示的列（配合 summarizeColumns），
+   * 如变更审批页的申请编号/发起时间/变更级别等。声明列按序全量展示
+   * （长文本列换行），其余字段只在详情抽屉查看；对不上时回退自动摘要。
+   */
+  preferredColumnNames?: readonly string[]
   /** 服务端首屏已应用的日期条件（默认当天），客户端以此初始化日期筛选。 */
   initialDateFilter?: RecordCondition | null
   /**
@@ -323,6 +363,11 @@ export default function PageFeishuTable({
   closeField?: string
   /** 是否允许新建记录（写入当前选中的子表并回写飞书），需操作权限。 */
   allowCreate?: boolean
+  /**
+   * 「新增」按钮的跳转链接（飞书审批填单页等）：传入后按钮变为新开该链接，
+   * 不再使用站内新建抽屉；数据仍来自页面绑定的多维表格。
+   */
+  createUrl?: string
 }) {
   const { message } = App.useApp()
   const { canOperate } = usePagePermissions(pageKey)
@@ -363,12 +408,19 @@ export default function PageFeishuTable({
     () => columns.filter((column) => column.kind === 'attachment'),
     [columns]
   )
-  // 主要列模式（仅作业安全镜像页开启）：勾选清单与长文本收进详情，截前 N 列
-  const summaryColumns = useMemo(
-    () =>
-      summarizeColumns ? buildSummaryColumns(columns, rows) : columns,
-    [summarizeColumns, columns, rows]
-  )
+  // 主要列模式（仅作业安全镜像页开启）：勾选清单与长文本收进详情，截前 N 列；
+  // 有关键列声明时按声明列展示（如变更审批页），对不上再回退自动摘要
+  const summaryColumns = useMemo(() => {
+    if (!summarizeColumns) return columns
+    if (preferredColumnNames?.length) {
+      const preferred = buildPreferredSummaryColumns(
+        columns,
+        preferredColumnNames
+      )
+      if (preferred) return preferred
+    }
+    return buildSummaryColumns(columns, rows)
+  }, [summarizeColumns, preferredColumnNames, columns, rows])
   // 全列模式：长内容列（隐患内容/改善行动/措施等）定宽换行，避免撑宽表格
   const wrappedColumnNames = useMemo(
     () => buildWrappedColumnNames(columns),
@@ -790,7 +842,7 @@ export default function PageFeishuTable({
           ? 220
           : wrappable && !summarizeColumns
             ? WRAPPED_COLUMN_WIDTH
-            : undefined,
+            : KIND_BASE_WIDTHS[column.kind as PageTableFieldKind],
       sorter: true,
       sortOrder:
         sortField === column.name
@@ -824,7 +876,8 @@ export default function PageFeishuTable({
         )
         if (rendered !== undefined) return rendered
         if (wrappable) {
-          // td 的 max-width 在表格布局里不可靠，用单元格内 div 限宽自动换行
+          // td 的 max-width 在表格布局里不可靠，用单元格内 div 限宽自动换行；
+          // 超长文本按 4 行截断保持行高紧凑，完整内容点击行后在详情中查看
           const text = displayFieldText(row.fields[column.name])
           if (!text) return <Typography.Text type="secondary">—</Typography.Text>
           return (
@@ -833,6 +886,10 @@ export default function PageFeishuTable({
                 maxWidth: WRAPPED_COLUMN_WIDTH,
                 whiteSpace: 'pre-wrap',
                 wordBreak: 'break-word',
+                display: '-webkit-box',
+                WebkitLineClamp: 4,
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden',
               }}
             >
               {text}
@@ -1078,7 +1135,11 @@ export default function PageFeishuTable({
         <Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>
           刷新
         </Button>
-        {allowCreate ? (
+        {createUrl ? (
+          <a href={createUrl} target="_blank" rel="noreferrer">
+            <Button type="primary" icon={<PlusOutlined />}>新增</Button>
+          </a>
+        ) : allowCreate ? (
           <Button
             type="primary"
             icon={<PlusOutlined />}
@@ -1134,7 +1195,7 @@ export default function PageFeishuTable({
       />
       <Drawer
         title={createOpen ? `${pageName} · 新建记录` : `${pageName} · 记录详情`}
-        width={720}
+        size={720}
         open={detail !== null || createOpen}
         onClose={() => {
           setDetail(null)

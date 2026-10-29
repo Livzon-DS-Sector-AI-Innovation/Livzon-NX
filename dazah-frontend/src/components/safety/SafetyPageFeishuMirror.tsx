@@ -20,9 +20,15 @@ import { PageFeishuTable } from '@/components/safety'
 export default async function SafetyPageFeishuMirror({
   pageKey,
   pageName,
+  preferredColumnNames,
+  createUrl,
 }: {
   pageKey: (typeof SAFETY_PAGE_TABLE_KEYS)[keyof typeof SAFETY_PAGE_TABLE_KEYS]
   pageName: string
+  /** 表格优先展示的关键列（可选）；不传保持自动摘要。 */
+  preferredColumnNames?: readonly string[]
+  /** 「新增」按钮的跳转链接（可选，如飞书审批填单页）；不传不显示新增按钮。 */
+  createUrl?: string
 }) {
   const first = await getSafetyPageTableRecords({
     pageKey,
@@ -61,6 +67,8 @@ export default async function SafetyPageFeishuMirror({
         pageName={pageName}
         showStats={false}
         summarizeColumns
+        preferredColumnNames={preferredColumnNames}
+        createUrl={createUrl}
         initialDateFilter={initialDateFilter}
         initialData={
           data

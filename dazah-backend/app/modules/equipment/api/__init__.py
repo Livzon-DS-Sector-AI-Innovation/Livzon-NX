@@ -29,6 +29,7 @@ from app.modules.equipment.api.spare_parts import (
 from app.modules.equipment.api.work_orders import (
     router as work_orders_router,
 )
+from app.modules.equipment.api.workshops import router as workshops_router
 from app.shared.module_api import create_module_router
 from app.shared.module_registry import MODULES_BY_CODE
 
@@ -56,3 +57,6 @@ router.include_router(maintainers_router, prefix="/maintenance/staff")
 router.include_router(personnel_router, prefix="/personnel")
 # 巡检模块路由（飞书镜像只读；本地任务式巡检旧轨 HTTP 已下线）
 router.include_router(inspection_feishu_router, prefix="/inspection")
+
+# 车间注册表路由（车间管理页与工作台车间数据源）
+router.include_router(workshops_router, prefix="/workshops")

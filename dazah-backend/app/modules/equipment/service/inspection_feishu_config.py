@@ -1,6 +1,7 @@
 """设备巡检飞书镜像配置服务。
 
-配置按车间一行，来源优先级：数据库该车间行（App Secret 加密存储）→
+配置按车间一行，凭据引用 ``feishu_apps`` 应用实体（登记一次、多车间复用，
+App Secret 加密存储于应用行）。来源优先级：数据库该车间行 →
 EQUIPMENT_FEISHU_* 环境变量回退（仅作用于默认车间 201-1，兼容存量
 单套配置）。车间行一旦保存即视为权威；未配置的非默认车间视为未启用。
 知识库（/wiki/）链接在保存时解析为真实多维表格 App Token，镜像同步
@@ -16,11 +17,12 @@ from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.config import get_settings
 from app.core.exceptions import AppException
-from app.core.llm.encryption import decrypt_api_key, encrypt_api_key, mask_api_key
-from app.core.llm.exceptions import LLMConfigError
+from app.core.llm.encryption import encrypt_api_key, mask_api_key
+from app.modules.equipment.models.feishu_app import EquipmentFeishuApp
 from app.modules.equipment.models.inspection_feishu_config import (
     EquipmentInspectionFeishuConfig,
 )
@@ -29,6 +31,7 @@ from app.modules.equipment.schemas.inspection import (
     EquipmentInspectionFeishuConfigTestResult,
     EquipmentInspectionFeishuConfigUpdateRequest,
 )
+from app.modules.equipment.service import feishu_app as feishu_app_service
 from app.platform.integrations.feishu.bitable import BitableClient
 from app.platform.integrations.feishu.utils import (
     extract_wiki_node_token,
@@ -91,26 +94,13 @@ def _sanitize_feishu_error_message(message: str | None) -> str | None:
     )
 
 
-def _decrypt_stored_secret(encrypted: str | None) -> str:
-    """解密存量 App Secret；密钥轮换导致解密失败时返回空串。
-
-    返回空串而非抛错，保证配置读取和镜像展示可用，用户重新
-    保存 Secret 即可覆盖损坏的存量密文。
-    """
-    if not encrypted:
-        return ""
-    try:
-        return decrypt_api_key(encrypted)
-    except LLMConfigError:
-        logger.warning("设备巡检飞书 App Secret 解密失败（加密密钥已轮换），需重新保存")
-        return ""
-
-
 async def _get_config_row(
     db: AsyncSession, workshop_code: str
 ) -> EquipmentInspectionFeishuConfig | None:
     result = await db.execute(
-        select(EquipmentInspectionFeishuConfig).where(
+        select(EquipmentInspectionFeishuConfig)
+        .options(selectinload(EquipmentInspectionFeishuConfig.feishu_app))
+        .where(
             EquipmentInspectionFeishuConfig.workshop_code == workshop_code,
             EquipmentInspectionFeishuConfig.is_deleted == False,  # noqa: E712
         )
@@ -150,9 +140,14 @@ def _env_config() -> InspectionFeishuEffectiveConfig:
 def _row_config(
     row: EquipmentInspectionFeishuConfig,
 ) -> InspectionFeishuEffectiveConfig:
+    app = row.feishu_app
     return InspectionFeishuEffectiveConfig(
-        app_id=(row.app_id or "").strip(),
-        app_secret=_decrypt_stored_secret(row.app_secret),
+        app_id=(app.app_id if app is not None else "").strip(),
+        app_secret=(
+            feishu_app_service.decrypt_app_secret(app.app_secret)
+            if app is not None
+            else ""
+        ),
         app_token=(row.app_token or "").strip(),
         base_url=(row.base_url or "").strip(),
         today_table_id=(row.today_table_id or "").strip(),
@@ -205,6 +200,8 @@ async def get_config_detail(
     )
     return EquipmentInspectionFeishuConfigDetail(
         workshop_code=workshop_code,
+        feishu_app_id=row.feishu_app_id if row is not None else None,
+        app_name=(row.feishu_app.name if row is not None and row.feishu_app else ""),
         app_id=config.app_id,
         app_secret_masked=mask_api_key(config.app_secret) if config.app_secret else "",
         app_secret_configured=bool(config.app_secret),
@@ -366,54 +363,76 @@ async def _resolve_app_token(
     return normalize_app_token(raw_app_token) or ""
 
 
+async def _resolve_target_app(
+    db: AsyncSession, data: EquipmentInspectionFeishuConfigUpdateRequest
+) -> EquipmentFeishuApp:
+    """解析本次配置指向的应用：下拉选择优先，其次手输。
+
+    手输的 App ID 已登记则直接关联（掩码回传不当作新密钥，附带的
+    Secret 与已登记值不同时引导走应用管理）；未登记则连同 Secret
+    登记为可复用的新应用。
+    """
+    if data.feishu_app_id is not None:
+        app = await feishu_app_service.get_app_by_id(db, data.feishu_app_id)
+        if app is None:
+            raise AppException(message="所选应用不存在或已删除", status_code=404)
+        return app
+
+    manual_app_id = data.app_id.strip()
+    submitted_secret = (data.app_secret or "").strip()
+    if not manual_app_id:
+        raise AppException(
+            message="请选择已登记应用，或填写新应用的 App ID 与 App Secret"
+        )
+    app = await feishu_app_service.get_app_by_app_id(db, manual_app_id)
+    if app is not None:
+        stored_secret = feishu_app_service.decrypt_app_secret(app.app_secret)
+        if submitted_secret and submitted_secret != mask_api_key(stored_secret):
+            raise AppException(
+                message=(
+                    f"该 App ID 已登记（{app.name}），请直接下拉选择；"
+                    "如需更换密钥请在应用管理中修改"
+                )
+            )
+        return app
+
+    if not submitted_secret:
+        raise AppException(
+            message="新 App ID 需同时填写 App Secret（保存后登记为可复用应用）"
+        )
+    app = EquipmentFeishuApp(
+        name=(data.app_name.strip() or manual_app_id),
+        app_id=manual_app_id,
+        app_secret=encrypt_api_key(submitted_secret),
+    )
+    db.add(app)
+    await db.flush()
+    return app
+
+
 async def update_config(
     db: AsyncSession,
     workshop_code: str,
     data: EquipmentInspectionFeishuConfigUpdateRequest,
 ) -> EquipmentInspectionFeishuConfigDetail:
     row = await _get_config_row(db, workshop_code)
-    app_id = data.app_id.strip()
-    submitted_secret = (data.app_secret or "").strip()
-
-    if row is None:
-        current_secret = ""
-        if not app_id or not submitted_secret:
-            raise AppException(
-                message=(
-                    "首次保存需填写 App ID 与 App Secret"
-                    "（保存后数据库配置优先于环境变量）"
-                )
-            )
-    else:
-        current_secret = _decrypt_stored_secret(row.app_secret)
-
-    # 掩码回传不当作新密钥加密（前端未修改 Secret 时可能原样带回掩码）
-    secret_changed = bool(
-        submitted_secret and submitted_secret != mask_api_key(current_secret)
-    )
-    if secret_changed:
-        current_secret = submitted_secret
+    app = await _resolve_target_app(db, data)
+    current_secret = feishu_app_service.decrypt_app_secret(app.app_secret)
 
     app_token = await _resolve_app_token(
-        app_id=app_id,
+        app_id=app.app_id,
         app_secret=current_secret,
         raw_app_token=data.app_token.strip(),
     )
-    if data.is_enabled and (not app_id or not current_secret or not app_token):
+    if data.is_enabled and (not current_secret or not app_token):
         raise AppException(
-            message="启用同步需完整填写 App ID、App Secret 与多维表格 App Token"
+            message="启用同步需选择已配置 Secret 的应用并填写多维表格 App Token"
         )
 
     if row is None:
-        row = EquipmentInspectionFeishuConfig(
-            workshop_code=workshop_code,
-            app_secret=encrypt_api_key(current_secret),
-        )
+        row = EquipmentInspectionFeishuConfig(workshop_code=workshop_code)
         db.add(row)
-    elif secret_changed:
-        row.app_secret = encrypt_api_key(current_secret)
-
-    row.app_id = app_id
+    row.feishu_app_id = app.id
     row.is_enabled = data.is_enabled
     row.app_token = app_token
     row.base_url = _normalized_base_url(data.base_url)
@@ -423,7 +442,7 @@ async def update_config(
             "history_table_id": _normalized_table_id(data.history_table_id),
             "device_table_id": _normalized_table_id(data.device_table_id),
         },
-        app_id=app_id,
+        app_id=app.app_id,
         app_secret=current_secret,
         app_token=app_token,
     )
@@ -444,13 +463,18 @@ async def test_config(
 
     if not config.app_id or not config.app_secret or not config.app_token:
         raise AppException(
-            message="请先完整配置 App ID、App Secret 与多维表格 App Token"
+            message="请先完整配置应用凭据与多维表格 App Token"
         )
-    if row is not None and row.app_secret and not config.app_secret:
+    if (
+        row is not None
+        and row.feishu_app is not None
+        and row.feishu_app.app_secret
+        and not config.app_secret
+    ):
         raise AppException(
             message=(
                 "已保存的 App Secret 无法解密（加密密钥已轮换），"
-                "请重新输入 App Secret 并保存后再测试连接"
+                "请在飞书配置页应用管理中重新保存该应用的 Secret 后再测试连接"
             ),
             status_code=400,
         )

@@ -123,4 +123,14 @@ describe('FireEquipmentDetailDrawer', () => {
     })
     expect(mocks.getFireEquipmentDetail).not.toHaveBeenCalled()
   })
+
+  it('Drawer 使用 antd v6 size 属性并应用 520px 宽度', async () => {
+    renderDrawer('eq-1')
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 40))
+    })
+    const wrapper = document.querySelector('.ant-drawer-content-wrapper') as HTMLElement | null
+    expect(wrapper).toBeTruthy()
+    expect(wrapper!.style.width).toBe('520px')
+  })
 })

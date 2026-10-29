@@ -14,7 +14,6 @@ from app.modules.safety.models import (
     Contractor,
     ContractorWorkRecord,
     DailyRiskReport,
-    EhsChange,
     HazardIdentification,
     HazardReport,
     OhHazardMonitor,
@@ -1054,6 +1053,7 @@ class SafetyRepository:
         position: str | None = None,
         keyword: str | None = None,
         status: str | None = None,
+        workshop: str | None = None,
     ) -> tuple[list[OperationRegulation], int]:
         """获取安全操作规程列表"""
         query = select(OperationRegulation).where(
@@ -1067,6 +1067,11 @@ class SafetyRepository:
             query = query.where(OperationRegulation.position.ilike(f"%{position}%"))
             count_query = count_query.where(
                 OperationRegulation.position.ilike(f"%{position}%")
+            )
+        if workshop:
+            query = query.where(OperationRegulation.workshop == workshop)
+            count_query = count_query.where(
+                OperationRegulation.workshop == workshop
             )
         if keyword:
             like = f"%{keyword}%"
@@ -2097,118 +2102,6 @@ class SafetyRepository:
             .where(
                 DailyRiskReport.id == report_id,
                 DailyRiskReport.is_deleted.is_(False),
-            )
-            .values(is_deleted=True)
-        )
-        result = await self.session.execute(query)
-        return bool(getattr(result, "rowcount", 0))
-
-    # ==================== EHS变更管理 (MOC) Operations ====================
-
-    async def get_ehs_changes(
-        self,
-        skip: int = 0,
-        limit: int = 20,
-        status: str | None = None,
-        change_type: str | None = None,
-        change_grade: str | None = None,
-        change_duration: str | None = None,
-        department: str | None = None,
-        keyword: str | None = None,
-    ) -> tuple[list[EhsChange], int]:
-        """获取EHS变更列表"""
-        query = select(EhsChange).where(EhsChange.is_deleted.is_(False))
-        count_query = select(func.count(EhsChange.id)).where(
-            EhsChange.is_deleted.is_(False)
-        )
-
-        if status:
-            query = query.where(EhsChange.status == status)
-            count_query = count_query.where(EhsChange.status == status)
-        if change_type:
-            query = query.where(EhsChange.change_type == change_type)
-            count_query = count_query.where(EhsChange.change_type == change_type)
-        if change_grade:
-            query = query.where(EhsChange.change_grade == change_grade)
-            count_query = count_query.where(EhsChange.change_grade == change_grade)
-        if change_duration:
-            query = query.where(EhsChange.change_duration == change_duration)
-            count_query = count_query.where(
-                EhsChange.change_duration == change_duration
-            )
-        if department:
-            query = query.where(EhsChange.department == department)
-            count_query = count_query.where(EhsChange.department == department)
-        if keyword:
-            keyword_filter = EhsChange.title.ilike(f"%{keyword}%")
-            query = query.where(keyword_filter)
-            count_query = count_query.where(keyword_filter)
-
-        total = await self.session.scalar(count_query)
-        query = query.offset(skip).limit(limit).order_by(EhsChange.created_at.desc())
-        result = await self.session.execute(query)
-        items = list(result.scalars().all())
-        return items, total or 0
-
-    async def get_ehs_change_by_id(self, change_id: uuid.UUID) -> EhsChange | None:
-        """获取EHS变更详情"""
-        query = select(EhsChange).where(
-            EhsChange.id == change_id,
-            EhsChange.is_deleted.is_(False),
-        )
-        result = await self.session.execute(query)
-        return result.scalar_one_or_none()
-
-    async def get_ehs_change_by_no(self, change_no: str) -> EhsChange | None:
-        """根据编号获取EHS变更"""
-        query = select(EhsChange).where(
-            EhsChange.change_no == change_no,
-            EhsChange.is_deleted.is_(False),
-        )
-        result = await self.session.execute(query)
-        return result.scalar_one_or_none()
-
-    async def create_ehs_change(self, data: dict[str, Any]) -> EhsChange:
-        """创建EHS变更"""
-        item = EhsChange(**data)
-        self.session.add(item)
-        await self.session.flush()
-        stmt = select(EhsChange).where(EhsChange.id == item.id)
-        result = await self.session.execute(stmt)
-        return result.scalar_one()
-
-    async def update_ehs_change(
-        self, change_id: uuid.UUID, data: dict[str, Any]
-    ) -> EhsChange | None:
-        """更新EHS变更"""
-        # 两步模式：先 UPDATE，再 SELECT + populate_existing 强制刷新 identity map 缓存
-        stmt_update = (
-            update(EhsChange)
-            .where(
-                EhsChange.id == change_id,
-                EhsChange.is_deleted.is_(False),
-            )
-            .values(**data, updated_at=func.now())
-        )
-        await self.session.execute(stmt_update)
-        stmt_select = (
-            select(EhsChange)
-            .where(
-                EhsChange.id == change_id,
-                EhsChange.is_deleted.is_(False),
-            )
-            .execution_options(populate_existing=True)
-        )
-        result = await self.session.execute(stmt_select)
-        return result.scalar_one_or_none()
-
-    async def delete_ehs_change(self, change_id: uuid.UUID) -> bool:
-        """删除EHS变更（软删除）"""
-        query = (
-            update(EhsChange)
-            .where(
-                EhsChange.id == change_id,
-                EhsChange.is_deleted.is_(False),
             )
             .values(is_deleted=True)
         )

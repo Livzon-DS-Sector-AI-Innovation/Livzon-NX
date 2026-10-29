@@ -3,8 +3,18 @@
 import io
 import uuid
 from pathlib import Path
+from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Response,
+    UploadFile,
+)
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -30,13 +40,19 @@ from app.modules.equipment.schemas import (
     LocationTree,
     LocationUpdate,
 )
-from app.modules.equipment.service import equipment_import, equipment_ledger_archive
+from app.modules.equipment.service import (
+    equipment_import,
+    equipment_ledger_archive,
+    equipment_qrcode,
+)
 
 router = APIRouter()
 
-# 车间代码形如 101 / 101-1 / 201-3；列表缺省 = 跨车间查询
+# 车间代码形如 101 / 101-1 / dlz；列表缺省 = 跨车间查询
 WORKSHOP_QUERY = Query(
-    None, pattern=r"^\d{3}(-\d)?$", description="车间代码（如 101-1 / 201-1）"
+    None,
+    pattern=r"^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
+    description="车间代码（如 101-1 / dlz）",
 )
 
 
@@ -262,6 +278,40 @@ async def get_equipment_statistics(
     return success_response(data=EquipmentStatistics(**stats))
 
 
+@router.get("/equipments/qrcode-pdf", summary="导出车间设备报修二维码 PDF")
+async def export_equipment_qrcode_pdf(
+    workshop: str = Query(
+        ...,
+        pattern=r"^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
+        description="车间代码（必填，如 101-1 / dlz）",
+    ),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    """按车间导出设备报修二维码 PDF（A4 一页 12 枚，打印覆膜张贴）。
+
+    码内容为纯文本「报修 {车间全名} {设备名} {设备编号}」，扫码后复制
+    发到维修群即可建单，不编码任何平台地址。
+    """
+    try:
+        pdf_bytes, _workshop_name = (
+            await equipment_qrcode.generate_workshop_qrcode_pdf(db, workshop)
+        )
+    except LookupError:
+        raise HTTPException(
+            status_code=404, detail=f"车间不存在: {workshop}"
+        ) from None
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from None
+    filename = quote(f"设备报修码_{workshop}.pdf")
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{filename}"
+        },
+    )
+
+
 _ALLOWED_IMPORT_EXTENSIONS = {".xlsx"}
 _ALLOWED_IMPORT_MIMES = {
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -312,7 +362,7 @@ async def import_equipments(
         None, description="默认安装地点（台账安装地点无法匹配时使用）"
     ),
     workshop: str | None = Form(
-        "201-1", pattern=r"^\d{3}(-\d)?$", description="归属车间代码"
+        "201-1", pattern=r"^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$", description="归属车间代码"
     ),
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = None,

@@ -1,18 +1,23 @@
 """设备巡检飞书镜像配置 ORM 模型。
 
-按车间一行配置：飞书应用凭据（App Secret 加密存储）与三张多维表格
-引用。数据库行优先于 EQUIPMENT_FEISHU_* 环境变量回退（环境变量仅
-作用于默认车间）。
+按车间一行配置：引用的飞书自建应用（feishu_apps，App Secret 加密存储于
+应用行）与三张多维表格引用。数据库行优先于 EQUIPMENT_FEISHU_* 环境变量
+回退（环境变量仅作用于默认车间）。
 """
 
 from __future__ import annotations
 
 from datetime import datetime
+from typing import TYPE_CHECKING
+from uuid import UUID
 
-from sqlalchemy import Boolean, DateTime, Index, String, Text, text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, Text, text
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.shared.base_model import BaseModel
+
+if TYPE_CHECKING:
+    from app.modules.equipment.models.feishu_app import EquipmentFeishuApp
 
 
 class EquipmentInspectionFeishuConfig(BaseModel):
@@ -36,11 +41,10 @@ class EquipmentInspectionFeishuConfig(BaseModel):
         server_default="201-1",
         comment="车间代码（如 101-1 / 201-1）",
     )
-    app_id: Mapped[str] = mapped_column(
-        String(100), default="", comment="飞书应用 App ID"
-    )
-    app_secret: Mapped[str] = mapped_column(
-        Text, default="", comment="飞书应用 App Secret（加密存储）"
+    feishu_app_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("equipment.feishu_apps.id"),
+        nullable=True,
+        comment="关联的飞书自建应用（凭据存于 feishu_apps）",
     )
     app_token: Mapped[str] = mapped_column(
         String(200), default="", comment="多维表格 App Token（wiki 链接保存时已解析）"
@@ -71,4 +75,8 @@ class EquipmentInspectionFeishuConfig(BaseModel):
     )
     last_tested_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), comment="最近连接测试时间"
+    )
+
+    feishu_app: Mapped[EquipmentFeishuApp | None] = relationship(
+        "EquipmentFeishuApp", lazy="raise"
     )

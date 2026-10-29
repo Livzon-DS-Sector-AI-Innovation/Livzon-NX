@@ -18,7 +18,7 @@ _SETTINGS_PAGE = "safety:system-config:safety-feishu-settings"
 
 def test_page_table_registry_matches_registered_page_definition() -> None:
     """注册表里的页面标识必须与菜单派生的页面定义一致，否则权限绑定无从生效。"""
-    assert len(PAGE_TABLE_DEFINITIONS) == 9
+    assert len(PAGE_TABLE_DEFINITIONS) == 11
     definition = get_page_table(_PAGE)
     assert definition is not None
     assert definition.page_name == "24小时值班隐患"
@@ -91,6 +91,53 @@ def test_ops_safety_mirror_pages_registered(
 
 def test_registry_lookup_returns_none_for_unknown_page() -> None:
     assert get_page_table("safety:not:registered") is None
+
+
+_EHS_CHANGE_REVIEW_PAGE = "safety:risk-hazard:ehs-change:ehs-change-review"
+_EHS_CHANGE_ACCEPTANCE_PAGE = (
+    "safety:risk-hazard:ehs-change:ehs-change-acceptance"
+)
+
+
+@pytest.mark.parametrize(
+    ("page_key", "page_name", "route_path"),
+    [
+        (
+            _EHS_CHANGE_REVIEW_PAGE,
+            "EHS变更审批",
+            "/safety/ehs-change",
+        ),
+        (
+            _EHS_CHANGE_ACCEPTANCE_PAGE,
+            "变更验收审批",
+            "/safety/ehs-change/acceptance",
+        ),
+    ],
+)
+def test_ehs_change_mirror_pages_registered(
+    page_key: str, page_name: str, route_path: str
+) -> None:
+    """「EHS变更审批/变更验收审批」镜像页登记、生命周期账本与数据路由一致。"""
+    definition = get_page_table(page_key)
+    assert definition is not None
+    assert definition.page_name == page_name
+    assert definition.route_path == route_path
+
+    page = PAGES_BY_KEY[page_key]
+    assert page.module_code == "safety"
+    assert page.page_name == page_name
+    assert page.route_path == route_path
+    # 页面键与路径不含审批/台账/记录等关键词：推导不出额外敏感动作，
+    # 因此镜像数据路由（绑定动作为空集）才能通过校验
+    assert _sensitive_actions(page_key, route_path, page_name) == ()
+    assert page_lifecycle_errors(page) == []
+
+    ledger = load_ledger()
+    entry = ledger["pages"][page_key]
+    assert entry["status"] == "active"
+    assert entry["module_code"] == "safety"
+    assert entry["route_path"] == route_path
+    assert entry["actions"] == {}
 
 
 def test_config_routes_bound_to_feishu_settings_page() -> None:
@@ -286,3 +333,18 @@ def test_every_page_table_api_route_has_a_binding() -> None:
         if api_binding_for_route(method, path) is None
     ]
     assert missing == []
+
+
+def test_governance_pages_registered_in_policy_and_lifecycle() -> None:
+    """安全治理批次新页：page_policy 与生命周期目录都已登记。"""
+    from app.platform.identity.page_lifecycle import load_ledger
+
+    pages = load_ledger()["pages"]
+    for page_key in (
+        "safety:emergency-accident:emergency-card",
+        "safety:emergency-accident:emergency-mgmt",
+        "safety:site-mgmt:safety-facilities",
+        "safety:site-mgmt:hazchem-msds",
+        "safety:governance:target-performance",
+    ):
+        assert pages[page_key]["status"] == "active", page_key

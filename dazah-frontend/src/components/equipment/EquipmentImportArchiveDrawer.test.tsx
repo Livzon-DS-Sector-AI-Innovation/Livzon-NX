@@ -118,6 +118,12 @@ describe('EquipmentImportArchiveDrawer', () => {
     expect(text).toContain('103台账.xlsx')
     expect(text).toContain('新建 2')
     expect(text).toContain('测试员')
+    // Drawer 由 width 迁移至 antd v6 的 size 属性，宽度应保持 80%
+    const wrapper = document.querySelector(
+      '.ant-drawer-content-wrapper',
+    ) as HTMLElement | null
+    expect(wrapper).toBeTruthy()
+    expect(wrapper!.style.width).toBe('80%')
   })
 
   it('shows the snapshot table when opening an archive', async () => {

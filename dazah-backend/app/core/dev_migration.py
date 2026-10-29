@@ -111,7 +111,8 @@ def _read_plan(config: Config, connection: Connection) -> MigrationPlan:
     revision = current[0] if current else "base"
     try:
         pending = tuple(
-            item.revision for item in script.iterate_revisions(heads[0], revision)
+            item.revision
+            for item in script.iterate_revisions(heads[0], revision, implicit_base=True)
         )
     except CommandError as exc:
         raise MigrationGuardError(

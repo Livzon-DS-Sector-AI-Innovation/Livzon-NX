@@ -197,6 +197,7 @@ async def test_update_with_new_secret_replaces_stored_secret(db_session):
     row = await _get_single_row(db_session)
     assert row.app_secret != original
     assert row.app_secret != "rotated-secret-456"
+    # Fernet 每次加密产生不同密文（随机 IV），这里解密比对明文
     assert decrypt_api_key(row.app_secret) == "rotated-secret-456"
 
 

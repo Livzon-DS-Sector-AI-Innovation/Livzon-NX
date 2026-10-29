@@ -373,11 +373,13 @@ describe('equipment menu structure', () => {
       'stats',
       'console',
       'feishu-config',
+      'workshop-admin',
     ])
     expect(equipment?.children.map((item) => item.path)).toEqual([
       '/equipment/stats',
       '/equipment',
       '/equipment/feishu-config',
+      '/equipment/workshop-admin',
     ])
     const console = equipment?.children.find((item) => item.key === 'console')
     expect(console?.anyOfPageKeys).toEqual([

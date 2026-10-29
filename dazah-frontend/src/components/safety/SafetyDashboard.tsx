@@ -16,6 +16,9 @@ import {
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import type { SpecialOperationReport, DailyRiskReport, TrainingRecord } from '@/types/safety'
+import type { SafetyOverviewData } from '@/actions/safety'
+import SafetyOverviewMap from './SafetyOverviewMap'
+import PlatformNotice from '@/components/shared/PlatformNotice'
 
 const { Title, Text } = Typography
 
@@ -27,6 +30,7 @@ export interface DashboardData {
   expiringCerts: TrainingRecord[]
   todaySpecialOps: SpecialOperationReport[]
   todayDailyRisks: DailyRiskReport[]
+  overview: SafetyOverviewData | null
 }
 
 interface TodayRiskRow {
@@ -372,6 +376,56 @@ export default function SafetyDashboard({ data }: { data: DashboardData }) {
           />
         </Col>
       </Row>
+
+      {/* ── 厂区风险分区 · 当日分布（平面图落点） ── */}
+      {data.overview && (
+        <SafetyOverviewMap overview={data.overview} />
+      )}
+
+      {/* ── 超储物料 ── */}
+      {data.overview && (data.overview.over_limit_chemicals ?? []).length > 0 && (
+        <PlatformNotice
+          type="warning"
+          showRulesLink={false}
+          message={
+            <Text strong style={{ color: T.charcoal, fontSize: 14 }}>
+              超储物料 {(data.overview.over_limit_chemicals ?? []).length} 项（存量 &gt; 上限）
+            </Text>
+          }
+          description={
+            <div className="mt-2 space-y-1">
+              {(data.overview.over_limit_chemicals ?? []).map((chem) => (
+                <div
+                  key={chem.inventory_id}
+                  className="flex items-center gap-3 text-sm"
+                >
+                  <Text style={{ color: T.charcoal, fontWeight: 500 }}>
+                    {chem.chemical_name}
+                  </Text>
+                  <Text style={{ color: T.steel, fontSize: 12 }}>
+                    {chem.workshop} · {chem.quantity}{chem.unit} / {chem.upper_limit ?? '-'}{chem.unit}
+                  </Text>
+                  {chem.over_pct !== null && (
+                    <Tag
+                      style={{
+                        color: T.error,
+                        backgroundColor: T.rose,
+                        border: 'none',
+                        borderRadius: 6,
+                        fontSize: 11,
+                        fontWeight: 600,
+                      }}
+                    >
+                      超储 {chem.over_pct}%
+                    </Tag>
+                  )}
+                </div>
+              ))}
+            </div>
+          }
+          className="!rounded-xl"
+        />
+      )}
 
       {/* ── 今日关键风险作业 ── */}
       <Card

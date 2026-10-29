@@ -9,11 +9,23 @@ Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 const mocks = vi.hoisted(() => ({
   message: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
   canOperate: true,
-  getFireEquipmentStats: vi.fn(),
-  getFireEquipmentList: vi.fn(),
-  getFireInspectionRecords: vi.fn(),
-  syncFireEquipment: vi.fn(),
-  getFireEquipmentDetail: vi.fn(),
+  // 默认合法响应兜底：未显式 mock 的异步调用不会产生 unhandled rejection
+  getFireEquipmentStats: vi.fn(async (): Promise<unknown> => ({ code: 200, data: {} })),
+  getFireEquipmentDashboard: vi.fn(async (): Promise<unknown> => ({ code: 200, data: {} })),
+  getFireEquipmentList: vi.fn(
+    async (): Promise<unknown> => ({
+      code: 200,
+      data: { items: [], columns: [], total: 0, page: 1, page_size: 20 },
+    }),
+  ),
+  getFireInspectionRecords: vi.fn(
+    async (): Promise<unknown> => ({
+      code: 200,
+      data: { items: [], total: 0, page: 1, page_size: 20 },
+    }),
+  ),
+  syncFireEquipment: vi.fn(async (): Promise<unknown> => ({ code: 200 })),
+  getFireEquipmentDetail: vi.fn(async (): Promise<unknown> => ({ code: 200, data: {} })),
   downloadZip: vi.fn(
     async (entries: Array<{ name: string; bytes: ArrayBuffer }>, zipName: string) => {
       // 记录调用由 vi.fn 的 mock.calls 承担；实现体仅消费参数避免未用告警
@@ -25,6 +37,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/actions/safety', () => ({
   getFireEquipmentStats: mocks.getFireEquipmentStats,
+  getFireEquipmentDashboard: mocks.getFireEquipmentDashboard,
   getFireEquipmentList: mocks.getFireEquipmentList,
   getFireInspectionRecords: mocks.getFireInspectionRecords,
   syncFireEquipment: mocks.syncFireEquipment,
@@ -62,6 +75,44 @@ vi.mock('@/components/shared/PlatformNotice', async () => {
       createElement('div', { 'data-notice': String(message) }, description),
   }
 })
+
+vi.mock('./FireEquipmentDashboard', () => ({
+  default: (props: {
+    stats?: { total?: number } | null
+    dashboard?: { expiry_summary?: { overdue?: number } } | null
+    drilling?: string | null
+    onDrill: (status: string | null) => void
+    onFilterUninspected: () => void
+  }) =>
+    createElement(
+      'div',
+      {
+        'data-dash-total': String(props.stats?.total ?? 0),
+        'data-dash-overdue': String(
+          props.dashboard?.expiry_summary?.overdue ?? 0
+        ),
+        'data-drilling': String(props.drilling ?? ''),
+      },
+      createElement(
+        'button',
+        {
+          type: 'button',
+          'data-drill': 'due_30',
+          onClick: () => props.onDrill(props.drilling ? null : 'due_30'),
+        },
+        'drill'
+      ),
+      createElement(
+        'button',
+        {
+          type: 'button',
+          'data-uninspected': 'true',
+          onClick: () => props.onFilterUninspected(),
+        },
+        'uninspected'
+      )
+    ),
+}))
 
 vi.mock('./FireEquipmentQrSheet', async () => {
   const { createElement } = await import('react')
@@ -221,6 +272,15 @@ const STATS = {
   last_sync_error: null,
 }
 
+const DASHBOARD = {
+  expiry_summary: { overdue: 1, within_7: 0, within_15: 0, within_30: 2 },
+  trend: [
+    { month: '2026-09', count: 0 },
+    { month: '2026-10', count: 1 },
+  ],
+  workshop_coverage: [{ tab_name: '主表', total: 2, inspected: 1 }],
+}
+
 const EQUIPMENT_PAGE = {
   columns: [
     { name: '型号', kind: 'text' },
@@ -304,6 +364,7 @@ function renderPanel(
       createElement(FireEquipmentPanel, {
         pageKey: PAGE_KEY,
         initialStats: STATS as never,
+        initialDashboard: DASHBOARD as never,
         initialEquipment: EQUIPMENT_PAGE as never,
         initialRecords: RECORDS_PAGE as never,
         initialError: null,
@@ -336,7 +397,9 @@ describe('FireEquipmentPanel', () => {
     const view = renderPanel()
     root = view.root
     container = view.container
-    expect(container.querySelector('[data-stat="器材总数"]')?.textContent).toBe('2')
+    // 仪表盘指标与到期分布透传
+    expect(container.querySelector('[data-dash-total]')?.getAttribute('data-dash-total')).toBe('2')
+    expect(container.querySelector('[data-dash-overdue]')?.getAttribute('data-dash-overdue')).toBe('1')
     expect(container.querySelector('[data-row="eq-1"]')?.textContent).toContain('MQC-001')
     // 未填编号显示兜底文案
     expect(container.querySelector('[data-row="eq-2"]')?.textContent).toContain('未填编号')
@@ -345,7 +408,6 @@ describe('FireEquipmentPanel', () => {
     expect(container.querySelector('[data-row="eq-1"]')?.textContent).toContain('MFZ/ABC4')
     // 有效日期列：临近到期显示橙色标示
     expect(container.querySelector('[data-row="eq-2"]')?.textContent).toContain('12天后到期')
-    expect(container.querySelector('[data-stat="已过期"]')?.textContent).toBe('1')
     // 未开启回写时展示一键创建入口；点检记录显示待回写
     expect(container.textContent).toContain('一键创建点检记录回写表')
     expect(container.querySelector('[data-tab="records"]')?.textContent).toContain('待回写')
@@ -377,6 +439,13 @@ describe('FireEquipmentPanel', () => {
       code: 200,
       data: { ...STATS, total: 9 },
     })
+    mocks.getFireEquipmentDashboard.mockResolvedValue({
+      code: 200,
+      data: {
+        ...DASHBOARD,
+        expiry_summary: { ...DASHBOARD.expiry_summary, overdue: 2 },
+      },
+    })
     mocks.getFireEquipmentList.mockResolvedValue({
       code: 200,
       data: { ...EQUIPMENT_PAGE, total: 9 },
@@ -399,9 +468,54 @@ describe('FireEquipmentPanel', () => {
 
     expect(mocks.syncFireEquipment).toHaveBeenCalledWith({ pageKey: PAGE_KEY })
     expect(mocks.message.success).toHaveBeenCalled()
-    expect(
-      container.querySelector('[data-stat="器材总数"]')?.textContent
-    ).toBe('9')
+    expect(container.querySelector('[data-dash-total]')?.getAttribute('data-dash-total')).toBe('9')
+    // 仪表盘随同步刷新（到期分布取回新数据）
+    expect(container.querySelector('[data-dash-overdue]')?.getAttribute('data-dash-overdue')).toBe('2')
+  })
+
+  it('drills expiry filter from dashboard and toggles off', async () => {
+    const view = renderPanel()
+    root = view.root
+    container = view.container
+
+    const drillButton = container.querySelector('[data-drill="due_30"]')
+    expect(drillButton).not.toBeNull()
+    await act(async () => {
+      drillButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await vi.waitFor(() => {
+      expect(mocks.getFireEquipmentList).toHaveBeenCalledWith(
+        expect.objectContaining({ expiryStatus: 'due_30', page: 1 })
+      )
+    })
+    expect(container.querySelector('[data-drilling]')?.getAttribute('data-drilling')).toBe('due_30')
+
+    const offButton = container.querySelector('[data-drill="due_30"]')
+    await act(async () => {
+      offButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await vi.waitFor(() => {
+      expect(mocks.getFireEquipmentList).toHaveBeenCalledWith(
+        expect.objectContaining({ expiryStatus: null })
+      )
+    })
+  })
+
+  it('filters uninspected equipment from dashboard card', async () => {
+    const view = renderPanel()
+    root = view.root
+    container = view.container
+
+    const uninspectedButton = container.querySelector('[data-uninspected="true"]')
+    expect(uninspectedButton).not.toBeNull()
+    await act(async () => {
+      uninspectedButton!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await vi.waitFor(() => {
+      expect(mocks.getFireEquipmentList).toHaveBeenCalledWith(
+        expect.objectContaining({ monthStatus: 'uninspected' })
+      )
+    })
   })
 
   it('renders inspection records with expand source column', () => {

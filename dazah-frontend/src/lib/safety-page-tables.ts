@@ -20,7 +20,54 @@ export const SAFETY_PAGE_TABLE_KEYS = {
     'safety:ops-safety:centrifuge-discharge-inspection',
   fireEquipmentInspection:
     'safety:emergency-accident:fire-equipment-inspection',
+  ehsChangeReview: 'safety:risk-hazard:ehs-change:ehs-change-review',
+  ehsChangeAcceptance: 'safety:risk-hazard:ehs-change:ehs-change-acceptance',
 } as const
+
+/**
+ * 镜像页表格优先展示的关键列（按声明顺序，列名与飞书表字段一致）。
+ * 命中的字段按此顺序作为表格摘要列，其余字段点击行后在详情抽屉查看；
+ * 实际字段与声明基本对不上（换绑子表或字段改名）时回退自动摘要。
+ * 不在此列的页面保持自动摘要行为。
+ */
+export const SAFETY_PAGE_TABLE_PREFERRED_COLUMNS: Record<string, string[]> = {
+  [SAFETY_PAGE_TABLE_KEYS.ehsChangeReview]: [
+    '申请编号',
+    '申请状态',
+    '发起时间',
+    '完成时间',
+    '变更申请人',
+    '变更申请部门',
+    '变更名称',
+    '变更分类',
+    '变更级别',
+    '申请变更原因',
+    '预计效果',
+    '变更风险评估及建议措施',
+  ],
+  [SAFETY_PAGE_TABLE_KEYS.ehsChangeAcceptance]: [
+    '申请编号',
+    '申请状态',
+    '审批流程',
+    '发起时间',
+    '发起人',
+    '部门',
+    '变更级别',
+    '变更验收日期',
+    '变更情况描述',
+    '变更审批人验收意见',
+    '变更验收人',
+  ],
+}
+
+/**
+ * 镜像页「新增」按钮的跳转链接（飞书审批填单页等新建入口，点击新开飞书）。
+ * 数据读取仍走页面绑定的多维表格；链接变更时只改这里。
+ */
+export const SAFETY_PAGE_TABLE_CREATE_URLS: Record<string, string> = {
+  [SAFETY_PAGE_TABLE_KEYS.ehsChangeReview]: 'https://applink.feishu.cn/T9aVmYNY9oKR',
+  [SAFETY_PAGE_TABLE_KEYS.ehsChangeAcceptance]: 'https://applink.feishu.cn/T9aVn44berv1',
+}
 
 /**
  * 默认按「当天」筛选的镜像页（日报/巡查类，数据量大且只关心当天）。

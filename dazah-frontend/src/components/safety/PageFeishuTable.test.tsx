@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   updateSafetyPageTableRecord: vi.fn(),
   uploadSafetyPageTableAttachment: vi.fn(),
   statsSelect: vi.fn(),
+  capturedTableColumns: [] as Array<Record<string, unknown>>,
 }))
 
 vi.mock('@/actions/safety', () => ({
@@ -135,8 +136,9 @@ vi.mock('antd', async () => {
     dataSource?: Row[]
     onChange?: (pagination: { current?: number; pageSize?: number }) => void
     onRow?: (row: Row) => { onClick?: () => void }
-  }) =>
-    createElement(
+  }) => {
+    mocks.capturedTableColumns = columns ?? []
+    return createElement(
       'div',
       null,
       createElement(
@@ -175,6 +177,7 @@ vi.mock('antd', async () => {
         )
       )
     )
+  }
   const Upload = ({ children, beforeUpload, disabled }: AnyProps) =>
     createElement(
       'div',
@@ -815,6 +818,9 @@ describe('PageFeishuTable（交互）', () => {
     expect(html).toContain(longContent)
     expect((html.match(/pre-wrap/g) ?? []).length).toBe(2)
     expect(html).toContain('break-word')
+    // 超长内容按 4 行截断保持行高紧凑（完整内容在详情抽屉查看）；
+    // happy-dom 会丢弃 -webkit- 前缀属性，这里断言截断用的 overflow
+    expect((html.match(/overflow: hidden/g) ?? []).length).toBe(2)
     expect(html).toContain('201一车间')
   })
 
@@ -1416,5 +1422,179 @@ describe('PageFeishuTable（statsGroupBy 透传）', () => {  it('passes statsGr
     >
     expect(calls.length).toBeGreaterThan(0)
     expect(calls[calls.length - 1][0].groupBy).toBeUndefined()
+  })
+})
+
+describe('PageFeishuTable（关键列模式）', () => {
+  const changeColumns = [    { field_id: 'f1', name: '申请编号', type: 1, kind: 'text', is_primary: true, options: [], editable: true },
+    { field_id: 'f2', name: '发起时间', type: 5, kind: 'date', is_primary: false, options: [], editable: true },
+    { field_id: 'f3', name: '变更名称', type: 1, kind: 'text', is_primary: false, options: [], editable: true },
+    { field_id: 'f4', name: '变更级别', type: 3, kind: 'select', is_primary: false, options: ['一级', '二级'], editable: true },
+    { field_id: 'f5', name: '变更原因', type: 1, kind: 'text', is_primary: false, options: [], editable: true },
+    { field_id: 'f6', name: '附件材料', type: 17, kind: 'attachment', is_primary: false, options: [], editable: true },
+  ]
+  const longReason = '现有反应釜产能不足，需新增一台反应釜并调整对应工艺管线与联锁设定'.repeat(2)
+  const changeRows = [
+    {
+      record_id: 'rec-1',
+      fields: {
+        申请编号: 'MOC-2026-001',
+        发起时间: 1729987200000,
+        变更名称: '新增反应釜',
+        变更级别: '一级',
+        变更原因: longReason,
+      },
+    },
+  ]
+
+  it('shows only the declared preferred columns and hides the rest', async () => {
+    rendered = renderTable({
+      summarizeColumns: true,
+      preferredColumnNames: ['申请编号', '发起时间', '变更名称', '变更级别', '变更原因'],
+      initialData: {
+        columns: changeColumns,
+        records: changeRows,
+        total: 1,
+        page: 1,
+        page_size: 20,
+        truncated: false,
+      },
+    })
+    await settle()
+
+    const tds = rendered.container.querySelectorAll(
+      'tbody tr[data-row="rec-1"] td'
+    )
+    // 只渲染声明的 5 个关键列（按声明顺序），附件列不在表格里
+    expect(tds.length).toBe(5)
+    expect(tds[0]?.textContent).toContain('MOC-2026-001')
+    expect(tds[3]?.textContent).toContain('一级')
+    expect(rendered.container.innerHTML).not.toContain('tok-')
+    // 未命中的字段收进详情：提示剩余字段数
+    expect(rendered.container.innerHTML).toContain('其余 1 个字段')
+  })
+
+  it('wraps long-text preferred columns instead of dropping them', async () => {
+    rendered = renderTable({
+      summarizeColumns: true,
+      preferredColumnNames: ['申请编号', '变更原因'],
+      initialData: {
+        columns: changeColumns,
+        records: changeRows,
+        total: 1,
+        page: 1,
+        page_size: 20,
+        truncated: false,
+      },
+    })
+    await settle()
+
+    const html = rendered.container.innerHTML
+    // 自动摘要会丢弃长文本列；关键列模式下按声明保留并换行渲染
+    expect(html).toContain(longReason)
+    expect(html).toContain('pre-wrap')
+  })
+
+  it('falls back to auto summary when preferred names mostly miss', async () => {    const manyColumns = [
+      ...Array.from({ length: 12 }, (_, index) => ({
+        field_id: `fld-biz${index}`,
+        name: `业务列${index + 1}`,
+        type: 1,
+        kind: 'text',
+        is_primary: false,
+        options: [],
+        editable: true,
+      })),
+    ]
+    rendered = renderTable({
+      summarizeColumns: true,
+      preferredColumnNames: ['业务列1', '已改名A', '已改名B', '已改名C', '已改名D'],
+      initialData: {
+        columns: manyColumns,
+        records: [{ record_id: 'rec-1', fields: { 业务列1: 'A' } }],
+        total: 1,
+        page: 1,
+        page_size: 20,
+        truncated: false,
+      },
+    })
+    await settle()
+
+    // 命中 1 列 < 3：回退自动摘要（10 列），而不是只渲染零星关键列
+    expect(
+      rendered.container.querySelectorAll('tbody tr[data-row="rec-1"] td')
+        .length
+    ).toBe(10)
+    expect(rendered.container.innerHTML).toContain('其余 2 个字段')
+  })
+})
+
+describe('PageFeishuTable（新增跳转链接）', () => {
+  it('renders the create button as an external jump link when createUrl is set', async () => {
+    rendered = renderTable({
+      summarizeColumns: true,
+      allowCreate: true,
+      createUrl: 'https://applink.feishu.cn/T9aVmYNY9oKR',
+    })
+    await settle()
+
+    const link = rendered.container.querySelector(
+      'a[href="https://applink.feishu.cn/T9aVmYNY9oKR"]'
+    ) as HTMLAnchorElement
+    expect(link).toBeTruthy()
+    expect(link.target).toBe('_blank')
+    expect(link.textContent).toContain('新增')
+    // 跳转模式不打开站内新建抽屉
+    expect(rendered.container.innerHTML).not.toContain('新记录将写入当前选中的数据表')
+  })
+
+  it('keeps the in-page create button when no createUrl is provided', async () => {
+    rendered = renderTable({ allowCreate: true })
+    await settle()
+
+    expect(
+      rendered.container.querySelector(
+        'a[href="https://applink.feishu.cn/T9aVmYNY9oKR"]'
+      )
+    ).toBeNull()
+    expect(findButton(rendered.container, '新建记录')).toBeTruthy()
+  })
+})
+
+describe('PageFeishuTable（列宽）', () => {
+  it('pins narrow-content columns to compact widths in summary mode', async () => {
+    const mixedColumns = [
+      { field_id: 'f1', name: '申请编号', type: 1, kind: 'text', is_primary: true, options: [], editable: true },
+      { field_id: 'f2', name: '申请状态', type: 3, kind: 'select', is_primary: false, options: ['已通过'], editable: true },
+      { field_id: 'f3', name: '发起时间', type: 5, kind: 'date', is_primary: false, options: [], editable: true },
+      { field_id: 'f4', name: '变更申请人', type: 11, kind: 'person', is_primary: false, options: [], editable: true },
+      { field_id: 'f5', name: '变更名称', type: 1, kind: 'text', is_primary: false, options: [], editable: true },
+    ]
+    rendered = renderTable({
+      summarizeColumns: true,
+      initialData: {
+        columns: mixedColumns,
+        records: [{ record_id: 'rec-1', fields: {} }],
+        total: 1,
+        page: 1,
+        page_size: 20,
+        truncated: false,
+      },
+    })
+    await settle()
+
+    const widths = new Map(
+      mocks.capturedTableColumns.map((column: Record<string, unknown>) => [
+        (column.dataIndex as string[])[1],
+        column.width as number | undefined,
+      ])
+    )
+    // 窄内容列固定紧凑宽度，剩余空间留给名称等文本列
+    expect(widths.get('申请状态')).toBe(110)
+    expect(widths.get('发起时间')).toBe(112)
+    expect(widths.get('变更申请人')).toBe(110)
+    // 文本列不设固定宽度，自动吸收剩余空间
+    expect(widths.get('申请编号')).toBeUndefined()
+    expect(widths.get('变更名称')).toBeUndefined()
   })
 })

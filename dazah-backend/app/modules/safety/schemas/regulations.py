@@ -13,7 +13,9 @@ from app.modules.safety.schemas.enums import (
 class OperationRegulationBase(BaseModel):
     """安全操作规程基础模式"""
 
-    regulation_no: str = Field(..., max_length=64, description="操规编号")
+    regulation_no: str | None = Field(
+        None, max_length=64, description="操规编号（可选，由文控/车间编号时填写）"
+    )
     regulation_name: str = Field(..., max_length=255, description="操规名称")
     document_path: str | None = Field(None, max_length=500, description="操规文档路径")
     document_original_name: str | None = Field(
@@ -21,6 +23,9 @@ class OperationRegulationBase(BaseModel):
     )
     position: str | None = Field(
         None, max_length=100, description="岗位（达托/达巴，逗号分隔）"
+    )
+    workshop: str | None = Field(
+        None, max_length=60, description="车间/部门（如 103车间、201二车间、动力部）"
     )
     notes: str | None = Field(None, description="备注")
 
@@ -41,6 +46,7 @@ class OperationRegulationUpdate(BaseModel):
         None, max_length=255, description="文档原始文件名"
     )
     position: str | None = Field(None, max_length=100, description="岗位")
+    workshop: str | None = Field(None, max_length=60, description="车间/部门")
     notes: str | None = Field(None, description="备注")
     content: str | None = Field(None, description="标准化 Markdown 内容")
     status: str | None = Field(None, max_length=20, description="操规状态")
@@ -184,3 +190,88 @@ class SopContentUpdate(BaseModel):
 
     content: str = Field(..., description="编辑后的标准化 Markdown 内容")
     status: str | None = Field(None, max_length=20, description="新状态（可选）")
+
+
+# ==================== 操规批量上传（自动识别） Schemas ====================
+
+
+class RegulationRecognizedInfo(BaseModel):
+    """从文件名/内容自动识别出的操规归属信息"""
+
+    workshop: str = Field("", max_length=60, description="识别的车间/部门")
+    position: str = Field("", max_length=100, description="识别的岗位")
+    title: str = Field("", max_length=255, description="识别的操规名称")
+    recognized_by: str = Field(
+        "heuristic", description="识别方式: heuristic(文件名规则)/ai(大模型)"
+    )
+
+
+class RegulationBatchUploadItem(BaseModel):
+    """批量上传单文件处理结果"""
+
+    file_name: str = Field(..., description="上传文件名")
+    ok: bool = Field(..., description="是否导入成功")
+    regulation_id: uuid.UUID | None = Field(None, description="创建的操规ID")
+    regulation_no: str = Field("", description="生成的操规编号")
+    regulation_name: str = Field("", description="操规名称")
+    workshop: str = Field("", description="车间/部门")
+    position: str = Field("", description="岗位")
+    recognized_by: str = Field("", description="识别方式")
+    message: str = Field("", description="失败原因或补充说明")
+
+
+class RegulationBatchUploadResponse(BaseModel):
+    """批量上传汇总结果"""
+
+    items: list[RegulationBatchUploadItem] = Field(default_factory=list)
+    success_count: int = Field(0, ge=0)
+    fail_count: int = Field(0, ge=0)
+
+
+# ==================== 操规合规审核 Schemas ====================
+
+
+class RegulationReviewItem(BaseModel):
+    """审核问题项（缺失项/不合规项）"""
+
+    item: str = Field("", description="问题项名称")
+    requirement: str = Field("", description="法规/规范要求")
+    basis: str = Field("", description="依据（法规名称与条款）")
+    severity: str = Field("建议", description="严重程度: 严重/一般/建议")
+    suggestion: str = Field("", description="整改建议")
+
+
+class RegulationReviewResponse(BaseModel):
+    """操规合规审核记录响应"""
+
+    id: uuid.UUID
+    regulation_id: uuid.UUID
+    regulation_name: str
+    result: str = Field(..., description="审核结论: pass/conditional_pass/fail")
+    score: int = Field(..., ge=0, le=100, description="合规评分")
+    summary: str = Field("", description="总体评价")
+    missing_items: list[RegulationReviewItem] = Field(default_factory=list)
+    non_compliant_items: list[RegulationReviewItem] = Field(default_factory=list)
+    suggestions: list[str] = Field(default_factory=list)
+    reviewed_by: uuid.UUID | None = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class RegulationReviewListResponse(BaseModel):
+    """操规审核记录列表"""
+
+    items: list[RegulationReviewResponse] = Field(default_factory=list)
+    total: int = Field(0, ge=0)
+
+
+class RegulationLatestReviewEntry(BaseModel):
+    """操规最新审核状态（用于台账列表列展示）"""
+
+    regulation_id: uuid.UUID
+    result: str
+    score: int
+    reviewed_at: datetime

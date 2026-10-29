@@ -182,7 +182,7 @@ export default function HazardLedgerEditDrawer({ record, open, onClose, onSaved 
       title={`编辑危险源辨识记录（${record.hazard_id_no}）`}
       open={open}
       onClose={onClose}
-      width={640}
+      size={640}
       destroyOnHidden
       footer={
         <Space style={{ display: 'flex', justifyContent: 'flex-end' }}>

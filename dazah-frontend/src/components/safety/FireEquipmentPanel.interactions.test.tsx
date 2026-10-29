@@ -12,16 +12,44 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   message: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
   canOperate: true,
-  getFireEquipmentStats: vi.fn(),
-  getFireEquipmentList: vi.fn(),
-  getFireInspectionRecords: vi.fn(),
-  syncFireEquipment: vi.fn(),
-  initFireEquipmentWritebackTable: vi.fn(),
-  getFireEquipmentDetail: vi.fn(),
+  // 默认给出合法响应兜底：未显式 mock 的异步调用不会产生 unhandled rejection。
+  // 返回类型放宽为 unknown，避免与各用例的 mockResolvedValue 形状互相约束。
+  getFireEquipmentStats: vi.fn(async (): Promise<unknown> => ({ code: 200, data: {} })),
+  getFireEquipmentDashboard: vi.fn(async (): Promise<unknown> => ({ code: 200, data: {} })),
+  getFireEquipmentList: vi.fn(
+    async (): Promise<unknown> => ({
+      code: 200,
+      data: { items: [], columns: [], total: 0, page: 1, page_size: 20 },
+    }),
+  ),
+  getFireInspectionRecords: vi.fn(
+    async (): Promise<unknown> => ({
+      code: 200,
+      data: { items: [], total: 0, page: 1, page_size: 20 },
+    }),
+  ),
+  syncFireEquipment: vi.fn(async (): Promise<unknown> => ({ code: 200 })),
+  initFireEquipmentWritebackTable: vi.fn(async (): Promise<unknown> => ({ code: 200 })),
+  getFireEquipmentDetail: vi.fn(async (): Promise<unknown> => ({ code: 200, data: {} })),
 }))
+
+// 面板经 App.useApp() 调用 message；无 Provider 时会落到真实静态 message，
+// 其 Notification 异步渲染会在 teardown 后继续产生日志。此处保留真实 antd
+// 组件，仅替换 App 上下文为桩，避免收尾竞态。
+vi.mock('antd', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('antd')>()
+  const AppStub = Object.assign(
+    ({ children }: { children?: unknown }) => children as never,
+    {
+      useApp: () => mocks.message,
+    },
+  )
+  return { ...actual, App: AppStub }
+})
 
 vi.mock('@/actions/safety', () => ({
   getFireEquipmentStats: mocks.getFireEquipmentStats,
+  getFireEquipmentDashboard: mocks.getFireEquipmentDashboard,
   getFireEquipmentList: mocks.getFireEquipmentList,
   getFireInspectionRecords: mocks.getFireInspectionRecords,
   syncFireEquipment: mocks.syncFireEquipment,
@@ -29,6 +57,10 @@ vi.mock('@/actions/safety', () => ({
   getFireEquipmentDetail: mocks.getFireEquipmentDetail,
 }))
 
+// 仪表盘含 ECharts 图表，happy-dom 无 2D 上下文，交互用例以 stub 代替
+vi.mock('./FireEquipmentDashboard', () => ({
+  default: () => null,
+}))
 // 面板里的 message 来自 antd 的全局通知：它会创建独立 React root，并为每条提示
 // 挂一个约 3 秒的自动关闭定时器。用例若在该定时器到期前结束，定时器会在
 // happy-dom 环境销毁之后触发渲染，抛 "ReferenceError: window is not defined"，

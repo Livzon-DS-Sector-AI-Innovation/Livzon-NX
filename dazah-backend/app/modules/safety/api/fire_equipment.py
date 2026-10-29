@@ -22,6 +22,7 @@ from app.modules.safety.schemas.fire_equipment import (
     ChecklistResponse,
     CreateFireInspectionRequest,
     FireEquipmentColumn,
+    FireEquipmentDashboardResponse,
     FireEquipmentDetailResponse,
     FireEquipmentItem,
     FireEquipmentListResponse,
@@ -172,6 +173,21 @@ async def get_fire_equipment_stats(
 ) -> ApiResponseEnvelope[FireEquipmentStats]:
     stats = await fire_equipment.get_fire_equipment_stats(db)
     return ApiResponseEnvelope(data=FireEquipmentStats(**stats))
+
+
+@fire_equipment_router.get(
+    "/fire-equipment/dashboard",
+    response_model=ApiResponseEnvelope[FireEquipmentDashboardResponse],
+    summary="点检仪表盘聚合（有效期到期分布 + 点检趋势 + 车间覆盖）",
+)
+async def get_fire_equipment_dashboard(
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser | None = Depends(get_current_user),
+) -> ApiResponseEnvelope[FireEquipmentDashboardResponse]:
+    dashboard = await fire_equipment.get_fire_equipment_dashboard(db)
+    return ApiResponseEnvelope(
+        data=FireEquipmentDashboardResponse(**dashboard)
+    )
 
 
 @fire_equipment_router.get(

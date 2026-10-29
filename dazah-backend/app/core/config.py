@@ -95,6 +95,11 @@ class Settings(BaseSettings):
     EQUIPMENT_FEISHU_APP_SECRET: str = ""
     EQUIPMENT_FEISHU_WS_ENABLED: bool = True
 
+    # 故障报修工单台账（平台 → 飞书多维表格实时镜像；为空停用）
+    REPAIR_LEDGER_APP_TOKEN: str = ""
+    REPAIR_LEDGER_TABLE_ID: str = ""
+    REPAIR_LEDGER_SUMMARY_TABLE_ID: str = ""
+
     # 设备巡检飞书多维表格镜像同步（只读展示，录入在飞书）
     EQUIPMENT_FEISHU_BITABLE_APP_TOKEN: str = ""
     EQUIPMENT_FEISHU_BITABLE_TODAY_TABLE_ID: str = ""

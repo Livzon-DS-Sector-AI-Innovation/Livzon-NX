@@ -135,6 +135,7 @@ def test_single_head_retains_the_safety_reminder_history() -> None:
     assert "d4e7f1a9c3b5" in history
     assert "d1f2a3b4c5d6" in history
     assert "f4a6c8e0b2d5" in history
+    assert "a7c3e5f1b8d2" in history
 
 
 def test_multi_table_tabs_upgrade_adds_columns_and_upgrades_index(monkeypatch) -> None:

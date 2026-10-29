@@ -113,11 +113,14 @@ async def test_seed_menus_structure_and_idempotent(db_session) -> None:
     assert workshop.parent_id == batches.id
     assert workshop.route_path == "/production/batches/workshop/101-1"
 
-    # disabled 种子 → status=disabled
-    emergency_plan = next(
-        m for m in menus if m.key == "safety:emergency-accident:emergency-plan"
+    # disabled 种子 → status=disabled（emergency-plan 已被安全治理批次替换为
+    # emergency-card/emergency-mgmt 两个启用菜单，禁用示例改用研发项目占位）
+    emergency_card = next(
+        m for m in menus if m.key == "safety:emergency-accident:emergency-card"
     )
-    assert emergency_plan.status == "disabled"
+    assert emergency_card.status == "active"
+    rd_projects = next(m for m in menus if m.key == "rd:projects")
+    assert rd_projects.status == "disabled"
 
     # permission_code 映射（hr:write）
     dept_mapping = next(

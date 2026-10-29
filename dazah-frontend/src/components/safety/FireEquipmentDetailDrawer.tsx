@@ -188,7 +188,7 @@ export default function FireEquipmentDetailDrawer({
       title="器材详情"
       open={open}
       onClose={onClose}
-      width={520}
+      size={520}
       destroyOnHidden
     >
       {open && equipmentId ? (
