@@ -19,6 +19,7 @@ import os
 import re
 import uuid
 from collections import OrderedDict
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from hashlib import sha256
@@ -474,7 +475,7 @@ def _draft(
     )
 
 
-def _make_cell_getter(cols: dict[str, int]):
+def _make_cell_getter(cols: dict[str, int]) -> Callable[[list[str], str], str]:
     def _cell(row: list[str], key: str) -> str:
         col = cols.get(key, -1)
         return row[col] if 0 <= col < len(row) else ""
@@ -714,7 +715,7 @@ def _map_noise_table(
                 extra["lex8h"] = lex8_num
             if lex40_num is not None:
                 extra["lex40h"] = lex40_num
-            new_group = {
+            new_group: dict[str, Any] = {
                 "workshop": _cell(row, "workshop"),
                 "post": _cell(row, "post"),
                 "verdict": verdict,
@@ -837,7 +838,7 @@ def _map_field_table(
         verdict_raw = _cell(row, "verdict")
         if e8_raw and verdict_raw:
             verdict, _noise = _map_verdict(verdict_raw)
-            new_group = {
+            new_group: dict[str, Any] = {
                 "workshop": _cell(row, "workshop"),
                 "post": _cell(row, "post"),
                 "verdict": verdict,
@@ -1469,8 +1470,11 @@ class OhDetectionReportService:
         detection_date: date | None = None,
         remark: str = "",
         user_id: uuid.UUID | None = None,
-    ) -> tuple[OhDetectionReport, int, bool]:
-        """导入（或覆盖同编号重导）检测报告。调用方负责事务提交。"""
+    ) -> tuple[OhDetectionReport, int, bool, int]:
+        """导入（或覆盖同编号重导）检测报告。调用方负责事务提交。
+
+        返回 ``(报告, 导入结果行数, 是否覆盖重导, 同步监测记录数)``。
+        """
         parsed = await parse_report(pdf_bytes, file_name)
         report_no = (report_no or parsed.report_no).strip()
         if not report_no:
