@@ -135,6 +135,7 @@ const OVERVIEW: SafetyOverviewData = {
   ],
   over_limit_chemicals: [],
   source_totals: { special_op: 2, daily_risk: 1 },
+  hazchem_daily_source: 'mirror',
   weekly_operation_types: [],
   open_hazard_count: 0,
   generated_at: '2026-10-27T03:00:00Z',

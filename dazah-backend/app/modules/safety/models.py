@@ -3062,6 +3062,21 @@ class SafetyPageFeishuConfig(BaseModel):
         nullable=True,
         comment="点检记录回写子表 table_id（灭火器/消防栓点检页专用，同一 Base）",
     )
+    over_limit_quantity_field: Mapped[str | None] = mapped_column(
+        String(120),
+        nullable=True,
+        comment="超储计算-存量列字段名（危化品统计表页专用，空=不启用超储计算）",
+    )
+    over_limit_limit_field: Mapped[str | None] = mapped_column(
+        String(120),
+        nullable=True,
+        comment="超储计算-上限列字段名（与存量列一起配置才生效）",
+    )
+    over_limit_name_field: Mapped[str | None] = mapped_column(
+        String(120),
+        nullable=True,
+        comment="超储计算-品名列字段名（空=取表格第一个文本列）",
+    )
     is_enabled: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
@@ -4213,6 +4228,52 @@ class ChemicalInventory(BaseModel):
     )
 
 
+class ChemicalMsdsAttachment(BaseModel):
+    """危化品 MSDS 附件（一个档案可挂多个文件，pdf/docx/图片等）。
+
+    存储走「MinIO 优先、本地 uploads/safety/hazchem 回退」（service 层负责），
+    这里只记录元数据；``hazardous_chemicals.msds_file_path/msds_file_name``
+    旧单文件两列由迁移搬迁为本表记录后不再写入（保留列便于回滚）。
+    """
+
+    __tablename__ = "chemical_msds_attachments"
+    __table_args__ = (
+        Index(
+            "ix_safety_chemical_msds_attachments_chemical",
+            "chemical_id",
+            "is_deleted",
+        ),
+        {"schema": "safety"},
+    )
+
+    chemical_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("safety.hazardous_chemicals.id"),
+        nullable=False,
+        comment="危化品档案",
+    )
+    file_name: Mapped[str] = mapped_column(
+        String(255), nullable=False, comment="原始文件名"
+    )
+    storage_key: Mapped[str] = mapped_column(
+        String(500), nullable=False, comment="存储 key（MinIO 对象名或本地相对路径）"
+    )
+    content_type: Mapped[str] = mapped_column(
+        String(120),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="文件 MIME 类型",
+    )
+    size_bytes: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+        comment="文件大小（字节）",
+    )
+
+
 # ==================== 应急处置：应急管理 ====================
 
 
@@ -4459,4 +4520,219 @@ class EmergencySupply(BaseModel):
     )
     search_text: Mapped[str] = mapped_column(
         Text, nullable=False, default="", server_default="", comment="关键字搜索文本"
+    )
+
+
+# ==================== 职业健康：检测报告导入 ====================
+
+
+class OhDetectionReport(BaseModel):
+    """职业病危害因素检测报告（第三方检测机构报告批次）。
+
+    一份 PDF 报告一行；明细见 ``OhDetectionResult``。
+    同 report_no 重复导入按覆盖更新处理（更新本行 + 重建明细）。
+    """
+
+    __tablename__ = "oh_detection_reports"
+    __table_args__ = (
+        Index(
+            "uq_safety_oh_detection_reports_no",
+            "report_no",
+            unique=True,
+            postgresql_where=text("is_deleted = false"),
+        ),
+        Index("ix_safety_oh_detection_reports_date", "detection_date", "is_deleted"),
+        {"schema": "safety", "comment": "职业病危害因素检测报告"},
+    )
+
+    report_no: Mapped[str] = mapped_column(
+        String(64), nullable=False, comment="报告编号（如 NZXZW-J-2026-141）"
+    )
+    report_name: Mapped[str] = mapped_column(
+        String(255), nullable=False, default="", server_default="", comment="报告名称"
+    )
+    company_name: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="受检企业",
+    )
+    detection_agency: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="检测机构",
+    )
+    detection_date: Mapped[date | None] = mapped_column(
+        Date, nullable=True, comment="检测日期"
+    )
+    table_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0", comment="识别表格数"
+    )
+    total_points: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0", comment="检测点数合计"
+    )
+    exceed_points: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0", comment="超标点数"
+    )
+    noise_post_points: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+        comment="噪声作业岗位数",
+    )
+    source_file_name: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="原始报告文件名",
+    )
+    source_file_path: Mapped[str] = mapped_column(
+        String(500),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="原始报告存储路径（uploads/safety/oh-detection/）",
+    )
+    source_file_sha256: Mapped[str] = mapped_column(
+        String(64), nullable=False, default="", server_default="", comment="文件 SHA256"
+    )
+    parse_mode: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="rules",
+        server_default="rules",
+        comment="解析模式: rules=规则 / llm=AI兜底 / mixed=混合",
+    )
+    parse_warnings: Mapped[list[Any] | None] = mapped_column(
+        JSON, nullable=True, comment="解析警告 [{table, reason}]"
+    )
+    remark: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default="", comment="备注"
+    )
+    search_text: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default="", comment="关键字搜索文本"
+    )
+
+
+class OhDetectionResult(BaseModel):
+    """检测报告结果明细：一个检测点/岗位接触记录一行。
+
+    ``record_type``：post=岗位接触（C_TWA / L_EX,40h / WBGT 岗位级），
+    point=采样点·测量地点单点（C_PE / C_STE / C_ME / 测量值）。
+    检出限表达（如 ``＜0.44``）保留原文，``measured_value_num`` 置空。
+    """
+
+    __tablename__ = "oh_detection_results"
+    __table_args__ = (
+        Index("ix_safety_oh_detection_results_report", "report_id", "seq"),
+        Index(
+            "ix_safety_oh_detection_results_category",
+            "report_id",
+            "factor_category",
+        ),
+        Index(
+            "ix_safety_oh_detection_results_verdict",
+            "verdict",
+            "is_deleted",
+        ),
+        {"schema": "safety", "comment": "职业病危害因素检测结果明细"},
+    )
+
+    report_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("safety.oh_detection_reports.id"),
+        nullable=False,
+        comment="所属检测报告",
+    )
+    seq: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="序号")
+    table_ref: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="表号（表5-18）",
+    )
+    table_title: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="表标题",
+    )
+    factor_category: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        comment="危害因素类别: dust_total/dust_respirable/free_silica/chemical/"
+        "noise/power_frequency_field/heat",
+    )
+    factor_name: Mapped[str] = mapped_column(
+        String(128), nullable=False, comment="危害因素名称（谷物粉尘/噪声…）"
+    )
+    record_type: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="point", comment="记录类型: post/point"
+    )
+    workshop: Mapped[str] = mapped_column(
+        String(255), nullable=False, default="", server_default="", comment="车间"
+    )
+    post: Mapped[str] = mapped_column(
+        String(255), nullable=False, default="", server_default="", comment="岗位"
+    )
+    sample_point: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="采样点/测量地点",
+    )
+    measured_value: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="检测值原文(＜0.44)",
+    )
+    measured_value_num: Mapped[float | None] = mapped_column(
+        Float, nullable=True, comment="检测值数值（检出限表达为空）"
+    )
+    unit: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="", server_default="", comment="单位"
+    )
+    limit_type: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="none",
+        server_default="none",
+        comment="限值类型: PC-TWA/PC-STEL/MAC/PE/LEX-40h/E8/WBGT/none",
+    )
+    limit_value_num: Mapped[float | None] = mapped_column(
+        Float, nullable=True, comment="限值数值"
+    )
+    verdict: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="unknown",
+        server_default="unknown",
+        comment="判定: compliant=未超标 / exceed=超标 / unknown=未识别",
+    )
+    is_noise_post: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+        comment="是否噪声作业岗位（80≤LEX,8h＜85dB 场景）",
+    )
+    verdict_raw: Mapped[str] = mapped_column(
+        String(128),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="判定原文",
+    )
+    extra: Mapped[dict[str, Any] | None] = mapped_column(
+        JSON, nullable=True, comment="类别特有字段（噪声LEX、高温接触时间率等）"
     )

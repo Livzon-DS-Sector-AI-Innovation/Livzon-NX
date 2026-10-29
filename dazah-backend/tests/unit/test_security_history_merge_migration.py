@@ -17,7 +17,7 @@ def test_merge_preserves_both_histories_and_runs_no_database_operations(monkeypa
     config = Config(str(root / "alembic.ini"))
     config.set_main_option("script_location", str(root / "alembic"))
     script = ScriptDirectory.from_config(config)
-    assert script.get_heads() == ["b8d2f4a6c0e9"]
+    assert script.get_heads() == ["b9e4f7a2c5d1"]
     merge = script.get_revision("b8d2f4a6c0e9")
     assert merge is not None
     assert set(merge.down_revision) == {"a7c3e5f1b8d2", "f4a6c8e0b2d5"}
@@ -64,5 +64,5 @@ def test_reviewed_plan_includes_the_other_branch_like_alembic_upgrade(monkeypatc
         assert plan.pending_revisions == tuple(
             step.revision.revision for step in actual
         )
-        assert plan.pending_revisions[-1] == "b8d2f4a6c0e9"
+        assert plan.pending_revisions[-1] == "b9e4f7a2c5d1"
         assert len(plan.pending_revisions) > 1

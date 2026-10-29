@@ -5,12 +5,21 @@ import {
   getSpecialOperationReports,
   getDailyRiskReports,
   getSafetyOverview,
+  getChemicalInventories,
+  getSafetyPageTableStats,
+  getSafetyPageTableRecords,
 } from '@/actions/safety'
 import { SafetyDashboard } from '@/components/safety'
 import type { SpecialOperationReport, DailyRiskReport, TrainingRecord } from '@/types/safety'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 60
+
+// 未关闭隐患 KPI 的默认数据源：24小时值班隐患（飞书镜像表），
+// 用户可在卡片上切换为「隐患台账」
+const HAZARD_DUTY_KEY = 'safety:risk-hazard:hazard-inspection:hazard-duty'
+const HAZARD_DUTY_STATUS_FIELD = '整改情况'
+const HAZARD_DUTY_CLOSED_VALUE = '已整改'
 
 function isToday(dateStr?: string): boolean {
   if (!dateStr) return false
@@ -41,6 +50,9 @@ async function fetchDashboardData() {
     specialOpReportsRes,
     dailyRiskReportsRes,
     overviewRes,
+    inventoriesRes,
+    dutyStatsRes,
+    dutyRecordsRes,
   ] = await Promise.all([
     getHazards({ page_size: 200 }),
     getHazardIdentifications({ page_size: 200 }),
@@ -48,19 +60,65 @@ async function fetchDashboardData() {
     getSpecialOperationReports({ page_size: 50 }).catch(() => ({ data: [], meta: { total: 0 } })),
     getDailyRiskReports({ page_size: 50, report_date: todayStr }).catch(() => ({ data: [], meta: { total: 0 } })),
     getSafetyOverview().catch(() => null),
+    getChemicalInventories({ page_size: 200 }).catch(() => null),
+    // 未关闭隐患（默认来源：24小时值班隐患）：统计未整改数量并取未整改明细
+    getSafetyPageTableStats({
+      pageKey: HAZARD_DUTY_KEY,
+      groupBy: [HAZARD_DUTY_STATUS_FIELD],
+      conditions: [
+        {
+          field: HAZARD_DUTY_STATUS_FIELD,
+          op: 'neq',
+          value: HAZARD_DUTY_CLOSED_VALUE,
+        },
+      ],
+    }).catch(() => null),
+    getSafetyPageTableRecords({
+      pageKey: HAZARD_DUTY_KEY,
+      pageSize: 50,
+      conditions: [
+        {
+          field: HAZARD_DUTY_STATUS_FIELD,
+          op: 'neq',
+          value: HAZARD_DUTY_CLOSED_VALUE,
+        },
+      ],
+    }).catch(() => null),
   ])
 
   // 未关闭隐患：过滤 status != closed && != verified
   const hazardsAll = Array.isArray((hazardsRes as { data?: unknown[] }).data)
     ? (hazardsRes as { data: { status: string }[] }).data
     : []
-  const openHazardCount = hazardsAll.filter(
-    (h) => h.status !== 'closed' && h.status !== 'verified'
-  ).length
+
+  // 未关闭隐患（24小时值班隐患口径）：统计接口 neq 条件已排除已整改，
+  // total 即未关闭数量；同时取未整改明细供卡片抽屉展示
+  const dutyStatsData =
+    dutyStatsRes && dutyStatsRes.code === 200 && dutyStatsRes.data
+      ? dutyStatsRes.data
+      : null
+  const dutyRecordsData =
+    dutyRecordsRes && dutyRecordsRes.code === 200 && dutyRecordsRes.data
+      ? dutyRecordsRes.data
+      : null
+  const openHazardCount = dutyStatsData?.total ?? 0
+  const openHazardRecords = (dutyRecordsData?.records ?? []).map(
+    (row: { record_id: string; fields?: Record<string, unknown> | null }) => ({
+      record_id: row.record_id,
+      fields: row.fields ?? {},
+    })
+  )
 
   // 未完成危险源辨识：过滤 overall_status = draft 或 in_progress
   const identificationsAll = Array.isArray((identificationsRes as { data?: unknown[] }).data)
-    ? (identificationsRes as { data: { overall_status: string }[] }).data
+    ? (identificationsRes as {
+        data: {
+          id: string
+          hazard_id_no: string
+          department: string
+          overall_status: string
+        }[]
+      }).data
     : []
   const unfinishedIdentCount = identificationsAll.filter(
     (i) => i.overall_status === 'draft' || i.overall_status === 'in_progress'
@@ -87,11 +145,28 @@ async function fetchDashboardData() {
 
   return {
     openHazardCount,
+    openHazardRecords,
     unfinishedIdentCount,
     expiringCerts,
     todaySpecialOps,
     todayDailyRisks,
     overview: overviewRes && 'data' in overviewRes ? overviewRes.data : null,
+    // 危化品车间存量（驾驶舱“危化品每日统计”卡片数据源）
+    chemicalInventories:
+      inventoriesRes && inventoriesRes.code === 200 && inventoriesRes.data
+        ? inventoriesRes.data.items
+        : [],
+
+    unfinishedIdentifications: identificationsAll
+      .filter(
+        (i) => i.overall_status === 'draft' || i.overall_status === 'in_progress'
+      )
+      .map((i) => ({
+        id: String(i.id),
+        hazard_id_no: String(i.hazard_id_no ?? ''),
+        department: String(i.department ?? ''),
+        overall_status: String(i.overall_status ?? ''),
+      })),
   }
 }
 

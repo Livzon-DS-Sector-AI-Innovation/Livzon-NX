@@ -30,6 +30,9 @@ class PageFeishuConfigItem(BaseModel):
     hidden_field_names: list[str] = Field(default_factory=list)
     workshop_aliases: dict[str, str] = Field(default_factory=dict)
     sub_tables: list[PageFeishuSubTable] = Field(default_factory=list)
+    over_limit_quantity_field: str | None = None
+    over_limit_limit_field: str | None = None
+    over_limit_name_field: str | None = None
     is_enabled: bool = True
     is_configured: bool = False
     is_mirrored: bool = True
@@ -55,6 +58,9 @@ class UpdatePageFeishuConfigRequest(BaseModel):
     hidden_field_names: list[str] | None = None
     workshop_aliases: dict[str, str] | None = None
     sub_tables: list[PageFeishuSubTable] | None = None
+    over_limit_quantity_field: str | None = None
+    over_limit_limit_field: str | None = None
+    over_limit_name_field: str | None = None
     is_enabled: bool | None = None
     is_mirrored: bool | None = None
 
@@ -107,6 +113,17 @@ class PageTableColumn(BaseModel):
 class PageTableRecord(BaseModel):
     record_id: str
     fields: dict[str, Any] = Field(default_factory=dict)
+    """绑定页配置了超储计算列时附带；未配置保持 None 不参与序列化语义。"""
+    over_limit: bool | None = None
+    over_pct: float | None = None
+
+
+class PageTableOverLimitFields(BaseModel):
+    """页面绑定里配置的超储计算列（未配置时响应不含该字段）。"""
+
+    quantity_field: str
+    limit_field: str
+    name_field: str
 
 
 class PageTableRecordCondition(BaseModel):
@@ -131,6 +148,7 @@ class PageTableRecordsResponse(BaseModel):
     page: int = 1
     page_size: int = 20
     truncated: bool = False
+    over_limit_fields: PageTableOverLimitFields | None = None
 
 
 class PageTableStatBucket(BaseModel):

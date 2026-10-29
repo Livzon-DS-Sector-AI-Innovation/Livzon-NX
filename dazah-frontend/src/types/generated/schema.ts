@@ -23817,18 +23817,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/safety/hazardous-chemicals/{chemical_id}/msds": {
+    "/api/v1/safety/hazardous-chemicals/{chemical_id}/msds-files": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** 下载 MSDS 文件 */
-        get: operations["download_msds_api_v1_safety_hazardous_chemicals__chemical_id__msds_get"];
+        /** MSDS 附件列表 */
+        get: operations["list_msds_files_api_v1_safety_hazardous_chemicals__chemical_id__msds_files_get"];
         put?: never;
-        /** 上传 MSDS 文件 */
-        post: operations["upload_msds_api_v1_safety_hazardous_chemicals__chemical_id__msds_post"];
+        /** 上传 MSDS 附件（附带 AI 识别档案字段建议） */
+        post: operations["upload_msds_file_api_v1_safety_hazardous_chemicals__chemical_id__msds_files_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/hazardous-chemicals/{chemical_id}/msds-files/{file_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** 删除 MSDS 附件（软删除） */
+        delete: operations["delete_msds_file_api_v1_safety_hazardous_chemicals__chemical_id__msds_files__file_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/hazardous-chemicals/{chemical_id}/msds-files/{file_id}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 下载 MSDS 附件 */
+        get: operations["download_msds_file_api_v1_safety_hazardous_chemicals__chemical_id__msds_files__file_id__content_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/hazardous-chemicals/{chemical_id}/msds-files/{file_id}/extract": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 重新 AI 识别 MSDS 附件内容（返回档案字段建议） */
+        post: operations["extract_msds_file_api_v1_safety_hazardous_chemicals__chemical_id__msds_files__file_id__extract_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/hazardous-chemicals/{chemical_id}/msds-files/{file_id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** MSDS 附件在线预览（office 转 PDF） */
+        get: operations["preview_msds_file_api_v1_safety_hazardous_chemicals__chemical_id__msds_files__file_id__preview_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -24357,6 +24425,109 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/safety/oh-detection-reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 检测报告列表（含全量统计） */
+        get: operations["list_oh_detection_reports_api_v1_safety_oh_detection_reports_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/oh-detection-reports/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 导入检测报告 PDF（同编号覆盖重导） */
+        post: operations["import_oh_detection_report_api_v1_safety_oh_detection_reports_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/oh-detection-reports/parse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 解析检测报告 PDF（预览，不落库） */
+        post: operations["parse_oh_detection_report_api_v1_safety_oh_detection_reports_parse_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/oh-detection-reports/{report_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 检测报告详情 */
+        get: operations["get_oh_detection_report_api_v1_safety_oh_detection_reports__report_id__get"];
+        put?: never;
+        post?: never;
+        /** 删除检测报告（软删除） */
+        delete: operations["delete_oh_detection_report_api_v1_safety_oh_detection_reports__report_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/oh-detection-reports/{report_id}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 下载检测报告原始 PDF */
+        get: operations["download_oh_detection_report_file_api_v1_safety_oh_detection_reports__report_id__file_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/oh-detection-reports/{report_id}/results": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 检测报告结果明细（筛选分页） */
+        get: operations["list_oh_detection_results_api_v1_safety_oh_detection_reports__report_id__results_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/safety/oh-hazard-monitors": {
         parameters: {
             query?: never;
@@ -24763,6 +24934,23 @@ export interface paths {
          * @description 开始体检（已安排→体检中）
          */
         post: operations["start_oh_health_exam_api_v1_safety_oh_health_exams__exam_id__start_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/open-hazard-details": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 未关闭隐患明细（来源：24小时值班隐患 / 隐患台账） */
+        get: operations["get_open_hazard_details_api_v1_safety_open_hazard_details_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -28992,6 +29180,28 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /**
+         * ApiResponseEnvelope
+         * @description Typed variant of the common API envelope used by migrated modules.
+         */
+        ApiResponseEnvelope: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            /** Data */
+            data: unknown;
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** ApiResponseEnvelope[AgentToolCatalogEntry] */
         ApiResponseEnvelope_AgentToolCatalogEntry_: {
             /**
@@ -29522,6 +29732,42 @@ export interface components {
              */
             code: number;
             data: components["schemas"]["ChemicalInventoryResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[ChemicalMsdsFileListResponse] */
+        ApiResponseEnvelope_ChemicalMsdsFileListResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["ChemicalMsdsFileListResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[ChemicalMsdsUploadResponse] */
+        ApiResponseEnvelope_ChemicalMsdsUploadResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["ChemicalMsdsUploadResponse"];
             /**
              * Message
              * @default success
@@ -30585,6 +30831,60 @@ export interface components {
             code: number;
             /** Data */
             data: null;
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[OhDetectionImportResponse] */
+        ApiResponseEnvelope_OhDetectionImportResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["OhDetectionImportResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[OhDetectionParsePreview] */
+        ApiResponseEnvelope_OhDetectionParsePreview_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["OhDetectionParsePreview"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[OhDetectionReportResponse] */
+        ApiResponseEnvelope_OhDetectionReportResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["OhDetectionReportResponse"];
             /**
              * Message
              * @default success
@@ -32298,6 +32598,25 @@ export interface components {
             code: number;
             /** Data */
             data: components["schemas"]["OotLimitProductOut"][];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[list[OpenHazardDetailItem]] */
+        ApiResponseEnvelope_list_OpenHazardDetailItem__: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            /** Data */
+            data: components["schemas"]["OpenHazardDetailItem"][];
             /**
              * Message
              * @default success
@@ -34293,6 +34612,45 @@ export interface components {
              */
             sheets: string;
         };
+        /** Body_import_oh_detection_report_api_v1_safety_oh_detection_reports_import_post */
+        Body_import_oh_detection_report_api_v1_safety_oh_detection_reports_import_post: {
+            /**
+             * Company Name
+             * @default
+             */
+            company_name: string;
+            /**
+             * Detection Agency
+             * @default
+             */
+            detection_agency: string;
+            /**
+             * Detection Date
+             * @description 检测日期 YYYY-MM-DD
+             */
+            detection_date?: string | null;
+            /**
+             * File
+             * @description 检测报告 PDF
+             */
+            file: string;
+            /**
+             * Remark
+             * @default
+             */
+            remark: string;
+            /**
+             * Report Name
+             * @default
+             */
+            report_name: string;
+            /**
+             * Report No
+             * @description 报告编号（识别值可覆盖）
+             * @default
+             */
+            report_no: string;
+        };
         /** Body_import_position_training_list_api_v1_hr_position_training_lists_import_post */
         Body_import_position_training_list_api_v1_hr_position_training_lists_import_post: {
             /** File */
@@ -34368,6 +34726,14 @@ export interface components {
         /** Body_parse_hazard_ledger_import_api_v1_safety_hazard_identifications_import_parse_post */
         Body_parse_hazard_ledger_import_api_v1_safety_hazard_identifications_import_parse_post: {
             /** File */
+            file: string;
+        };
+        /** Body_parse_oh_detection_report_api_v1_safety_oh_detection_reports_parse_post */
+        Body_parse_oh_detection_report_api_v1_safety_oh_detection_reports_parse_post: {
+            /**
+             * File
+             * @description 检测报告 PDF
+             */
             file: string;
         };
         /** Body_preview_capa_import_api_v1_quality_capas_import_preview_post */
@@ -34499,8 +34865,8 @@ export interface components {
             /** File */
             file: string;
         };
-        /** Body_upload_msds_api_v1_safety_hazardous_chemicals__chemical_id__msds_post */
-        Body_upload_msds_api_v1_safety_hazardous_chemicals__chemical_id__msds_post: {
+        /** Body_upload_msds_file_api_v1_safety_hazardous_chemicals__chemical_id__msds_files_post */
+        Body_upload_msds_file_api_v1_safety_hazardous_chemicals__chemical_id__msds_files_post: {
             /** File */
             file: string;
         };
@@ -36919,6 +37285,51 @@ export interface components {
             unit?: string | null;
             /** Upper Limit */
             upper_limit?: number | null;
+        };
+        /** ChemicalMsdsFileItem */
+        ChemicalMsdsFileItem: {
+            /**
+             * Chemical Id
+             * Format: uuid
+             */
+            chemical_id: string;
+            /** Content Type */
+            content_type: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by?: string | null;
+            /** File Name */
+            file_name: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Size Bytes */
+            size_bytes: number;
+        };
+        /** ChemicalMsdsFileListResponse */
+        ChemicalMsdsFileListResponse: {
+            /** Items */
+            items: components["schemas"]["ChemicalMsdsFileItem"][];
+        };
+        /**
+         * ChemicalMsdsUploadResponse
+         * @description 上传 MSDS 成功后的响应：附件 + 更新后的档案 + AI 识别建议。
+         */
+        ChemicalMsdsUploadResponse: {
+            /**
+             * Ai Error
+             * @description AI 识别未执行/失败的原因（附件已保存成功）
+             */
+            ai_error?: string | null;
+            ai_suggestion?: components["schemas"]["MsdsExtractionSuggestion"] | null;
+            chemical: components["schemas"]["HazardousChemicalResponse"];
+            file: components["schemas"]["ChemicalMsdsFileItem"];
         };
         /**
          * ChoiceOption
@@ -50522,6 +50933,35 @@ export interface components {
             /** Month */
             month: string;
         };
+        /**
+         * MsdsExtractionSuggestion
+         * @description MSDS 附件 AI 识别出的档案字段建议值（人工确认后才写入档案）。
+         *
+         *     各字段为「识别到则填、未识别为 None」；不覆盖档案必填项 name 之外的
+         *     任何空值以外的语义由前端确认弹窗决定。
+         */
+        MsdsExtractionSuggestion: {
+            /** Alias */
+            alias?: string | null;
+            /** Cas No */
+            cas_no?: string | null;
+            /** Category */
+            category?: string | null;
+            /**
+             * Category Label
+             * @description 危险性类别中文名
+             * @default
+             */
+            category_label: string;
+            /** Hazard Statements */
+            hazard_statements?: string | null;
+            /** Name */
+            name?: string | null;
+            /** Remark */
+            remark?: string | null;
+            /** Storage Requirements */
+            storage_requirements?: string | null;
+        };
         /** NCECreate */
         NCECreate: {
             /**
@@ -51340,6 +51780,301 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** OhDetectionImportResponse */
+        OhDetectionImportResponse: {
+            /**
+             * Imported Count
+             * @description 本次导入明细行数
+             */
+            imported_count: number;
+            /**
+             * Monitors Synced
+             * @description 自动同步生成的危害因素监测记录数（按车间/点位分组）
+             * @default 0
+             */
+            monitors_synced: number;
+            /**
+             * Replaced
+             * @description 是否覆盖了同编号已有报告
+             * @default false
+             */
+            replaced: boolean;
+            report: components["schemas"]["OhDetectionReportResponse"];
+            /**
+             * Skipped Tables
+             * @description 跳过的表格 [{table, reason}]
+             */
+            skipped_tables?: {
+                [key: string]: string;
+            }[];
+        };
+        /**
+         * OhDetectionParsePreview
+         * @description 检测报告 PDF 解析预览（不落库）。
+         */
+        OhDetectionParsePreview: {
+            /**
+             * Company Name
+             * @description 受检企业
+             * @default
+             */
+            company_name: string;
+            /**
+             * Detection Agency
+             * @description 检测机构
+             * @default
+             */
+            detection_agency: string;
+            /**
+             * Exceed Points
+             * @description 超标数
+             * @default 0
+             */
+            exceed_points: number;
+            /**
+             * Existing Report Id
+             * @description 同编号已存在的报告 ID（导入将覆盖）
+             */
+            existing_report_id?: string | null;
+            /**
+             * Existing Total Points
+             * @description 同编号已存在报告的明细数（覆盖提示）
+             * @default 0
+             */
+            existing_total_points: number;
+            /**
+             * File Name
+             * @description 上传文件名
+             * @default
+             */
+            file_name: string;
+            /**
+             * File Sha256
+             * @description 文件 SHA256
+             * @default
+             */
+            file_sha256: string;
+            /**
+             * Noise Post Points
+             * @description 噪声作业岗位数
+             * @default 0
+             */
+            noise_post_points: number;
+            /**
+             * Parse Mode
+             * @description 解析模式 rules/llm/mixed
+             * @default rules
+             */
+            parse_mode: string;
+            /**
+             * Report Name
+             * @description 报告名称
+             * @default
+             */
+            report_name: string;
+            /**
+             * Report No
+             * @description 识别的报告编号（可编辑）
+             * @default
+             */
+            report_no: string;
+            /**
+             * Table Count
+             * @description 识别表格数
+             * @default 0
+             */
+            table_count: number;
+            /** Tables */
+            tables?: components["schemas"]["OhDetectionTableSummary"][];
+            /**
+             * Total Points
+             * @description 检测记录数
+             * @default 0
+             */
+            total_points: number;
+            /**
+             * Warnings
+             * @description 全局解析警告
+             */
+            warnings?: string[];
+        };
+        /** OhDetectionReportResponse */
+        OhDetectionReportResponse: {
+            /** Company Name */
+            company_name: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Created By Name
+             * @description 导入人
+             * @default
+             */
+            created_by_name: string;
+            /** Detection Agency */
+            detection_agency: string;
+            /** Detection Date */
+            detection_date?: string | null;
+            /** Exceed Points */
+            exceed_points: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Noise Post Points */
+            noise_post_points: number;
+            /** Parse Mode */
+            parse_mode: string;
+            /** Parse Warnings */
+            parse_warnings?: {
+                [key: string]: unknown;
+            }[] | null;
+            /** Remark */
+            remark: string;
+            /** Report Name */
+            report_name: string;
+            /** Report No */
+            report_no: string;
+            /** Source File Name */
+            source_file_name: string;
+            /** Source File Path */
+            source_file_path: string;
+            /** Source File Sha256 */
+            source_file_sha256: string;
+            /** Table Count */
+            table_count: number;
+            /** Total Points */
+            total_points: number;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * OhDetectionResultDraft
+         * @description 解析引擎输出的单条检测结果草稿（入库前校验）。
+         */
+        OhDetectionResultDraft: {
+            /** Extra */
+            extra?: {
+                [key: string]: unknown;
+            } | null;
+            /** Factor Category */
+            factor_category: string;
+            /** Factor Name */
+            factor_name: string;
+            /**
+             * Is Noise Post
+             * @default false
+             */
+            is_noise_post: boolean;
+            /**
+             * Limit Type
+             * @default none
+             */
+            limit_type: string;
+            /** Limit Value Num */
+            limit_value_num?: number | null;
+            /**
+             * Measured Value
+             * @default
+             */
+            measured_value: string;
+            /** Measured Value Num */
+            measured_value_num?: number | null;
+            /**
+             * Post
+             * @default
+             */
+            post: string;
+            /**
+             * Record Type
+             * @default point
+             */
+            record_type: string;
+            /**
+             * Sample Point
+             * @default
+             */
+            sample_point: string;
+            /**
+             * Table Ref
+             * @default
+             */
+            table_ref: string;
+            /**
+             * Table Title
+             * @default
+             */
+            table_title: string;
+            /**
+             * Unit
+             * @default
+             */
+            unit: string;
+            /**
+             * Verdict
+             * @default unknown
+             */
+            verdict: string;
+            /**
+             * Verdict Raw
+             * @default
+             */
+            verdict_raw: string;
+            /**
+             * Workshop
+             * @default
+             */
+            workshop: string;
+        };
+        /**
+         * OhDetectionTableSummary
+         * @description 解析预览中的单表识别汇总。
+         */
+        OhDetectionTableSummary: {
+            /**
+             * Layout
+             * @description 识别版式
+             * @default unknown
+             */
+            layout: string;
+            /**
+             * Mode
+             * @description 识别模式: rules=规则 / llm=AI / skipped=跳过
+             * @default rules
+             */
+            mode: string;
+            /**
+             * Row Count
+             * @description 识别结果行数
+             * @default 0
+             */
+            row_count: number;
+            /**
+             * Sample Rows
+             * @description 前几行样例（预览展示用）
+             */
+            sample_rows?: components["schemas"]["OhDetectionResultDraft"][];
+            /**
+             * Table Ref
+             * @description 表号（表5-2）
+             * @default
+             */
+            table_ref: string;
+            /**
+             * Table Title
+             * @description 表标题
+             * @default
+             */
+            table_title: string;
+            /** Warnings */
+            warnings?: string[];
+        };
         /**
          * OhHazardMonitorCreate
          * @description 创建危害因素监测
@@ -52056,6 +52791,39 @@ export interface components {
             version_label?: string | null;
         };
         /**
+         * OpenHazardDetailItem
+         * @description 未关闭隐患明细行（来自 24小时值班 / 隐患台账镜像表）。
+         */
+        OpenHazardDetailItem: {
+            /**
+             * Content
+             * @default
+             */
+            content: string;
+            /**
+             * Date
+             * @default
+             */
+            date: string;
+            /** Record Id */
+            record_id: string;
+            /**
+             * Status
+             * @default
+             */
+            status: string;
+            /**
+             * Where
+             * @default
+             */
+            where: string;
+            /**
+             * Who
+             * @default
+             */
+            who: string;
+        };
+        /**
          * OperationLevel
          * @description 特殊作业级别枚举
          * @enum {string}
@@ -52311,15 +53079,15 @@ export interface components {
              */
             question?: string | null;
         };
-        /** OverLimitChemicalItem */
+        /**
+         * OverLimitChemicalItem
+         * @description 超储物料条目：本地库存口径含 inventory_id；统计表镜像口径无本地记录。
+         */
         OverLimitChemicalItem: {
             /** Chemical Name */
             chemical_name: string;
-            /**
-             * Inventory Id
-             * Format: uuid
-             */
-            inventory_id: string;
+            /** Inventory Id */
+            inventory_id?: string | null;
             /** Over Pct */
             over_pct?: number | null;
             /** Quantity */
@@ -52439,6 +53207,12 @@ export interface components {
             last_test_status?: string | null;
             /** Last Tested At */
             last_tested_at?: string | null;
+            /** Over Limit Limit Field */
+            over_limit_limit_field?: string | null;
+            /** Over Limit Name Field */
+            over_limit_name_field?: string | null;
+            /** Over Limit Quantity Field */
+            over_limit_quantity_field?: string | null;
             /** Page Key */
             page_key: string;
             /** Page Name */
@@ -52911,12 +53685,28 @@ export interface components {
             /** Values */
             values?: components["schemas"]["PageTableFieldValueCount"][];
         };
+        /**
+         * PageTableOverLimitFields
+         * @description 页面绑定里配置的超储计算列（未配置时响应不含该字段）。
+         */
+        PageTableOverLimitFields: {
+            /** Limit Field */
+            limit_field: string;
+            /** Name Field */
+            name_field: string;
+            /** Quantity Field */
+            quantity_field: string;
+        };
         /** PageTableRecord */
         PageTableRecord: {
             /** Fields */
             fields?: {
                 [key: string]: unknown;
             };
+            /** Over Limit */
+            over_limit?: boolean | null;
+            /** Over Pct */
+            over_pct?: number | null;
             /** Record Id */
             record_id: string;
         };
@@ -52924,6 +53714,7 @@ export interface components {
         PageTableRecordsResponse: {
             /** Columns */
             columns?: components["schemas"]["PageTableColumn"][];
+            over_limit_fields?: components["schemas"]["PageTableOverLimitFields"] | null;
             /**
              * Page
              * @default 1
@@ -58741,6 +59532,17 @@ export interface components {
             buildings?: components["schemas"]["CampusBuildingItem"][];
             /** Generated At */
             generated_at?: string | null;
+            /**
+             * Hazchem Daily
+             * @description 危化品每日统计全量行：优先统计表镜像（飞书）口径，未配置镜像时回退本地车间存量台账
+             */
+            hazchem_daily?: components["schemas"]["OverLimitChemicalItem"][];
+            /**
+             * Hazchem Daily Source
+             * @description 数据口径: mirror=统计表镜像 / local=本地台账
+             * @default local
+             */
+            hazchem_daily_source: string;
             /** Markers */
             markers?: components["schemas"]["MapBuildingMarkers"][];
             /**
@@ -63928,6 +64730,12 @@ export interface components {
             is_enabled?: boolean | null;
             /** Is Mirrored */
             is_mirrored?: boolean | null;
+            /** Over Limit Limit Field */
+            over_limit_limit_field?: string | null;
+            /** Over Limit Name Field */
+            over_limit_name_field?: string | null;
+            /** Over Limit Quantity Field */
+            over_limit_quantity_field?: string | null;
             /** Sub Tables */
             sub_tables?: components["schemas"]["PageFeishuSubTable"][] | null;
             /** Table Id */
@@ -129351,12 +130159,117 @@ export interface operations {
             };
         };
     };
-    download_msds_api_v1_safety_hazardous_chemicals__chemical_id__msds_get: {
+    list_msds_files_api_v1_safety_hazardous_chemicals__chemical_id__msds_files_get: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 chemical_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_ChemicalMsdsFileListResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_msds_file_api_v1_safety_hazardous_chemicals__chemical_id__msds_files_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chemical_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_msds_file_api_v1_safety_hazardous_chemicals__chemical_id__msds_files_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_ChemicalMsdsUploadResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_msds_file_api_v1_safety_hazardous_chemicals__chemical_id__msds_files__file_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chemical_id: string;
+                file_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_NoneType_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_msds_file_api_v1_safety_hazardous_chemicals__chemical_id__msds_files__file_id__content_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chemical_id: string;
+                file_id: string;
             };
             cookie?: {
                 auth_token?: string | null;
@@ -129384,22 +130297,19 @@ export interface operations {
             };
         };
     };
-    upload_msds_api_v1_safety_hazardous_chemicals__chemical_id__msds_post: {
+    extract_msds_file_api_v1_safety_hazardous_chemicals__chemical_id__msds_files__file_id__extract_post: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 chemical_id: string;
+                file_id: string;
             };
             cookie?: {
                 auth_token?: string | null;
             };
         };
-        requestBody: {
-            content: {
-                "multipart/form-data": components["schemas"]["Body_upload_msds_api_v1_safety_hazardous_chemicals__chemical_id__msds_post"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
@@ -129407,7 +130317,41 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ApiResponseEnvelope_HazardousChemicalResponse_"];
+                    "application/json": components["schemas"]["ApiResponseEnvelope_ChemicalMsdsUploadResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_msds_file_api_v1_safety_hazardous_chemicals__chemical_id__msds_files__file_id__preview_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                chemical_id: string;
+                file_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -130500,6 +131444,253 @@ export interface operations {
             };
         };
     };
+    list_oh_detection_reports_api_v1_safety_oh_detection_reports_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                keyword?: string | null;
+                year?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_oh_detection_report_api_v1_safety_oh_detection_reports_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_oh_detection_report_api_v1_safety_oh_detection_reports_import_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_OhDetectionImportResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    parse_oh_detection_report_api_v1_safety_oh_detection_reports_parse_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_parse_oh_detection_report_api_v1_safety_oh_detection_reports_parse_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_OhDetectionParsePreview_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_oh_detection_report_api_v1_safety_oh_detection_reports__report_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_OhDetectionReportResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_oh_detection_report_api_v1_safety_oh_detection_reports__report_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_oh_detection_report_file_api_v1_safety_oh_detection_reports__report_id__file_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_oh_detection_results_api_v1_safety_oh_detection_reports__report_id__results_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                factor_category?: string | null;
+                record_type?: string | null;
+                workshop?: string | null;
+                verdict?: string | null;
+                is_noise_post?: boolean | null;
+                keyword?: string | null;
+            };
+            header?: never;
+            path: {
+                report_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_oh_hazard_monitors_api_v1_safety_oh_hazard_monitors_get: {
         parameters: {
             query?: {
@@ -131469,6 +132660,41 @@ export interface operations {
             };
         };
     };
+    get_open_hazard_details_api_v1_safety_open_hazard_details_get: {
+        parameters: {
+            query: {
+                /** @description 来源: duty=24小时值班隐患 / ledger=隐患台账 */
+                source: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_list_OpenHazardDetailItem__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_page_feishu_configs_api_v1_safety_page_feishu_configs_get: {
         parameters: {
             query?: never;
@@ -131652,6 +132878,8 @@ export interface operations {
                 conditions?: string | null;
                 /** @description 子表页签 table_id；缺省主绑定表 */
                 table_id?: string | null;
+                /** @description 只保留超储行（需在页面绑定中配置存量列与上限列） */
+                over_limit_only?: boolean;
             };
             header?: never;
             path: {

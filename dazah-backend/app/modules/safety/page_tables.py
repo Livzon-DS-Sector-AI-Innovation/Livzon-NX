@@ -50,6 +50,11 @@ PAGE_TABLE_DEFINITIONS: tuple[PageTableDefinition, ...] = (
         route_path="/safety/hazchem-unloading-inspection",
     ),
     PageTableDefinition(
+        page_key="safety:site-mgmt:hazchem-msds",
+        page_name="危化品统计表（车间库存/超储）",
+        route_path="/safety/hazchem",
+    ),
+    PageTableDefinition(
         page_key="safety:ops-safety:centrifuge-discharge-inspection",
         page_name="离心出料风险巡查表",
         route_path="/safety/centrifuge-discharge-inspection",
@@ -84,6 +89,9 @@ PAGE_TABLE_DEFINITIONS: tuple[PageTableDefinition, ...] = (
 PAGE_TABLES_BY_KEY: dict[str, PageTableDefinition] = {
     item.page_key: item for item in PAGE_TABLE_DEFINITIONS
 }
+
+# 危化品统计表镜像页：车间库存/超储与总览超储卡片的数据源页面标识
+HAZCHEM_PAGE_KEY = "safety:site-mgmt:hazchem-msds"
 
 
 def get_page_table(page_key: str) -> PageTableDefinition | None:

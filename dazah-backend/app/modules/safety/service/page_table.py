@@ -77,6 +77,7 @@ from app.modules.safety.schemas.page_table import (
     PageTableDueSummary,
     PageTableFieldValueCount,
     PageTableFieldValuesResponse,
+    PageTableOverLimitFields,
     PageTableRecord,
     PageTableRecordCondition,
     PageTableRecordsResponse,
@@ -259,6 +260,186 @@ def _workshop_aliases_of(raw: Any) -> dict[str, str]:
     return aliases
 
 
+# ── 超储计算（危化品统计表等绑定页的派生标注）──
+
+_NUMBER_RE = re.compile(r"-?\d+(?:,\d{3})*(?:\.\d+)?")
+
+
+@dataclass(frozen=True, slots=True)
+class OverLimitFieldConfig:
+    """绑定页配置的超储计算列（存量/上限成对，品名列可选）。"""
+
+    quantity_field: str
+    limit_field: str
+    name_field: str | None
+
+
+@dataclass(slots=True)
+class MirrorInventoryRow:
+    """绑定表格一行按超储列解析后的归一结果（总览卡片/统计共用）。"""
+
+    record_id: str
+    name: str
+    workshop: str
+    quantity: float | None
+    upper_limit: float | None
+    over_limit: bool = False
+    over_pct: float | None = None
+
+
+def _over_limit_config(model: SafetyPageFeishuConfig) -> OverLimitFieldConfig | None:
+    quantity_field = _clean(model.over_limit_quantity_field)
+    limit_field = _clean(model.over_limit_limit_field)
+    if not quantity_field or not limit_field:
+        return None
+    return OverLimitFieldConfig(
+        quantity_field=quantity_field,
+        limit_field=limit_field,
+        name_field=_clean(model.over_limit_name_field),
+    )
+
+
+def _parse_field_number(value: Any) -> float | None:
+    """从字段值解析数量：兼容数字、带单位文本（“500kg”）、千分位与全角数字。"""
+    if value is None or isinstance(value, bool | dict | list):
+        return None
+    if isinstance(value, int | float):
+        return float(value)
+    text = str(value).translate(_FULLWIDTH_TRANS)
+    match = _NUMBER_RE.search(text)
+    if match is None:
+        return None
+    try:
+        return float(match.group(0).replace(",", ""))
+    except ValueError:
+        return None
+
+
+def _row_over_pct(quantity: float, upper_limit: float) -> float | None:
+    if upper_limit <= 0:
+        return None
+    return round((quantity - upper_limit) / upper_limit * 100, 1)
+
+
+def _annotate_over_limit(
+    records: list[PageTableRecord],
+    config: OverLimitFieldConfig,
+    source_values: dict[str, dict[str, Any]],
+) -> None:
+    """按配置列给记录打超储标记；数值从原始字段值解析，不受页面隐藏列影响。"""
+    for record in records:
+        raw_fields = source_values.get(record.record_id)
+        if not raw_fields:
+            continue
+        quantity = _parse_field_number(raw_fields.get(config.quantity_field))
+        upper_limit = _parse_field_number(raw_fields.get(config.limit_field))
+        if quantity is None or upper_limit is None:
+            continue
+        if quantity > upper_limit:
+            record.over_limit = True
+            record.over_pct = _row_over_pct(quantity, upper_limit)
+        else:
+            record.over_limit = False
+
+
+def _display_field_text(value: Any) -> str:
+    if value is None or isinstance(value, dict | list):
+        return ""
+    return str(value).strip()
+
+
+async def collect_mirror_over_limit_rows(
+    db: AsyncSession, page_key: str
+) -> list[MirrorInventoryRow] | None:
+    """读取绑定表格全量行并按超储列解析。
+
+    未绑定、未配置超储列或读取失败时返回 None，调用方回退本地库存口径；
+    读取失败会记录 warning 日志（不静默）。
+    """
+    model = await _get_config_model(db, page_key)
+    if model is None or not model.is_enabled:
+        return None
+    config = _over_limit_config(model)
+    if config is None:
+        return None
+    app_token = _clean(model.app_token)
+    table_id = _clean(model.table_id)
+    if not app_token or not table_id:
+        return None
+    try:
+        columns = await _load_field_schema(app_token, table_id)
+        field_rows: list[tuple[str, dict[str, Any]]] = []
+        if model.is_mirrored and model.last_synced_at is not None:
+            result = await db.execute(
+                select(SafetyPageTableMirrorRecord).where(
+                    SafetyPageTableMirrorRecord.page_key == page_key,
+                    SafetyPageTableMirrorRecord.table_id == table_id,
+                    SafetyPageTableMirrorRecord.is_deleted.is_(False),
+                )
+            )
+            field_rows = [
+                (row.record_id, dict(row.fields or {}))
+                for row in result.scalars()
+            ]
+        else:
+            raw_rows = await _fetch_raw_records(
+                app_token, table_id, fetch_sort_field=None
+            )
+            field_rows = [
+                (
+                    str(row.get("record_id") or ""),
+                    row_fields if isinstance(row_fields, dict) else {},
+                )
+                for row in raw_rows
+                if row.get("record_id")
+                for row_fields in [row.get("fields")]
+            ]
+    except Exception:
+        logger.warning(
+            "读取绑定表格超储数据失败，回退本地库存口径: page=%s",
+            page_key,
+            exc_info=True,
+        )
+        return None
+
+    name_field = config.name_field or next(
+        (field.name for field in columns if field.kind == KIND_TEXT), None
+    )
+    workshop_field = next(
+        (
+            field.name
+            for field in columns
+            if field.kind == KIND_TEXT
+            and any(key in field.name for key in _STATS_LOCATION_NAME_KEYS)
+        ),
+        None,
+    )
+    rows: list[MirrorInventoryRow] = []
+    for record_id, fields in field_rows:
+        quantity = _parse_field_number(fields.get(config.quantity_field))
+        upper_limit = _parse_field_number(fields.get(config.limit_field))
+        row = MirrorInventoryRow(
+            record_id=record_id,
+            name=_display_field_text(fields.get(name_field)) if name_field else "",
+            workshop=(
+                _display_field_text(fields.get(workshop_field))
+                if workshop_field
+                else ""
+            ),
+            quantity=quantity,
+            upper_limit=upper_limit,
+        )
+        if (
+            quantity is not None
+            and upper_limit is not None
+            and quantity > upper_limit
+        ):
+            row.over_limit = True
+            row.over_pct = _row_over_pct(quantity, upper_limit)
+        rows.append(row)
+    return rows
+
+
 def _build_config_item(
     definition: PageTableDefinition,
     model: SafetyPageFeishuConfig | None,
@@ -282,6 +463,9 @@ def _build_config_item(
             PageFeishuSubTable(**entry)
             for entry in _clean_sub_tables(model.sub_tables)
         ],
+        over_limit_quantity_field=_clean(model.over_limit_quantity_field),
+        over_limit_limit_field=_clean(model.over_limit_limit_field),
+        over_limit_name_field=_clean(model.over_limit_name_field),
         is_enabled=model.is_enabled,
         is_configured=bool(_clean(model.app_token) and _clean(model.table_id)),
         is_mirrored=model.is_mirrored,
@@ -351,6 +535,34 @@ async def save_page_feishu_config(
             model.sub_tables = _clean_sub_tables(
                 [entry.model_dump() for entry in (data.sub_tables or [])]
             )
+        over_limit_touched = any(
+            field in data.model_fields_set
+            for field in (
+                "over_limit_quantity_field",
+                "over_limit_limit_field",
+                "over_limit_name_field",
+            )
+        )
+        if over_limit_touched:
+            quantity_field = _clean(
+                data.over_limit_quantity_field
+                if "over_limit_quantity_field" in data.model_fields_set
+                else model.over_limit_quantity_field
+            )
+            limit_field = _clean(
+                data.over_limit_limit_field
+                if "over_limit_limit_field" in data.model_fields_set
+                else model.over_limit_limit_field
+            )
+            if bool(quantity_field) != bool(limit_field):
+                raise AppException(
+                    message="超储计算的「存量列」与「上限列」必须同时配置或同时清空",
+                    status_code=400,
+                )
+            model.over_limit_quantity_field = quantity_field
+            model.over_limit_limit_field = limit_field
+            if "over_limit_name_field" in data.model_fields_set:
+                model.over_limit_name_field = _clean(data.over_limit_name_field)
         if "is_enabled" in data.model_fields_set and data.is_enabled is not None:
             model.is_enabled = data.is_enabled
         if "is_mirrored" in data.model_fields_set and data.is_mirrored is not None:
@@ -1175,12 +1387,15 @@ async def _list_records_from_mirror(
     filter_value: str | None,
     conditions: list[PageTableRecordCondition] | None,
     table_id: str | None = None,
+    over_limit_config: OverLimitFieldConfig | None = None,
+    over_limit_only: bool = False,
 ) -> PageTableRecordsResponse:
     """镜像数据源：SQL 过滤/排序/分页（本地全量，无条数窗口）。
 
     仪表盘下钻（车间归一/AI 口径）无法下推 SQL：命中该场景时先取回全部
     匹配行，Python 端过滤排序后再分页，与实时路径语义一致。
     ``table_id`` 选择页签对应子表的镜像行；缺省主绑定表。
+    超储过滤是派生值，同样只能 Python 端完成。
     """
     record_model = SafetyPageTableMirrorRecord
     effective_table = (
@@ -1227,8 +1442,12 @@ async def _list_records_from_mirror(
     dimension = (filter_field or "").strip()
     dimension_value = (filter_value or "").strip()
     drill_down = bool(dimension and dimension_value)
-    # 命中文本条件或下钻时需要全量取回后 Python 过滤，不能再 SQL 分页
-    python_filter = drill_down or len(sql_conditions) < len(active_conditions)
+    # 命中文本条件、下钻或超储过滤时需要全量取回后 Python 过滤，不能再 SQL 分页
+    python_filter = (
+        drill_down
+        or len(sql_conditions) < len(active_conditions)
+        or (over_limit_only and over_limit_config is not None)
+    )
 
     sort_target = next(
         (field for field in columns if field.name == sort_field), None
@@ -1245,6 +1464,13 @@ async def _list_records_from_mirror(
             )
             for row in rows
         ]
+        if over_limit_config is not None:
+            source_values = {row.record_id: dict(row.fields or {}) for row in rows}
+            _annotate_over_limit(decoded_rows, over_limit_config, source_values)
+            if over_limit_only:
+                decoded_rows = [
+                    record for record in decoded_rows if record.over_limit
+                ]
         if drill_down:
             decoded_rows = await _apply_dimension_filter(
                 db, decoded_rows, columns, aliases, dimension, dimension_value
@@ -1293,6 +1519,9 @@ async def _list_records_from_mirror(
             )
             for row in rows
         ]
+        if over_limit_config is not None:
+            source_values = {row.record_id: dict(row.fields or {}) for row in rows}
+            _annotate_over_limit(page_rows, over_limit_config, source_values)
 
     return PageTableRecordsResponse(
         page_key=definition.page_key,
@@ -1303,6 +1532,15 @@ async def _list_records_from_mirror(
         page=safe_page,
         page_size=safe_size,
         truncated=False,
+        over_limit_fields=(
+            PageTableOverLimitFields(
+                quantity_field=over_limit_config.quantity_field,
+                limit_field=over_limit_config.limit_field,
+                name_field=over_limit_config.name_field or "",
+            )
+            if over_limit_config
+            else None
+        ),
     )
 
 
@@ -1319,12 +1557,15 @@ async def list_page_table_records(
     filter_value: str | None = None,
     conditions: list[PageTableRecordCondition] | None = None,
     table_id: str | None = None,
+    over_limit_only: bool = False,
 ) -> PageTableRecordsResponse:
     """返回列定义与分页记录（多页签页面用 ``table_id`` 选择子表）。
 
     镜像开启且已同步过时查本地镜像（全量、无条数窗口）；未同步过先触发
     后台同步并回退实时拉取，保证首屏可用。``filter_field``/``filter_value``
     服务于仪表盘下钻，``conditions`` 是查询表单的多条件（字段间 AND）。
+    页面绑定配置了超储计算列时，记录附带 ``over_limit/over_pct`` 派生标记，
+    ``over_limit_only`` 只保留超储行。
     """
     definition, model, app_token, _primary = await _load_config_or_raise(
         db, page_key
@@ -1333,6 +1574,15 @@ async def list_page_table_records(
     effective_table = bound.table_id
     columns = await _visible_columns(model, app_token, effective_table)
     aliases = _workshop_aliases_of(model.workshop_aliases)
+    over_limit_config = _over_limit_config(model)
+    if over_limit_only and over_limit_config is None:
+        raise AppException(
+            message=(
+                "该页面未配置超储计算列，无法按超储筛选。请先在 飞书设置 → "
+                "页面数据表映射 中配置存量列与上限列"
+            ),
+            status_code=400,
+        )
     # 条件字段必须在当前表格中（统计聚合路径宽松跳过，列表路径严格校验）
     for condition in conditions or []:
         if condition.value.strip() and not any(
@@ -1363,6 +1613,8 @@ async def list_page_table_records(
                 filter_value=filter_value,
                 conditions=conditions,
                 table_id=effective_table,
+                over_limit_config=over_limit_config,
+                over_limit_only=over_limit_only,
             )
 
     raw_rows = await _fetch_raw_records(
@@ -1376,16 +1628,24 @@ async def list_page_table_records(
     dept_map = _resolve_dept_inheritance(full_schema, raw_rows)
 
     decoded_rows: list[PageTableRecord] = []
+    raw_field_map: dict[str, dict[str, Any]] = {}
     for row in raw_rows:
         record_id = str(row.get("record_id") or "")
         if not record_id:
             continue
         raw_fields = row.get("fields")
-        decoded = decode_record_fields(
-            columns, raw_fields if isinstance(raw_fields, dict) else {}
-        )
+        normalized = raw_fields if isinstance(raw_fields, dict) else {}
+        raw_field_map[record_id] = normalized
+        decoded = decode_record_fields(columns, normalized)
         _apply_inherited_dept(dept_field, dept_map, record_id, decoded)
         decoded_rows.append(PageTableRecord(record_id=record_id, fields=decoded))
+
+    if over_limit_config is not None:
+        _annotate_over_limit(decoded_rows, over_limit_config, raw_field_map)
+        if over_limit_only:
+            decoded_rows = [
+                record for record in decoded_rows if record.over_limit
+            ]
 
     needle = (keyword or "").strip().lower()
     if needle:
@@ -1443,6 +1703,15 @@ async def list_page_table_records(
         page=safe_page,
         page_size=safe_size,
         truncated=truncated,
+        over_limit_fields=(
+            PageTableOverLimitFields(
+                quantity_field=over_limit_config.quantity_field,
+                limit_field=over_limit_config.limit_field,
+                name_field=over_limit_config.name_field or "",
+            )
+            if over_limit_config
+            else None
+        ),
     )
 
 

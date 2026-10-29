@@ -19,10 +19,12 @@ describe('safety page table helpers', () => {
     expect(toRecordRow({ record_id: 'rec-1' })).toEqual({
       record_id: 'rec-1',
       fields: {},
+      over_limit: null,
+      over_pct: null,
     })
     expect(toRecordRows(undefined)).toEqual([])
     expect(toRecordRows([{ record_id: 'a', fields: { x: 1 } }])).toEqual([
-      { record_id: 'a', fields: { x: 1 } },
+      { record_id: 'a', fields: { x: 1 }, over_limit: null, over_pct: null },
     ])
   })
 

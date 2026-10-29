@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from datetime import UTC, datetime, time, timedelta, timezone
+from typing import Any
 from uuid import UUID
 
 from sqlalchemy import or_, select
@@ -20,18 +21,25 @@ from app.modules.safety.models import (
     DailyRiskReport,
     HazardousChemical,
     HazardReport,
+    SafetyPageTableMirrorRecord,
     SpecialOperationReport,
 )
+from app.modules.safety.page_tables import HAZCHEM_PAGE_KEY
 from app.modules.safety.schemas.dashboard import (
     CampusBuildingItem,
     MapBuildingMarkers,
     MapRiskItem,
+    OpenHazardDetailItem,
     OverLimitChemicalItem,
     SafetyOverviewResponse,
     UnmappedRiskGroup,
     WeeklyOperationTypeCount,
 )
 from app.modules.safety.service.hazchem import inventory_over_limit
+from app.modules.safety.service.page_table import (
+    _row_over_pct,
+    collect_mirror_over_limit_rows,
+)
 
 CN_TZ = timezone(timedelta(hours=8))
 
@@ -129,6 +137,85 @@ def match_department_building(
 def _truncate(value: str | None, limit: int = 40) -> str:
     value = (value or "").strip()
     return value[:limit] + "…" if len(value) > limit else value
+
+
+# 未关闭隐患明细的数据源（飞书镜像表）：page_key + 状态字段 + 已关闭值
+OPEN_HAZARD_SOURCE_TABLES = {
+    "duty": (
+        "safety:risk-hazard:hazard-inspection:hazard-duty",
+        "整改情况",
+        "已整改",
+    ),
+    "ledger": (
+        "safety:risk-hazard:hazard-inspection:hazard-quick-report",
+        "关闭状态",
+        "已关闭",
+    ),
+}
+
+
+def _field_text(value: Any) -> str:
+    """镜像字段转可读文本：人员数组取 name 拼接，其余直接转字符串。"""
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, list):
+        names = [
+            str(item.get("name") or "")
+            for item in value
+            if isinstance(item, dict)
+        ]
+        return "、".join(name for name in names if name)
+    return str(value)
+
+
+async def list_open_hazard_details(
+    db: AsyncSession, source: str, limit: int = 50
+) -> list[OpenHazardDetailItem]:
+    """未关闭隐患明细：按来源读取镜像表，排除已关闭/已整改行，
+    且仅保留填写了隐患内容的记录。"""
+    if source not in OPEN_HAZARD_SOURCE_TABLES:
+        return []
+    page_key, status_field, closed_value = OPEN_HAZARD_SOURCE_TABLES[source]
+    rows = (
+        await db.execute(
+            select(SafetyPageTableMirrorRecord).where(
+                SafetyPageTableMirrorRecord.page_key == page_key,
+                SafetyPageTableMirrorRecord.is_deleted.is_(False),
+            )
+        )
+    ).scalars()
+
+    duty = source == "duty"
+    items: list[OpenHazardDetailItem] = []
+    for row in rows:
+        fields = dict(row.fields or {})
+        status = _field_text(fields.get(status_field))
+        if closed_value in status:
+            continue
+        content = _field_text(fields.get("隐患内容"))
+        if not content:
+            continue
+        where = _field_text(
+            fields.get("车间/位置" if duty else "部门/车间")
+        )
+        who = _field_text(fields.get("值班人员" if duty else "负责人"))
+        date = _field_text(
+            fields.get("值班日期" if duty else "目标完成日期")
+        )
+        items.append(
+            OpenHazardDetailItem(
+                record_id=str(row.record_id),
+                content=content,
+                where=where,
+                who=who,
+                date=date,
+                status=status,
+            )
+        )
+    items.sort(key=lambda item: item.date or "", reverse=True)
+    return items[:limit]
 
 
 class SafetyOverviewService:
@@ -313,53 +400,143 @@ class SafetyOverviewService:
             key=lambda row: -row.total,
         )
 
-        # 超储物料 Top
-        over_rows = (
-            await self.db.execute(
-                select(ChemicalInventory, HazardousChemical)
-                .join(
-                    HazardousChemical,
-                    HazardousChemical.id == ChemicalInventory.chemical_id,
+        # 超储物料 Top：危化品统计表镜像配置了超储列时走镜像口径，
+        # 未配置/读取失败回退本地库存口径
+        over_limit: list[OverLimitChemicalItem] = []
+        hazchem_daily: list[OverLimitChemicalItem] = []
+        hazchem_daily_source = "local"
+        mirror_rows = await collect_mirror_over_limit_rows(self.db, HAZCHEM_PAGE_KEY)
+        if mirror_rows is not None:
+            over_rows = sorted(
+                (row for row in mirror_rows if row.over_limit),
+                key=lambda row: (row.over_pct is None, row.over_pct or 0),
+                reverse=True,
+            )[:10]
+            over_limit = [
+                OverLimitChemicalItem(
+                    inventory_id=None,
+                    chemical_name=row.name or "（未识别品名）",
+                    workshop=row.workshop,
+                    quantity=row.quantity if row.quantity is not None else 0.0,
+                    upper_limit=row.upper_limit,
+                    over_pct=row.over_pct,
                 )
-                .where(
-                    ChemicalInventory.is_deleted.is_(False),
-                    HazardousChemical.is_deleted.is_(False),
-                    ChemicalInventory.upper_limit.is_not(None),
-                    ChemicalInventory.quantity > ChemicalInventory.upper_limit,
+                for row in over_rows
+            ]
+        else:
+            rows = (
+                await self.db.execute(
+                    select(ChemicalInventory, HazardousChemical)
+                    .join(
+                        HazardousChemical,
+                        HazardousChemical.id == ChemicalInventory.chemical_id,
+                    )
+                    .where(
+                        ChemicalInventory.is_deleted.is_(False),
+                        HazardousChemical.is_deleted.is_(False),
+                        ChemicalInventory.upper_limit.is_not(None),
+                        ChemicalInventory.quantity > ChemicalInventory.upper_limit,
+                    )
+                    .order_by(
+                        (
+                            ChemicalInventory.quantity
+                            / ChemicalInventory.upper_limit
+                        ).desc()
+                    )
+                    .limit(10)
                 )
-                .order_by(
-                    (ChemicalInventory.quantity / ChemicalInventory.upper_limit).desc()
+            ).all()
+            over_limit = [
+                OverLimitChemicalItem(
+                    inventory_id=inventory.id,
+                    chemical_name=chemical.name,
+                    workshop=inventory.workshop,
+                    quantity=float(inventory.quantity),
+                    upper_limit=float(inventory.upper_limit)
+                    if inventory.upper_limit
+                    else None,
+                    over_pct=(
+                        round(
+                            (float(inventory.quantity) - float(inventory.upper_limit))
+                            / float(inventory.upper_limit)
+                            * 100,
+                            1,
+                        )
+                        if inventory_over_limit(
+                            float(inventory.quantity), float(inventory.upper_limit)
+                        )
+                        and inventory.upper_limit
+                        and float(inventory.upper_limit) > 0
+                        else None
+                    ),
+                    unit=inventory.unit,
                 )
-                .limit(10)
-            )
-        ).all()
-        over_limit = [
-            OverLimitChemicalItem(
-                inventory_id=inventory.id,
-                chemical_name=chemical.name,
-                workshop=inventory.workshop,
-                quantity=float(inventory.quantity),
-                upper_limit=float(inventory.upper_limit)
-                if inventory.upper_limit
-                else None,
-                over_pct=(
-                    round(
-                        (float(inventory.quantity) - float(inventory.upper_limit))
-                        / float(inventory.upper_limit)
-                        * 100,
-                        1,
+                for inventory, chemical in rows
+            ]
+
+        # 危化品每日统计：镜像口径用全量行（超标优先），本地口径用车间存量台账
+        if mirror_rows is not None:
+            hazchem_daily_source = "mirror"
+            hazchem_daily = [
+                OverLimitChemicalItem(
+                    inventory_id=None,
+                    chemical_name=row.name,
+                    workshop=row.workshop,
+                    quantity=row.quantity if row.quantity is not None else 0.0,
+                    upper_limit=row.upper_limit,
+                    over_pct=row.over_pct,
+                    unit="吨",
+                )
+                # 按车间排列；剔除未识别品名且无存量/无限量的空行
+                for row in sorted(
+                    (
+                        row
+                        for row in mirror_rows
+                        if (row.name or "").strip()
+                        and (row.quantity is not None or row.upper_limit is not None)
+                    ),
+                    key=lambda row: (row.workshop, row.name),
+                )
+            ]
+        else:
+            hazchem_daily_source = "local"
+            local_rows = (
+                await self.db.execute(
+                    select(ChemicalInventory, HazardousChemical)
+                    .join(
+                        HazardousChemical,
+                        HazardousChemical.id == ChemicalInventory.chemical_id,
+                    )
+                    .where(
+                        ChemicalInventory.is_deleted.is_(False),
+                        HazardousChemical.is_deleted.is_(False),
+                    )
+                    .order_by(
+                        ChemicalInventory.workshop.asc(),
+                        HazardousChemical.name.asc(),
+                    )
+                )
+            ).all()
+            hazchem_daily = [
+                OverLimitChemicalItem(
+                    inventory_id=inventory.id,
+                    chemical_name=chemical.name,
+                    workshop=inventory.workshop,
+                    quantity=float(inventory.quantity),
+                    upper_limit=float(inventory.upper_limit)
+                    if inventory.upper_limit
+                    else None,
+                    over_pct=_row_over_pct(
+                        float(inventory.quantity), float(inventory.upper_limit)
                     )
                     if inventory_over_limit(
                         float(inventory.quantity), float(inventory.upper_limit)
                     )
-                    and inventory.upper_limit
-                    and float(inventory.upper_limit) > 0
-                    else None
-                ),
-                unit=inventory.unit,
-            )
-            for inventory, chemical in over_rows
-        ]
+                    else None,
+                    unit=inventory.unit,
+                )
+                for inventory, chemical in local_rows
+            ]
 
         open_hazard_count = sum(1 for item in items if item.source == "hazard")
         source_totals: dict[str, int] = {}
@@ -378,6 +555,8 @@ class SafetyOverviewService:
                 for key, group in sorted(unmapped.items(), key=lambda kv: -len(kv[1]))
             ],
             over_limit_chemicals=over_limit,
+            hazchem_daily=hazchem_daily,
+            hazchem_daily_source=hazchem_daily_source,
             weekly_operation_types=weekly,
             source_totals=source_totals,
             open_hazard_count=open_hazard_count,

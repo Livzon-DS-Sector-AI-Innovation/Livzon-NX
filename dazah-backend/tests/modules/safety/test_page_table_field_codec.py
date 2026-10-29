@@ -342,3 +342,16 @@ def test_encode_value_person_url_invalid_shapes() -> None:
     assert encode_value(schema["依据"], None) is None
     with pytest.raises(FieldCodecError, match="链接"):
         encode_value(schema["依据"], 123)
+
+
+def test_readonly_time_fields_decode_to_date() -> None:
+    """飞书「创建/最后更新时间」是毫秒时间戳，页面需显示日期而非数字。"""
+    schema = _schema_by_name()
+    millis = 1793094245000  # 13 位毫秒时间戳
+    decoded = decode_value(schema["创建时间"], millis)
+    assert isinstance(decoded, str)
+    assert decoded.startswith("2026-10-")
+    assert decoded.count("-") == 2  # YYYY-MM-DD，而非原始时间戳
+    # 公式等其它只读数值原样输出，不被误判为时间
+    assert decode_value(schema["公式列"], 1793094245000) == 1793094245000
+    assert decode_value(schema["公式列"], "文本结果") == "文本结果"

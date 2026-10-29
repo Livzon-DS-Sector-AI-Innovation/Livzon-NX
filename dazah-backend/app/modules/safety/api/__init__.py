@@ -21,6 +21,7 @@ from app.modules.safety.api.hazard_identifications import hazard_identifications
 from app.modules.safety.api.hazards import hazards_router
 from app.modules.safety.api.hazchem import hazchem_router
 from app.modules.safety.api.knowledge import knowledge_router
+from app.modules.safety.api.oh_detection_reports import oh_detection_reports_router
 from app.modules.safety.api.oh_hazard_monitors import oh_hazard_monitors_router
 from app.modules.safety.api.oh_health_exams import oh_health_exams_router
 from app.modules.safety.api.page_table import page_table_router
@@ -52,6 +53,7 @@ router.include_router(enums_router)
 router.include_router(hazard_identifications_router)
 router.include_router(hazards_router)
 router.include_router(knowledge_router)
+router.include_router(oh_detection_reports_router)
 router.include_router(oh_hazard_monitors_router)
 router.include_router(oh_health_exams_router)
 router.include_router(page_table_router)

@@ -216,6 +216,10 @@ async def list_page_table_records(
     table_id: str | None = Query(
         None, description="子表页签 table_id；缺省主绑定表"
     ),
+    over_limit_only: bool = Query(
+        False,
+        description="只保留超储行（需在页面绑定中配置存量列与上限列）",
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
 ) -> ApiResponseEnvelope[PageTableRecordsResponse]:
@@ -232,6 +236,7 @@ async def list_page_table_records(
         filter_value=filter_value,
         conditions=_parse_conditions(conditions),
         table_id=table_id,
+        over_limit_only=over_limit_only,
     )
     return ApiResponseEnvelope(data=result)
 

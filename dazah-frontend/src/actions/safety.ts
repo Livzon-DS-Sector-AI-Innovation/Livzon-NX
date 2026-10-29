@@ -72,6 +72,11 @@ import type {
   OhHealthExam,
   OhHealthExamFormData,
   OhHealthExamQueryParams,
+  OhDetectionReport,
+  OhDetectionImportResult,
+  OhDetectionParsePreview,
+  OhDetectionResult,
+  OhDetectionResultQueryParams,
 } from '@/types/safety'
 import type { components } from '@/types/generated/schema'
 
@@ -2018,6 +2023,122 @@ export async function updateExamAbnormalityStatus(id: string, index: number, sta
   return res
 }
 
+// ==================== 检测报告导入 Actions ====================
+
+const OH_DETECTION_PAGE_KEY = 'safety:occupational-health-group:oh-monitor'
+
+export async function getOhDetectionReports(
+  params: { page?: number; page_size?: number; keyword?: string; year?: number } = {}
+) {
+  const searchParams = new URLSearchParams()
+  if (params.page) searchParams.set('page', String(params.page))
+  if (params.page_size) searchParams.set('page_size', String(params.page_size))
+  if (params.keyword) searchParams.set('keyword', params.keyword)
+  if (params.year) searchParams.set('year', String(params.year))
+  const qs = searchParams.toString()
+  return fetchApi<OhDetectionReport[]>(
+    `/safety/oh-detection-reports${qs ? '?' + qs : ''}`,
+    { headers: { 'X-Dazah-Page-Key': OH_DETECTION_PAGE_KEY } }
+  )
+}
+
+export async function getOhDetectionReport(id: string) {
+  return fetchApi<OhDetectionReport>(`/safety/oh-detection-reports/${id}`, {
+    headers: { 'X-Dazah-Page-Key': OH_DETECTION_PAGE_KEY },
+  })
+}
+
+export async function getOhDetectionResults(id: string, params: OhDetectionResultQueryParams = {}) {
+  const searchParams = new URLSearchParams()
+  if (params.page) searchParams.set('page', String(params.page))
+  if (params.page_size) searchParams.set('page_size', String(params.page_size))
+  if (params.factor_category) searchParams.set('factor_category', params.factor_category)
+  if (params.record_type) searchParams.set('record_type', params.record_type)
+  if (params.workshop) searchParams.set('workshop', params.workshop)
+  if (params.verdict) searchParams.set('verdict', params.verdict)
+  if (params.is_noise_post !== undefined && params.is_noise_post !== null) {
+    searchParams.set('is_noise_post', String(params.is_noise_post))
+  }
+  if (params.keyword) searchParams.set('keyword', params.keyword)
+  const qs = searchParams.toString()
+  return fetchApi<OhDetectionResult[]>(
+    `/safety/oh-detection-reports/${id}/results${qs ? '?' + qs : ''}`,
+    { headers: { 'X-Dazah-Page-Key': OH_DETECTION_PAGE_KEY } }
+  )
+}
+
+async function uploadDetectionReport<T>(
+  endpoint: string,
+  file: File,
+  fields: Record<string, string> = {}
+): Promise<ApiResponse<T>> {
+  const formData = new FormData()
+  formData.append('file', file)
+  for (const [key, value] of Object.entries(fields)) {
+    if (value !== '') formData.append(key, value)
+  }
+  const authHeaders = await getAuthHeaders()
+  const { 'Content-Type': _, ...uploadHeaders } = authHeaders
+  uploadHeaders['X-Dazah-Page-Key'] = OH_DETECTION_PAGE_KEY
+  let response: Response
+  try {
+    response = await fetch(`${API_BASE}/safety/oh-detection-reports/${endpoint}`, {
+      method: 'POST',
+      headers: uploadHeaders,
+      body: formData,
+    })
+  } catch {
+    return { code: -1, message: '网络请求失败，无法连接到后端服务' } as ApiResponse<T>
+  }
+  if (!response.ok) {
+    let errorMessage = `HTTP ${response.status}`
+    try {
+      const errorJson = await response.json()
+      errorMessage = errorJson.message || errorJson.detail || errorMessage
+    } catch {
+      // 保留默认错误信息
+    }
+    return { code: response.status, message: errorMessage } as ApiResponse<T>
+  }
+  return response.json()
+}
+
+export async function parseOhDetectionReport(file: File) {
+  return uploadDetectionReport<OhDetectionParsePreview>('parse', file)
+}
+
+export async function importOhDetectionReport(
+  file: File,
+  fields: {
+    report_no: string
+    report_name?: string
+    company_name?: string
+    detection_agency?: string
+    detection_date?: string
+    remark?: string
+  }
+) {
+  const res = await uploadDetectionReport<OhDetectionImportResult>('import', file, {
+    report_no: fields.report_no,
+    report_name: fields.report_name || '',
+    company_name: fields.company_name || '',
+    detection_agency: fields.detection_agency || '',
+    detection_date: fields.detection_date || '',
+    remark: fields.remark || '',
+  })
+  revalidatePath('/safety/occupational-health')
+  return res
+}
+
+export async function deleteOhDetectionReport(id: string) {
+  const res = await fetchApi<null>(`/safety/oh-detection-reports/${id}`, {
+    method: 'DELETE',
+    headers: { 'X-Dazah-Page-Key': OH_DETECTION_PAGE_KEY },
+  })
+  revalidatePath('/safety/occupational-health')
+  return res
+}
+
 // ============ Scheduled Tasks ============
 
 export async function getScheduledTasks(params: ScheduledTaskQueryParams = {}) {
@@ -2150,8 +2271,9 @@ export async function getSafetyPageTableRecords(params: {
   sortDirection?: 'asc' | 'desc'
   filterField?: string | null
   filterValue?: string | null
-  conditions?: Array<{ field: string; value: string; op?: 'eq' | 'gte' | 'lte' }>
+  conditions?: Array<{ field: string; value: string; op?: 'eq' | 'neq' | 'gte' | 'lte' }>
   tableId?: string | null
+  overLimitOnly?: boolean
 }) {
   const search = new URLSearchParams()
   if (params.page) search.set('page', String(params.page))
@@ -2165,12 +2287,32 @@ export async function getSafetyPageTableRecords(params: {
     search.set('conditions', JSON.stringify(params.conditions))
   }
   if (params.tableId) search.set('table_id', params.tableId)
+  if (params.overLimitOnly) search.set('over_limit_only', 'true')
   const query = search.toString()
   const res = await fetchApi<PageTableRecordsResponse>(
     `/safety/page-tables/${encodeURIComponent(params.pageKey)}/records${query ? `?${query}` : ''}`,
     { headers: { 'X-Dazah-Page-Key': params.pageKey } }
   )
   return res
+}
+
+// 未关闭隐患明细（安全总览驾驶舱卡片）：数据来自 24小时值班隐患 /
+// 隐患台账两张镜像表，请求携带对应页面键
+export async function getOpenHazardDetails(params: {
+  source: 'duty' | 'ledger'
+  limit?: number
+}) {
+  const pageKeys: Record<string, string> = {
+    duty: 'safety:risk-hazard:hazard-inspection:hazard-duty',
+    ledger: 'safety:risk-hazard:hazard-inspection:hazard-quick-report',
+  }
+  const search = new URLSearchParams()
+  search.set('source', params.source)
+  if (params.limit) search.set('limit', String(params.limit))
+  return fetchApi<components['schemas']['OpenHazardDetailItem'][]>(
+    `/safety/open-hazard-details?${search.toString()}`,
+    { headers: { 'X-Dazah-Page-Key': pageKeys[params.source] } }
+  )
 }
 
 export async function getSafetyPageTableStats(params: {
@@ -3210,6 +3352,13 @@ type ChemicalInventoryCreateInput =
   components['schemas']['ChemicalInventoryCreate']
 type ChemicalInventoryUpdateInput =
   components['schemas']['ChemicalInventoryUpdate']
+type ChemicalMsdsFileItem = components['schemas']['ChemicalMsdsFileItem']
+type ChemicalMsdsFileListData =
+  components['schemas']['ChemicalMsdsFileListResponse']
+type ChemicalMsdsUploadData =
+  components['schemas']['ChemicalMsdsUploadResponse']
+type MsdsExtractionSuggestion =
+  components['schemas']['MsdsExtractionSuggestion']
 
 export type {
   HazardousChemicalItem,
@@ -3221,6 +3370,10 @@ export type {
   HazardousChemicalUpdateInput,
   ChemicalInventoryCreateInput,
   ChemicalInventoryUpdateInput,
+  ChemicalMsdsFileItem,
+  ChemicalMsdsFileListData,
+  ChemicalMsdsUploadData,
+  MsdsExtractionSuggestion,
 }
 
 export async function getHazardousChemicals(
@@ -3286,47 +3439,84 @@ export async function deleteHazardousChemical(id: string) {
   return response
 }
 
-export async function uploadChemicalMsds(id: string, file: File) {
+export async function uploadChemicalMsdsFile(chemicalId: string, file: File) {
   const formData = new FormData()
   formData.append('file', file)
   // 上传必须剥离 JSON Content-Type，让浏览器自动生成 multipart boundary
   const authHeaders = await getAuthHeaders()
   const { 'Content-Type': _, ...uploadHeaders } = authHeaders
   const response = await fetch(
-    `${API_BASE}/safety/hazardous-chemicals/${id}/msds`,
+    `${API_BASE}/safety/hazardous-chemicals/${chemicalId}/msds-files`,
     { method: 'POST', headers: uploadHeaders, body: formData }
   )
   if (!response.ok) {
     const text = await response.text()
-    return { code: response.status, message: text } as ApiResponse<HazardousChemicalItem>
+    return { code: response.status, message: text } as ApiResponse<ChemicalMsdsUploadData>
   }
-  const data = (await response.json()) as ApiResponse<HazardousChemicalItem>
+  const data = (await response.json()) as ApiResponse<ChemicalMsdsUploadData>
   revalidatePath('/safety/hazchem')
   return data
 }
 
-export async function downloadChemicalMsds(
-  id: string,
-  fileName?: string
-): Promise<void> {
+export async function listChemicalMsdsFiles(chemicalId: string) {
+  return fetchApi<ChemicalMsdsFileListData>(
+    `/safety/hazardous-chemicals/${chemicalId}/msds-files`
+  )
+}
+
+export async function deleteChemicalMsdsFile(chemicalId: string, fileId: string) {
+  const response = await fetchApi<null>(
+    `/safety/hazardous-chemicals/${chemicalId}/msds-files/${fileId}`,
+    { method: 'DELETE' }
+  )
+  revalidatePath('/safety/hazchem')
+  return response
+}
+
+export async function reextractChemicalMsdsFile(chemicalId: string, fileId: string) {
+  return fetchApi<ChemicalMsdsUploadData>(
+    `/safety/hazardous-chemicals/${chemicalId}/msds-files/${fileId}/extract`,
+    { method: 'POST' }
+  )
+}
+
+/**
+ * 拉取 MSDS 附件字节（preview=true 返回浏览器可呈现内容，office 已转 PDF）。
+ *
+ * Server Action 在服务端执行，无法返回 blob URL 或操作 DOM，因此返回
+ * base64 与 MIME，由客户端组件自行组装 Blob/预览地址。
+ */
+export async function fetchChemicalMsdsBytes(
+  chemicalId: string,
+  fileId: string,
+  preview: boolean
+): Promise<{ base64: string; contentType: string }> {
   const headers = await getAuthHeaders()
   const response = await fetch(
-    `${API_BASE}/safety/hazardous-chemicals/${id}/msds`,
+    `${API_BASE}/safety/hazardous-chemicals/${chemicalId}/msds-files/${fileId}` +
+      (preview ? '/preview' : '/content'),
     { headers }
   )
   if (!response.ok) {
     const text = await response.text()
-    throw new Error(`MSDS 下载失败 (${response.status}): ${text}`)
+    throw new Error(`MSDS 读取失败 (${response.status}): ${text}`)
   }
-  const blob = await response.blob()
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = fileName || 'MSDS'
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  URL.revokeObjectURL(url)
+  const buffer = Buffer.from(await response.arrayBuffer())
+  return {
+    base64: buffer.toString('base64'),
+    contentType: response.headers.get('content-type') || 'application/octet-stream',
+  }
+}
+
+/**
+ * 拉取用于下载的 MSDS 原始字节（Server Action，返回 base64）。
+ * 客户端拿到后自行触发浏览器下载。
+ */
+export async function fetchChemicalMsdsDownloadBytes(
+  chemicalId: string,
+  fileId: string
+): Promise<{ base64: string; contentType: string }> {
+  return fetchChemicalMsdsBytes(chemicalId, fileId, false)
 }
 
 export async function getChemicalInventories(

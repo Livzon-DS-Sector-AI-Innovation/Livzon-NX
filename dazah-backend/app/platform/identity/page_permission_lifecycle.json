@@ -4153,7 +4153,16 @@
       "status": "active",
       "module_code": "safety",
       "route_path": "/safety/occupational-health",
-      "actions": {}
+      "actions": {
+        "bulk_import": {
+          "status": "active",
+          "category": "bulk_change"
+        },
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        }
+      }
     },
     "safety:ops-safety:centrifuge-discharge-inspection": {
       "status": "active",

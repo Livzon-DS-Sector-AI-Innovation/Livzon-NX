@@ -34,6 +34,7 @@ import {
   testSafetyPageFeishuConfig,
 } from '@/actions/safety'
 import PlatformNotice from '@/components/shared/PlatformNotice'
+import { SAFETY_PAGE_TABLE_KEYS } from '@/lib/safety-page-tables'
 import type { components } from '@/types/generated/schema'
 
 type PageFeishuConfigItem = components['schemas']['PageFeishuConfigItem']
@@ -75,6 +76,17 @@ function PageTableConfigItem({
   )
   const [aliasesText, setAliasesText] = useState(
     formatWorkshopAliasText(item.workshop_aliases ?? {})
+  )
+  // 超储计算列（危化品统计表页专用：存量/上限/品名列）
+  const supportsOverLimit = item.page_key === SAFETY_PAGE_TABLE_KEYS.hazchemMsds
+  const [overLimitQuantity, setOverLimitQuantity] = useState(
+    item.over_limit_quantity_field ?? undefined
+  )
+  const [overLimitLimit, setOverLimitLimit] = useState(
+    item.over_limit_limit_field ?? undefined
+  )
+  const [overLimitName, setOverLimitName] = useState(
+    item.over_limit_name_field ?? undefined
   )
   const [enabled, setEnabled] = useState(item.is_enabled)
   const [mirrored, setMirrored] = useState(item.is_mirrored)
@@ -177,6 +189,14 @@ function PageTableConfigItem({
       message.warning('请填写 App Token 与 Table ID')
       return
     }
+    if (
+      supportsOverLimit &&
+      Boolean(overLimitQuantity ?? overLimitLimit) &&
+      !(overLimitQuantity && overLimitLimit)
+    ) {
+      message.warning('超储计算的「存量列」与「上限列」需同时选择或同时清空')
+      return
+    }
     setSaving(true)
     const res = await saveSafetyPageFeishuConfig(item.page_key, {
       app_token: appToken.trim(),
@@ -187,6 +207,13 @@ function PageTableConfigItem({
       workshop_aliases: parseWorkshopAliasText(aliasesText),
       is_enabled: enabled,
       is_mirrored: mirrored,
+      ...(supportsOverLimit
+        ? {
+            over_limit_quantity_field: overLimitQuantity ?? null,
+            over_limit_limit_field: overLimitLimit ?? null,
+            over_limit_name_field: overLimitName ?? null,
+          }
+        : {}),
     })
     setSaving(false)
     if (res.code === 200 && res.data) {
@@ -195,7 +222,23 @@ function PageTableConfigItem({
     } else {
       message.error(res.message || '保存失败')
     }
-  }, [aliasesText, appToken, enabled, hiddenFields, item.page_key, message, mirrored, onSaved, selectedSubTables, tableId, viewId])
+  }, [
+    aliasesText,
+    appToken,
+    enabled,
+    hiddenFields,
+    item.page_key,
+    message,
+    mirrored,
+    onSaved,
+    overLimitLimit,
+    overLimitName,
+    overLimitQuantity,
+    selectedSubTables,
+    supportsOverLimit,
+    tableId,
+    viewId,
+  ])
 
   return (
     <Card
@@ -342,6 +385,64 @@ function PageTableConfigItem({
             onChange={(event) => setAliasesText(event.target.value)}
           />
         </Space.Compact>
+        {supportsOverLimit ? (
+          <>
+            <Space.Compact block>
+              <Button disabled style={{ cursor: 'default', width: 140 }}>
+                超储计算-存量列
+              </Button>
+              <Select
+                style={{ width: '100%' }}
+                allowClear
+                showSearch
+                placeholder={
+                  fieldOptions.length
+                    ? '选择统计表中「当前存量」列（与上限列同时配置生效）'
+                    : '先点「测试绑定」获取字段清单'
+                }
+                value={overLimitQuantity}
+                options={fieldOptions.map((name) => ({ value: name, label: name }))}
+                onChange={(value) => setOverLimitQuantity(value)}
+              />
+            </Space.Compact>
+            <Space.Compact block>
+              <Button disabled style={{ cursor: 'default', width: 140 }}>
+                超储计算-上限列
+              </Button>
+              <Select
+                style={{ width: '100%' }}
+                allowClear
+                showSearch
+                placeholder={
+                  fieldOptions.length
+                    ? '选择统计表中「存量上限」列（与存量列同时配置生效）'
+                    : '先点「测试绑定」获取字段清单'
+                }
+                value={overLimitLimit}
+                options={fieldOptions.map((name) => ({ value: name, label: name }))}
+                onChange={(value) => setOverLimitLimit(value)}
+              />
+            </Space.Compact>
+            <Space.Compact block>
+              <Button disabled style={{ cursor: 'default', width: 140 }}>
+                超储计算-品名列
+              </Button>
+              <Select
+                style={{ width: '100%' }}
+                allowClear
+                showSearch
+                placeholder="可选；缺省取表格第一个文本列"
+                value={overLimitName}
+                options={fieldOptions.map((name) => ({ value: name, label: name }))}
+                onChange={(value) => setOverLimitName(value)}
+              />
+            </Space.Compact>
+            <Typography.Text type="secondary">
+              配置存量/上限列后，页面与安全总览的超储预警改从这张统计表计算；
+              列值支持带单位文本（如 500kg）。不配置则回退本地库存口径。
+            </Typography.Text>
+          </>
+        ) : null}
         <Space size={12} wrap>
           <Typography.Text>启用该页面的表格镜像</Typography.Text>
           <Switch

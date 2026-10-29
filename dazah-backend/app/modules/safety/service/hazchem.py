@@ -2,14 +2,23 @@
 
 from __future__ import annotations
 
+import logging
+import uuid as uuid_module
 from datetime import UTC, datetime
+from pathlib import Path
 from uuid import UUID
 
 from sqlalchemy import ColumnElement, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import storage
+from app.core.config import get_settings
 from app.core.exceptions import AppException, NotFoundException
-from app.modules.safety.models import ChemicalInventory, HazardousChemical
+from app.modules.safety.models import (
+    ChemicalInventory,
+    ChemicalMsdsAttachment,
+    HazardousChemical,
+)
 from app.modules.safety.schemas.hazchem import (
     ChemicalInventoryCreate,
     ChemicalInventoryResponse,
@@ -19,6 +28,8 @@ from app.modules.safety.schemas.hazchem import (
     HazardousChemicalUpdate,
     HazchemStatsResponse,
 )
+
+logger = logging.getLogger(__name__)
 
 _VALID_CATEGORIES = {
     "explosive",
@@ -43,6 +54,75 @@ def build_search_text(
 
 def inventory_over_limit(quantity: float, upper_limit: float | None) -> bool:
     return upper_limit is not None and quantity > upper_limit
+
+
+# ── MSDS 附件存储：MinIO 优先、本地 uploads/safety/hazchem 回退 ──
+
+MSDS_ALLOWED_EXTS = {".pdf", ".doc", ".docx", ".png", ".jpg", ".jpeg"}
+MSDS_MAX_BYTES = 30 * 1024 * 1024
+
+
+def _msds_local_root() -> Path:
+    root = (Path(get_settings().UPLOAD_DIR) / "safety" / "hazchem").resolve()
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
+def _msds_local_path(storage_key: str) -> Path:
+    """把存储 key 解析为本地路径；旧迁移数据存 uploads/ 前缀整体路径。"""
+    normalized = storage_key.replace("\\", "/")
+    if normalized.startswith("uploads/"):
+        return Path(normalized).resolve()
+    root = _msds_local_root()
+    path = (root / storage_key).resolve()
+    try:
+        path.relative_to(root)
+    except ValueError as exc:
+        raise AppException(message="非法文件路径") from exc
+    if path == root:
+        raise AppException(message="非法文件路径")
+    return path
+
+
+def store_msds_object(storage_key: str, content: bytes, content_type: str) -> str:
+    if storage.is_enabled():
+        storage.upload_object(
+            "safety", storage_key, content, len(content), content_type
+        )
+        return storage_key
+    path = _msds_local_path(storage_key)
+    with open(path, "wb") as file_obj:
+        file_obj.write(content)
+    return storage_key
+
+
+def read_msds_object(storage_key: str) -> tuple[bytes, str] | None:
+    if storage.is_enabled():
+        found = storage.get_object("safety", storage_key)
+        if found is not None:
+            return found
+    path = _msds_local_path(storage_key)
+    if not path.exists():
+        return None
+    return path.read_bytes(), "application/octet-stream"
+
+
+def delete_msds_object(storage_key: str) -> None:
+    if storage.is_enabled():
+        try:
+            storage.delete_object("safety", storage_key)
+        except Exception:
+            # 旧迁移数据只存在于本地：MinIO 删除失败不阻断本地清理
+            logger.warning(
+                "删除 MinIO MSDS 对象失败: key=%s", storage_key, exc_info=True
+            )
+    path = _msds_local_path(storage_key)
+    if path.exists():
+        path.unlink()
+
+
+def build_msds_storage_key(chemical_id: UUID, file_ext: str) -> str:
+    return f"msds_{chemical_id}_{uuid_module.uuid4().hex}{file_ext}"
 
 
 class HazchemService:
@@ -185,6 +265,71 @@ class HazchemService:
         chemical.updated_at = datetime.now(UTC)
         await self.db.flush()
         return chemical
+
+    # ---------- MSDS 多附件 ----------
+
+    async def list_msds_files(
+        self, chemical_id: UUID
+    ) -> list[ChemicalMsdsAttachment]:
+        if await self.get_chemical(chemical_id) is None:
+            raise NotFoundException("危化品档案不存在")
+        result = await self.db.execute(
+            select(ChemicalMsdsAttachment)
+            .where(
+                ChemicalMsdsAttachment.chemical_id == chemical_id,
+                ChemicalMsdsAttachment.is_deleted.is_(False),
+            )
+            .order_by(ChemicalMsdsAttachment.created_at.desc())
+        )
+        return list(result.scalars().all())
+
+    async def get_msds_file(
+        self, chemical_id: UUID, file_id: UUID
+    ) -> ChemicalMsdsAttachment:
+        result = await self.db.execute(
+            select(ChemicalMsdsAttachment).where(
+                ChemicalMsdsAttachment.id == file_id,
+                ChemicalMsdsAttachment.chemical_id == chemical_id,
+                ChemicalMsdsAttachment.is_deleted.is_(False),
+            )
+        )
+        attachment = result.scalar_one_or_none()
+        if attachment is None:
+            raise NotFoundException("MSDS 附件")
+        return attachment
+
+    async def add_msds_file(
+        self,
+        chemical_id: UUID,
+        *,
+        file_name: str,
+        storage_key: str,
+        content_type: str,
+        size_bytes: int,
+        user_id: UUID | None = None,
+    ) -> ChemicalMsdsAttachment:
+        if await self.get_chemical(chemical_id) is None:
+            raise NotFoundException("危化品档案不存在")
+        attachment = ChemicalMsdsAttachment(
+            chemical_id=chemical_id,
+            file_name=file_name,
+            storage_key=storage_key,
+            content_type=content_type,
+            size_bytes=size_bytes,
+            created_by=user_id,
+            updated_by=user_id,
+        )
+        self.db.add(attachment)
+        await self.db.flush()
+        return attachment
+
+    async def delete_msds_file(
+        self, chemical_id: UUID, file_id: UUID
+    ) -> bool:
+        attachment = await self.get_msds_file(chemical_id, file_id)
+        attachment.is_deleted = True
+        await self.db.flush()
+        return True
 
     # ---------- 车间存量 ----------
 
@@ -363,6 +508,11 @@ class HazchemService:
         ]
 
     async def get_stats(self) -> HazchemStatsResponse:
+        from app.modules.safety.page_tables import HAZCHEM_PAGE_KEY
+        from app.modules.safety.service.page_table import (
+            collect_mirror_over_limit_rows,
+        )
+
         chemicals_total = (
             await self.db.execute(
                 select(func.count())
@@ -370,16 +520,39 @@ class HazchemService:
                 .where(HazardousChemical.is_deleted.is_(False))
             )
         ).scalar() or 0
+        # MSDS 已上传 = 至少挂一个附件的未删档案数（旧单文件数据已由迁移入附件表）
         msds_uploaded = (
             await self.db.execute(
-                select(func.count())
-                .select_from(HazardousChemical)
+                select(func.count(func.distinct(ChemicalMsdsAttachment.chemical_id)))
+                .select_from(ChemicalMsdsAttachment)
+                .join(
+                    HazardousChemical,
+                    HazardousChemical.id == ChemicalMsdsAttachment.chemical_id,
+                )
                 .where(
+                    ChemicalMsdsAttachment.is_deleted.is_(False),
                     HazardousChemical.is_deleted.is_(False),
-                    HazardousChemical.msds_file_path != "",
                 )
             )
         ).scalar() or 0
+
+        # 存量统计：统计表镜像配置了超储列时走镜像口径，否则本地库存口径
+        mirror_rows = await collect_mirror_over_limit_rows(self.db, HAZCHEM_PAGE_KEY)
+        if mirror_rows is not None:
+            return HazchemStatsResponse(
+                chemicals_total=chemicals_total,
+                msds_uploaded=msds_uploaded,
+                inventory=ChemicalInventoryStatsResponse(
+                    total_entries=len(mirror_rows),
+                    over_limit_count=sum(
+                        1 for row in mirror_rows if row.over_limit
+                    ),
+                    limited_count=sum(
+                        1 for row in mirror_rows if row.upper_limit is not None
+                    ),
+                    by_category={},  # 统计表列不承诺档案类别枚举，镜像口径不提供
+                ),
+            )
 
         rows = (
             await self.db.execute(

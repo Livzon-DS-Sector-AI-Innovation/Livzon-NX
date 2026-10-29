@@ -51,6 +51,7 @@ import {
   toRecordRows,
   type PageTableColumn,
   type PageTableFieldKind,
+  type PageTableOverLimitFields,
   type PageTableRecordRow,
   type PageTableStats,
   type PageTableTab,
@@ -307,6 +308,8 @@ export default function PageFeishuTable({
   allowCreate = false,
   preferredColumnNames,
   createUrl,
+  /** 隐藏「共 N 条；列与数据来自飞书」说明文字（嵌入页如危化品统计表用）。 */
+  hideMetaHint = false,
 }: {
   pageKey: string
   pageName: string
@@ -368,6 +371,8 @@ export default function PageFeishuTable({
    * 不再使用站内新建抽屉；数据仍来自页面绑定的多维表格。
    */
   createUrl?: string
+  /** 隐藏「共 N 条；列与数据来自飞书」说明文字（嵌入页如危化品统计表用）。 */
+  hideMetaHint?: boolean
 }) {
   const { message } = App.useApp()
   const { canOperate } = usePagePermissions(pageKey)
@@ -389,6 +394,10 @@ export default function PageFeishuTable({
   const [loading, setLoading] = useState(false)
   const [truncated, setTruncated] = useState(initialData?.truncated ?? false)
   const [loadError, setLoadError] = useState<string | null>(initialError)
+  // 超储口径：绑定配置了存量/上限列时后端在响应里附带（未配置保持 null）
+  const [overLimitFields, setOverLimitFields] =
+    useState<PageTableOverLimitFields | null>(null)
+  const [overLimitOnly, setOverLimitOnly] = useState(false)
   const [dimensionFilter, setDimensionFilter] = useState<{
     field: string
     value: string
@@ -499,6 +508,7 @@ export default function PageFeishuTable({
       dateRange?: [dayjs.Dayjs | null, dayjs.Dayjs | null] | null
       dueDrill?: boolean
       dueWindow?: number
+      overLimitOnly?: boolean
     }) => {
       const nextFieldFilters = override?.fieldFilters ?? fieldFilters
       const nextDateRange =
@@ -544,6 +554,10 @@ export default function PageFeishuTable({
           override?.tableId !== undefined
             ? override.tableId ?? undefined
             : activeTableIdRef.current,
+        overLimitOnly:
+          override?.overLimitOnly !== undefined
+            ? override.overLimitOnly
+            : overLimitOnly,
       }
       const seq = requestSeq.current + 1
       requestSeq.current = seq
@@ -560,6 +574,7 @@ export default function PageFeishuTable({
           filterValue: next.filter?.value || undefined,
           conditions: next.conditions.length ? next.conditions : undefined,
           tableId: next.tableId,
+          overLimitOnly: next.overLimitOnly || undefined,
         }),
         showStats
           ? getSafetyPageTableStats({
@@ -590,6 +605,7 @@ export default function PageFeishuTable({
         setPage(res.data.page)
         setPageSize(res.data.page_size)
         setTruncated(res.data.truncated)
+        setOverLimitFields(res.data.over_limit_fields ?? null)
         setLoadError(null)
         // 结构不同的子表（不符合项/观察项）没有统计维度字段，首轮 stats
         // 会 400：按该表实际存在的维度回退重查；一个都没有时清空仪表盘
@@ -633,6 +649,7 @@ export default function PageFeishuTable({
       fieldFilters,
       filterDateField,
       keyword,
+      overLimitOnly,
       page,
       pageSize,
       pageKey,
@@ -1132,6 +1149,18 @@ export default function PageFeishuTable({
         <Button onClick={() => void load({ page: 1, keyword })} loading={loading}>
           查询
         </Button>
+        {overLimitFields ? (
+          <Button
+            type={overLimitOnly ? 'primary' : 'default'}
+            onClick={() => {
+              const next = !overLimitOnly
+              setOverLimitOnly(next)
+              void load({ page: 1, overLimitOnly: next })
+            }}
+          >
+            只看超储
+          </Button>
+        ) : null}
         <Button icon={<ReloadOutlined />} onClick={() => void load()} loading={loading}>
           刷新
         </Button>
@@ -1152,12 +1181,14 @@ export default function PageFeishuTable({
             新建记录
           </Button>
         ) : null}
-        <Typography.Text type="secondary">
-          共 {total} 条；列与数据来自飞书多维表格，修改会直接写回飞书。
-          {detailOnlyCount > 0
-            ? ` 表格仅显示主要列，其余 ${detailOnlyCount} 个字段点击行后在详情中查看。`
-            : ''}
-        </Typography.Text>
+        {hideMetaHint ? null : (
+          <Typography.Text type="secondary">
+            共 {total} 条；列与数据来自飞书多维表格，修改会直接写回飞书。
+            {detailOnlyCount > 0
+              ? ` 表格仅显示主要列，其余 ${detailOnlyCount} 个字段点击行后在详情中查看。`
+              : ''}
+          </Typography.Text>
+        )}
       </Space>
       <Table<PageTableRecordRow>
         rowKey="record_id"
@@ -1192,6 +1223,7 @@ export default function PageFeishuTable({
           onClick: () => openDetail(row),
           style: { cursor: 'pointer' },
         })}
+        rowClassName={(row) => (row.over_limit ? 'bg-red-50' : '')}
       />
       <Drawer
         title={createOpen ? `${pageName} · 新建记录` : `${pageName} · 记录详情`}

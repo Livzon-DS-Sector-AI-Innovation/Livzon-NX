@@ -1,13 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   App,
   Button,
   Card,
   Form,
   Input,
-  InputNumber,
+  List,
   Modal,
   Popconfirm,
   Select,
@@ -19,26 +19,40 @@ import {
   Upload,
 } from 'antd'
 import {
+  DeleteOutlined,
   DownloadOutlined,
+  EyeOutlined,
   FileTextOutlined,
+  RobotOutlined,
   UploadOutlined,
 } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
+import { FeishuAttachmentPreviewModal } from '@/components/quality'
 import {
-  createChemicalInventory,
   createHazardousChemical,
-  deleteChemicalInventory,
+  deleteChemicalMsdsFile,
   deleteHazardousChemical,
-  downloadChemicalMsds,
-  getChemicalInventories,
+  fetchChemicalMsdsBytes,
   getHazardousChemicals,
-  updateChemicalInventory,
+  listChemicalMsdsFiles,
+  reextractChemicalMsdsFile,
   updateHazardousChemical,
-  uploadChemicalMsds,
-  type ChemicalInventoryItem,
+  uploadChemicalMsdsFile,
+  type ChemicalMsdsFileItem,
   type HazardousChemicalItem,
+  type MsdsExtractionSuggestion,
 } from '@/actions/safety'
 import { usePagePermissions } from '@/hooks/usePagePermissions'
+import { SAFETY_PAGE_TABLE_KEYS } from '@/lib/safety-page-tables'
+import PageFeishuTable from './PageFeishuTable'
+
+/** Server Action 返回 base64：在浏览器侧组装成 Blob URL。 */
+function base64ToObjectUrl(base64: string, contentType: string): string {
+  const binary = atob(base64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i)
+  return URL.createObjectURL(new Blob([bytes], { type: contentType }))
+}
 
 const { Text, Title } = Typography
 
@@ -71,6 +85,8 @@ export const CHEMICAL_CATEGORY_LABELS: Record<string, string> = {
   other: '其他',
 }
 
+const MSDS_ACCEPT = '.pdf,.doc,.docx,.png,.jpg,.jpeg'
+
 interface ChemicalFormValues {
   name: string
   alias?: string
@@ -81,24 +97,34 @@ interface ChemicalFormValues {
   remark?: string
 }
 
-interface InventoryFormValues {
-  chemical_id: string
-  workshop: string
-  quantity: number
-  upper_limit?: number | null
-  unit: string
-  remark?: string
+interface MsdsPreviewState {
+  open: boolean
+  fileName: string
+  previewSrc: string
+  downloadSrc: string
+  objectUrls: string[]
+}
+
+interface AiSuggestionState {
+  open: boolean
+  chemical: HazardousChemicalItem | null
+  aiError: string | null
+}
+
+function formatSize(bytes: number): string {
+  if (!bytes) return ''
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)}MB`
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)}KB`
+  return `${bytes}B`
 }
 
 export default function HazchemPanel({
   pageKey,
   initialChemicals,
-  initialInventories,
   initialError,
 }: {
   pageKey: string
   initialChemicals: HazardousChemicalItem[]
-  initialInventories: ChemicalInventoryItem[]
   initialError: string | null
 }) {
   const { canOperate, canDelete } = usePagePermissions(pageKey)
@@ -106,57 +132,68 @@ export default function HazchemPanel({
 
   const [chemicals, setChemicals] = useState<HazardousChemicalItem[]>(initialChemicals)
   const [chemTotal, setChemTotal] = useState(initialChemicals.length)
-  const [inventories, setInventories] = useState<ChemicalInventoryItem[]>(initialInventories)
-  const [invTotal, setInvTotal] = useState(initialInventories.length)
   const [error, setError] = useState<string | null>(initialError)
   const [loading, setLoading] = useState(false)
   const [chemKeyword, setChemKeyword] = useState('')
-  const [overLimitOnly, setOverLimitOnly] = useState(false)
+  const [activeTab, setActiveTab] = useState('chemicals')
+  // 车间库存镜像表较重（拉取绑定表格列与记录），首次切到该页签时再挂载
+  const [inventoryMounted, setInventoryMounted] = useState(false)
 
   const [chemFormOpen, setChemFormOpen] = useState(false)
   const [editingChemical, setEditingChemical] = useState<HazardousChemicalItem | null>(null)
   const [chemForm] = Form.useForm<ChemicalFormValues>()
 
-  const [invFormOpen, setInvFormOpen] = useState(false)
-  const [editingInventory, setEditingInventory] = useState<ChemicalInventoryItem | null>(null)
-  const [invForm] = Form.useForm<InventoryFormValues>()
+  // MSDS 附件管理（按档案懒加载，避免列表页 N+1 拉附件）
+  const [msdsChemical, setMsdsChemical] = useState<HazardousChemicalItem | null>(null)
+  const [msdsFiles, setMsdsFiles] = useState<ChemicalMsdsFileItem[]>([])
+  const [msdsLoading, setMsdsLoading] = useState(false)
+  const [msdsUploading, setMsdsUploading] = useState(false)
+  const [preview, setPreview] = useState<MsdsPreviewState>({
+    open: false,
+    fileName: '',
+    previewSrc: '',
+    downloadSrc: '',
+    objectUrls: [],
+  })
+
+  // AI 识别结果确认（人工确认后才写入档案）
+  const [aiState, setAiState] = useState<AiSuggestionState>({
+    open: false,
+    chemical: null,
+    aiError: null,
+  })
+  const [aiForm] = Form.useForm<ChemicalFormValues>()
+  const [aiApplying, setAiApplying] = useState(false)
 
   useEffect(() => {
     setChemicals(initialChemicals)
     setChemTotal(initialChemicals.length)
-    setInventories(initialInventories)
-    setInvTotal(initialInventories.length)
     setError(initialError)
-  }, [initialChemicals, initialInventories, initialError])
+  }, [initialChemicals, initialError])
 
-  const refreshChemicals = async (nextKeyword = chemKeyword) => {
-    setLoading(true)
-    try {
-      const res = await getHazardousChemicals({ keyword: nextKeyword || undefined, page_size: 200 })
-      if (res.code === 200 && res.data) {
-        setChemicals(res.data.items)
-        setChemTotal(res.data.total)
-        setError(null)
-      } else {
-        setError(res.message || '加载危化品档案失败')
+  const refreshChemicals = useCallback(
+    async (nextKeyword = chemKeyword) => {
+      setLoading(true)
+      try {
+        const res = await getHazardousChemicals({
+          keyword: nextKeyword || undefined,
+          page_size: 200,
+        })
+        if (res.code === 200 && res.data) {
+          setChemicals(res.data.items)
+          setChemTotal(res.data.total)
+          setError(null)
+        } else {
+          setError(res.message || '加载危化品档案失败')
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : '加载危化品档案失败')
+      } finally {
+        setLoading(false)
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '加载危化品档案失败')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const refreshInventories = async (nextOverLimit = overLimitOnly) => {
-    const res = await getChemicalInventories({
-      over_limit_only: nextOverLimit || undefined,
-      page_size: 200,
-    })
-    if (res.code === 200 && res.data) {
-      setInventories(res.data.items)
-      setInvTotal(res.data.total)
-    }
-  }
+    },
+    [chemKeyword]
+  )
 
   const openChemCreate = () => {
     setEditingChemical(null)
@@ -215,65 +252,171 @@ export default function HazchemPanel({
     }
   }
 
-  const openInvCreate = () => {
-    setEditingInventory(null)
-    invForm.setFieldsValue({
-      chemical_id: chemicals[0]?.id,
-      workshop: '',
-      quantity: 0,
-      upper_limit: null,
-      unit: 'kg',
-      remark: '',
-    })
-    setInvFormOpen(true)
-  }
+  // ---------- MSDS 附件 ----------
 
-  const openInvEdit = (item: ChemicalInventoryItem) => {
-    setEditingInventory(item)
-    invForm.setFieldsValue({
-      chemical_id: item.chemical_id,
-      workshop: item.workshop,
-      quantity: item.quantity,
-      upper_limit: item.upper_limit,
-      unit: item.unit,
-      remark: item.remark,
-    })
-    setInvFormOpen(true)
-  }
-
-  const submitInventory = async () => {
-    const values = await invForm.validateFields()
-    const payload = {
-      chemical_id: values.chemical_id,
-      workshop: values.workshop,
-      quantity: values.quantity,
-      upper_limit: values.upper_limit ?? null,
-      unit: values.unit ?? 'kg',
-      remark: values.remark ?? '',
+  const refreshMsdsFiles = useCallback(async (chemicalId: string) => {
+    const res = await listChemicalMsdsFiles(chemicalId)
+    if (res.code === 200 && res.data) {
+      setMsdsFiles(res.data.items ?? [])
     }
+  }, [])
+
+  const openMsdsManager = (chemical: HazardousChemicalItem) => {
+    setMsdsChemical(chemical)
+    setMsdsFiles([])
+    setMsdsLoading(true)
+    void refreshMsdsFiles(chemical.id).finally(() => setMsdsLoading(false))
+  }
+
+  /** 打开 AI 识别确认弹窗：识别值覆盖非空字段，其余保持档案当前值。 */
+  const openAiSuggestion = (
+    chemical: HazardousChemicalItem,
+    suggestion: MsdsExtractionSuggestion | null,
+    aiError: string | null
+  ) => {
+    if (!suggestion) {
+      if (aiError) message.info(`MSDS 已保存；AI 识别未完成：${aiError}`)
+      return
+    }
+    aiForm.setFieldsValue({
+      name: suggestion.name ?? chemical.name,
+      alias: suggestion.alias ?? chemical.alias,
+      cas_no: suggestion.cas_no ?? chemical.cas_no,
+      category: suggestion.category ?? chemical.category,
+      hazard_statements: suggestion.hazard_statements ?? chemical.hazard_statements,
+      storage_requirements:
+        suggestion.storage_requirements ?? chemical.storage_requirements,
+      remark: suggestion.remark ?? chemical.remark,
+    })
+    setAiState({ open: true, chemical, aiError })
+  }
+
+  const handleMsdsUpload = async (file: File) => {
+    if (!msdsChemical) return null
+    setMsdsUploading(true)
     try {
-      const res = editingInventory
-        ? await updateChemicalInventory(editingInventory.id, payload)
-        : await createChemicalInventory(payload)
-      if (res.code === 200) {
-        message.success('存量已保存')
-        setInvFormOpen(false)
-        await refreshInventories()
+      const res = await uploadChemicalMsdsFile(msdsChemical.id, file)
+      if (res.code === 200 && res.data) {
+        message.success('MSDS 已上传')
+        await refreshMsdsFiles(msdsChemical.id)
+        openAiSuggestion(
+          res.data.chemical && res.data.chemical.id === msdsChemical.id
+            ? res.data.chemical
+            : msdsChemical,
+          res.data.ai_suggestion ?? null,
+          res.data.ai_error ?? null
+        )
       } else {
-        message.error(res.message || '保存失败')
+        message.error(res.message || '上传失败')
       }
+      return res
     } catch (err) {
-      message.error(err instanceof Error ? err.message : '保存失败')
+      message.error(err instanceof Error ? err.message : '上传失败')
+      return null
+    } finally {
+      setMsdsUploading(false)
     }
   }
 
-  const handleInvDelete = async (item: ChemicalInventoryItem) => {
-    const res = await deleteChemicalInventory(item.id)
+  const handleMsdsPreview = async (file: ChemicalMsdsFileItem) => {
+    if (!msdsChemical) return
+    try {
+      const [preview, download] = await Promise.all([
+        fetchChemicalMsdsBytes(msdsChemical.id, file.id, true),
+        fetchChemicalMsdsBytes(msdsChemical.id, file.id, false),
+      ])
+      const previewSrc = base64ToObjectUrl(preview.base64, preview.contentType)
+      const downloadSrc = base64ToObjectUrl(download.base64, download.contentType)
+      setPreview({
+        open: true,
+        fileName: file.file_name,
+        previewSrc,
+        downloadSrc,
+        objectUrls: [previewSrc, downloadSrc],
+      })
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : '预览加载失败')
+    }
+  }
+
+  /** 下载：Server Action 取字节 → 浏览器侧触发保存。 */
+  const handleMsdsDownload = async (file: ChemicalMsdsFileItem) => {
+    if (!msdsChemical) return
+    try {
+      const payload = await fetchChemicalMsdsBytes(msdsChemical.id, file.id, false)
+      const url = base64ToObjectUrl(payload.base64, payload.contentType)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = file.file_name || 'MSDS'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : '下载失败')
+    }
+  }
+
+  const closePreview = () => {    for (const url of preview.objectUrls) URL.revokeObjectURL(url)
+    setPreview({
+      open: false,
+      fileName: '',
+      previewSrc: '',
+      downloadSrc: '',
+      objectUrls: [],
+    })
+  }
+
+  const handleMsdsDelete = async (file: ChemicalMsdsFileItem) => {
+    if (!msdsChemical) return
+    const res = await deleteChemicalMsdsFile(msdsChemical.id, file.id)
     if (res.code === 200) {
-      message.success('存量记录已删除')
-      await refreshInventories()
+      message.success('附件已删除')
+      await refreshMsdsFiles(msdsChemical.id)
     } else {
       message.error(res.message || '删除失败')
+    }
+  }
+
+  const handleReextract = async (file: ChemicalMsdsFileItem) => {
+    if (!msdsChemical) return
+    const res = await reextractChemicalMsdsFile(msdsChemical.id, file.id)
+    if (res.code === 200 && res.data) {
+      openAiSuggestion(
+        msdsChemical,
+        res.data.ai_suggestion ?? null,
+        res.data.ai_error ?? null
+      )
+    } else {
+      message.error(res.message || '识别失败')
+    }
+  }
+
+  const applyAiSuggestion = async () => {
+    if (!aiState.chemical) return
+    const values = await aiForm.validateFields()
+    setAiApplying(true)
+    try {
+      const res = await updateHazardousChemical(aiState.chemical.id, {
+        name: values.name,
+        alias: values.alias ?? '',
+        cas_no: values.cas_no ?? '',
+        category: values.category,
+        hazard_statements: values.hazard_statements ?? '',
+        storage_requirements: values.storage_requirements ?? '',
+        remark: values.remark ?? '',
+      })
+      if (res.code === 200) {
+        message.success('档案已按识别结果更新')
+        setAiState({ open: false, chemical: null, aiError: null })
+        await refreshChemicals()
+      } else {
+        message.error(res.message || '更新失败')
+      }
+    } catch (err) {
+      message.error(err instanceof Error ? err.message : '更新失败')
+    } finally {
+      setAiApplying(false)
     }
   }
 
@@ -314,50 +457,20 @@ export default function HazchemPanel({
       ),
     },
     {
-      title: 'MSDS',
+      title: 'MSDS 附件',
       key: 'msds',
-      width: 150,
-      render: (_, row) =>
-        row.msds_file_path ? (
-          <Button
-            type="link"
-            size="small"
-            icon={<DownloadOutlined />}
-            style={{ padding: 0 }}
-            onClick={() =>
-              downloadChemicalMsds(row.id, row.msds_file_name || `${row.name}-MSDS`).catch((err) =>
-                message.error(err instanceof Error ? err.message : '下载失败')
-              )
-            }
-          >
-            {row.msds_file_name || '下载'}
-          </Button>
-        ) : (
-          <Upload
-            showUploadList={false}
-            accept=".pdf,.doc,.docx,.png,.jpg,.jpeg"
-            customRequest={async ({ file, onSuccess, onError }) => {
-              try {
-                const res = await uploadChemicalMsds(row.id, file as File)
-                if (res.code === 200) {
-                  message.success('MSDS 已上传')
-                  onSuccess?.(res)
-                  await refreshChemicals()
-                } else {
-                  message.error(res.message || '上传失败')
-                  onError?.(new Error(res.message))
-                }
-              } catch (err) {
-                message.error(err instanceof Error ? err.message : '上传失败')
-                onError?.(err as Error)
-              }
-            }}
-          >
-            <Button type="link" size="small" icon={<UploadOutlined />} style={{ padding: 0 }} disabled={!canOperate}>
-              上传
-            </Button>
-          </Upload>
-        ),
+      width: 130,
+      render: (_, row) => (
+        <Button
+          type="link"
+          size="small"
+          icon={<FileTextOutlined />}
+          style={{ padding: 0 }}
+          onClick={() => openMsdsManager(row)}
+        >
+          查看 / 上传
+        </Button>
+      ),
     },
     {
       title: '储存要求',
@@ -387,60 +500,13 @@ export default function HazchemPanel({
     },
   ]
 
-  const inventoryColumns: ColumnsType<ChemicalInventoryItem> = [
-    { title: '品名', dataIndex: 'chemical_name', key: 'chemical_name' },
-    { title: '车间/库房', dataIndex: 'workshop', key: 'workshop', width: 140 },
-    {
-      title: '存量/上限',
-      key: 'stock',
-      width: 160,
-      render: (_, row) => (
-        <Text style={{ color: T.charcoal }}>
-          {row.quantity}{row.unit} / {row.upper_limit ?? '不限'}{row.upper_limit ? row.unit : ''}
-        </Text>
-      ),
-    },
-    {
-      title: '状态',
-      key: 'status',
-      width: 120,
-      render: (_, row) =>
-        row.over_limit ? (
-          <Tag style={{ borderRadius: 6, border: 'none', backgroundColor: T.rose, color: T.error, fontWeight: 600 }}>
-            超储{row.over_pct !== null ? ` ${row.over_pct}%` : ''}
-          </Tag>
-        ) : (
-          <Tag style={{ borderRadius: 6, border: 'none', backgroundColor: T.mint, color: T.success, fontWeight: 600 }}>
-            正常
-          </Tag>
-        ),
-    },
-    {
-      title: '操作',
-      key: 'actions',
-      width: 140,
-      render: (_, row) => (
-        <Space size={4}>
-          <Button type="link" size="small" style={{ padding: 0 }} disabled={!canOperate} onClick={() => openInvEdit(row)}>
-            更新存量
-          </Button>
-          <Popconfirm title="确定删除该存量记录？" onConfirm={() => handleInvDelete(row)} disabled={!canDelete}>
-            <Button type="link" size="small" danger style={{ padding: 0 }} disabled={!canDelete}>
-              删除
-            </Button>
-          </Popconfirm>
-        </Space>
-      ),
-    },
-  ]
-
   return (
     <div className="space-y-4 pb-8">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <Title level={4} className="!mb-1">危化品与 MSDS 管理</Title>
           <Text style={{ color: T.slate, fontSize: 13 }}>
-            危化品档案、MSDS 附件与车间存量上限（超储预警）
+            危化品档案与 MSDS 附件；车间库存/超储镜像自飞书危化品统计表
           </Text>
         </div>
       </div>
@@ -453,7 +519,11 @@ export default function HazchemPanel({
 
       <Card variant="borderless" style={{ borderRadius: 12, border: `1px solid ${T.hairline}` }}>
         <Tabs
-          defaultActiveKey="chemicals"
+          activeKey={activeTab}
+          onChange={(key) => {
+            setActiveTab(key)
+            if (key === 'inventory') setInventoryMounted(true)
+          }}
           items={[
             {
               key: 'chemicals',
@@ -467,7 +537,7 @@ export default function HazchemPanel({
                       style={{ maxWidth: 260 }}
                       onSearch={(v) => {
                         setChemKeyword(v)
-                        refreshChemicals(v)
+                        void refreshChemicals(v)
                       }}
                     />
                     <Button type="primary" disabled={!canOperate} onClick={openChemCreate}>
@@ -489,35 +559,17 @@ export default function HazchemPanel({
             {
               key: 'inventory',
               label: '车间库存/超储',
-              children: (
-                <>
-                  <div className="flex items-center gap-3 mb-3 flex-wrap">
-                    <Button
-                      type={overLimitOnly ? 'primary' : 'default'}
-                      icon={<FileTextOutlined />}
-                      onClick={() => {
-                        const next = !overLimitOnly
-                        setOverLimitOnly(next)
-                        refreshInventories(next)
-                      }}
-                    >
-                      只看超储
-                    </Button>
-                    <Button type="primary" disabled={!canOperate} onClick={openInvCreate}>
-                      新增存量记录
-                    </Button>
-                    <Text style={{ color: T.muted, fontSize: 12, marginLeft: 'auto' }}>共 {invTotal} 条</Text>
-                  </div>
-                  <Table<ChemicalInventoryItem>
-                    rowKey="id"
-                    columns={inventoryColumns}
-                    dataSource={inventories}
-                    pagination={{ pageSize: 20, showSizeChanger: false }}
-                    size="middle"
-                    rowClassName={(row) => (row.over_limit ? 'bg-red-50' : '')}
-                  />
-                </>
-              ),
+              children: inventoryMounted ? (
+                <PageFeishuTable
+                  pageKey={SAFETY_PAGE_TABLE_KEYS.hazchemMsds}
+                  pageName="危化品统计表"
+                  showStats={false}
+                  summarizeColumns={false}
+                  allowCreate
+                  hideMetaHint
+                  defaultSortField="车间"
+                />
+              ) : null,
             },
           ]}
         />
@@ -566,42 +618,150 @@ export default function HazchemPanel({
       </Modal>
 
       <Modal
-        title={editingInventory ? '更新车间存量' : '新增存量记录'}
-        open={invFormOpen}
-        onOk={submitInventory}
-        onCancel={() => setInvFormOpen(false)}
+        title={`MSDS 附件 · ${msdsChemical?.name ?? ''}`}
+        open={msdsChemical !== null}
+        onCancel={() => setMsdsChemical(null)}
+        footer={
+          <Upload
+            multiple
+            showUploadList={false}
+            accept={MSDS_ACCEPT}
+            disabled={!canOperate || msdsUploading || msdsChemical === null}
+            beforeUpload={(file) => {
+              void handleMsdsUpload(file as File)
+              return false
+            }}
+          >
+            <Button type="primary" icon={<UploadOutlined />} loading={msdsUploading} disabled={!canOperate}>
+              上传 MSDS（{MSDS_ACCEPT.replace(/\./g, '').toUpperCase()}）
+            </Button>
+          </Upload>
+        }
+        width={720}
         destroyOnHidden
       >
-        <Form<InventoryFormValues> form={invForm} layout="vertical" className="mt-3">
-          <Form.Item name="chemical_id" label="危化品" rules={[{ required: true, message: '请选择危化品' }]}>
-            <Select
-              showSearch
-              optionFilterProp="label"
-              disabled={editingInventory !== null}
-              options={chemicals.map((c) => ({ label: c.name, value: c.id }))}
-            />
+        <Text style={{ color: T.steel, fontSize: 12 }}>
+          上传后自动 AI 识别 MSDS 内容（品名/CAS/危险性/储存要求等），确认后写入档案；支持 pdf/doc/docx/图片，单文件 ≤30MB。
+        </Text>
+        <List
+          className="mt-3"
+          size="small"
+          loading={msdsLoading}
+          dataSource={msdsFiles}
+          locale={{ emptyText: '暂无 MSDS 附件' }}
+          renderItem={(file) => (
+            <List.Item
+              actions={[
+                <Button
+                  key="preview"
+                  type="link"
+                  size="small"
+                  icon={<EyeOutlined />}
+                  style={{ padding: 0 }}
+                  onClick={() => void handleMsdsPreview(file)}
+                >
+                  预览
+                </Button>,
+                <Button
+                  key="download"
+                  type="link"
+                  size="small"
+                  icon={<DownloadOutlined />}
+                  style={{ padding: 0 }}
+                  onClick={() => void handleMsdsDownload(file)}
+                >
+                  下载
+                </Button>,
+                <Button
+                  key="extract"
+                  type="link"
+                  size="small"
+                  icon={<RobotOutlined />}
+                  style={{ padding: 0 }}
+                  onClick={() => void handleReextract(file)}
+                >
+                  重新识别
+                </Button>,
+                <Popconfirm
+                  key="delete"
+                  title="确定删除该 MSDS 附件？"
+                  disabled={!canDelete}
+                  onConfirm={() => void handleMsdsDelete(file)}
+                >
+                  <Button type="link" size="small" danger icon={<DeleteOutlined />} style={{ padding: 0 }} disabled={!canDelete}>
+                    删除
+                  </Button>
+                </Popconfirm>,
+              ]}
+            >
+              <List.Item.Meta
+                title={<Text style={{ color: T.charcoal }}>{file.file_name}</Text>}
+                description={
+                  <Text style={{ fontSize: 12, color: T.muted }}>
+                    {formatSize(file.size_bytes)} · {file.created_at?.slice(0, 10)}
+                  </Text>
+                }
+              />
+            </List.Item>
+          )}
+        />
+      </Modal>
+
+      <Modal
+        title="AI 识别结果确认"
+        open={aiState.open}
+        onOk={() => void applyAiSuggestion()}
+        onCancel={() => setAiState({ open: false, chemical: null, aiError: null })}
+        confirmLoading={aiApplying}
+        okText="确认更新档案"
+        width={680}
+        destroyOnHidden
+      >
+        <Text style={{ color: T.slate, fontSize: 13 }}>
+          AI 已从 MSDS 识别以下信息并填入表单（识别为空的字段保持档案原值），请核对后确认写入
+          {aiState.chemical ? `「${aiState.chemical.name}」` : ''}档案。
+        </Text>
+        <Form<ChemicalFormValues> form={aiForm} layout="vertical" className="mt-3">
+          <div className="grid grid-cols-2 gap-x-4">
+            <Form.Item name="name" label="化学品名称" rules={[{ required: true, message: '请填写品名' }]}>
+              <Input />
+            </Form.Item>
+            <Form.Item name="alias" label="别名/商品名">
+              <Input />
+            </Form.Item>
+          </div>
+          <div className="grid grid-cols-2 gap-x-4">
+            <Form.Item name="cas_no" label="CAS 号">
+              <Input />
+            </Form.Item>
+            <Form.Item name="category" label="危险性类别" rules={[{ required: true }]}>
+              <Select
+                options={Object.entries(CHEMICAL_CATEGORY_LABELS).map(([value, label]) => ({
+                  value,
+                  label,
+                }))}
+              />
+            </Form.Item>
+          </div>
+          <Form.Item name="hazard_statements" label="危险性概述">
+            <Input.TextArea rows={3} />
           </Form.Item>
-          <div className="grid grid-cols-2 gap-x-4">
-            <Form.Item name="workshop" label="车间/库房" rules={[{ required: true, message: '请填写车间' }]}>
-              <Input placeholder="如 203车间 / 301仓库" />
-            </Form.Item>
-            <Form.Item name="unit" label="单位">
-              <Input placeholder="kg / L / 桶" />
-            </Form.Item>
-          </div>
-          <div className="grid grid-cols-2 gap-x-4">
-            <Form.Item name="quantity" label="当前存量" rules={[{ required: true }]}>
-              <InputNumber min={0} style={{ width: '100%' }} />
-            </Form.Item>
-            <Form.Item name="upper_limit" label="存量上限（留空不设限）">
-              <InputNumber min={0} style={{ width: '100%' }} />
-            </Form.Item>
-          </div>
+          <Form.Item name="storage_requirements" label="储存要求">
+            <Input.TextArea rows={2} />
+          </Form.Item>
           <Form.Item name="remark" label="备注">
             <Input.TextArea rows={2} />
           </Form.Item>
         </Form>
       </Modal>
+
+      <FeishuAttachmentPreviewModal
+        open={preview.open}
+        fileName={preview.fileName}
+        previewSrc={preview.previewSrc}
+        downloadSrc={preview.downloadSrc}
+        onClose={closePreview}
+      />
     </div>
   )
 }

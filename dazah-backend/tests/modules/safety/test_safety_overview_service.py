@@ -267,3 +267,45 @@ async def test_overview_aggregates_markers_and_over_limit(
 
     assert overview.open_hazard_count >= 0
     assert overview.generated_at is not None
+
+
+async def test_overview_uses_mirror_over_limit_when_configured(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """危化品统计表镜像配置了超储口径时，总览卡片改用镜像行。"""
+    from app.modules.safety.service import dashboard as dashboard_service
+    from app.modules.safety.service.page_table import MirrorInventoryRow
+
+    async def _fake_collect(db: object, page_key: str) -> list[MirrorInventoryRow]:
+        assert page_key == "safety:site-mgmt:hazchem-msds"
+        return [
+            MirrorInventoryRow(
+                record_id="rec1",
+                name="测试镜像-丙酮",
+                workshop="201一车间",
+                quantity=150.0,
+                upper_limit=100.0,
+                over_limit=True,
+                over_pct=50.0,
+            ),
+            MirrorInventoryRow(
+                record_id="rec2",
+                name="测试镜像-甲醇",
+                workshop="102车间",
+                quantity=30.0,
+                upper_limit=100.0,
+            ),
+        ]
+
+    monkeypatch.setattr(
+        dashboard_service, "collect_mirror_over_limit_rows", _fake_collect
+    )
+    overview = await SafetyOverviewService(db_session).get_overview()
+    assert len(overview.over_limit_chemicals) == 1
+    item = overview.over_limit_chemicals[0]
+    assert item.chemical_name == "测试镜像-丙酮"
+    assert item.workshop == "201一车间"
+    assert item.quantity == 150.0
+    assert item.over_pct == 50.0
+    assert item.inventory_id is None

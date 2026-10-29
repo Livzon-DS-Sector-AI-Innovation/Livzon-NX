@@ -212,7 +212,7 @@ describe('safety governance actions（批次4：法规/处置卡/目标/设施/�
     expect(i7?.method).toBe('DELETE')
 
     const [u8, i8] = await capture(() =>
-      safety.uploadChemicalMsds('c1', new File(['x'], 'msds.pdf')),
+      safety.uploadChemicalMsdsFile('c1', new File(['x'], 'msds.pdf')),
     )
     expect(u8).toContain('/api/v1/safety/')
     expect(i8?.method).toBe('POST')
@@ -316,7 +316,7 @@ describe('safety governance actions（批次4：法规/处置卡/目标/设施/�
     vi.stubGlobal('fetch', vi.fn(textResponse))
     const results = await Promise.allSettled([
       safety.batchUploadRegulations([new File(['x'], 'a.pdf')]),
-      safety.uploadChemicalMsds('c1', new File(['x'], 'm.pdf')),
+      safety.uploadChemicalMsdsFile('c1', new File(['x'], 'm.pdf')),
       safety.uploadEmergencyPlanFile('p1', new File(['x'], 'p.pdf')),
     ])
     for (const r of results) {
@@ -338,7 +338,7 @@ describe('safety governance actions（批次4：法规/处置卡/目标/设施/�
     const blobResponse = () =>
       Promise.resolve(new Response(new Blob(['pdf']), { status: 200 }))
     vi.stubGlobal('fetch', vi.fn(blobResponse))
-    await safety.downloadChemicalMsds('c1')
+    await safety.fetchChemicalMsdsDownloadBytes('c1', 'f1')
     vi.unstubAllGlobals()
   })
 })
