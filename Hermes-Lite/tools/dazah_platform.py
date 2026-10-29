@@ -446,6 +446,7 @@ async def dazah_tool(
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
+        "X-Dazah-Delegation": str(context.get("delegation_token") or ""),
     }
     try:
         async with httpx.AsyncClient(timeout=120) as client:

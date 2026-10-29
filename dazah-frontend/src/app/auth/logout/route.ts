@@ -13,6 +13,7 @@ export async function GET(request: NextRequest) {
           method: "POST",
           headers: { Authorization: `Bearer ${token}` },
           cache: "no-store",
+          redirect: "error",
         })
         revoked = result.ok || result.status === 401
         break

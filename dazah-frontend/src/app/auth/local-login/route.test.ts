@@ -24,6 +24,7 @@ describe('local login route', () => {
         host: 'factory.test',
         'x-forwarded-host': 'factory.test',
         'x-forwarded-proto': 'http',
+        origin: 'http://factory.test',
       },
       body: new URLSearchParams({
         username: 'local-user',
@@ -59,6 +60,7 @@ describe('local login route', () => {
         host: 'factory.test',
         'x-forwarded-host': 'factory.test',
         'x-forwarded-proto': 'https',
+        origin: 'https://factory.test',
       },
       body: new URLSearchParams({
         username: 'local-user',

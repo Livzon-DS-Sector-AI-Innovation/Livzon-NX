@@ -26,7 +26,6 @@ from app.modules.agent.models import (
 from app.modules.agent.schemas import (
     AgentAutomationDraftCreate,
     AgentToolExecuteRequest,
-    AgentTrustedSubject,
 )
 from app.modules.agent.service import AgentService
 from app.modules.agent.tool_registration import ensure_agent_tools_registered
@@ -39,6 +38,7 @@ from app.modules.agent.tools import (
 from app.platform.identity import deps
 from app.platform.identity.models import User, UserPageGrant
 from app.platform.identity.rbac import seed_menus
+from tests.modules.agent.delegation_helpers import delegated_subject
 
 
 @pytest.mark.asyncio
@@ -345,11 +345,15 @@ async def test_rejected_confirmation_cancellation_survives_request_transaction(
             db.add(user)
             await db.flush()
             await AgentAccessScopeService().synchronize(db, user_id=user.id)
+            settings = get_settings().model_copy(
+                update={"AGENT_TOOL_TOKEN": "synthetic-service-token"}
+            )
+            trusted_subject, headers = await delegated_subject(
+                db, settings, user, source
+            )
             request = AgentToolExecuteRequest(
                 operation=operation,
-                subject=AgentTrustedSubject(
-                    user_id=user.id, tenant_id="local", source=source
-                ),
+                subject=trusted_subject,
             )
             confirmation = AgentConfirmation(
                 user_id=user.id,
@@ -375,9 +379,7 @@ async def test_rejected_confirmation_cancellation_survives_request_transaction(
 
             app.dependency_overrides[get_db] = transaction
             app.dependency_overrides[deps.get_current_user] = lambda: user
-            app.dependency_overrides[get_settings] = lambda: get_settings().model_copy(
-                update={"AGENT_TOOL_TOKEN": "synthetic-service-token"}
-            )
+            app.dependency_overrides[get_settings] = lambda: settings
             async with AsyncClient(
                 transport=ASGITransport(app=app), base_url="http://test"
             ) as client:
@@ -395,9 +397,9 @@ async def test_rejected_confirmation_cancellation_survives_request_transaction(
                                 "tenant_id": "foreign",
                             },
                         },
-                        headers={"Authorization": "Bearer synthetic-service-token"},
+                        headers=headers,
                     )
-                    assert foreign.status_code == 403
+                    assert foreign.status_code == 401
                     await db.refresh(confirmation)
                     assert confirmation.status == "pending"
                     response = await client.post(
@@ -406,7 +408,7 @@ async def test_rejected_confirmation_cancellation_survives_request_transaction(
                             "choice": "allow",
                             "subject": request.subject.model_dump(mode="json"),
                         },
-                        headers={"Authorization": "Bearer synthetic-service-token"},
+                        headers=headers,
                     )
                 assert response.status_code == 403
             await db.refresh(confirmation)

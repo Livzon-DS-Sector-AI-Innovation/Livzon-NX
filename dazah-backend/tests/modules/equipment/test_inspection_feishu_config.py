@@ -3,10 +3,12 @@
 from typing import Any
 
 import pytest
+from cryptography.fernet import Fernet
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppException
+from app.core.llm.encryption import encrypt_api_key
 from app.modules.equipment.models.inspection_feishu_config import (
     EquipmentInspectionFeishuConfig,
 )
@@ -14,6 +16,13 @@ from app.modules.equipment.schemas.inspection import (
     EquipmentInspectionFeishuConfigUpdateRequest,
 )
 from app.modules.equipment.service import inspection_feishu_config as config_service
+
+
+@pytest.fixture(autouse=True)
+def _test_encryption_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        config_service.settings, "LLM_ENCRYPTION_KEY", Fernet.generate_key().decode()
+    )
 
 
 @pytest.fixture(autouse=True)
@@ -98,7 +107,7 @@ async def test_effective_config_prefers_database_row(
     db_session.add(
         EquipmentInspectionFeishuConfig(
             app_id="cli_db",
-            app_secret="db_secret",
+            app_secret=encrypt_api_key("db_secret"),
             app_token="bascn_db",
             today_table_id="tbl_db_today",
             history_table_id="tbl_db_history",
@@ -122,7 +131,7 @@ async def test_effective_config_disabled_switch_stops_sync(
     db_session.add(
         EquipmentInspectionFeishuConfig(
             app_id="cli_db",
-            app_secret="db_secret",
+            app_secret=encrypt_api_key("db_secret"),
             app_token="bascn_db",
             is_enabled=False,
         )

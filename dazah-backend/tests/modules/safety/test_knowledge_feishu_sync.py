@@ -3,8 +3,10 @@
 from typing import Any
 
 import pytest
+from cryptography.fernet import Fernet
 from sqlalchemy import delete, select
 
+from app.core.config import get_settings
 from app.core.exceptions import AppException
 from app.core.llm.encryption import encrypt_api_key
 from app.modules.safety.models import (
@@ -12,6 +14,13 @@ from app.modules.safety.models import (
     SafetyKnowledgeArticle,
 )
 from app.modules.safety.service import knowledge_feishu
+
+
+@pytest.fixture(autouse=True)
+def _credential_encryption(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        get_settings(), "LLM_ENCRYPTION_KEY", Fernet.generate_key().decode()
+    )
 
 
 class _FakeBitableClient:

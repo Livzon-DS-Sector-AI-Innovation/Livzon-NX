@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock
 import httpx
 import pytest
 
+from app.core.config import get_settings
 from app.core.exceptions import AppException
 from app.modules.safety.crawler.types import CrawledRegulation
 from app.modules.safety.service import regulation_radar as radar
@@ -482,7 +483,9 @@ async def test_update_settings_persists_radar_notify_targets(
     )
     from app.modules.safety.service import feishu_settings
 
-    monkeypatch.setenv("LLM_ENCRYPTION_KEY", Fernet.generate_key().decode())
+    monkeypatch.setattr(
+        get_settings(), "LLM_ENCRYPTION_KEY", Fernet.generate_key().decode()
+    )
 
     detail = await feishu_settings.update_safety_feishu_app_settings(
         db_session,

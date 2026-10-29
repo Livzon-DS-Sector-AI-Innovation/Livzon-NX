@@ -6,6 +6,8 @@ from typing import Any, cast
 
 import httpx
 
+from app.core.llm.http_security import provider_client
+
 from .capacity import bounded_call, bounded_stream
 from .config import LLMConfigData, get_config
 from .exceptions import LLMOutputError, LLMProviderError, LLMRateLimitError
@@ -63,7 +65,7 @@ class LLMClient:
         """Get HTTP client and config."""
         config = await get_config(config_type)
 
-        client = httpx.AsyncClient(
+        client = provider_client(
             base_url=config.api_base_url.rstrip("/"),
             headers={
                 "Authorization": f"Bearer {config.api_key}",
@@ -104,7 +106,7 @@ class LLMClient:
         client, config = await self._get_client_and_config(config_type)
         if timeout is not None:
             await client.aclose()
-            client = httpx.AsyncClient(
+            client = provider_client(
                 base_url=config.api_base_url.rstrip("/"),
                 headers={
                     "Authorization": f"Bearer {config.api_key}",
@@ -161,11 +163,9 @@ class LLMClient:
                 raise LLMRateLimitError("Rate limit exceeded", status_code=429)
 
             if resp.is_error:
-                error_text = resp.text[:500]
                 raise LLMProviderError(
                     "LLM 服务返回错误",
                     status_code=resp.status_code,
-                    raw_response=error_text,
                 )
 
             data: Any = resp.json()
@@ -377,11 +377,9 @@ class LLMClient:
                 raise LLMRateLimitError("Rate limit exceeded", status_code=429)
 
             if resp.is_error:
-                error_text = resp.text[:500]
                 raise LLMProviderError(
                     "视觉模型服务返回错误",
                     status_code=resp.status_code,
-                    raw_response=error_text,
                 )
 
             data: Any = resp.json()
@@ -455,7 +453,7 @@ class LLMClient:
         """
         try:
             config = await get_config("text")
-            client = httpx.AsyncClient(
+            client = provider_client(
                 base_url=config.api_base_url.rstrip("/"),
                 headers={"Authorization": f"Bearer {config.api_key}"},
                 timeout=5.0,
@@ -468,8 +466,10 @@ class LLMClient:
                 }
             finally:
                 await client.aclose()
-        except Exception as e:
-            return {"status": "error", "detail": str(e)}
+        except Exception:
+            return {
+                "status": "error", "detail": "LLM 服务暂不可用，请检查配置或稍后重试"
+            }
 
     async def active_model_name(self, config_type: str = "text") -> str:
         """返回当前激活配置的模型名（不暴露密钥）。
@@ -524,49 +524,61 @@ class LLMClient:
         if thinking:
             body["thinking"] = {"type": "enabled"}
 
-        async with httpx.AsyncClient(
-            base_url=config.api_base_url.rstrip("/"),
-            headers={
-                "Authorization": f"Bearer {config.api_key}",
-                "Content-Type": "application/json",
-            },
-            timeout=config.timeout_seconds,
-        ) as client:
-            async with client.stream("POST", "/chat/completions", json=body) as resp:
-                if resp.status_code == 429:
-                    raise LLMRateLimitError("Rate limit exceeded", status_code=429)
+        try:
+            async with provider_client(
+                base_url=config.api_base_url.rstrip("/"),
+                headers={
+                    "Authorization": f"Bearer {config.api_key}",
+                    "Content-Type": "application/json",
+                },
+                timeout=config.timeout_seconds,
+            ) as client:
+                async with client.stream(
+                    "POST", "/chat/completions", json=body
+                ) as resp:
+                    if resp.status_code == 429:
+                        raise LLMRateLimitError("Rate limit exceeded", status_code=429)
 
-                if resp.is_error:
-                    error_text = await resp.aread()
-                    detail = error_text.decode()[:500]
-                    raise LLMProviderError(
-                        f"Stream API error: {resp.status_code} - {detail}",
-                        status_code=resp.status_code,
-                    )
+                    if resp.is_error:
+                        raise LLMProviderError(
+                            "LLM 流式服务返回错误",
+                            status_code=resp.status_code,
+                        )
 
-                async for line in resp.aiter_lines():
-                    if not line or not line.startswith("data: "):
-                        continue
-
-                    data = line[6:]  # Remove "data: " prefix
-                    if data == "[DONE]":
-                        break
-
-                    try:
-                        chunk = json_module.loads(data)
-                        if not chunk.get("choices"):
+                    async for line in resp.aiter_lines():
+                        if not line or not line.startswith("data: "):
                             continue
 
-                        delta = chunk["choices"][0].get("delta", {})
-                        reasoning = delta.get("reasoning_content")
-                        content = delta.get("content")
+                        data = line[6:]  # Remove "data: " prefix
+                        if data == "[DONE]":
+                            break
 
-                        if reasoning:
-                            yield {"type": "reasoning", "text": reasoning}
-                        if content:
-                            yield {"type": "content", "text": content}
-                    except json_module.JSONDecodeError:
-                        continue
+                        try:
+                            chunk = json_module.loads(data)
+                            if (
+                                isinstance(chunk, dict)
+                                and chunk.get("error") is not None
+                            ):
+                                raise LLMProviderError(
+                                    "LLM 流式服务返回错误", status_code=502
+                                )
+                            if not chunk.get("choices"):
+                                continue
+
+                            delta = chunk["choices"][0].get("delta", {})
+                            reasoning = delta.get("reasoning_content")
+                            content = delta.get("content")
+
+                            if reasoning:
+                                yield {"type": "reasoning", "text": reasoning}
+                            if content:
+                                yield {"type": "content", "text": content}
+                        except json_module.JSONDecodeError:
+                            continue
+        except httpx.TimeoutException as exc:
+            raise LLMProviderError("LLM 服务响应超时", status_code=504) from exc
+        except httpx.RequestError as exc:
+            raise LLMProviderError("LLM 服务暂不可用", status_code=502) from exc
 
 
 # Global singleton instance

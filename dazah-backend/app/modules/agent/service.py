@@ -34,6 +34,7 @@ from app.modules.procurement.contract_generator import (
     get_contract_template_metadata,
 )
 from app.modules.procurement.schemas import ContractCategory
+from app.platform.identity.agent_delegation import issue_agent_delegation
 from app.platform.identity.models import User
 
 from .attachment_service import AgentAttachmentService
@@ -1052,6 +1053,7 @@ class AgentService:
                 db,
                 hermes_result,
                 session_id=session.id,
+                user_id=current_user.id,
             )
         ]
         return AgentChatResponse(
@@ -1353,6 +1355,7 @@ class AgentService:
                         db,
                         hermes_result,
                         session_id=session.id,
+                        user_id=current_user.id,
                     )
                 ]
                 response = AgentChatResponse(
@@ -2168,6 +2171,9 @@ class AgentService:
                 if context.get("page_context") else None
             ),
         ).model_dump(mode="json")
+        payload["subject"]["delegation_token"] = issue_agent_delegation(
+            self.settings, user, source="web"
+        )
         try:
             async with httpx.AsyncClient(
                 timeout=self._hermes_timeout_seconds()
@@ -2249,6 +2255,9 @@ class AgentService:
         if self.settings.HERMES_AGENT_TOKEN:
             headers["Authorization"] = f"Bearer {self.settings.HERMES_AGENT_TOKEN}"
         payload = agent_request.model_dump(mode="json")
+        payload["subject"]["delegation_token"] = issue_agent_delegation(
+            self.settings, user, source="web"
+        )
         stream_url = self._hermes_stream_url()
         last_sequence = 0
         try:
@@ -3029,11 +3038,9 @@ class AgentService:
         confirmations: list[AgentConfirmation] = []
         seen: set[uuid.UUID] = set()
         native_confirmations = self._extract_feishu_native_confirmations(hermes_result)
-        resolved_user_id = (
-            await self._resolve_user_id(db, session_id, user_id)
-            if native_confirmations
-            else None
-        )
+        resolved_user_id = await self._resolve_user_id(db, session_id, user_id)
+        if resolved_user_id is None:
+            return []
 
         if resolved_user_id is not None:
             for item in native_confirmations:
@@ -3076,6 +3083,14 @@ class AgentService:
         async def append_confirmation(confirmation: AgentConfirmation | None) -> None:
             if confirmation is None:
                 return
+            # Hermes/model output may reference arbitrary UUIDs. Check ownership
+            # even for fetched IDs and existing external-confirmation collisions.
+            if (
+                confirmation.user_id != resolved_user_id
+                or (session_id is not None and confirmation.session_id != session_id)
+                or confirmation.is_deleted
+            ):
+                return
             if confirmation.id in seen:
                 return
             if confirmation.status != "pending":
@@ -3088,7 +3103,7 @@ class AgentService:
         for confirmation in await self.repo.list_pending_confirmations(
             db,
             session_id=session_id,
-            user_id=user_id,
+            user_id=resolved_user_id,
         ):
             await append_confirmation(confirmation)
 

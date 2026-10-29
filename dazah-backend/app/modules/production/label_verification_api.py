@@ -1,14 +1,18 @@
 import logging
-from datetime import date
+import uuid
+from datetime import date, datetime
+from pathlib import Path
 from typing import Any
 from uuid import UUID
 
-from fastapi import Depends, Query, UploadFile
+from fastapi import Depends, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.response import paginated_response, success_response
+from app.core.upload_security import stream_upload_to_path, validate_upload_metadata
 from app.modules.production.label_verification_schemas import (
     LabelVerificationCreate,
     LabelVerificationUpdate,
@@ -19,6 +23,8 @@ from app.shared.module_registry import MODULES_BY_CODE
 from app.shared.schemas import PageParams
 
 logger = logging.getLogger(__name__)
+
+LABEL_VIDEO_EXTENSIONS = {".mp4", ".mov", ".avi", ".mkv", ".webm"}
 
 
 # 标签复核由生产管理页面承载，必须和页面权限目录使用同一业务模块。
@@ -138,6 +144,15 @@ async def delete_label_verification(
     return success_response(message="标签复核记录删除成功")
 
 
+def resolve_upload_path(upload_dir: str, file_key: str) -> Path:
+    """Resolve a client-provided file key strictly inside ``upload_dir``."""
+    root = Path(upload_dir).resolve()
+    candidate = (root / file_key).resolve()
+    if not candidate.is_relative_to(root):
+        raise HTTPException(status_code=400, detail="文件路径非法")
+    return candidate
+
+
 @router.post(
     "/label-verifications/upload-video",
     summary="上传标签复核视频",
@@ -147,30 +162,29 @@ async def upload_label_verification_video(
     service: LabelVerificationService = Depends(get_label_verification_service),
 ) -> Any:
     """上传视频文件，返回文件 key 和文件名"""
-    import os
-    from datetime import datetime
-
-    from app.core.config import get_settings
-
     settings = get_settings()
-    upload_dir = os.path.join(settings.UPLOAD_DIR, "label-verification")
-    os.makedirs(upload_dir, exist_ok=True)
+    filename = validate_upload_metadata(
+        file, allowed_extensions=LABEL_VIDEO_EXTENSIONS
+    )
+    suffix = Path(filename).suffix.lower()
+    stored_name = (
+        f"video_{int(datetime.now().timestamp())}_{uuid.uuid4().hex}{suffix}"
+    )
+    destination = Path(settings.UPLOAD_DIR) / "label-verification" / stored_name
+    _, file_size = await stream_upload_to_path(
+        file,
+        destination,
+        max_bytes=settings.VIDEO_UPLOAD_MAX_MB * 1024 * 1024,
+        allowed_extensions=LABEL_VIDEO_EXTENSIONS,
+        what="视频文件",
+    )
 
-    os.path.splitext(file.filename or ".mp4")[1]
-    timestamp = int(datetime.now().timestamp())
-    safe_name = f"video_{timestamp}_{file.filename or 'unknown'}"
-    file_path = os.path.join(upload_dir, safe_name)
-
-    content = await file.read()
-    with open(file_path, "wb") as f:
-        f.write(content)
-
-    file_key = f"label-verification/{safe_name}"
+    file_key = f"label-verification/{stored_name}"
     return success_response(
         data={
             "file_key": file_key,
-            "file_name": file.filename or safe_name,
-            "file_size": len(content),
+            "file_name": filename,
+            "file_size": file_size,
         },
         message="视频上传成功",
     )
@@ -181,34 +195,27 @@ async def upload_label_verification_video(
     summary="分析标签复核视频",
 )
 async def analyze_label_verification_video(
-    file_key: str,
-    fps: float = 1.0,
+    file_key: str = Query(..., description="上传接口返回的文件 key"),
+    fps: float = Query(1.0, gt=0, le=10, description="抽帧频率"),
     service: LabelVerificationService = Depends(get_label_verification_service),
 ) -> Any:
     """分析视频中的标签信息，返回 AI 识别结果"""
-    import os
-
-    from app.core.config import get_settings
     from app.core.llm import llm_client
     from app.modules.production.label_verification_video_service import (
         LabelVerificationVideoService,
     )
 
     settings = get_settings()
-    video_path = os.path.join(settings.UPLOAD_DIR, file_key)
+    video_path = resolve_upload_path(settings.UPLOAD_DIR, file_key)
 
-    if not os.path.exists(video_path):
-        from fastapi import HTTPException
-
+    if not video_path.is_file():
         raise HTTPException(status_code=404, detail="视频文件不存在")
 
     # 提取视频帧
     video_service = LabelVerificationVideoService(settings.UPLOAD_DIR)
-    frames = video_service.extract_frames(video_path, fps=fps, max_frames=20)
+    frames = video_service.extract_frames(str(video_path), fps=fps, max_frames=20)
 
     if not frames:
-        from fastapi import HTTPException
-
         raise HTTPException(status_code=400, detail="无法从视频中提取帧")
 
     # 使用统一的 LLM 客户端（视觉模型）
@@ -267,8 +274,6 @@ async def analyze_label_verification_video(
 
     except Exception as e:
         logger.error(f"视频分析失败: {e}")
-        from fastapi import HTTPException
-
         raise HTTPException(status_code=500, detail=f"视频分析失败: {str(e)}")
 
 
@@ -323,8 +328,6 @@ async def auto_compare_video(
             os.path.basename(payload.video_file_key),
         )
         if not os.path.exists(video_path):
-            from fastapi import HTTPException
-
             raise HTTPException(status_code=404, detail="视频文件不存在")
 
     # 构建表单数据
@@ -359,8 +362,6 @@ async def auto_compare_video(
         )
     except Exception as e:
         logger.error(f"自动对比失败: {e}")
-        from fastapi import HTTPException
-
         raise HTTPException(status_code=500, detail=f"视频分析失败: {str(e)}")
 
     return success_response(

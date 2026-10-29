@@ -583,7 +583,9 @@ class EmployeeService:
         employee_number = getattr(data, "employee_number", None)
         if employee_number is not None and employee_number.strip() == "":
             data.employee_number = None
-        update_data = data.model_dump(exclude_unset=True)
+        update_data = data.model_dump(
+            exclude_unset=True, include=set(EmployeeUpdate.model_fields)
+        )
         if current_page_key.get() is not None:
             from app.core.exceptions import ForbiddenException
 

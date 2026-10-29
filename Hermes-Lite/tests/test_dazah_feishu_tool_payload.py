@@ -14,6 +14,7 @@ def _bind_context() -> object:
             "external_binding_id": "00000000-0000-0000-0000-000000000002",
             "trace_id": "00000000-0000-0000-0000-000000000003",
             "platform_session_id": "00000000-0000-0000-0000-000000000004",
+            "delegation_token": "synthetic-user-delegation",
         }
     )
 
@@ -62,6 +63,8 @@ def test_dazah_tool_search_uses_trusted_subject(monkeypatch) -> None:
     assert payload["subject"]["tenant_id"] == "tenant-test"
     assert payload["subject"]["user_id"].endswith("0001")
     assert "context" not in payload
+    assert recorded["headers"]["X-Dazah-Delegation"] == "synthetic-user-delegation"
+    assert "delegation_token" not in payload["subject"]
 
 
 def test_dazah_tool_execute_does_not_accept_legacy_aliases(monkeypatch) -> None:

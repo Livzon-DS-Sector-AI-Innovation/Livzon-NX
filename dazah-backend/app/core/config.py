@@ -4,10 +4,17 @@ from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
 
+from cryptography.fernet import Fernet
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
+
+# Known placeholder values that must never sign production tokens.
+_UNSAFE_SECRET_KEYS = {
+    "change-me-in-production",
+    "local-development-only-change-me",
+}
 
 
 def _get_env_file() -> str:
@@ -97,6 +104,8 @@ class Settings(BaseSettings):
     # Upload
     UPLOAD_DIR: str = "./uploads"
     MAX_UPLOAD_SIZE_MB: int = 50
+    # 标签复核视频单独放宽；其余上传继续使用 MAX_UPLOAD_SIZE_MB。
+    VIDEO_UPLOAD_MAX_MB: int = Field(default=500, ge=1, le=4096)
 
     # MinIO / S3-compatible object storage
     MINIO_ENABLED: bool = False
@@ -116,8 +125,11 @@ class Settings(BaseSettings):
     JWT_EXPIRE_SECONDS: int = 86400  # 24 hours
 
     # Local auth. When unset, development enables it and production disables it.
-    # Use admin_only only for a time-boxed production recovery window.
+    # Use admin_only only for a time-boxed production recovery window. Enabling
+    # the regular local login in production additionally requires
+    # ALLOW_PRODUCTION_LOCAL_LOGIN=true.
     LOCAL_LOGIN_MODE: Literal["disabled", "admin_only", "enabled"] | None = None
+    ALLOW_PRODUCTION_LOCAL_LOGIN: bool = False
 
     # Module access is grant-based in production. ``all`` is retained only as
     # a development compatibility override for older local environments.
@@ -224,11 +236,15 @@ class Settings(BaseSettings):
     FEISHU_EVENT_VERIFICATION_TOKEN: str = ""
 
     # LLM (AI 解析配置)
+    LLM_ENCRYPTION_KEY: str | None = None
+    # Exact origins approved by operations for private model deployments.
+    LLM_ALLOWED_PRIVATE_API_ORIGINS: str = ""
     LLM_API_KEY: str | None = None
     LLM_BASE_URL: str | None = "https://api.deepseek.com"
     LLM_MODEL: str | None = "deepseek-chat"
 
-    # MCP — AI Agent 认证
+    # Retired MCP flags remain parseable so stale deployments fail explicitly.
+    MCP_ENABLED: bool = False
     MCP_AGENT_API_KEYS: str = ""
 
     # Hermes 中枢 Agent
@@ -308,8 +324,34 @@ class Settings(BaseSettings):
         missing: list[str] = []
         if not self.SECRET_KEY:
             missing.append("SECRET_KEY")
+        if self.is_production and (
+            self.SECRET_KEY.strip() in _UNSAFE_SECRET_KEYS
+            or len(self.SECRET_KEY.strip()) < 32
+        ):
+            missing.append("SECRET_KEY（生产必须使用至少 32 位随机值，禁止示例默认值）")
+        if self.is_production and self.DEV_BYPASS_AUTH:
+            missing.append("DEV_BYPASS_AUTH（生产必须为 false）")
+        if self.MCP_ENABLED:
+            missing.append(
+                "MCP_ENABLED（旧 MCP 已停用，请使用带用户身份的 Agent 工具网关）"
+            )
+        if (
+            self.is_production
+            and self.effective_local_login_mode == "enabled"
+            and not self.ALLOW_PRODUCTION_LOCAL_LOGIN
+        ):
+            missing.append(
+                "ALLOW_PRODUCTION_LOCAL_LOGIN（生产启用本地登录需显式允许）"
+            )
         if self.is_production and not self.ENCRYPTION_KEY:
             missing.append("ENCRYPTION_KEY")
+        if self.is_production and not self.LLM_ENCRYPTION_KEY:
+            missing.append("LLM_ENCRYPTION_KEY（凭证加密必需，禁止明文保存）")
+        if self.LLM_ENCRYPTION_KEY:
+            try:
+                Fernet(self.LLM_ENCRYPTION_KEY.encode())
+            except (ValueError, TypeError):
+                missing.append("LLM_ENCRYPTION_KEY（必须为有效的 Fernet 密钥）")
         if not self.FRONTEND_URL:
             missing.append("FRONTEND_URL")
         if self.is_production:

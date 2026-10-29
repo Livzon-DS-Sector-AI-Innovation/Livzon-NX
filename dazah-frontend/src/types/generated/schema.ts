@@ -8279,7 +8279,7 @@ export interface paths {
         };
         /**
          * 获取人员名单
-         * @description 分页获取所有人员名单，支持按部门和姓名筛选。
+         * @description 分页获取人员名单；联系方式仅对平台/HR 读者返回。
          */
         get: operations["list_personnel_api_v1_identity_personnel_get"];
         put?: never;
@@ -25826,7 +25826,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** 授权下载模块文件 */
+        /**
+         * 拒绝无业务记录上下文的附件下载
+         * @description Object keys never prove ownership; use the owning module's record API.
+         *
+         *     This legacy route cannot recover a record/page scope reliably from a key.
+         *     Fail closed for every caller, including admins, before touching storage.
+         */
         get: operations["download_module_file_api_v1_uploads__module___object_key__get"];
         put?: never;
         post?: never;
@@ -27991,6 +27997,8 @@ export interface components {
         };
         /** AgentTrustedSubject */
         AgentTrustedSubject: {
+            /** Delegation Token */
+            delegation_token?: string | null;
             /** Display Name */
             display_name?: string | null;
             /** External Binding Id */
@@ -40971,6 +40979,11 @@ export interface components {
         EmployeeUpdate: {
             /** Age */
             age?: number | null;
+            /**
+             * Archive Number
+             * @description 档案编号
+             */
+            archive_number?: string | null;
             /** Bank Account */
             bank_account?: string | null;
             /** Birth Day */
@@ -40979,6 +40992,16 @@ export interface components {
             birth_month?: number | null;
             /** Birth Year */
             birth_year?: number | null;
+            /**
+             * Certificate Number
+             * @description 证书编号
+             */
+            certificate_number?: string | null;
+            /**
+             * Certificate Review Date
+             * @description 技能证书复审时间
+             */
+            certificate_review_date?: string | null;
             /** Classification */
             classification?: string | null;
             /** Company Tenure */
@@ -40989,6 +41012,16 @@ export interface components {
             contract_end_3?: string | null;
             /** Contract End 4 */
             contract_end_4?: string | null;
+            /**
+             * Contract End 5
+             * @description 合同截止日期5
+             */
+            contract_end_5?: string | null;
+            /**
+             * Contract End 6
+             * @description 合同截止日期6
+             */
+            contract_end_6?: string | null;
             /** Contract End Date */
             contract_end_date?: string | null;
             /** Contract Opinion */
@@ -40999,12 +41032,27 @@ export interface components {
             contract_start_3?: string | null;
             /** Contract Start 4 */
             contract_start_4?: string | null;
+            /**
+             * Contract Start 5
+             * @description 第五次续签合同日期
+             */
+            contract_start_5?: string | null;
+            /**
+             * Contract Start 6
+             * @description 第六次续签合同日期
+             */
+            contract_start_6?: string | null;
             /** Contract Start Date */
             contract_start_date?: string | null;
             /** Contract Type */
             contract_type?: string | null;
             /** Current Address */
             current_address?: string | null;
+            /**
+             * Degree
+             * @description 学位
+             */
+            degree?: string | null;
             /** Department */
             department?: string | null;
             /** Dept Leader Name */
@@ -41023,6 +41071,16 @@ export interface components {
             emergency_contact_relation?: string | null;
             /** Employee Number */
             employee_number?: string | null;
+            /**
+             * Employment Type
+             * @description 人员就业方式
+             */
+            employment_type?: string | null;
+            /**
+             * Ethnic Group
+             * @description 民族
+             */
+            ethnic_group?: string | null;
             /** Factory Entry Date */
             factory_entry_date?: string | null;
             /** Factory Tenure */
@@ -41031,6 +41089,11 @@ export interface components {
             gender?: string | null;
             /** Graduation Date */
             graduation_date?: string | null;
+            /**
+             * Health Status
+             * @description 健康状况
+             */
+            health_status?: string | null;
             /** Hire Date */
             hire_date?: string | null;
             /** Household Type */
@@ -41043,6 +41106,11 @@ export interface components {
             id_card_expiry?: string | null;
             /** Job Category */
             job_category?: string | null;
+            /**
+             * Last Working Day
+             * @description 最后工作日
+             */
+            last_working_day?: string | null;
             /** Level */
             level?: string | null;
             /** Livo Entry Date */
@@ -41055,12 +41123,37 @@ export interface components {
             name?: string | null;
             /** Native Place */
             native_place?: string | null;
+            /**
+             * Offboarding Reason
+             * @description 离职原因
+             */
+            offboarding_reason?: string | null;
+            /**
+             * Offboarding Type
+             * @description 离职类型
+             */
+            offboarding_type?: string | null;
             /** Phone */
             phone?: string | null;
+            /**
+             * Planned Probation Date
+             * @description 拟转正日期
+             */
+            planned_probation_date?: string | null;
             /** Political Status */
             political_status?: string | null;
             /** Position */
             position?: string | null;
+            /**
+             * Probation Effective Date
+             * @description 转正生效日期
+             */
+            probation_effective_date?: string | null;
+            /**
+             * Probation Status
+             * @description 转正状态
+             */
+            probation_status?: string | null;
             /** Qualification Type */
             qualification_type?: string | null;
             /** Qualifications */
@@ -41069,22 +41162,50 @@ export interface components {
             remarks?: string[] | null;
             /** School */
             school?: string | null;
+            /**
+             * Seq Number
+             * @description 序号（飞书自动编号）
+             */
+            seq_number?: number | null;
             /** Status */
             status?: string | null;
             /** Status Category */
             status_category?: string | null;
+            /**
+             * Sub Department
+             * @description 二级部门
+             */
+            sub_department?: string | null;
             /** Team */
             team?: string | null;
             /** Training Id */
             training_id?: string | null;
             /** Transfer History */
             transfer_history?: string | null;
+            /**
+             * Work Experience 1
+             * @description 工作经验一
+             */
+            work_experience_1?: string | null;
+            /**
+             * Work Experience 2
+             * @description 工作经验二
+             */
+            work_experience_2?: string | null;
+            /**
+             * Work Experience 3
+             * @description 工作经验三
+             */
+            work_experience_3?: string | null;
+            /**
+             * Work Experience 4
+             * @description 工作经验四
+             */
+            work_experience_4?: string | null;
             /** Work Start Date */
             work_start_date?: string | null;
             /** Work Years */
             work_years?: number | null;
-        } & {
-            [key: string]: unknown;
         };
         /** EnergyApiResponse[BotResponse] */
         EnergyApiResponse_BotResponse_: {
@@ -52563,8 +52684,6 @@ export interface components {
             spec?: string | null;
             /** Unit */
             unit?: string | null;
-        } & {
-            [key: string]: unknown;
         };
         /** ProductionFeishuConfigUpsert */
         ProductionFeishuConfigUpsert: {
@@ -64681,6 +64800,7 @@ export interface operations {
             query?: never;
             header?: {
                 authorization?: string | null;
+                "x-dazah-delegation"?: string | null;
             };
             path: {
                 confirmation_id: string;
@@ -66156,6 +66276,7 @@ export interface operations {
             query?: never;
             header?: {
                 authorization?: string | null;
+                "x-dazah-delegation"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -66191,6 +66312,7 @@ export interface operations {
             query?: never;
             header?: {
                 authorization?: string | null;
+                "x-dazah-delegation"?: string | null;
             };
             path?: never;
             cookie?: never;
@@ -66230,6 +66352,7 @@ export interface operations {
             };
             header?: {
                 authorization?: string | null;
+                "x-dazah-delegation"?: string | null;
             };
             path: {
                 operation: string;
@@ -84341,7 +84464,9 @@ export interface operations {
             };
             header?: never;
             path?: never;
-            cookie?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
         };
         requestBody?: never;
         responses: {
@@ -92035,7 +92160,9 @@ export interface operations {
     analyze_label_verification_video_api_v1_production_label_verifications_analyze_video_post: {
         parameters: {
             query: {
+                /** @description 上传接口返回的文件 key */
                 file_key: string;
+                /** @description 抽帧频率 */
                 fps?: number;
             };
             header?: never;

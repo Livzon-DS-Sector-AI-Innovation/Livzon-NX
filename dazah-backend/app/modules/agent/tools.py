@@ -792,6 +792,12 @@ class ToolExecutor:
                 status.HTTP_403_FORBIDDEN,
                 "Trusted Agent subject is not an active local user",
             )
+        tenant_id = request.subject.tenant_id
+        if tenant_id and (user.tenant_key or "default") != tenant_id:
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                "Trusted Agent subject tenant mismatch",
+            )
         return session_id, user_id, user
 
     async def _write_audit(

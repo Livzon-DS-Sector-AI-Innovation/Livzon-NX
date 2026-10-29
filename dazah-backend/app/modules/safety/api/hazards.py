@@ -1,16 +1,18 @@
 """Safety API — hazards endpoints."""
 
-import os
 import uuid
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.deps import CurrentUser, get_current_user
 from app.core.response import ApiResponse
+from app.core.upload_security import read_upload_secure
 from app.modules.safety.schemas import (
     DepartmentLeaderResponse,
     HazardReportCreate,
@@ -26,6 +28,8 @@ from app.modules.safety.service import (
 )
 
 hazards_router = APIRouter()
+
+_HAZARD_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
 
 
 @hazards_router.get("/hazards", response_model=ApiResponse, summary="获取隐患列表")
@@ -165,20 +169,24 @@ async def upload_hazard_photo(
 ) -> Any:
     """上传隐患缺陷图片，追加到 defect_photos JSON 数组"""
 
-    upload_dir = os.path.join("uploads", "safety", "hazard")
-    os.makedirs(upload_dir, exist_ok=True)
-
-    file_ext = os.path.splitext(file.filename or ".png")[1]
-    safe_name = f"hazard_{hazard_id}_{int(datetime.now().timestamp())}{file_ext}"
-    file_path = os.path.join(upload_dir, safe_name)
-
-    content = await file.read()
-    with open(file_path, "wb") as f:
-        f.write(content)
+    filename, content = await read_upload_secure(
+        file,
+        max_bytes=get_settings().MAX_UPLOAD_SIZE_MB * 1024 * 1024,
+        allowed_extensions=_HAZARD_IMAGE_EXTENSIONS,
+        what="图片",
+    )
+    upload_dir = Path("uploads") / "safety" / "hazard"
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    safe_name = (
+        f"hazard_{hazard_id}_{int(datetime.now().timestamp())}_"
+        f"{uuid.uuid4().hex}{Path(filename).suffix.lower()}"
+    )
+    file_path = upload_dir / safe_name
+    file_path.write_bytes(content)
 
     service = SafetyService(db)
     item = await service.upload_hazard_photo(
-        hazard_id, file.filename or "unknown", file_path
+        hazard_id, filename, str(file_path)
     )
     if not item:
         return ApiResponse(code=404, message="隐患不存在")
@@ -199,19 +207,23 @@ async def upload_rectification_photo(
 ) -> Any:
     """上传整改后图片，追加到 rectification_photos JSON 数组"""
 
-    upload_dir = os.path.join("uploads", "safety", "hazard")
-    os.makedirs(upload_dir, exist_ok=True)
-
-    file_ext = os.path.splitext(file.filename or ".png")[1]
-    safe_name = f"rectification_{hazard_id}_{int(datetime.now().timestamp())}{file_ext}"
-    file_path = os.path.join(upload_dir, safe_name)
-
-    content = await file.read()
-    with open(file_path, "wb") as f:
-        f.write(content)
+    _filename, content = await read_upload_secure(
+        file,
+        max_bytes=get_settings().MAX_UPLOAD_SIZE_MB * 1024 * 1024,
+        allowed_extensions=_HAZARD_IMAGE_EXTENSIONS,
+        what="图片",
+    )
+    upload_dir = Path("uploads") / "safety" / "hazard"
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    safe_name = (
+        f"rectification_{hazard_id}_{int(datetime.now().timestamp())}_"
+        f"{uuid.uuid4().hex}{Path(_filename).suffix.lower()}"
+    )
+    file_path = upload_dir / safe_name
+    file_path.write_bytes(content)
 
     service = SafetyService(db)
-    item = await service.upload_rectification_photo(hazard_id, file_path)
+    item = await service.upload_rectification_photo(hazard_id, str(file_path))
     if not item:
         return ApiResponse(code=404, message="隐患不存在")
     await db.commit()

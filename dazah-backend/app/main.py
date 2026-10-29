@@ -53,19 +53,10 @@ logging.getLogger("websockets").setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
 
-# ── MCP 服务初始化（模块级别，确保 lifespan 可合并）──
+# Register only the identity-aware Agent tool providers.
 from app.modules.agent.tool_registration import ensure_agent_tools_registered  # noqa: E402
-from app.modules.equipment import mcp_tools  # noqa: E402, F401 — 触发 @mcp.tool() 注册
-from app.modules.hr import mcp_tools as hr_mcp_tools  # noqa: E402, F401
-from app.modules.quality import mcp_tools as quality_mcp_tools  # noqa: E402, F401
-from app.modules.registration import mcp_tools as registration_mcp_tools  # noqa: E402, F401
-from app.modules.warehouse import mcp_tools as warehouse_mcp_tools  # noqa: E402, F401
-from app.platform.mcp.middleware import build_mcp_middleware  # noqa: E402
-from app.platform.mcp.server import get_mcp_app  # noqa: E402
 
 ensure_agent_tools_registered()
-mcp_middleware = build_mcp_middleware()
-mcp_asgi = get_mcp_app(path="/", middleware=mcp_middleware)
 
 
 @asynccontextmanager
@@ -451,15 +442,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("Shutting down %s", settings.APP_NAME)
 
 
-from fastmcp.utilities.lifespan import combine_lifespans  # noqa: E402
-
 app = FastAPI(
     title=settings.APP_NAME,
     description="原料药事业部工厂基座系统",
     version="0.1.0",
-    lifespan=combine_lifespans(lifespan, mcp_asgi.lifespan),
+    lifespan=lifespan,
     docs_url="/docs" if not settings.is_production else None,
     redoc_url="/redoc" if not settings.is_production else None,
+    openapi_url=None if settings.is_production else "/openapi.json",
 )
 
 app.add_middleware(
@@ -483,11 +473,6 @@ app.add_middleware(AuditMiddleware)
 app.add_middleware(MaintenanceMiddleware, journal=False)
 
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)
-
-# ── 挂载 MCP 服务（AI Agent 协议入口）──
-app.mount("/mcp", mcp_asgi, name="mcp")
-logger.info("MCP server mounted at /mcp")
-
 
 @app.exception_handler(AppException)
 async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:

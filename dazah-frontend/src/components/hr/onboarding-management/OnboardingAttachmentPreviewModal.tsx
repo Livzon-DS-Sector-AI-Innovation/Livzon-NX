@@ -16,6 +16,31 @@ const DOCX_EXT = /\.(docx|doc)$/i
 const XLSX_EXT = /\.(xlsx|xls|csv)$/i
 const MAX_SHEET_ROWS = 500
 
+/**
+ * Wrap mammoth output in a fully sandboxed document.
+ *
+ * The generated HTML comes from an untrusted user upload, so it must never be
+ * injected into the admin page. A sandboxed iframe without `allow-scripts`
+ * blocks scripts/forms/top-navigation, and the inline CSP blocks any remote
+ * resource the document could reference.
+ */
+function buildDocxPreviewDocument(bodyHtml: string): string {
+  return [
+    '<!doctype html><html><head><meta charset="utf-8">',
+    '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; img-src data:; font-src data:">',
+    '<style>',
+    'html,body{margin:0;padding:0;background:#fff;color:#000;',
+    "font-family:'Microsoft YaHei','PingFang SC',Arial,sans-serif;}",
+    'body{padding:16px;}',
+    'table{border-collapse:collapse;width:100%;}',
+    'td,th{border:1px solid #ccc;padding:4px 8px;font-size:13px;}',
+    'img{max-width:100%;height:auto;}',
+    '</style></head><body>',
+    bodyHtml,
+    '</body></html>',
+  ].join('')
+}
+
 interface SheetRow {
   key: number
   [col: number]: unknown
@@ -42,10 +67,7 @@ export default function OnboardingAttachmentPreviewModal({ open, fileName, blob,
           const { value } = await mammoth.convertToHtml({
             arrayBuffer: await blob.arrayBuffer(),
           })
-          setDocxHtml(
-            '<style>table{border-collapse:collapse;width:100%}td,th{border:1px solid #ccc;padding:4px 8px;font-size:13px}</style>' +
-              value,
-          )
+          setDocxHtml(buildDocxPreviewDocument(value))
         } else {
           // 老 .doc 二进制格式：mammoth 不支持，降级提示
           setPreviewType('other')
@@ -120,10 +142,18 @@ export default function OnboardingAttachmentPreviewModal({ open, fileName, blob,
             <iframe src={pdfUrl} style={{ width: '100%', height: '100%', border: 'none' }} title={fileName} />
           )}
           {previewType === 'docx' && docxHtml && (
-            <div
+            <iframe
               className="docx-preview"
-              style={{ width: '100%', minHeight: '60vh', background: '#fff', overflow: 'auto' }}
-              dangerouslySetInnerHTML={{ __html: docxHtml }}
+              title={fileName}
+              sandbox=""
+              srcDoc={docxHtml}
+              style={{
+                width: '100%',
+                minHeight: '60vh',
+                height: '70vh',
+                border: 'none',
+                background: '#fff',
+              }}
             />
           )}
           {previewType === 'xlsx' && sheetData && (

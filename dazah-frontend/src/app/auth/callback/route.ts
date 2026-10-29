@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 
-import { getPublicOrigin, isSecurePublicRequest } from "@/lib/public-origin"
+import { getPublicOrigin, isSecurePublicRequest, isTrustedBrowserWriteRequest } from "@/lib/public-origin"
 import { getLocalLoginMode } from "@/lib/local-auth"
 import { getBackendFallbackUrls } from "@/lib/server-api"
 
@@ -45,6 +45,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  if (!isTrustedBrowserWriteRequest(request)) {
+    return new NextResponse("请求来源未经授权", { status: 403 })
+  }
   if (getLocalLoginMode() === "disabled") {
     return loginRedirect(request, "local_login_forbidden")
   }
@@ -68,6 +71,7 @@ export async function POST(request: NextRequest) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ username, password }),
           cache: "no-store",
+          redirect: "error",
         },
       )
       const payload = await response.json().catch(() => null)

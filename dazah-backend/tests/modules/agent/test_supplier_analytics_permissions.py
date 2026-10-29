@@ -13,6 +13,7 @@ from app.modules.agent import api
 from app.modules.agent.access_scope import AgentAccessScopeService
 from app.modules.agent.tool_registration import ensure_agent_tools_registered
 from app.modules.agent.tools import ToolExecutor, tool_registry
+from app.platform.identity.agent_delegation import issue_agent_delegation
 from app.platform.identity.page_permissions import PagePermissionService
 from app.platform.identity.schemas import EffectivePageGrantOut, PageDataScopeInput
 
@@ -39,7 +40,8 @@ async def test_analytics_http_enforces_page_scope_and_revocation(
         replace(original, required_roles=("admin",)),
     )
     user = SimpleNamespace(
-        id=uuid4(), role="user", status="active", is_deleted=False, grant_version=2
+        id=uuid4(), role="user", status="active", is_deleted=False, grant_version=2,
+        tenant_key="local", session_version=0,
     )
     snapshot = SimpleNamespace(
         source_grant_version=1 if stale else 2,
@@ -83,7 +85,9 @@ async def test_analytics_http_enforces_page_scope_and_revocation(
         "AgentService",
         lambda settings: SimpleNamespace(execute_tool=executor.execute),
     )
-    settings = SimpleNamespace(AGENT_TOOL_TOKEN="unit-service-token")
+    settings = SimpleNamespace(
+        AGENT_TOOL_TOKEN="unit-service-token", SECRET_KEY="a" * 40
+    )
     app = FastAPI()
     app.include_router(api.router, prefix="/api/v1/agent")
     app.dependency_overrides[get_settings] = lambda: settings
@@ -93,7 +97,12 @@ async def test_analytics_http_enforces_page_scope_and_revocation(
     ) as client:
         response = await client.post(
             "/api/v1/agent/tools/execute",
-            headers={"Authorization": "Bearer unit-service-token"},
+            headers={
+                "Authorization": "Bearer unit-service-token",
+                "X-Dazah-Delegation": issue_agent_delegation(
+                    settings, user, source="internal"
+                ),
+            },
             json={
                 "operation": "analytics.aggregate",
                 "params": {"dataset": "procurement.suppliers"},

@@ -6,6 +6,7 @@ from typing import Any, cast
 import pytest
 from fastapi import HTTPException, Request, status
 
+from app.core.config import Settings
 from app.modules.agent import api
 from app.modules.agent.schemas import (
     AgentConfirmationResolveRequest,
@@ -14,6 +15,8 @@ from app.modules.agent.schemas import (
     AgentToolEnabledUpdate,
     AgentToolSearchRequest,
 )
+from app.platform.identity.agent_delegation import issue_agent_delegation
+from app.platform.identity.models import User
 
 SimpleNamespace: Any = _SimpleNamespace
 
@@ -110,6 +113,21 @@ def _subject(user_id: uuid.UUID) -> dict[str, object]:
     }
 
 
+def _settings() -> Settings:
+    return Settings(
+        _env_file=None, AGENT_TOOL_TOKEN="token", SECRET_KEY="a" * 40,
+        FRONTEND_URL="http://localhost:3000",
+    )
+
+
+def _delegation(user_id: uuid.UUID) -> str:
+    return issue_agent_delegation(
+        _settings(),
+        User(id=user_id, tenant_key="tenant-a", session_version=0),
+        source="internal",
+    )
+
+
 def _response_payload(response: Any) -> dict[str, Any]:
     return json.loads(response.body)  # type: ignore[no-any-return]
 
@@ -123,10 +141,13 @@ async def test_control_plane_tool_routes_delegate_and_enforce_admin(
         id=user_id,
         tenant_key="tenant-a",
         role="admin",
+        status="active",
+        is_deleted=False,
+        session_version=0,
     )
     regular: Any = SimpleNamespace(id=uuid.uuid4(), role="user")
-    settings: Any = SimpleNamespace(AGENT_TOOL_TOKEN="token")
-    db: Any = cast(Any, FakeDb)()
+    settings: Any = _settings()
+    db: Any = cast(Any, FakeDb)(admin)
     agent_service: Any = FakeAgentService()
     catalog_service: Any = FakeCatalogService()
     monkeypatch.setattr(api, "AgentService", lambda settings: agent_service)
@@ -194,6 +215,7 @@ async def test_control_plane_tool_routes_delegate_and_enforce_admin(
         db,
         "Bearer token",
         settings,
+        _delegation(user_id),
     )
     assert _response_payload(searched)["data"] == [{"operation": "agent.test"}]
 
@@ -205,6 +227,7 @@ async def test_control_plane_tool_routes_delegate_and_enforce_admin(
         db,
         "Bearer token",
         settings,
+        _delegation(user_id),
     )
     assert _response_payload(described)["data"] == {"operation": "agent.test"}
 
@@ -257,7 +280,8 @@ async def test_gateway_confirmation_resolution_rejects_untrusted_subject(
                 payload,
                 cast(Any, FakeDb)(user),
                 "Bearer token",
-                SimpleNamespace(AGENT_TOOL_TOKEN="token"),
+                _settings(),
+                _delegation(user_id),
             )
         assert exc.value.status_code == status.HTTP_403_FORBIDDEN
 
@@ -274,6 +298,7 @@ async def test_gateway_confirmation_resolution_delegates_choice(
         is_deleted=False,
         status="active",
         tenant_key="tenant-a",
+        session_version=0,
     )
     service: Any = FakeAgentService()
     monkeypatch.setattr(api, "require_service_token", lambda *args: None)
@@ -286,7 +311,8 @@ async def test_gateway_confirmation_resolution_delegates_choice(
         ),
         cast(Any, FakeDb)(user),
         "Bearer token",
-        SimpleNamespace(AGENT_TOOL_TOKEN="token"),
+        _settings(),
+        _delegation(user_id),
     )
 
     payload = _response_payload(response)["data"]
@@ -305,7 +331,8 @@ async def test_gateway_expired_confirmation_returns_conflict_response(
 ) -> None:
     user_id = uuid.uuid4()
     user: Any = SimpleNamespace(
-        id=user_id, is_deleted=False, status="active", tenant_key="tenant-a"
+        id=user_id, is_deleted=False, status="active", tenant_key="tenant-a",
+        session_version=0,
     )
     service: Any = FakeAgentService()
     service.expired = True
@@ -319,7 +346,8 @@ async def test_gateway_expired_confirmation_returns_conflict_response(
         ),
         cast(Any, FakeDb)(user),
         "Bearer token",
-        SimpleNamespace(AGENT_TOOL_TOKEN="token"),
+        _settings(),
+        _delegation(user_id),
     )
 
     assert response.status_code == status.HTTP_409_CONFLICT

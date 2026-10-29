@@ -201,7 +201,8 @@ async def test_input_validation_failure_returns_invalid_request_response() -> No
     repo: Any = cast(Any, FakeRepo)()
     executor = ToolExecutor(registry=build_registry(), repo=repo)
     user: Any = SimpleNamespace(
-        id=uuid.uuid4(), role="user", status="active", is_deleted=False
+        id=uuid.uuid4(), role="user", status="active", is_deleted=False,
+        tenant_key="test",
     )
 
     response = await executor.execute(
@@ -220,7 +221,8 @@ async def test_input_validation_failure_returns_invalid_request_response() -> No
 @pytest.mark.anyio
 async def test_permission_denied_returns_403() -> None:
     user: Any = SimpleNamespace(
-        id=uuid.uuid4(), role="user", status="active", is_deleted=False
+        id=uuid.uuid4(), role="user", status="active", is_deleted=False,
+        tenant_key="test",
     )
     executor = ToolExecutor(registry=build_registry(), repo=cast(Any, FakeRepo)())
 
@@ -240,7 +242,8 @@ async def test_permission_denied_returns_403() -> None:
 @pytest.mark.anyio
 async def test_read_tool_executes_and_writes_audit() -> None:
     user: Any = SimpleNamespace(
-        id=uuid.uuid4(), role="user", status="active", is_deleted=False
+        id=uuid.uuid4(), role="user", status="active", is_deleted=False,
+        tenant_key="test",
     )
     db: Any = cast(Any, FakeDb)(user=user)
     repo: Any = cast(Any, FakeRepo)()
@@ -264,7 +267,8 @@ async def test_read_tool_executes_and_writes_audit() -> None:
 @pytest.mark.anyio
 async def test_write_tool_requires_confirmation_then_executes() -> None:
     user: Any = SimpleNamespace(
-        id=uuid.uuid4(), role="user", status="active", is_deleted=False
+        id=uuid.uuid4(), role="user", status="active", is_deleted=False,
+        tenant_key="test",
     )
     db: Any = cast(Any, FakeDb)(user=user)
     repo: Any = cast(Any, FakeRepo)()
@@ -293,7 +297,8 @@ async def test_write_tool_requires_confirmation_then_executes() -> None:
 async def test_human_decision_tool_returns_policy_refusal() -> None:
     executor = ToolExecutor(registry=build_registry(), repo=cast(Any, FakeRepo)())
     user: Any = SimpleNamespace(
-        id=uuid.uuid4(), role="user", status="active", is_deleted=False
+        id=uuid.uuid4(), role="user", status="active", is_deleted=False,
+        tenant_key="test",
     )
 
     response = await executor.execute(

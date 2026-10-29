@@ -4,7 +4,7 @@ import uuid
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,6 +20,7 @@ from .capabilities import (
 from .config import LLMConfigModel
 from .encryption import decrypt_api_key, encrypt_api_key, mask_api_key
 from .exceptions import LLMConfigError
+from .http_security import validate_provider_url
 
 router = APIRouter(
     prefix="/llm/configs",
@@ -28,7 +29,19 @@ router = APIRouter(
 )
 
 
-class LLMConfigCreate(BaseModel):
+class _ProviderEndpointInput(BaseModel):
+    @field_validator("api_base_url", check_fields=False)
+    @classmethod
+    def validate_endpoint(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        try:
+            return validate_provider_url(value)
+        except LLMConfigError as exc:
+            raise ValueError("模型 API 地址不符合出站访问策略") from exc
+
+
+class LLMConfigCreate(_ProviderEndpointInput):
     """Request body for creating LLM config."""
 
     config_name: str = Field(..., max_length=128)
@@ -54,7 +67,7 @@ class LLMConfigCreate(BaseModel):
     notes: str | None = None
 
 
-class LLMConfigUpdate(BaseModel):
+class LLMConfigUpdate(_ProviderEndpointInput):
     """Request body for updating LLM config."""
 
     config_name: str | None = Field(None, max_length=128)
@@ -102,7 +115,7 @@ class LLMCapabilityDetectionResponse(BaseModel):
     detail: str
 
 
-class LLMConfigProbeRequest(BaseModel):
+class LLMConfigProbeRequest(_ProviderEndpointInput):
     """Unsaved LLM configuration connectivity test."""
 
     probe_type: Literal["url", "model"]

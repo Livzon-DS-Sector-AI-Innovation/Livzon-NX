@@ -311,5 +311,5 @@ async def test_stream_chat_maps_429_and_api_error(
 
     cls500, _ = _stream_client_factory(_StreamResp([], status=500))
     monkeypatch.setattr("app.core.llm.client.httpx.AsyncClient", cls500)
-    with pytest.raises(LLMProviderError, match="Stream API error"):
+    with pytest.raises(LLMProviderError, match="LLM 流式服务返回错误"):
         [c async for c in client.stream_chat([{"role": "user", "content": "x"}])]

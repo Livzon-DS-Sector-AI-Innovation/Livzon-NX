@@ -3,6 +3,7 @@
 import os
 import uuid
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
@@ -10,9 +11,11 @@ from fastapi import APIRouter, Depends, Query, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.deps import CurrentUser, get_current_user
 from app.core.response import ApiResponse
+from app.core.upload_security import read_upload_secure
 from app.modules.safety.schemas import (
     OperationRegulationCreate,
     OperationRegulationResponse,
@@ -142,20 +145,32 @@ async def upload_regulation_document(
 ) -> Any:
     """上传操规文档并更新操规记录"""
 
-    upload_dir = os.path.join("uploads", "safety", "regulations")
-    os.makedirs(upload_dir, exist_ok=True)
-
-    file_ext = os.path.splitext(file.filename or ".md")[1]
-    safe_name = f"{regulation_id}_{int(datetime.now().timestamp())}{file_ext}"
-    file_path = os.path.join(upload_dir, safe_name)
-
-    content = await file.read()
-    with open(file_path, "wb") as f:
-        f.write(content)
+    filename, content = await read_upload_secure(
+        file,
+        max_bytes=get_settings().MAX_UPLOAD_SIZE_MB * 1024 * 1024,
+        allowed_extensions={
+            ".doc",
+            ".docx",
+            ".pdf",
+            ".md",
+            ".txt",
+            ".xlsx",
+            ".xls",
+        },
+        what="操规文档",
+    )
+    upload_dir = Path("uploads") / "safety" / "regulations"
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    safe_name = (
+        f"{regulation_id}_{int(datetime.now().timestamp())}_"
+        f"{uuid.uuid4().hex}{Path(filename).suffix.lower()}"
+    )
+    file_path = upload_dir / safe_name
+    file_path.write_bytes(content)
 
     service = RegulationService(db)
     item = await service.upload_regulation_document(
-        regulation_id, file.filename or "unknown", file_path
+        regulation_id, filename, str(file_path)
     )
     if not item:
         return ApiResponse(code=404, message="操规不存在")
@@ -285,19 +300,31 @@ async def manual_revision_complete(
     3. 同步更新操规表文档链接
     """
 
-    upload_dir = os.path.join("uploads", "safety", "regulations")
-    os.makedirs(upload_dir, exist_ok=True)
-
-    file_ext = os.path.splitext(file.filename or ".md")[1]
-    safe_name = f"revision_{revision_id}_{int(datetime.now().timestamp())}{file_ext}"
-    file_path = os.path.join(upload_dir, safe_name)
-
-    content = await file.read()
-    with open(file_path, "wb") as f:
-        f.write(content)
+    filename, content = await read_upload_secure(
+        file,
+        max_bytes=get_settings().MAX_UPLOAD_SIZE_MB * 1024 * 1024,
+        allowed_extensions={
+            ".doc",
+            ".docx",
+            ".pdf",
+            ".md",
+            ".txt",
+            ".xlsx",
+            ".xls",
+        },
+        what="操规文档",
+    )
+    upload_dir = Path("uploads") / "safety" / "regulations"
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    safe_name = (
+        f"revision_{revision_id}_{int(datetime.now().timestamp())}_"
+        f"{uuid.uuid4().hex}{Path(filename).suffix.lower()}"
+    )
+    file_path = upload_dir / safe_name
+    file_path.write_bytes(content)
 
     service = RegulationService(db)
-    item = await service.manual_revision_complete(revision_id, file_path, file.filename)
+    item = await service.manual_revision_complete(revision_id, str(file_path), filename)
     if not item:
         return ApiResponse(
             code=400, message="无法完成修订，当前状态不允许或修订类型不是人工修订"

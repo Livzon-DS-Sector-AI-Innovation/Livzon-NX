@@ -11,9 +11,10 @@ import json
 import logging
 from typing import Any
 
-from sqlalchemy import func, or_, select, text
+from sqlalchemy import false, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.platform.identity.menu_seed_data import SEED_MENUS
 from app.platform.identity.models import (
     DepartmentRoleRule,
@@ -203,7 +204,6 @@ PUBLIC_PATH_PREFIXES: tuple[str, ...] = (
     "/openapi.json",
     "/api/v1/system/modules",
     "/api/v1/identity/auth/",
-    "/mcp",
     "/uploads",
 )
 
@@ -393,11 +393,16 @@ async def resolve_user_permissions(db: AsyncSession, user_id: Any) -> list[str]:
     """
     from app.platform.identity.models import User
 
-    # 本地开发用户：全部权限
+    # 本地开发用户：全部权限（生产环境永不生效）
+    dev_clause = (
+        false()
+        if get_settings().is_production
+        else User.feishu_open_id == DEV_BYPASS_OPEN_ID
+    )
     dev_result = await db.execute(
         select(User.id).where(
             User.id == user_id,
-            or_(User.role == "admin", User.feishu_open_id == DEV_BYPASS_OPEN_ID),
+            or_(User.role == "admin", dev_clause),
             User.is_deleted.is_(False),
         )
     )

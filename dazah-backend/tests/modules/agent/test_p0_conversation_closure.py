@@ -73,10 +73,11 @@ async def test_user_can_restore_own_session_with_confirmation_state(
     )
 
     assert [message.role for message in detail.messages] == ["user", "assistant"]
-    assert detail.confirmations[0].id == confirmation.id
-    assert detail.confirmations[0].status == "pending"
-    assert detail.confirmations[1].id == expired_confirmation.id
-    assert detail.confirmations[1].status == "expired"
+    # PostgreSQL now() is constant within a transaction, so equal creation
+    # timestamps do not define the order of these two confirmation records.
+    assert {item.id: item.status for item in detail.confirmations} == {
+        confirmation.id: "pending", expired_confirmation.id: "expired",
+    }
     assert detail.session.pending_confirmation_count == 1
 
     page = await service.list_sessions(

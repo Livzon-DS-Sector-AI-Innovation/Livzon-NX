@@ -179,8 +179,8 @@ verify_release_checksum() {
 
   [[ -f "$release_path" ]] || return 1
   if [[ ! -f "$checksum_path" ]]; then
-    log "WARNING: 未找到 SHA-256 校验文件，继续加载镜像包"
-    return 0
+    log "ERROR: 未找到 SHA-256 校验文件，拒绝加载镜像包"
+    return 1
   fi
 
   release_dir="$(dirname "$release_path")"
