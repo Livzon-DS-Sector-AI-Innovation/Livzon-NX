@@ -122,7 +122,9 @@ async def create_work_order(
             workshop_name=workshop_name,
             fault=data.fault_description or "平台报修",
             priority=wo.priority,
-            reporter_name=current_user.name or "平台用户",
+            reporter_name=(
+                current_user.name if current_user else None
+            ) or "平台用户",
             workshop_code=workshop_code,
         )
         dispatched = message_id is not None

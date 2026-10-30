@@ -12,7 +12,7 @@
 
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import case, func, select
+from sqlalchemy import ColumnElement, case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.equipment.models.equipment import Equipment
@@ -28,7 +28,9 @@ def _months_back(months: int) -> datetime:
     )
 
 
-def _base_filters(workshop_code: str | None, since: datetime):
+def _base_filters(
+    workshop_code: str | None, since: datetime
+) -> list[ColumnElement[bool]]:
     filters = [
         WorkOrder.is_deleted == False,  # noqa: E712
         WorkOrder.reported_at >= since,

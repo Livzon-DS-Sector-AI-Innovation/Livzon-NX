@@ -6,6 +6,7 @@
 """
 
 import logging
+import uuid
 from datetime import date, timedelta
 from typing import Any
 
@@ -85,7 +86,7 @@ def _build_reminder_card(
 
 
 async def _resolve_responsible_union_id(
-    db: AsyncSession, responsible_person_id: str | None
+    db: AsyncSession, responsible_person_id: uuid.UUID | None
 ) -> str:
     if responsible_person_id is None:
         return ""
@@ -145,11 +146,13 @@ async def remind_due_calibration_plans(db: AsyncSession) -> tuple[int, int]:
             if equipment
             else str(plan.equipment_id)
         )
-        days_left = (plan.next_calibration_date - today).days
+        next_date = plan.next_calibration_date
+        assert next_date is not None  # 查询已过滤 isnot(None)
+        days_left = (next_date - today).days
         card = _build_reminder_card(
             equipment_label=equipment_label,
             calibration_type=plan.calibration_type,
-            next_date=plan.next_calibration_date,
+            next_date=next_date,
             days_left=days_left,
         )
 
@@ -162,8 +165,7 @@ async def remind_due_calibration_plans(db: AsyncSession) -> tuple[int, int]:
                     open_id=union_id,
                     title="校准到期提醒",
                     content=(
-                        f"{equipment_label} 下次校准 "
-                        f"{plan.next_calibration_date.isoformat()}"
+                        f"{equipment_label} 下次校准 {next_date.isoformat()}"
                     ),
                     receive_id_type="union_id",
                 )
