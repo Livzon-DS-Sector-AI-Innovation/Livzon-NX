@@ -17,6 +17,7 @@ export function KpiCard({
   index,
   placeholder,
   note,
+  onClick,
 }: {
   label: string
   value: number | string
@@ -28,6 +29,8 @@ export function KpiCard({
   /** 待接入态：数据源未启用，以置灰文案替代数值 */
   placeholder?: boolean
   note?: string
+  /** 可选点击行为：传入后卡片可点击（如跳转工单列表） */
+  onClick?: () => void
 }) {
   const numericValue = typeof value === 'number' ? value : 0
   const animatedValue = useCountUp(numericValue)
@@ -35,6 +38,7 @@ export function KpiCard({
   return (
     <div
       className="kpi-card"
+      role={onClick ? 'button' : undefined}
       style={{
         background: '#ffffff',
         borderRadius: 12,
@@ -45,8 +49,13 @@ export function KpiCard({
         animation: `fadeInUp 0.5s ease both`,
         animationDelay: `${index * 80}ms`,
         transition: 'box-shadow 0.2s ease, transform 0.2s ease',
-        cursor: 'default',
+        cursor: onClick ? 'pointer' : 'default',
       }}
+      onClick={onClick}
+      onKeyDown={onClick ? (e) => {
+        if (e.key === 'Enter' || e.key === ' ') onClick()
+      } : undefined}
+      tabIndex={onClick ? 0 : undefined}
       onMouseEnter={(e) => {
         e.currentTarget.style.boxShadow = 'rgba(15,15,15,0.08) 0px 4px 12px 0px'
         e.currentTarget.style.transform = 'translateY(-2px)'

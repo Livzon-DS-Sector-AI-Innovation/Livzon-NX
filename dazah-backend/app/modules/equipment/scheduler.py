@@ -247,3 +247,49 @@ async def timeout_scan_loop() -> None:
         except TimeoutError:
             pass
     logger.info("工单超时扫描任务已停止")
+
+
+# ── Calibration reminder ────────────────────────────────────────────
+
+stop_calibration_reminder_flag = asyncio.Event()
+
+
+async def calibration_reminder_loop() -> None:
+    """每天 08:30 CST 提醒即将到期/已逾期的校准计划（负责人单聊 + 群兜底）。"""
+    logger.info("校准到期提醒任务已启动（每天 08:30 CST）")
+    while not stop_calibration_reminder_flag.is_set():
+        now = datetime.now(CST)
+        next_run = (now + timedelta(days=1)).replace(
+            hour=8, minute=30, second=0, microsecond=0
+        )
+        wait_seconds = (next_run - now).total_seconds()
+        logger.info(
+            "下次校准到期提醒将在 %.0f 分钟后（%s）",
+            wait_seconds / 60,
+            next_run.strftime("%Y-%m-%d %H:%M"),
+        )
+        try:
+            await asyncio.wait_for(
+                stop_calibration_reminder_flag.wait(),
+                timeout=wait_seconds,
+            )
+            break
+        except TimeoutError:
+            pass
+
+        try:
+            async with async_session_factory() as db:
+                from app.modules.equipment.service.calibration_reminder import (
+                    remind_due_calibration_plans,
+                )
+
+                reminded, skipped = await remind_due_calibration_plans(db)
+                await db.commit()
+                logger.info(
+                    "校准到期提醒完成: 提醒 %d 个, 跳过(当日已提醒) %d 个",
+                    reminded,
+                    skipped,
+                )
+        except Exception:
+            logger.exception("校准到期提醒循环异常")
+    logger.info("校准到期提醒任务已停止")

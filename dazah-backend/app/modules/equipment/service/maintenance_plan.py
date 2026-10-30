@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.database import async_session_factory
 from app.core.exceptions import NotFoundException
 from app.modules.equipment import repository as repo
 from app.modules.equipment.models import MaintenancePlan
@@ -175,6 +176,8 @@ async def generate_due_work_orders(
 
     created_count = 0
     skipped_count = 0
+    # 已建单的派卡参数：工单建完后向维修群发接单卡片（与报修同链路）
+    dispatch_payloads: list[dict[str, object]] = []
 
     for plan in due_plans:
         # 防重：last_generated_date >= next_maintenance_date 则跳过
@@ -242,6 +245,14 @@ async def generate_due_work_orders(
 
                 created_count += 1
                 work_order_created = True
+                dispatch_payloads.append(
+                    {
+                        "work_order_no": wo_no,
+                        "equipment_label": f"{equipment.name}（{equipment.equipment_no}）",
+                        "workshop_code": equipment.workshop_code or "",
+                        "plan_name": plan.plan_name,
+                    }
+                )
                 logger.info(
                     "自动生成工单 %s (计划=%s, 设备=%s)",
                     wo_no,
@@ -262,7 +273,57 @@ async def generate_due_work_orders(
         if not work_order_created:
             skipped_count += 1
 
+    await _dispatch_generated_orders(dispatch_payloads)
+
     return created_count, skipped_count
+
+
+async def _dispatch_generated_orders(
+    payloads: list[dict[str, object]],
+) -> None:
+    """向车间维修群派发自动生成的计划维护工单卡片；单张失败不影响其余。"""
+    if not payloads:
+        return
+    from sqlalchemy import select as sa_select
+
+    from app.modules.equipment.models.workshop import EquipmentWorkshop
+    from app.modules.equipment.service.work_order_feishu import (
+        dispatch_repair_card,
+    )
+
+    for payload in payloads:
+        workshop_code = str(payload["workshop_code"])
+        workshop_name = workshop_code or "未分配车间"
+        try:
+            if workshop_code:
+                async with async_session_factory() as db:
+                    workshop_row = (
+                        (
+                            await db.execute(
+                                sa_select(EquipmentWorkshop).where(
+                                    EquipmentWorkshop.code == workshop_code,
+                                    EquipmentWorkshop.is_deleted == False,  # noqa: E712
+                                )
+                            )
+                        )
+                        .scalars()
+                        .first()
+                    )
+                if workshop_row is not None:
+                    workshop_name = workshop_row.name
+            await dispatch_repair_card(
+                work_order_no=str(payload["work_order_no"]),
+                equipment_label=str(payload["equipment_label"]),
+                workshop_name=workshop_name,
+                fault=f"[计划维护] {payload['plan_name']}",
+                priority="中",
+                reporter_name="维护计划自动生成",
+                workshop_code=workshop_code,
+            )
+        except Exception:
+            logger.exception(
+                "计划维护工单派发维修群卡片失败: %s", payload["work_order_no"]
+            )
 
 
 async def _generate_work_order_no(db: AsyncSession) -> str:

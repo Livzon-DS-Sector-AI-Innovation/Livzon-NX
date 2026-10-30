@@ -55,6 +55,18 @@ export function CalibrationPlanTable({ onRefresh, onRecordRefresh }: Props) {
       },
     },
     {
+      title: '剩余天数', key: 'days_left', width: 90,
+      render: (_, r) => {
+        if (!r.next_calibration_date) return '-'
+        const days = Math.ceil(
+          (new Date(r.next_calibration_date).getTime() - new Date().setHours(0, 0, 0, 0)) / 86400000,
+        )
+        if (days < 0) return <span style={{ color: '#e03131', fontWeight: 600 }}>逾期{-days}天</span>
+        if (days <= 7) return <span style={{ color: '#fa8c16', fontWeight: 600 }}>{days}天</span>
+        return <span style={{ color: '#787671' }}>{days}天</span>
+      },
+    },
+    {
       title: '状态', dataIndex: 'status', key: 'status', width: 80,
       render: (s: CalibrationPlanStatus) => <span style={statusMap[s]}>{s}</span>,
     },

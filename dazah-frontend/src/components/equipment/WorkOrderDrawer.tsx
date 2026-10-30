@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { App, Drawer, Form, Input, Select, Button, Space } from 'antd'
+import PlatformNotice from '@/components/shared/PlatformNotice'
 import { useEquipmentStore } from '@/stores/equipment'
 import { createWorkOrder, updateWorkOrder } from '@/actions/equipment'
 import { CreateWorkOrderInput, UpdateWorkOrderInput, FailureCode, WorkOrderStatus, Maintainer } from '@/types/equipment'
@@ -31,6 +32,7 @@ export function WorkOrderDrawer({ equipments, symptoms, onRefresh }: WorkOrderDr
   const [maintainers, setMaintainers] = useState<Maintainer[]>([])
 
   const isEditing = !!editingWorkOrder
+  const priority = Form.useWatch('priority', form)
 
   useEffect(() => {
     if (workOrderDrawerOpen) {
@@ -91,8 +93,13 @@ export function WorkOrderDrawer({ equipments, symptoms, onRefresh }: WorkOrderDr
           fault_description: values.fault_description || undefined,
           responsible_person_id: values.responsible_person_id || undefined,
         }
-        await createWorkOrder(data)
-        message.success('创建工单成功')
+        const result = await createWorkOrder(data)
+        // 后端建单后向车间维修群派发接单卡片；未配置群时提示人工通知
+        if ((result as { dispatched?: boolean } | null)?.dispatched) {
+          message.success('工单已创建，维修群已收到派单卡片')
+        } else {
+          message.warning('工单已创建，但未配置维修群，请电话通知维修')
+        }
       }
       closeWorkOrderDrawer()
       onRefresh?.()
@@ -147,9 +154,23 @@ export function WorkOrderDrawer({ equipments, symptoms, onRefresh }: WorkOrderDr
         <Form.Item name="priority" label="优先级" rules={[{ required: true, message: '请选择优先级' }]}>
           <Select options={[{ label: '紧急', value: '紧急' }, { label: '高', value: '高' }, { label: '中', value: '中' }, { label: '低', value: '低' }]} />
         </Form.Item>
-        <Form.Item name="responsible_person_id" label="责任人" rules={[{ required: true, message: '请选择责任人' }]}>
+        {priority === '紧急' && (
+          <PlatformNotice
+            type="warning"
+            showRulesLink={false}
+            title="紧急工单要求维修人员 5 分钟内接单，建议同时电话通知"
+            style={{ marginBottom: 16 }}
+          />
+        )}
+        <Form.Item
+          name="responsible_person_id"
+          label="责任人"
+          rules={isEditing ? [{ required: true, message: '请选择责任人' }] : []}
+          extra={isEditing ? undefined : '报修可不填，留空由维修群接单指派'}
+        >
           <Select
-            placeholder="选择责任人"
+            placeholder={isEditing ? '选择责任人' : '选填，留空走维修群接单'}
+            allowClear={!isEditing}
             showSearch
             optionFilterProp="label"
             options={maintainers.map((m) => ({

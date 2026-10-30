@@ -18,6 +18,8 @@ const actions = vi.hoisted(() => ({
   fetchSpareParts: vi.fn(),
   fetchStockWarnings: vi.fn(),
   fetchInspectionTodaySummaries: vi.fn(),
+  fetchEfficiencyStatistics: vi.fn(),
+  fetchEnabledWorkshops: vi.fn(),
 }))
 
 const navigation = vi.hoisted(() => ({

@@ -103,6 +103,11 @@ from app.modules.equipment.schemas.spare_part import (
     StockWarningResponse,
 )
 from app.modules.equipment.schemas.work_order import (
+    EfficiencyMonthTrend,
+    EfficiencyRepairerRank,
+    EfficiencyResponseBucket,
+    EfficiencyStatistics,
+    EfficiencyTopFault,
     MaterialConsumeItem,
     MaterialConsumeRequest,
     MaterialConsumeResponse,
@@ -201,6 +206,11 @@ __all__ = [
     "WorkOrderComplete",
     "WorkOrderVerify",
     "WorkOrderResponse",
+    "EfficiencyMonthTrend",
+    "EfficiencyRepairerRank",
+    "EfficiencyResponseBucket",
+    "EfficiencyStatistics",
+    "EfficiencyTopFault",
     "WorkOrderStatistics",
     # calibration
     "CalibrationType",

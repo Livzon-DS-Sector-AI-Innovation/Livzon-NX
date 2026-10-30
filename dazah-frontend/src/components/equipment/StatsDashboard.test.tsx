@@ -1,16 +1,22 @@
 /* @vitest-environment happy-dom */
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { AntdProvider } from '@/components/AntdProvider'
 import { setAppearance } from '@/lib/useAppearance'
 import { StatsDashboard } from './StatsDashboard'
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
+}))
 
 it('preserves actual status and category counts across appearances, including the empty state', async () => {
   const host = document.createElement('div'); document.body.append(host); const root = createRoot(host)
   const data: React.ComponentProps<typeof StatsDashboard>['initialData'] = {
     equipmentStats: { total: 12, by_status: { 在用: 10, 维修中: 2, 备用: 0, 停用: 0, 报废: 0 }, by_category: { 反应釜: 6, 干燥机: 6 }, by_location: {} },
-    workOrderStats: null, stockWarnings: [], overduePlans: [], calibrationPlans: [], recentWorkOrders: [], inspectionSummaries: [],
+    workOrderStats: null,
+    efficiency: null, stockWarnings: [], overduePlans: [], calibrationPlans: [], recentWorkOrders: [], inspectionSummaries: [],
+    workshopOptions: [],
   }
   try {
     await act(async () => root.render(<AntdProvider><StatsDashboard initialData={data} /></AntdProvider>))

@@ -650,4 +650,61 @@ async def consume_materials(
     wo.spare_parts_cost = current_cost + total_cost
     await db.flush()
 
+    # 领料后检查安全线：事务内可读到刚扣减的库存值
+    await _notify_low_stock(db, items)
+
     return transactions
+
+
+async def _notify_low_stock(db: AsyncSession, items: list[dict[str, Any]]) -> None:
+    """领料后检查库存：跌破安全线的备件向维修群发提醒卡片。
+
+    群取全局默认维修群；单条提醒失败不影响领料主流程。
+    """
+    from app.modules.equipment.feishu.repair_card import send_card_to_chat
+    from app.modules.equipment.service import spare_part as sp_service
+    from app.modules.equipment.service.work_order_feishu import (
+        resolve_repair_chat_id,
+    )
+
+    chat_id = ""
+    for item in items:
+        try:
+            spare_part = await sp_service.get_spare_part_by_id(
+                db, item["spare_part_id"]
+            )
+            stock = await sp_service.get_stock_by_spare_part_id(
+                db, item["spare_part_id"]
+            )
+            if not stock or not spare_part:
+                continue
+            if stock.current_qty >= stock.safety_qty:
+                continue
+            if not chat_id:
+                chat_id = await resolve_repair_chat_id("")
+                if not chat_id:
+                    return
+            card = {
+                "config": {"wide_screen_mode": True},
+                "header": {
+                    "template": "red",
+                    "title": {"tag": "plain_text", "content": "备件库存预警"},
+                },
+                "elements": [
+                    {
+                        "tag": "div",
+                        "text": {
+                            "tag": "lark_md",
+                            "content": (
+                                f"备件 **{spare_part.name}** 库存 **{stock.current_qty:g}**，"
+                                f"已低于安全线 **{stock.safety_qty}**，请及时补充"
+                            ),
+                        },
+                    },
+                ],
+            }
+            await send_card_to_chat(chat_id, card)
+        except Exception:
+            logger.exception(
+                "库存安全线提醒发送失败: spare_part_id=%s", item["spare_part_id"]
+            )

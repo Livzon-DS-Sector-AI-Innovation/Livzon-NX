@@ -2828,6 +2828,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/equipment/maintenance/work-orders/efficiency": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 维修效能统计
+         * @description 维修效能聚合：平均响应/MTTR/紧急5分钟达标率/月度趋势/故障TOP10。
+         *
+         *     workshop 为空 = 全车间；只读聚合，无新表。
+         */
+        get: operations["get_work_order_efficiency_api_v1_equipment_maintenance_work_orders_efficiency_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/equipment/maintenance/work-orders/statistics": {
         parameters: {
             query?: never;
@@ -75298,6 +75320,42 @@ export interface operations {
                 "application/json": components["schemas"]["WorkOrderCreate"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_work_order_efficiency_api_v1_equipment_maintenance_work_orders_efficiency_get: {
+        parameters: {
+            query?: {
+                /** @description 车间代码（空=全车间） */
+                workshop?: string | null;
+                /** @description 统计月数（默认 6） */
+                months?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

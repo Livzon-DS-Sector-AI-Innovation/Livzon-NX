@@ -114222,6 +114222,87 @@
         ]
       }
     },
+    "/api/v1/equipment/maintenance/work-orders/efficiency": {
+      "get": {
+        "description": "维修效能聚合：平均响应/MTTR/紧急5分钟达标率/月度趋势/故障TOP10。\n\nworkshop 为空 = 全车间；只读聚合，无新表。",
+        "operationId": "get_work_order_efficiency_api_v1_equipment_maintenance_work_orders_efficiency_get",
+        "parameters": [
+          {
+            "description": "车间代码（空=全车间）",
+            "in": "query",
+            "name": "workshop",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "车间代码（空=全车间）",
+              "title": "Workshop"
+            }
+          },
+          {
+            "description": "统计月数（默认 6）",
+            "in": "query",
+            "name": "months",
+            "required": false,
+            "schema": {
+              "default": 6,
+              "description": "统计月数（默认 6）",
+              "maximum": 24,
+              "minimum": 1,
+              "title": "Months",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "维修效能统计",
+        "tags": [
+          "设备管理"
+        ]
+      }
+    },
     "/api/v1/equipment/maintenance/work-orders/statistics": {
       "get": {
         "operationId": "get_work_order_statistics_api_v1_equipment_maintenance_work_orders_statistics_get",

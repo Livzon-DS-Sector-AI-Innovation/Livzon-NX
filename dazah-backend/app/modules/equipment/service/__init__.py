@@ -142,6 +142,9 @@ from app.modules.equipment.service.work_order import (
     update_work_order,
     verify_work_order,
 )
+from app.modules.equipment.service.work_order_efficiency import (
+    get_efficiency_statistics,
+)
 from app.modules.equipment.service.work_order_image import (
     delete_image as delete_work_order_image,
 )
@@ -245,6 +248,7 @@ __all__ = [
     "create_work_order",
     "generate_work_order_no",
     "get_work_order_by_id",
+    "get_efficiency_statistics",
     "get_work_order_statistics",
     "get_work_orders",
     "start_work_order",

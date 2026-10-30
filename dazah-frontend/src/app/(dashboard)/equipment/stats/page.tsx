@@ -8,6 +8,8 @@ import {
   fetchCalibrationPlans,
   fetchWorkOrders,
   fetchInspectionTodaySummaries,
+  fetchEfficiencyStatistics,
+  fetchEnabledWorkshops,
 } from '@/actions/equipment'
 import type {
 
@@ -21,6 +23,7 @@ import type {
   MaintenancePlan,
   CalibrationPlan,
   WorkOrder,
+  EfficiencyStatistics,
 } from '@/types/equipment'
 
 export const dynamic = 'force-dynamic'
@@ -48,6 +51,8 @@ export default async function StatsPage() {
   let calibrationPlans: CalibrationPlan[] = []
   let recentWorkOrders: WorkOrder[] = []
   let inspectionSummaries: Awaited<ReturnType<typeof fetchInspectionTodaySummaries>> = []
+  let efficiency: EfficiencyStatistics | null = null
+  let workshopOptions: { code: string; name: string }[] = []
 
   try {
     const results = await Promise.allSettled([
@@ -58,10 +63,12 @@ export default async function StatsPage() {
       fetchCalibrationPlans({ status: '启用', page_size: 100 }),
       fetchWorkOrders({ page: 1, page_size: 10 }),
       fetchInspectionTodaySummaries(),
+      fetchEfficiencyStatistics(),
+      fetchEnabledWorkshops(),
     ])
 
     // 依次解构，每个接口错误不影响其他
-    const [eqResult, woResult, swResult, overdueResult, calResult, ordersResult, inspectionResult] = results
+    const [eqResult, woResult, swResult, overdueResult, calResult, ordersResult, inspectionResult, effResult, wsResult] = results
 
     if (eqResult.status === 'fulfilled') {
       equipmentStats = eqResult.value
@@ -99,10 +106,22 @@ export default async function StatsPage() {
       console.warn('近期工单加载失败:', ordersResult.reason)
     }
 
+    if (effResult.status === 'fulfilled') {
+      efficiency = effResult.value
+    } else {
+      console.warn('维修效能加载失败:', effResult.reason)
+    }
+
     if (inspectionResult.status === 'fulfilled') {
       inspectionSummaries = inspectionResult.value
     } else {
       console.warn('今日巡检进度加载失败:', inspectionResult.reason)
+    }
+
+    if (wsResult.status === 'fulfilled') {
+      workshopOptions = wsResult.value
+    } else {
+      console.warn('车间清单加载失败:', wsResult.reason)
     }
   } catch (error) {
     console.warn('设备汇总数据加载异常:', error)
@@ -118,6 +137,8 @@ export default async function StatsPage() {
         calibrationPlans,
         recentWorkOrders,
         inspectionSummaries,
+      efficiency,
+      workshopOptions,
       }}
     />
   )

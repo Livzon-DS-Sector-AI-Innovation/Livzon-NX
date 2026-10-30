@@ -1,5 +1,7 @@
 'use client'
 
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { ConfigProvider } from 'antd'
 import {
   CheckCircleFilled,
@@ -25,6 +27,7 @@ import type {
   MaintenancePlan,
   CalibrationPlan,
   WorkOrder,
+  EfficiencyStatistics,
 } from '@/types/equipment'
 import type { InspectionFeishuWorkshopSummary } from '@/types/inspection-feishu'
 import { KpiCard } from './stats/KpiCard'
@@ -34,6 +37,9 @@ import { WorkOrderPipeline } from './stats/WorkOrderPipeline'
 import { WarningPanels } from './stats/WarningPanels'
 import { RecentWorkOrders } from './stats/RecentWorkOrders'
 import { InspectionProgressCard } from './inspection/InspectionProgressCard'
+import { EfficiencyCard } from './stats/EfficiencyCard'
+import { RepairerRankCard } from './stats/RepairerRankCard'
+import { ResponseBucketCard } from './stats/ResponseBucketCard'
 
 // ============================================================
 // 类型定义
@@ -41,11 +47,13 @@ import { InspectionProgressCard } from './inspection/InspectionProgressCard'
 interface DashboardData {
   equipmentStats: EquipmentStatistics | null
   workOrderStats: WorkOrderStatistics | null
+  efficiency: EfficiencyStatistics | null
   stockWarnings: StockWarning[]
   overduePlans: MaintenancePlan[]
   calibrationPlans: CalibrationPlan[]
   recentWorkOrders: WorkOrder[]
   inspectionSummaries: InspectionFeishuWorkshopSummary[]
+  workshopOptions: { code: string; name: string }[]
 }
 
 interface StatsDashboardProps {
@@ -56,6 +64,7 @@ interface StatsDashboardProps {
 // 主仪表盘组件
 // ============================================================
 export function StatsDashboard({ initialData }: StatsDashboardProps) {
+  const router = useRouter()
   const {
     equipmentStats,
     workOrderStats,
@@ -64,7 +73,12 @@ export function StatsDashboard({ initialData }: StatsDashboardProps) {
     calibrationPlans,
     recentWorkOrders,
     inspectionSummaries,
+    workshopOptions,
   } = initialData
+
+  // 效能数据与车间选中态：三张卡共享，切换车间时由效能卡统一刷新
+  const [efficiency, setEfficiency] = useState(initialData.efficiency)
+  const [workshopLabel, setWorkshopLabel] = useState('全工厂')
 
   const eq = equipmentStats || { total: 0, by_status: {} as Record<EquipmentStatus, number>, by_category: {} as Record<string, number>, by_location: {} as Record<string, number> }
   const wo = workOrderStats || { total: 0, by_status: {} as Record<WorkOrderStatus, number>, by_type: {} as Record<WorkOrderType, number>, by_priority: {} as Record<WorkOrderPriority, number> }
@@ -106,12 +120,8 @@ export function StatsDashboard({ initialData }: StatsDashboardProps) {
         }
       `}</style>
 
-      <div
-        style={{
-          maxWidth: 1280,
-          margin: '0 auto'
-        }}
-      >
+      {/* 主区已由 AppShell 留出可用宽度；不再额外限宽，卡片与平台其他页面一致撑满 */}
+      <div>
         {/* ========== 页面标题 ========== */}
         <div
           style={{
@@ -222,31 +232,64 @@ export function StatsDashboard({ initialData }: StatsDashboardProps) {
             index={0}
           />
           <KpiCard
-            label="设备在线率"
-            value="待接入"
-            placeholder
-            note="设备在线监测未接入"
+            label="紧急响应达标"
+            value={
+              efficiency?.urgent_5min_rate === null || efficiency === null
+                ? '—'
+                : `${Math.round((efficiency.urgent_5min_rate ?? 0) * 100)}%`
+            }
+            note={`紧急单 ${efficiency?.urgent_total ?? 0} 个`}
             icon={<CheckCircleFilled />}
-            accentColor="#a4a097"
+            accentColor={efficiency?.urgent_5min_rate != null && efficiency.urgent_5min_rate < 0.5 ? '#fa541c' : '#52c41a'}
             index={1}
           />
           <KpiCard
             label="待处理工单"
-            value="待接入"
-            placeholder
-            note="工单模块未启用"
+            value={wo.by_status['待处理'] ?? 0}
+            suffix="单"
             icon={<AlertOutlined />}
-            accentColor="#a4a097"
+            accentColor="#fa8c16"
             index={2}
+            onClick={() => router.push('/equipment/maintenance')}
           />
           <KpiCard
             label="库存预警"
-            value="待接入"
-            placeholder
-            note="备件模块未启用"
+            value={stockWarnings.length}
+            suffix="项"
             icon={<WarningFilled />}
-            accentColor="#a4a097"
+            accentColor={stockWarnings.length > 0 ? '#fa541c' : '#52c41a'}
             index={3}
+          />
+        </div>
+
+        {/* ========== 维修效能 ========== */}
+        <EfficiencyCard
+          initialData={efficiency}
+          workshopOptions={workshopOptions}
+          onData={setEfficiency}
+          onWorkshopChange={(code) => {
+            const matched = workshopOptions.find((w) => w.code === code)
+            setWorkshopLabel(matched ? matched.name : '全工厂')
+          }}
+        />
+
+        {/* ========== 维修人员排行 + 响应时效分布（随效能卡联动） ========== */}
+        <div
+          className="equipment-chart-grid"
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
+            gap: 16,
+            marginBottom: 28,
+          }}
+        >
+          <RepairerRankCard
+            ranking={efficiency?.repairer_ranking ?? []}
+            workshopLabel={workshopLabel}
+          />
+          <ResponseBucketCard
+            buckets={efficiency?.response_buckets ?? []}
+            workshopLabel={workshopLabel}
           />
         </div>
 
