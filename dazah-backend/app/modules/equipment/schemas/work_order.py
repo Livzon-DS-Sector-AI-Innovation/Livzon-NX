@@ -136,6 +136,69 @@ class WorkOrderStatistics(BaseModel):
     by_priority: dict[str, int]
 
 
+class EfficiencyMonthTrend(BaseModel):
+    """月度趋势行"""
+
+    month: str = Field(description="年月（YYYY-MM）")
+    total: int = Field(description="当月工单数")
+    completed: int = Field(description="当月已完成/已关闭数")
+    urgent: int = Field(description="当月紧急工单数")
+    avg_response: float = Field(description="当月平均响应时长（分钟）")
+    avg_repair: float = Field(description="当月平均修复时长（分钟）")
+
+
+class EfficiencyTopFault(BaseModel):
+    """故障 TOP 设备行"""
+
+    equipment_id: str = Field(description="设备ID")
+    equipment_name: str = Field(description="设备名称")
+    equipment_no: str = Field(description="设备编号")
+    workshop_code: str = Field(description="所属车间代码")
+    order_count: int = Field(description="工单数")
+    avg_repair_minutes: float = Field(description="平均修复时长（分钟）")
+
+
+class EfficiencyRepairerRank(BaseModel):
+    """维修人员排行行"""
+
+    assignee_id: str = Field(description="接单人ID")
+    assignee_name: str = Field(description="接单人姓名")
+    order_count: int = Field(description="接单数")
+    avg_response_minutes: float = Field(description="平均响应时长（分钟）")
+    avg_repair_minutes: float = Field(description="平均修复时长（分钟）")
+
+
+class EfficiencyResponseBucket(BaseModel):
+    """响应时效分布档位"""
+
+    bucket: str = Field(
+        description="档位（≤5分钟/5-30分钟/30-120分钟/>120分钟/未接单）"
+    )
+    count: int = Field(description="档内工单数")
+    ratio: float = Field(description="占全部工单比例（0~1）")
+
+
+class EfficiencyStatistics(BaseModel):
+    """维修效能统计"""
+
+    avg_response_minutes: float = Field(description="期内平均响应时长（分钟）")
+    avg_repair_minutes: float = Field(description="期内 MTTR（分钟）")
+    urgent_total: int = Field(description="紧急工单总数")
+    urgent_on_time: int = Field(description="响应≤5分钟的紧急工单数")
+    urgent_5min_rate: float | None = Field(
+        default=None, description="紧急 5 分钟达标率（0~1）；无紧急单为 None"
+    )
+    total_orders: int = Field(description="期内工单总数")
+    monthly: list[EfficiencyMonthTrend] = Field(description="月度趋势")
+    top_faults: list[EfficiencyTopFault] = Field(description="故障 TOP10 设备")
+    repairer_ranking: list[EfficiencyRepairerRank] = Field(
+        description="维修人员排行（接单数 TOP5）"
+    )
+    response_buckets: list[EfficiencyResponseBucket] = Field(
+        description="响应时效分布（五档，含未接单）"
+    )
+
+
 # ==================== 领料 ====================
 class MaterialConsumeItem(BaseModel):
     """单条领料项"""

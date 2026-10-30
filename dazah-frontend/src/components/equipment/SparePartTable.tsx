@@ -46,6 +46,10 @@ export function SparePartTable({ onRefresh }: Props) {
       ),
     },
     {
+      title: '安全线', dataIndex: 'min_qty', key: 'min_qty', width: 80, align: 'right',
+      render: (v: number | null) => v ?? '-',
+    },
+    {
       title: '状态', dataIndex: 'is_active', key: 'is_active', width: 80,
       render: (v: boolean) => <span style={v ? pillSuccess : pillNeutral}>{v ? '启用' : '停用'}</span>,
     },

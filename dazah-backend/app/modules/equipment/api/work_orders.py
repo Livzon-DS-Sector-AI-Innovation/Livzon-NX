@@ -1,10 +1,12 @@
 """维修工单 API 路由."""
 
+import logging
 import uuid
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy import inspect as sa_inspect
+from sqlalchemy import select
 from sqlalchemy.exc import MissingGreenlet
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import NO_VALUE  # type: ignore[attr-defined]
@@ -14,7 +16,9 @@ from app.core.deps import CurrentUser
 from app.core.exceptions import AppException
 from app.core.response import paginated_response, success_response
 from app.modules.equipment import service
+from app.modules.equipment.models.equipment import Equipment
 from app.modules.equipment.models.work_order import WorkOrder
+from app.modules.equipment.models.workshop import EquipmentWorkshop
 from app.modules.equipment.schemas import (
     MaterialConsumeRequest,
     MaterialConsumeResponse,
@@ -26,6 +30,9 @@ from app.modules.equipment.schemas import (
     WorkOrderUpdate,
     WorkOrderVerify,
 )
+from app.modules.equipment.service.work_order_feishu import dispatch_repair_card
+
+logger = logging.getLogger(__name__)
 
 
 def _require_user(current_user: CurrentUser) -> uuid.UUID:
@@ -82,7 +89,50 @@ async def create_work_order(
 ) -> JSONResponse:
     reporter_id = _require_user(current_user)
     wo = await service.create_work_order(db, data, reporter_id)
-    return success_response(data=_to_response(wo))
+    # 网页建单与飞书报修走同一条派单链路：落库后向车间维修群发接单卡片。
+    # 先提交再发卡，避免"群已见单、事务回滚"；发卡失败不影响建单本身。
+    dispatched = False
+    try:
+        equipment = await db.get(Equipment, wo.equipment_id)
+        workshop_code = (equipment.workshop_code if equipment else "") or ""
+        workshop_name = workshop_code or "未分配车间"
+        if workshop_code:
+            workshop_row = (
+                (
+                    await db.execute(
+                        select(EquipmentWorkshop).where(
+                            EquipmentWorkshop.code == workshop_code,
+                            EquipmentWorkshop.is_deleted == False,  # noqa: E712
+                        )
+                    )
+                )
+                .scalars()
+                .first()
+            )
+            if workshop_row is not None:
+                workshop_name = workshop_row.name
+        await db.commit()
+        message_id = await dispatch_repair_card(
+            work_order_no=wo.work_order_no,
+            equipment_label=(
+                f"{equipment.name}（{equipment.equipment_no}）"
+                if equipment
+                else str(wo.equipment_id)
+            ),
+            workshop_name=workshop_name,
+            fault=data.fault_description or "平台报修",
+            priority=wo.priority,
+            reporter_name=(
+                current_user.name if current_user else None
+            ) or "平台用户",
+            workshop_code=workshop_code,
+        )
+        dispatched = message_id is not None
+    except Exception:
+        logger.exception("网页建单派发维修群卡片失败（工单已创建，不影响）")
+    payload = _to_response(wo).model_dump(mode="json")
+    payload["dispatched"] = dispatched
+    return success_response(data=payload)
 
 
 @router.put("/{work_order_id}", summary="更新工单")
@@ -140,6 +190,26 @@ async def get_work_order_statistics(
 ) -> JSONResponse:
     stats = await service.get_work_order_statistics(db, workshop)
     return success_response(data=WorkOrderStatistics.model_validate(stats))
+
+
+@router.get("/efficiency", summary="维修效能统计")
+async def get_work_order_efficiency(
+    workshop: str | None = Query(
+        None,
+        pattern=r"^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
+        description="车间代码（空=全车间）",
+    ),
+    months: int = Query(6, ge=1, le=24, description="统计月数（默认 6）"),
+    db: AsyncSession = Depends(get_db),
+) -> JSONResponse:
+    """维修效能聚合：平均响应/MTTR/紧急5分钟达标率/月度趋势/故障TOP10。
+
+    workshop 为空 = 全车间；只读聚合，无新表。
+    """
+    from app.modules.equipment.schemas import EfficiencyStatistics
+
+    stats = await service.get_efficiency_statistics(db, workshop, months)
+    return success_response(data=EfficiencyStatistics.model_validate(stats))
 
 
 @router.get("/{work_order_id}", summary="工单详情")

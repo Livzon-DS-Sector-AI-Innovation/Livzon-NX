@@ -16,6 +16,17 @@ from app.modules.equipment.feishu.repair_card import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _isolate_token_cache():
+    """重置模块级 token 缓存：本文件用例断言"缓存为空→发请求"的初始态，
+    也避免本文件写入的长效缓存泄漏到同进程的其他测试。"""
+    repair_card._token_cache["token"] = ""
+    repair_card._token_cache["expires_at"] = 0.0
+    yield
+    repair_card._token_cache["token"] = ""
+    repair_card._token_cache["expires_at"] = 0.0
+
+
 def _dispatch_card(priority: str = "高"):
     return build_dispatch_card(
         work_order_no="WO-20261026-0001",

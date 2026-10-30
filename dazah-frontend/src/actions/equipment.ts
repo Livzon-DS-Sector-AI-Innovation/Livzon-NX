@@ -7,6 +7,7 @@ import type { InspectionFeishuWorkshopSummary } from '@/types/inspection-feishu'
 import type {
   EquipmentImportArchive,
   EquipmentImportArchiveSummary,
+  EfficiencyStatistics,
 } from '@/types/equipment'
 import {
   CreateCategoryInput, UpdateCategoryInput, CreateLocationInput, UpdateLocationInput, CreateEquipmentInput, UpdateEquipmentInput,
@@ -529,6 +530,39 @@ export async function fetchWorkOrderStatistics(workshop?: string): Promise<any> 
   if (!res.ok) return { total: 0, by_status: {}, by_type: {}, by_priority: {} }
   const json = await res.json()
   return json.data
+}
+
+export async function fetchEfficiencyStatistics(
+  workshop?: string,
+  months = 6,
+): Promise<EfficiencyStatistics | null> {
+  const params = new URLSearchParams()
+  if (workshop) params.set('workshop', workshop)
+  params.set('months', String(months))
+  const res = await fetch(
+    `${API_BASE_URL}/api/v1/equipment/maintenance/work-orders/efficiency?${params}`,
+    {
+      cache: 'no-store',
+      headers: await getAuthHeaders(),
+    },
+  )
+  if (!res.ok) return null
+  const json = await res.json()
+  return json.data as EfficiencyStatistics
+}
+
+/** 启用车间清单（效能卡车间下拉数据源）；失败降级为空（仅剩全工厂） */
+export async function fetchEnabledWorkshops(): Promise<
+  { code: string; name: string }[]
+> {
+  const res = await fetch(`${API_BASE_URL}/api/v1/equipment/workshops`, {
+    cache: 'no-store',
+    headers: await getAuthHeaders(),
+  })
+  if (!res.ok) return []
+  const json = await res.json()
+  const list = (json.data || []) as { code: string; name: string }[]
+  return list.map((w) => ({ code: w.code, name: w.name }))
 }
 
 export async function fetchFailureCodes(type: 'symptoms' | 'causes' | 'actions'): Promise<any[]> {

@@ -342,6 +342,51 @@ export interface WorkOrderListResponse {
   page_size: number
 }
 
+export interface EfficiencyMonthTrend {
+  month: string
+  total: number
+  completed: number
+  urgent: number
+  avg_response: number
+  avg_repair: number
+}
+
+export interface EfficiencyTopFault {
+  equipment_id: string
+  equipment_name: string
+  equipment_no: string
+  workshop_code: string
+  order_count: number
+  avg_repair_minutes: number
+}
+
+export interface EfficiencyRepairerRank {
+  assignee_id: string
+  assignee_name: string
+  order_count: number
+  avg_response_minutes: number
+  avg_repair_minutes: number
+}
+
+export interface EfficiencyResponseBucket {
+  bucket: string
+  count: number
+  ratio: number
+}
+
+export interface EfficiencyStatistics {
+  avg_response_minutes: number
+  avg_repair_minutes: number
+  urgent_total: number
+  urgent_on_time: number
+  urgent_5min_rate: number | null
+  total_orders: number
+  monthly: EfficiencyMonthTrend[]
+  top_faults: EfficiencyTopFault[]
+  repairer_ranking: EfficiencyRepairerRank[]
+  response_buckets: EfficiencyResponseBucket[]
+}
+
 export interface WorkOrderStatistics {
   total: number
   by_status: Record<WorkOrderStatus, number>

@@ -116,7 +116,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     register_feishu_event_handlers()
 
     from app.modules.equipment.scheduler import (
+        calibration_reminder_loop,
         maintenance_plan_loop,
+        stop_calibration_reminder_flag,
         stop_maintenance_plan_flag,
         stop_timeout_flag,
         timeout_scan_loop,
@@ -128,6 +130,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     maintenance_plan_task = asyncio.ensure_future(maintenance_plan_loop())
     timeout_task = asyncio.ensure_future(timeout_scan_loop())
+    calibration_reminder_task = asyncio.ensure_future(calibration_reminder_loop())
     member_task = asyncio.ensure_future(member_sync_loop())
 
     hr_member_task: asyncio.Task[None] | None = None
@@ -375,6 +378,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     stop_maintenance_plan_flag.set()
     stop_timeout_flag.set()
+    stop_calibration_reminder_flag.set()
     stop_member_sync_flag.set()
 
     # 停止安全模块 WebSocket
@@ -435,6 +439,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     maintenance_plan_task.cancel()
     timeout_task.cancel()
+    calibration_reminder_task.cancel()
     member_task.cancel()
     if hr_member_task is not None:
         hr_member_task.cancel()

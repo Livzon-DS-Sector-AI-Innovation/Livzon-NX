@@ -2,6 +2,8 @@
 export { EquipmentPage } from './EquipmentPage'
 export { StatsCards } from './StatsCards'
 export { StatsDashboard } from './StatsDashboard'
+export { EfficiencyCard } from './stats/EfficiencyCard'
+export type { EfficiencyWorkshopOption } from './stats/EfficiencyCard'
 export { WorkshopNavBlocks } from './WorkshopNavBlocks'
 export { ModuleTabs } from './ModuleTabs'
 export { EquipmentTable } from './EquipmentTable'
