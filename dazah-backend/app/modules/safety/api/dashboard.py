@@ -6,13 +6,19 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import CurrentUser, get_current_user
-from app.modules.safety.schemas.dashboard import SafetyOverviewResponse
-from app.modules.safety.service.dashboard import SafetyOverviewService
+from app.modules.safety.schemas.dashboard import (
+    OpenHazardDetailItem,
+    SafetyOverviewResponse,
+)
+from app.modules.safety.service.dashboard import (
+    SafetyOverviewService,
+    list_open_hazard_details,
+)
 from app.shared.schemas import ApiResponseEnvelope
 
 safety_dashboard_router = APIRouter()
@@ -29,3 +35,20 @@ async def get_safety_overview(
 ) -> ApiResponseEnvelope[SafetyOverviewResponse]:
     service = SafetyOverviewService(db)
     return ApiResponseEnvelope(data=await service.get_overview())
+
+
+@safety_dashboard_router.get(
+    "/open-hazard-details",
+    response_model=ApiResponseEnvelope[list[OpenHazardDetailItem]],
+    summary="未关闭隐患明细（来源：24小时值班隐患 / 隐患台账）",
+)
+async def get_open_hazard_details(
+    source: str = Query(..., description="来源: duty=24小时值班隐患 / ledger=隐患台账"),
+    limit: int = Query(50, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser | None = Depends(get_current_user),
+) -> ApiResponseEnvelope[list[OpenHazardDetailItem]]:
+    return ApiResponseEnvelope(
+        data=await list_open_hazard_details(db, source=source, limit=limit)
+    )
+

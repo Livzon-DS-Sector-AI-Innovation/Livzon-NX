@@ -292,6 +292,12 @@ def decode_value(field: FieldSchema, raw: Any) -> Any:
     # 只读类型：尽力给出可展示的文本，避免前端出现空白列。
     # link/查找引用类字段返回 {"link_record_ids": [...]} 之类的结构对象，
     # 没有可读文本，输出 None 而不是 str(dict) 垃圾串。
+    if isinstance(raw, (int, float)) and not isinstance(raw, bool):
+        # 创建/最后更新时间等只读时间字段是 13 位毫秒时间戳，直接显示
+        # 时间戳数字无法阅读，按日期格式化；其他数值原样输出。
+        if field.type in (FIELD_TYPE_CREATED_TIME, FIELD_TYPE_MODIFIED_TIME):
+            return _decode_date(raw)
+        return raw
     if isinstance(raw, dict):
         return None
     text = _join_rich_text(raw)

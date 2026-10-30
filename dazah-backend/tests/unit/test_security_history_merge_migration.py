@@ -17,12 +17,12 @@ def test_merge_preserves_both_histories_and_runs_no_database_operations(monkeypa
     config = Config(str(root / "alembic.ini"))
     config.set_main_option("script_location", str(root / "alembic"))
     script = ScriptDirectory.from_config(config)
-    # ada9041499a5：车间维修群链与主线在 b8d2f4a6c0e9 之后的合并点（单 head）
-    assert script.get_heads() == ["ada9041499a5"]
-    merge = script.get_revision("ada9041499a5")
+    # 9af3c6bb8778：车间维修群链（ada9041499a5）与主线危化品/MSDS 链的合并点（单 head）
+    assert script.get_heads() == ["9af3c6bb8778"]
+    merge = script.get_revision("9af3c6bb8778")
     assert merge is not None
-    # 合并点接住车间维修群链与主线（b8d2f4a6c0e9 为主线侧合并点）
-    assert set(merge.down_revision) == {"da5f78a06d60", "b8d2f4a6c0e9"}
+    # 合并点接住车间维修群链（ada9041499a5）与主线危化品/MSDS 链（b9e4f7a2c5d1）
+    assert set(merge.down_revision) == {"ada9041499a5", "b9e4f7a2c5d1"}
     for parent in merge.down_revision:
         pending = list(
             script.iterate_revisions(merge.revision, parent, implicit_base=True)
@@ -66,5 +66,5 @@ def test_reviewed_plan_includes_the_other_branch_like_alembic_upgrade(monkeypatc
         assert plan.pending_revisions == tuple(
             step.revision.revision for step in actual
         )
-        assert plan.pending_revisions[-1] == "ada9041499a5"
+        assert plan.pending_revisions[-1] == "9af3c6bb8778"
         assert len(plan.pending_revisions) > 1

@@ -8,6 +8,11 @@ export interface ApiResponse<T = unknown> {
     page?: number
     page_size?: number
     total?: number
+    // 检测报告列表聚合统计（后端 list meta 扩展字段）
+    report_count?: number
+    total_points?: number
+    exceed_points?: number
+    noise_post_points?: number
   }
 }
 
@@ -2102,6 +2107,145 @@ export interface OhHealthExamQueryParams {
   exam_type?: string
   department?: string
   keyword?: string
+}
+
+// ============ 检测报告导入（第三方职业病危害因素检测报告） ============
+
+export enum OhDetectionFactorCategory {
+  DUST_TOTAL = 'dust_total',
+  DUST_RESPIRABLE = 'dust_respirable',
+  FREE_SILICA = 'free_silica',
+  CHEMICAL = 'chemical',
+  NOISE = 'noise',
+  POWER_FREQUENCY_FIELD = 'power_frequency_field',
+  HEAT = 'heat',
+}
+
+export const OH_DETECTION_FACTOR_CATEGORY_OPTIONS = [
+  { value: OhDetectionFactorCategory.DUST_TOTAL, label: '粉尘（总尘）' },
+  { value: OhDetectionFactorCategory.DUST_RESPIRABLE, label: '粉尘（呼尘）' },
+  { value: OhDetectionFactorCategory.FREE_SILICA, label: '游离二氧化硅' },
+  { value: OhDetectionFactorCategory.CHEMICAL, label: '化学因素' },
+  { value: OhDetectionFactorCategory.NOISE, label: '噪声' },
+  { value: OhDetectionFactorCategory.POWER_FREQUENCY_FIELD, label: '工频电场' },
+  { value: OhDetectionFactorCategory.HEAT, label: '高温' },
+]
+
+export const OH_DETECTION_VERDICT_OPTIONS = [
+  { value: 'compliant', label: '未超标', color: 'green' },
+  { value: 'exceed', label: '超标', color: 'red' },
+  { value: 'unknown', label: '未判定', color: 'default' },
+]
+
+export const OH_DETECTION_RECORD_TYPE_OPTIONS = [
+  { value: 'post', label: '岗位接触' },
+  { value: 'point', label: '采样点/测量点' },
+]
+
+export const OH_DETECTION_PARSE_MODE_OPTIONS = [
+  { value: 'rules', label: '规则识别' },
+  { value: 'llm', label: 'AI 识别' },
+  { value: 'mixed', label: '规则 + AI' },
+]
+
+export interface OhDetectionReport {
+  id: string
+  report_no: string
+  report_name: string
+  company_name: string
+  detection_agency: string
+  detection_date?: string | null
+  table_count: number
+  total_points: number
+  exceed_points: number
+  noise_post_points: number
+  source_file_name: string
+  source_file_path: string
+  source_file_sha256: string
+  parse_mode: string
+  parse_warnings?: Array<{ table: string; reason: string }> | null
+  remark: string
+  created_at: string
+  updated_at: string
+}
+
+export interface OhDetectionResult {
+  id: string
+  report_id: string
+  seq: number
+  table_ref: string
+  table_title: string
+  factor_category: string
+  factor_name: string
+  record_type: string
+  workshop: string
+  post: string
+  sample_point: string
+  measured_value: string
+  measured_value_num?: number | null
+  unit: string
+  limit_type: string
+  limit_value_num?: number | null
+  verdict: string
+  is_noise_post: boolean
+  verdict_raw: string
+  extra?: Record<string, unknown> | null
+}
+
+export interface OhDetectionTableSummary {
+  table_ref: string
+  table_title: string
+  layout: string
+  mode: 'rules' | 'llm' | 'skipped'
+  row_count: number
+  warnings: string[]
+  sample_rows: OhDetectionResult[]
+}
+
+export interface OhDetectionParsePreview {
+  report_no: string
+  report_name: string
+  company_name: string
+  detection_agency: string
+  file_name: string
+  file_sha256: string
+  parse_mode: string
+  table_count: number
+  total_points: number
+  exceed_points: number
+  noise_post_points: number
+  warnings: string[]
+  tables: OhDetectionTableSummary[]
+  existing_report_id?: string | null
+  existing_total_points: number
+}
+
+export interface OhDetectionImportResult {
+  report: OhDetectionReport
+  imported_count: number
+  replaced: boolean
+  monitors_synced: number
+  skipped_tables: Array<{ table: string; reason: string }>
+}
+
+export interface OhDetectionResultQueryParams {
+  page?: number
+  page_size?: number
+  factor_category?: string
+  record_type?: string
+  workshop?: string
+  verdict?: string
+  is_noise_post?: boolean
+  keyword?: string
+}
+
+export interface OhDetectionReportListMeta {
+  page?: number
+  page_size?: number
+  report_count: number
+  total_points: number
+  exceed_points: number
+  noise_post_points: number
 }
 
 // ============ Scheduled Tasks (定时任务) ============

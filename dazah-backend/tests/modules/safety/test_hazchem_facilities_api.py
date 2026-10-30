@@ -15,6 +15,7 @@ from app.modules.safety.api.facilities import safety_facilities_router
 from app.modules.safety.api.hazchem import hazchem_router
 from app.modules.safety.models import (
     ChemicalInventory,
+    ChemicalMsdsAttachment,
     HazardousChemical,
     SafetyFacility,
     SafetyFacilityInspection,
@@ -59,13 +60,19 @@ async def client(
 
 
 async def _cleanup(db: AsyncSession) -> None:
+    chemical_ids = (
+        __import__("sqlalchemy")
+        .select(HazardousChemical.id)
+        .where(HazardousChemical.name.like(f"{_CHEM_PREFIX}%"))
+    )
+    await db.execute(
+        delete(ChemicalMsdsAttachment).where(
+            ChemicalMsdsAttachment.chemical_id.in_(chemical_ids)
+        )
+    )
     await db.execute(
         delete(ChemicalInventory).where(
-            ChemicalInventory.chemical_id.in_(
-                __import__("sqlalchemy")
-                .select(HazardousChemical.id)
-                .where(HazardousChemical.name.like(f"{_CHEM_PREFIX}%"))
-            )
+            ChemicalInventory.chemical_id.in_(chemical_ids)
         )
     )
     await db.execute(

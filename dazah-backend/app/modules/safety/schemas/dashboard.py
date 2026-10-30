@@ -59,13 +59,26 @@ class WeeklyOperationTypeCount(BaseModel):
 
 
 class OverLimitChemicalItem(BaseModel):
-    inventory_id: UUID
+    """超储物料条目：本地库存口径含 inventory_id；统计表镜像口径无本地记录。"""
+
+    inventory_id: UUID | None = None
     chemical_name: str
     workshop: str
     quantity: float
     upper_limit: float | None = None
     over_pct: float | None = None
     unit: str = ""
+
+
+class OpenHazardDetailItem(BaseModel):
+    """未关闭隐患明细行（来自 24小时值班 / 隐患台账镜像表）。"""
+
+    record_id: str
+    content: str = ""
+    where: str = ""
+    who: str = ""
+    date: str = ""
+    status: str = ""
 
 
 class SafetyOverviewResponse(BaseModel):
@@ -78,6 +91,14 @@ class SafetyOverviewResponse(BaseModel):
         "与 markers+unmapped 总数核对一致性",
     )
     over_limit_chemicals: list[OverLimitChemicalItem] = Field(default_factory=list)
+    hazchem_daily: list[OverLimitChemicalItem] = Field(
+        default_factory=list,
+        description="危化品每日统计全量行：优先统计表镜像（飞书）口径，"
+        "未配置镜像时回退本地车间存量台账",
+    )
+    hazchem_daily_source: str = Field(
+        default="local", description="数据口径: mirror=统计表镜像 / local=本地台账"
+    )
     weekly_operation_types: list[WeeklyOperationTypeCount] = Field(default_factory=list)
     open_hazard_count: int = 0
     generated_at: datetime | None = None

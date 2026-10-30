@@ -149,6 +149,8 @@
 :root[data-theme="dark"] .hover\:bg-\[\#f3f0ff\]:hover { background-color: var(--color-primary-soft); }
 :root[data-theme="dark"] .border-\[\#e5e3df\],
 :root[data-theme="dark"] .border-\[\#e8eaef\] { border-color: var(--color-hairline); }
+/* 超储/逾期行高亮（bg-red-50）在暗色下改为深红，保持状态可辨。 */
+:root[data-theme="dark"] .bg-red-50 { background-color: #3d2022; }
 
 /* Compatibility for existing inline neutral surfaces. These exact values only
    target legacy light colors; token-based components retain their own states. */

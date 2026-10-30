@@ -7,32 +7,30 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 const mocks = vi.hoisted(() => ({
-  message: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
+  message: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() },
   canOperate: true,
   canDelete: true,
   getHazardousChemicals: vi.fn(),
-  getChemicalInventories: vi.fn(),
   createHazardousChemical: vi.fn(),
   updateHazardousChemical: vi.fn(),
   deleteHazardousChemical: vi.fn(),
-  uploadChemicalMsds: vi.fn(),
-  downloadChemicalMsds: vi.fn(),
-  createChemicalInventory: vi.fn(),
-  updateChemicalInventory: vi.fn(),
-  deleteChemicalInventory: vi.fn(),
+  listChemicalMsdsFiles: vi.fn(),
+  uploadChemicalMsdsFile: vi.fn(),
+  deleteChemicalMsdsFile: vi.fn(),
+  reextractChemicalMsdsFile: vi.fn(),
+  fetchChemicalMsdsBytes: vi.fn(),
 }))
 
 vi.mock('@/actions/safety', () => ({
   getHazardousChemicals: mocks.getHazardousChemicals,
-  getChemicalInventories: mocks.getChemicalInventories,
   createHazardousChemical: mocks.createHazardousChemical,
   updateHazardousChemical: mocks.updateHazardousChemical,
   deleteHazardousChemical: mocks.deleteHazardousChemical,
-  uploadChemicalMsds: mocks.uploadChemicalMsds,
-  downloadChemicalMsds: mocks.downloadChemicalMsds,
-  createChemicalInventory: mocks.createChemicalInventory,
-  updateChemicalInventory: mocks.updateChemicalInventory,
-  deleteChemicalInventory: mocks.deleteChemicalInventory,
+  listChemicalMsdsFiles: mocks.listChemicalMsdsFiles,
+  uploadChemicalMsdsFile: mocks.uploadChemicalMsdsFile,
+  deleteChemicalMsdsFile: mocks.deleteChemicalMsdsFile,
+  reextractChemicalMsdsFile: mocks.reextractChemicalMsdsFile,
+  fetchChemicalMsdsBytes: mocks.fetchChemicalMsdsBytes,
 }))
 
 vi.mock('@/hooks/usePagePermissions', () => ({
@@ -44,11 +42,32 @@ vi.mock('@/hooks/usePagePermissions', () => ({
   }),
 }))
 
+vi.mock('./PageFeishuTable', () => ({
+  default: () =>
+    createElement('div', { 'data-mirror-table': 'y' }, '危化品统计表镜像'),
+}))
+
+vi.mock('@/components/quality', () => ({
+  FeishuAttachmentPreviewModal: ({
+    open,
+    fileName,
+  }: {
+    open?: boolean
+    fileName?: string
+  }) =>
+    open
+      ? createElement('div', { 'data-preview-modal': 'y' }, fileName ?? '')
+      : null,
+}))
+
 vi.mock('@ant-design/icons', () => {
   const Icon = () => null
   return {
+    DeleteOutlined: Icon,
     DownloadOutlined: Icon,
+    EyeOutlined: Icon,
     FileTextOutlined: Icon,
+    RobotOutlined: Icon,
     UploadOutlined: Icon,
   }
 })
@@ -66,17 +85,20 @@ vi.mock('antd', async () => {
   const Button = ({ children, onClick, disabled, icon }: AnyProps) =>
     createElement(
       'button',
-      { type: 'button', disabled: Boolean(disabled), 'data-icon': icon ? 'y' : 'n', onClick: onClick as never },
+      {
+        type: 'button',
+        disabled: Boolean(disabled),
+        'data-icon': icon ? 'y' : 'n',
+        onClick: onClick as never,
+      },
       children as ReactNode
     )
   const Table = ({
     columns,
     dataSource,
-    rowClassName,
   }: {
     columns?: Column[]
     dataSource?: Array<Record<string, unknown>>
-    rowClassName?: (row: Record<string, unknown>) => string
   }) =>
     createElement(
       'tbody',
@@ -84,11 +106,7 @@ vi.mock('antd', async () => {
       (dataSource ?? []).map((row, rowIndex) =>
         createElement(
           'tr',
-          {
-            key: String(row.id ?? rowIndex),
-            'data-row': String(row.id ?? rowIndex),
-            class: rowClassName ? rowClassName(row) : undefined,
-          },
+          { key: String(row.id ?? rowIndex), 'data-row': String(row.id ?? rowIndex) },
           (columns ?? []).map((column, columnIndex) =>
             createElement(
               'td',
@@ -101,36 +119,60 @@ vi.mock('antd', async () => {
         )
       )
     )
-  const Tabs = ({ items }: { items?: Array<{ key: string; label: string; children: ReactNode }> }) =>
+  const Tabs = ({
+    items,
+    activeKey,
+    onChange,
+  }: {
+    items?: Array<{ key: string; label: string; children: ReactNode }>
+    activeKey?: string
+    onChange?: (key: string) => void
+  }) =>
     createElement(
       'div',
-      null,
-      (items ?? []).map((item) =>
-        createElement(
-          'section',
-          { key: item.key, 'data-tab': item.key },
-          createElement('h3', null, item.label),
-          item.children
-        )
-      )
-    )
-  const Input = Object.assign(
-    () => createElement('input'),
-    {
-      Search: ({ placeholder, onSearch }: AnyProps) =>
+      { 'data-active-tab': String(activeKey ?? '') },
+      ...(items ?? []).map((item) =>
         createElement(
           'button',
           {
+            key: item.key,
             type: 'button',
-            'data-search': String(placeholder ?? ''),
-            onClick: () => (onSearch as (v: string) => void)?.(''),
+            'data-tab': item.key,
+            onClick: () => (onChange as (key: string) => void)?.(item.key),
           },
-          'search'
-        ),
-    }
-  )
+          item.label
+        )
+      ),
+      (items ?? []).find((item) => item.key === activeKey)?.children ?? null
+    )
+  const Input = Object.assign(() => createElement('input'), {
+    Search: ({ placeholder, onSearch }: AnyProps) =>
+      createElement(
+        'button',
+        {
+          type: 'button',
+          'data-search': String(placeholder ?? ''),
+          onClick: () => (onSearch as (v: string) => void)?.(''),
+        },
+        'search'
+      ),
+    TextArea: (props: AnyProps) =>
+      createElement('textarea', { placeholder: String(props.placeholder ?? '') }),
+  })
+  const formValues = {
+    name: '乙醇',
+    alias: '',
+    cas_no: '',
+    category: 'flammable_liquid',
+    hazard_statements: '',
+    storage_requirements: '',
+    remark: '',
+  }
   const useForm = () => [
-    { setFieldsValue: vi.fn(), validateFields: vi.fn(async () => ({})) },
+    {
+      setFieldsValue: vi.fn(),
+      validateFields: vi.fn(async () => formValues),
+    },
   ]
   const Form = Object.assign(
     ({ children }: AnyProps) => createElement('form', null, children as ReactNode),
@@ -145,11 +187,57 @@ vi.mock('antd', async () => {
         ),
     }
   )
-  const Upload = ({ children }: AnyProps) => createElement('span', null, children as ReactNode)
-  const Text = ({ children }: AnyProps) => createElement('span', null, children as ReactNode)
-  const App = Object.assign(({ children }: AnyProps) => createElement('div', null, children as ReactNode), {
-    useApp: () => ({ message: mocks.message }),
-  })
+  const Upload = ({ children, beforeUpload }: AnyProps) =>
+    createElement(
+      'span',
+      null,
+      children as ReactNode,
+      beforeUpload
+        ? createElement(
+            'button',
+            {
+              type: 'button',
+              'data-upload-trigger': 'y',
+              onClick: () => {
+                ;(beforeUpload as (file: File) => unknown)(
+                  new File(['x'], '丙酮MSDS.pdf', { type: 'application/pdf' })
+                )
+              },
+            },
+            'trigger-upload'
+          )
+        : null
+    )
+  const Text = ({ children }: AnyProps) =>
+    createElement('span', null, children as ReactNode)
+  const App = Object.assign(
+    ({ children }: AnyProps) => createElement('div', null, children as ReactNode),
+    { useApp: () => ({ message: mocks.message }) }
+  )
+  const Meta = ({ title, description }: AnyProps) => {
+    const titleText = String(
+      (title as { props?: { children?: unknown } } | undefined)?.props?.children ?? ''
+    )
+    const descriptionText = String(
+      (description as { props?: { children?: unknown } } | undefined)?.props
+        ?.children ?? ''
+    )
+    return createElement(
+      'div',
+      { 'data-file-name': titleText },
+      titleText,
+      ' ',
+      descriptionText
+    )
+  }
+  const ListItem = ({ children, actions }: AnyProps) =>
+    createElement(
+      'div',
+      { 'data-msds-item': 'y' },
+      children as ReactNode,
+      ...((actions as ReactNode[]) ?? [])
+    )
+  ListItem.Meta = Meta
 
   return {
     App,
@@ -157,29 +245,60 @@ vi.mock('antd', async () => {
     Card: Box,
     Form,
     Input,
-    InputNumber: () => createElement('input'),
-    Modal: ({ children, open, onOk }: AnyProps) =>
-      createElement(
-        'div',
-        { 'data-modal-open': String(Boolean(open)) },
-        open && onOk
-          ? createElement('button', { type: 'button', 'data-modal-ok': 'y', onClick: onOk as never }, '确定')
-          : null
-      ),
+    List: Object.assign(
+      ({ dataSource, renderItem }: AnyProps) =>
+        createElement(
+          'div',
+          { 'data-msds-list': 'y' },
+          ...(((dataSource ?? []) as Array<Record<string, unknown>>).map((file) =>
+            (renderItem as (row: Record<string, unknown>) => ReactNode)(file)
+          ) as ReactNode[])
+        ),
+      { Item: ListItem }
+    ),
+    Modal: ({ children, open, onOk, title, footer }: AnyProps) =>
+      open
+        ? createElement(
+            'div',
+            { 'data-modal-title': String(title ?? ''), 'data-modal-open': 'true' },
+            children as ReactNode,
+            (footer as ReactNode) ?? null,
+            onOk
+              ? createElement(
+                  'button',
+                  {
+                    type: 'button',
+                    'data-modal-ok': 'y',
+                    onClick: onOk as never,
+                  },
+                  '确定'
+                )
+              : null
+          )
+        : null,
     Popconfirm: ({ children, onConfirm }: AnyProps) =>
       createElement(
         'span',
         null,
         children as ReactNode,
         onConfirm
-          ? createElement('button', { type: 'button', 'data-popconfirm-ok': 'y', onClick: onConfirm as never }, '确认删')
+          ? createElement(
+              'button',
+              {
+                type: 'button',
+                'data-popconfirm-ok': 'y',
+                onClick: onConfirm as never,
+              },
+              '确认删'
+            )
           : null
       ),
     Select: () => createElement('select'),
     Space: Box,
     Table,
     Tabs,
-    Tag: ({ children }: AnyProps) => createElement('span', null, children as ReactNode),
+    Tag: ({ children }: AnyProps) =>
+      createElement('span', null, children as ReactNode),
     Typography: Object.assign(
       ({ children }: AnyProps) => createElement('div', null, children as ReactNode),
       { Text, Title: Text }
@@ -201,44 +320,44 @@ const CHEMICALS = [
     category: 'flammable_liquid',
     hazard_statements: '高度易燃液体',
     storage_requirements: '阴凉通风',
-    msds_file_path: 'uploads/safety/hazchem/msds.pdf',
-    msds_file_name: '乙醇MSDS.pdf',
+    msds_file_path: '',
+    msds_file_name: '',
     remark: '',
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-01T00:00:00Z',
   },
 ]
 
-const INVENTORIES = [
+const MSDS_FILES = [
   {
-    id: 'inv-1',
+    id: 'f-1',
     chemical_id: 'c-1',
-    chemical_name: '乙醇',
-    category: 'flammable_liquid',
-    workshop: 'daba',
-    quantity: 4.6,
-    upper_limit: 3,
-    over_limit: true,
-    over_pct: 53.3,
-    unit: 'kg',
-    remark: '',
-    updated_at: '2026-10-26T00:00:00Z',
-  },
-  {
-    id: 'inv-2',
-    chemical_id: 'c-1',
-    chemical_name: '乙醇',
-    category: 'flammable_liquid',
-    workshop: 'extraction_2b',
-    quantity: 1,
-    upper_limit: 8,
-    over_limit: false,
-    over_pct: null,
-    unit: 'kg',
-    remark: '',
-    updated_at: '2026-10-26T00:00:00Z',
+    file_name: '乙醇MSDS.pdf',
+    content_type: 'application/pdf',
+    size_bytes: 2048,
+    created_at: '2026-10-01T00:00:00Z',
+    created_by: null,
   },
 ]
+
+const UPLOAD_WITH_AI = {
+  code: 200,
+  data: {
+    file: MSDS_FILES[0],
+    chemical: CHEMICALS[0],
+    ai_suggestion: {
+      name: '丙酮',
+      alias: null,
+      cas_no: '67-64-1',
+      category: 'flammable_liquid',
+      category_label: '易燃液体',
+      hazard_statements: '高度易燃液体和蒸气',
+      storage_requirements: null,
+      remark: null,
+    },
+    ai_error: null,
+  },
+}
 
 let root: Root | null = null
 let container: HTMLElement
@@ -248,82 +367,213 @@ beforeEach(() => {
   document.body.appendChild(container)
   mocks.canOperate = true
   mocks.canDelete = true
+  mocks.listChemicalMsdsFiles.mockResolvedValue({
+    code: 200,
+    data: { items: MSDS_FILES },
+  })
 })
 
 afterEach(() => {
   root?.unmount()
+  root = null
   container.remove()
   vi.clearAllMocks()
 })
 
-async function renderPanel() {
+async function renderPanel(overrides: Record<string, unknown> = {}) {
   root = createRoot(container)
   await act(async () => {
     root!.render(
       createElement(HazchemPanel, {
         pageKey: PAGE_KEY,
         initialChemicals: CHEMICALS,
-        initialInventories: INVENTORIES,
         initialError: null,
+        ...overrides,
       })
     )
   })
 }
 
+function findButton(text: string) {
+  return [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+    (button) => button.textContent?.includes(text)
+  )
+}
+
+async function openMsdsManager() {
+  await act(async () => {
+    findButton('查看 / 上传')!.click()
+    await new Promise((resolve) => setTimeout(resolve, 30))
+  })
+  const modal = container.querySelector('[data-modal-title^="MSDS 附件"]')
+  expect(modal).not.toBeNull()
+  return modal as HTMLElement
+}
+
 describe('HazchemPanel', () => {
-  it('renders chemical catalog with MSDS download and inventory over-limit tags', async () => {
+  it('renders chemical catalog with MSDS entry and lazy mirror tab', async () => {
     await renderPanel()
     const markup = container.innerHTML
     expect(markup).toContain('危化品与 MSDS 管理')
     expect(container.querySelector('[data-row="c-1"]')).not.toBeNull()
     expect(markup).toContain('乙醇')
     expect(markup).toContain('64-17-5')
-    expect(markup).toContain('超储 53.3%')
-    expect(container.querySelector('[data-row="inv-2"]')).not.toBeNull()
+    expect(findButton('查看 / 上传')).toBeDefined()
+    // 镜像表初始不挂载，切到页签后挂载
+    expect(container.querySelector('[data-mirror-table]')).toBeNull()
+    const inventoryTab = container.querySelector<HTMLButtonElement>(
+      'button[data-tab="inventory"]'
+    )
+    expect(inventoryTab).not.toBeNull()
+    await act(async () => {
+      inventoryTab!.click()
+    })
+    expect(container.querySelector('[data-mirror-table]')).not.toBeNull()
   })
 
-  it('toggles over-limit-only filter', async () => {
-    mocks.getChemicalInventories.mockResolvedValue({
-      code: 200,
-      data: { items: INVENTORIES.slice(0, 1), total: 1 },
+  it('opens MSDS manager, lists files and downloads', async () => {
+    mocks.fetchChemicalMsdsBytes.mockResolvedValue({
+      base64: Buffer.from('pdf').toString('base64'),
+      contentType: 'application/pdf',
     })
     await renderPanel()
-    const toggle = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
-      button.textContent?.includes('只看超储')
+    const msdsModal = await openMsdsManager()
+    expect(mocks.listChemicalMsdsFiles).toHaveBeenCalledWith('c-1')
+    expect(msdsModal.textContent).toContain('乙醇MSDS.pdf')
+    const download = [...msdsModal.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent === '下载'
     )
-    expect(toggle).toBeDefined()
+    expect(download).toBeDefined()
     await act(async () => {
-      toggle!.click()
+      download!.click()
+      await new Promise((resolve) => setTimeout(resolve, 30))
     })
-    expect(mocks.getChemicalInventories).toHaveBeenCalledWith(
-      expect.objectContaining({ over_limit_only: true })
-    )
+    expect(mocks.fetchChemicalMsdsBytes).toHaveBeenCalledWith('c-1', 'f-1', false)
   })
 
-  it('disables create buttons without operate permission', async () => {
+  it('previews MSDS through object URLs', async () => {
+    mocks.fetchChemicalMsdsBytes.mockResolvedValue({
+      base64: Buffer.from('pdf').toString('base64'),
+      contentType: 'application/pdf',
+    })
+    await renderPanel()
+    const msdsModal = await openMsdsManager()
+    const preview = [...msdsModal.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent === '预览'
+    )
+    expect(preview).toBeDefined()
+    await act(async () => {
+      preview!.click()
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    expect(mocks.fetchChemicalMsdsBytes).toHaveBeenCalledWith('c-1', 'f-1', true)
+    expect(mocks.fetchChemicalMsdsBytes).toHaveBeenCalledWith('c-1', 'f-1', false)
+    expect(container.querySelector('[data-preview-modal]')).not.toBeNull()
+  })
+
+  it('upload with AI suggestion opens confirm modal and applies to archive', async () => {
+    mocks.uploadChemicalMsdsFile.mockResolvedValue(UPLOAD_WITH_AI)
+    mocks.updateHazardousChemical.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: null,
+    })
+    mocks.getHazardousChemicals.mockResolvedValue({
+      code: 200,
+      data: { items: CHEMICALS, total: 1 },
+    })
+    await renderPanel()
+    const msdsModal = await openMsdsManager()
+    const trigger = msdsModal.querySelector<HTMLButtonElement>(
+      '[data-upload-trigger]'
+    )
+    expect(trigger).toBeDefined()
+    await act(async () => {
+      trigger!.click()
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    expect(mocks.uploadChemicalMsdsFile).toHaveBeenCalledWith(
+      'c-1',
+      expect.objectContaining({ name: '丙酮MSDS.pdf' })
+    )
+    const aiModal = container.querySelector(
+      '[data-modal-title="AI 识别结果确认"]'
+    )
+    expect(aiModal).not.toBeNull()
+    const ok = aiModal!.querySelector<HTMLButtonElement>('[data-modal-ok]')
+    expect(ok).not.toBeNull()
+    await act(async () => {
+      ok!.click()
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    expect(mocks.updateHazardousChemical).toHaveBeenCalledWith('c-1', {
+      name: '乙醇',
+      alias: '',
+      cas_no: '',
+      category: 'flammable_liquid',
+      hazard_statements: '',
+      storage_requirements: '',
+      remark: '',
+    })
+  })
+
+  it('upload without AI suggestion keeps archive untouched', async () => {
+    mocks.uploadChemicalMsdsFile.mockResolvedValue({
+      code: 200,
+      data: { file: MSDS_FILES[0], chemical: CHEMICALS[0], ai_suggestion: null, ai_error: '平台未配置 AI 模型，无法自动识别' },
+    })
+    await renderPanel()
+    const msdsModal = await openMsdsManager()
+    const trigger = msdsModal.querySelector<HTMLButtonElement>(
+      '[data-upload-trigger]'
+    )
+    await act(async () => {
+      trigger!.click()
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    expect(
+      container.querySelector('[data-modal-title="AI 识别结果确认"]')
+    ).toBeNull()
+    expect(mocks.updateHazardousChemical).not.toHaveBeenCalled()
+    expect(mocks.message.info).toHaveBeenCalled()
+  })
+
+  it('deletes an MSDS attachment after confirmation', async () => {
+    mocks.deleteChemicalMsdsFile.mockResolvedValue({ code: 200, data: null })
+    await renderPanel()
+    const msdsModal = await openMsdsManager()
+    const confirm = msdsModal.querySelector<HTMLButtonElement>(
+      '[data-popconfirm-ok]'
+    )
+    expect(confirm).toBeDefined()
+    await act(async () => {
+      confirm!.click()
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    expect(mocks.deleteChemicalMsdsFile).toHaveBeenCalledWith('c-1', 'f-1')
+  })
+
+  it('disables create button without operate permission', async () => {
     mocks.canOperate = false
     await renderPanel()
-    const createButtons = [...container.querySelectorAll<HTMLButtonElement>('button')].filter((button) =>
-      button.textContent?.includes('新增危化品')
-    )
-    expect(createButtons.length).toBeGreaterThan(0)
-    expect(createButtons.every((button) => button.disabled)).toBe(true)
+    const createButton = findButton('新增危化品')
+    expect(createButton).toBeDefined()
+    expect(createButton!.disabled).toBe(true)
   })
 
   it('creates a chemical through the modal submit', async () => {
-    mocks.createHazardousChemical.mockResolvedValue({ code: 200, message: 'success', data: null })
+    mocks.createHazardousChemical.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: null,
+    })
     await renderPanel()
-    const createButton = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
-      button.textContent?.includes('新增危化品'),
-    )
-    expect(createButton).toBeDefined()
     await act(async () => {
-      createButton!.click()
+      findButton('新增危化品')!.click()
     })
     const modal = container.querySelector('[data-modal-open="true"]')
     expect(modal).not.toBeNull()
-    const ok = modal!.querySelector<HTMLButtonElement>('button[data-modal-ok]')
-    expect(ok).not.toBeNull()
+    const ok = modal!.querySelector<HTMLButtonElement>('[data-modal-ok]')
     await act(async () => {
       ok!.click()
       await new Promise((resolve) => setTimeout(resolve, 30))
@@ -331,100 +581,71 @@ describe('HazchemPanel', () => {
     expect(mocks.createHazardousChemical).toHaveBeenCalled()
   })
 
-  it('creates an inventory through the modal submit', async () => {
-    mocks.createChemicalInventory.mockResolvedValue({ code: 200, message: 'success', data: null })
-    await renderPanel()
-    const createButton = [...container.querySelectorAll<HTMLButtonElement>('button')].find((button) =>
-      button.textContent?.includes('新增存量记录'),
-    )
-    expect(createButton).toBeDefined()
-    await act(async () => {
-      createButton!.click()
-    })
-    const modal = container.querySelector('[data-modal-open="true"]')
-    expect(modal).not.toBeNull()
-    const ok = modal!.querySelector<HTMLButtonElement>('button[data-modal-ok]')
-    expect(ok).not.toBeNull()
-    await act(async () => {
-      ok!.click()
-      await new Promise((resolve) => setTimeout(resolve, 30))
-    })
-    expect(mocks.createChemicalInventory).toHaveBeenCalled()
-  })
-
-  it('编辑危化品后提交更新', async () => {
-    mocks.updateHazardousChemical.mockResolvedValue({ code: 200, message: 'success', data: null })
-    await renderPanel()
-    const editBtn = [...container.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent === '编辑')
-    expect(editBtn).toBeDefined()
-    await act(async () => { editBtn!.click() })
-    const modal = container.querySelector('[data-modal-open="true"]')
-    expect(modal).not.toBeNull()
-    const ok = modal!.querySelector<HTMLButtonElement>('button[data-modal-ok]')
-    await act(async () => {
-      ok!.click()
-      await new Promise((r) => setTimeout(r, 30))
-    })
-    expect(mocks.updateHazardousChemical).toHaveBeenCalled()
-  })
-
   it('删除危化品档案（Popconfirm 确认后调用）', async () => {
-    mocks.deleteHazardousChemical.mockResolvedValue({ code: 200, message: 'success', data: null })
+    mocks.deleteHazardousChemical.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: null,
+    })
     await renderPanel()
-    const confirm = container.querySelector<HTMLButtonElement>('button[data-popconfirm-ok]')
+    const confirm = container.querySelector<HTMLButtonElement>(
+      '[data-popconfirm-ok]'
+    )
     expect(confirm).toBeDefined()
     await act(async () => {
       confirm!.click()
-      await new Promise((r) => setTimeout(r, 30))
+      await new Promise((resolve) => setTimeout(resolve, 30))
     })
     expect(mocks.deleteHazardousChemical).toHaveBeenCalled()
   })
 
-  it('删除存量记录（Popconfirm 确认后调用）', async () => {
-    mocks.deleteChemicalInventory.mockResolvedValue({ code: 200, message: 'success', data: null })
-        mocks.getChemicalInventories.mockResolvedValue({ code: 200, message: 'success', data: [], meta: { total: 0 } })
-await renderPanel()
-    const confirms = container.querySelectorAll<HTMLButtonElement>('button[data-popconfirm-ok]')
-    const target = Array.from(confirms).at(-1)!
-    expect(target).toBeDefined()
-    await act(async () => {
-      target.click()
-      await new Promise((r) => setTimeout(r, 30))
+  it('MSDS 上传失败提示错误', async () => {
+    mocks.uploadChemicalMsdsFile.mockResolvedValue({
+      code: 500,
+      message: '附件保存失败',
     })
-    expect(mocks.deleteChemicalInventory).toHaveBeenCalled()
+    await renderPanel()
+    const msdsModal = await openMsdsManager()
+    const trigger = msdsModal.querySelector<HTMLButtonElement>(
+      '[data-upload-trigger]'
+    )
+    expect(trigger).toBeDefined()
+    await act(async () => {
+      trigger!.click()
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    expect(mocks.message.error).toHaveBeenCalledWith('附件保存失败')
   })
 
-  it('edits inventory, downloads MSDS, delete failure branch', async () => {
-    mocks.updateChemicalInventory.mockResolvedValue({ code: 200, message: 'success', data: null })
-    mocks.getChemicalInventories.mockResolvedValue({ code: 200, message: 'success', data: { items: [], total: 0 } })
+  it('MSDS 下载失败提示错误', async () => {
+    mocks.fetchChemicalMsdsBytes.mockRejectedValue(new Error('网络中断'))
     await renderPanel()
-    const invEdit = [...container.querySelectorAll<HTMLButtonElement>('button')].filter((b) => b.textContent === '编辑')[1]
-    if (invEdit) {
-      await act(async () => { invEdit.click() })
-      const ok = container.querySelector<HTMLButtonElement>('[data-modal-open="true"] button[data-modal-ok]')
-      await act(async () => {
-        ok!.click()
-        await new Promise((r) => setTimeout(r, 30))
-      })
-      expect(mocks.updateChemicalInventory).toHaveBeenCalled()
-    }
+    const msdsModal = await openMsdsManager()
+    const download = [...msdsModal.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent === '下载'
+    )
+    await act(async () => {
+      download!.click()
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    expect(mocks.message.error).toHaveBeenCalledWith('网络中断')
+  })
 
-    const msds = [...container.querySelectorAll<HTMLButtonElement>('button')].find((b) => b.textContent?.includes('MSDS') || b.textContent === '下载')
-    if (msds) {
-      await act(async () => {
-        msds!.click()
-        await new Promise((r) => setTimeout(r, 30))
-      })
-      expect(mocks.downloadChemicalMsds).toHaveBeenCalled()
-    }
-
-    mocks.deleteHazardousChemical.mockResolvedValue({ code: 500, message: '删除失败' })
-    const confirm = container.querySelector<HTMLButtonElement>('button[data-popconfirm-ok]')
-    if (confirm) {
-      await act(async () => {
-        confirm.click()
-        await new Promise((r) => setTimeout(r, 30))
-      })
-    }
+  it('MSDS 重新识别失败提示错误', async () => {
+    mocks.reextractChemicalMsdsFile.mockResolvedValue({
+      code: 500,
+      message: '识别服务不可用',
+    })
+    await renderPanel()
+    const msdsModal = await openMsdsManager()
+    const extract = [...msdsModal.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent?.includes('重新识别')
+    )
+    expect(extract).toBeDefined()
+    await act(async () => {
+      extract!.click()
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    expect(mocks.message.error).toHaveBeenCalledWith('识别服务不可用')
   })
 })

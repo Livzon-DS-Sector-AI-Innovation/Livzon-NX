@@ -1,39 +1,49 @@
 """Safety API — 危化品与 MSDS 端点。
 
-危化品档案（含 MSDS 文件上传/下载）与车间存量台账（超储预警）。
+危化品档案（含 MSDS 多附件上传/下载/在线预览/AI 识别）与车间存量台账
+（超储预警，本地口径；页面展示走飞书统计表镜像）。
 """
 
 from __future__ import annotations
 
-import os
-from datetime import datetime
+from pathlib import Path
+from urllib.parse import quote
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, UploadFile
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Depends, Query, Response, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.deps import CurrentUser, get_current_user
 from app.core.exceptions import AppException, NotFoundException
+from app.core.upload_security import read_upload_secure, sniff_upload_mime
 from app.modules.safety.schemas.hazchem import (
     ChemicalInventoryCreate,
     ChemicalInventoryListResponse,
     ChemicalInventoryResponse,
     ChemicalInventoryUpdate,
+    ChemicalMsdsFileItem,
+    ChemicalMsdsFileListResponse,
+    ChemicalMsdsUploadResponse,
     HazardousChemicalCreate,
     HazardousChemicalListResponse,
     HazardousChemicalResponse,
     HazardousChemicalUpdate,
     HazchemStatsResponse,
 )
-from app.modules.safety.service.hazchem import HazchemService
+from app.modules.safety.service.hazchem import (
+    MSDS_ALLOWED_EXTS,
+    MSDS_MAX_BYTES,
+    HazchemService,
+    build_msds_storage_key,
+    read_msds_object,
+    store_msds_object,
+)
+from app.modules.safety.service.msds_extract import extract_msds_suggestion
+from app.platform.storage.preview import resolve_preview_content
 from app.shared.schemas import ApiResponseEnvelope
 
 hazchem_router = APIRouter()
-
-_MSDS_ALLOWED_EXTS = {".pdf", ".doc", ".docx", ".png", ".jpg", ".jpeg"}
-_MSDS_MAX_BYTES = 30 * 1024 * 1024
 
 
 @hazchem_router.get(
@@ -166,66 +176,196 @@ async def delete_hazardous_chemical(
     return ApiResponseEnvelope(data=None, message="删除成功")
 
 
-@hazchem_router.post(
-    "/hazardous-chemicals/{chemical_id}/msds",
-    response_model=ApiResponseEnvelope[HazardousChemicalResponse],
-    summary="上传 MSDS 文件",
+@hazchem_router.get(
+    "/hazardous-chemicals/{chemical_id}/msds-files",
+    response_model=ApiResponseEnvelope[ChemicalMsdsFileListResponse],
+    summary="MSDS 附件列表",
 )
-async def upload_msds(
+async def list_msds_files(
+    chemical_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser | None = Depends(get_current_user),
+) -> ApiResponseEnvelope[ChemicalMsdsFileListResponse]:
+    service = HazchemService(db)
+    items = await service.list_msds_files(chemical_id)
+    return ApiResponseEnvelope(
+        data=ChemicalMsdsFileListResponse(
+            items=[ChemicalMsdsFileItem.model_validate(item) for item in items]
+        )
+    )
+
+
+@hazchem_router.post(
+    "/hazardous-chemicals/{chemical_id}/msds-files",
+    response_model=ApiResponseEnvelope[ChemicalMsdsUploadResponse],
+    summary="上传 MSDS 附件（附带 AI 识别档案字段建议）",
+)
+async def upload_msds_file(
     chemical_id: UUID,
     file: UploadFile,
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
-) -> ApiResponseEnvelope[HazardousChemicalResponse]:
+) -> ApiResponseEnvelope[ChemicalMsdsUploadResponse]:
     if current_user is None:
         raise AppException(status_code=401, message="请先登录")
-    file_ext = os.path.splitext(file.filename or "")[1].lower()
-    if file_ext not in _MSDS_ALLOWED_EXTS:
+    file_name, content = await read_upload_secure(
+        file,
+        max_bytes=MSDS_MAX_BYTES,
+        allowed_extensions=MSDS_ALLOWED_EXTS,
+        what="MSDS 文件",
+    )
+    file_ext = Path(file_name).suffix.lower()
+    if file_ext not in MSDS_ALLOWED_EXTS:
         raise AppException(
             status_code=422,
             message="MSDS 仅支持 pdf/doc/docx/png/jpg 文件",
         )
-    content = await file.read()
-    if len(content) > _MSDS_MAX_BYTES:
-        raise AppException(status_code=422, message="MSDS 文件不能超过 30MB")
 
-    upload_dir = os.path.join("uploads", "safety", "hazchem")
-    os.makedirs(upload_dir, exist_ok=True)
-    safe_name = f"msds_{chemical_id}_{int(datetime.now().timestamp())}{file_ext}"
-    file_path = os.path.join(upload_dir, safe_name)
-    with open(file_path, "wb") as f:
-        f.write(content)
-
-    service = HazchemService(db)
-    chemical = await service.set_msds_file(
-        chemical_id, file_path, file.filename or "msds", user_id=current_user.id
-    )
-    await db.commit()
-    await db.refresh(chemical)
-    return ApiResponseEnvelope(data=HazardousChemicalResponse.model_validate(chemical))
-
-
-@hazchem_router.get(
-    "/hazardous-chemicals/{chemical_id}/msds",
-    response_model=None,
-    summary="下载 MSDS 文件",
-)
-async def download_msds(
-    chemical_id: UUID,
-    db: AsyncSession = Depends(get_db),
-    current_user: CurrentUser | None = Depends(get_current_user),
-) -> FileResponse:
     service = HazchemService(db)
     chemical = await service.get_chemical(chemical_id)
     if chemical is None:
         raise NotFoundException("危化品档案")
-    if not chemical.msds_file_path or not os.path.exists(chemical.msds_file_path):
-        raise NotFoundException("MSDS 文件")
-    return FileResponse(
-        chemical.msds_file_path,
-        filename=chemical.msds_file_name or "msds",
-        media_type="application/octet-stream",
+    # 记录魔数嗅探出的真实类型，不信任客户端 Content-Type 头
+    content_type = sniff_upload_mime(file_name, content)
+    storage_key = store_msds_object(
+        build_msds_storage_key(chemical_id, file_ext), content, content_type
     )
+    attachment = await service.add_msds_file(
+        chemical_id,
+        file_name=file_name,
+        storage_key=storage_key,
+        content_type=content_type,
+        size_bytes=len(content),
+        user_id=current_user.id,
+    )
+    await db.commit()
+    await db.refresh(attachment)
+    await db.refresh(chemical)
+
+    suggestion, ai_error = await extract_msds_suggestion(
+        file_name=file_name, content=content
+    )
+    return ApiResponseEnvelope(
+        data=ChemicalMsdsUploadResponse(
+            file=ChemicalMsdsFileItem.model_validate(attachment),
+            chemical=HazardousChemicalResponse.model_validate(chemical),
+            ai_suggestion=suggestion,
+            ai_error=ai_error,
+        )
+    )
+
+
+@hazchem_router.get(
+    "/hazardous-chemicals/{chemical_id}/msds-files/{file_id}/content",
+    response_model=None,
+    summary="下载 MSDS 附件",
+)
+async def download_msds_file(
+    chemical_id: UUID,
+    file_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser | None = Depends(get_current_user),
+) -> Response:
+    service = HazchemService(db)
+    attachment = await service.get_msds_file(chemical_id, file_id)
+    stored = read_msds_object(attachment.storage_key)
+    if stored is None:
+        raise NotFoundException("MSDS 文件")
+    data, content_type = stored
+    return Response(
+        content=data,
+        media_type=content_type,
+        headers={
+            "Content-Disposition": (
+                f"attachment; filename*=UTF-8''{quote(attachment.file_name)}"
+            )
+        },
+    )
+
+
+@hazchem_router.get(
+    "/hazardous-chemicals/{chemical_id}/msds-files/{file_id}/preview",
+    response_model=None,
+    summary="MSDS 附件在线预览（office 转 PDF）",
+)
+async def preview_msds_file(
+    chemical_id: UUID,
+    file_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser | None = Depends(get_current_user),
+) -> Response:
+    service = HazchemService(db)
+    attachment = await service.get_msds_file(chemical_id, file_id)
+    stored = read_msds_object(attachment.storage_key)
+    if stored is None:
+        raise NotFoundException("MSDS 文件")
+    data, _content_type = stored
+    try:
+        preview_data, preview_type, preview_name = resolve_preview_content(
+            data, attachment.file_name
+        )
+    except ValueError as exc:
+        raise AppException(message=str(exc), status_code=415) from exc
+    return Response(
+        content=preview_data,
+        media_type=preview_type,
+        headers={
+            "Content-Disposition": (
+                f"inline; filename*=UTF-8''{quote(preview_name)}"
+            )
+        },
+    )
+
+
+@hazchem_router.post(
+    "/hazardous-chemicals/{chemical_id}/msds-files/{file_id}/extract",
+    response_model=ApiResponseEnvelope[ChemicalMsdsUploadResponse],
+    summary="重新 AI 识别 MSDS 附件内容（返回档案字段建议）",
+)
+async def extract_msds_file(
+    chemical_id: UUID,
+    file_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser | None = Depends(get_current_user),
+) -> ApiResponseEnvelope[ChemicalMsdsUploadResponse]:
+    service = HazchemService(db)
+    attachment = await service.get_msds_file(chemical_id, file_id)
+    chemical = await service.get_chemical(chemical_id)
+    if chemical is None:
+        raise NotFoundException("危化品档案")
+    stored = read_msds_object(attachment.storage_key)
+    if stored is None:
+        raise NotFoundException("MSDS 文件")
+    suggestion, ai_error = await extract_msds_suggestion(
+        file_name=attachment.file_name, content=stored[0]
+    )
+    return ApiResponseEnvelope(
+        data=ChemicalMsdsUploadResponse(
+            file=ChemicalMsdsFileItem.model_validate(attachment),
+            chemical=HazardousChemicalResponse.model_validate(chemical),
+            ai_suggestion=suggestion,
+            ai_error=ai_error,
+        )
+    )
+
+
+@hazchem_router.delete(
+    "/hazardous-chemicals/{chemical_id}/msds-files/{file_id}",
+    response_model=ApiResponseEnvelope[None],
+    summary="删除 MSDS 附件（软删除）",
+)
+async def delete_msds_file(
+    chemical_id: UUID,
+    file_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser | None = Depends(get_current_user),
+) -> ApiResponseEnvelope[None]:
+    if current_user is None:
+        raise AppException(status_code=401, message="请先登录")
+    service = HazchemService(db)
+    await service.delete_msds_file(chemical_id, file_id)
+    await db.commit()
+    return ApiResponseEnvelope(data=None, message="删除成功")
 
 
 @hazchem_router.get(

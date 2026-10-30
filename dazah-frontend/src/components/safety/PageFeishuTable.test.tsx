@@ -131,11 +131,13 @@ vi.mock('antd', async () => {
     dataSource,
     onChange,
     onRow,
+    rowClassName,
   }: {
     columns?: Column[]
     dataSource?: Row[]
     onChange?: (pagination: { current?: number; pageSize?: number }) => void
     onRow?: (row: Row) => { onClick?: () => void }
+    rowClassName?: (row: Row) => string
   }) => {
     mocks.capturedTableColumns = columns ?? []
     return createElement(
@@ -163,6 +165,7 @@ vi.mock('antd', async () => {
               {
                 key: row.record_id,
                 'data-row': row.record_id,
+                className: rowClassName?.(row) ?? '',
                 onClick: () => rowProps && rowProps.onClick && rowProps.onClick(),
               },
               (columns ?? []).map((column, index) =>
@@ -1596,5 +1599,37 @@ describe('PageFeishuTable（列宽）', () => {
     // 文本列不设固定宽度，自动吸收剩余空间
     expect(widths.get('申请编号')).toBeUndefined()
     expect(widths.get('变更名称')).toBeUndefined()
+  })
+
+  it('危化品镜像页可切换「只看超储」并按行标记超储样式', async () => {
+    const base = okRecords()
+    mocks.getSafetyPageTableRecords.mockResolvedValue({
+      ...base,
+      data: {
+        ...base.data,
+        over_limit_fields: { quantity_field: '库存数量', limit_field: '存储上限' },
+        records: [
+          { record_id: 'rec-1', fields: {}, over_limit: true },
+          { record_id: 'rec-2', fields: {} },
+        ],
+      },
+    })
+    rendered = renderTable({
+      pageKey: 'safety:site-mgmt:hazchem-msds',
+      pageName: '危化品统计表（车间库存/超储）',
+      initialData: null,
+    })
+    await settle()
+
+    const toggle = findButton(rendered.container, '只看超储')
+    expect(toggle).toBeDefined()
+    act(() => toggle!.click())
+    await settle()
+    expect(mocks.getSafetyPageTableRecords).toHaveBeenLastCalledWith(
+      expect.objectContaining({ overLimitOnly: true }),
+    )
+    const highlighted = rendered.container.querySelectorAll('tr.bg-red-50')
+    expect(highlighted.length).toBe(1)
+    expect(highlighted[0].getAttribute('data-row')).toBe('rec-1')
   })
 })
