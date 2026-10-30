@@ -538,3 +538,33 @@ async def test_dispatch_routes_to_workshop_chat(monkeypatch):
         workshop_code="202-1",
     )
     assert sent_chats == ["oc_ws_201", "oc_global"]
+
+
+@pytest.mark.asyncio
+async def test_dispatch_skips_when_no_chat_configured(monkeypatch):
+    """车间与全局默认群都未配置 → 记警告并跳过派单卡片（返回 None）。"""
+    import app.modules.equipment.service.work_order_feishu as wof_mod
+
+    db_ws = SimpleNamespace(execute=AsyncMock(return_value=_Result([])))
+    monkeypatch.setattr(
+        "app.core.database.async_session_factory", _factory(db_ws)
+    )
+    import app.core.config as cfg
+
+    monkeypatch.setattr(
+        cfg.get_settings(),
+        "FEISHU_EQUIPMENT_CHAT_ID",
+        "",
+        raising=False,
+    )
+    result = await wof_mod.dispatch_repair_card(
+        work_order_no="WO-NC",
+        equipment_label="离心泵A（LB-1）",
+        workshop_name="201一车间",
+        fault="漏了",
+        priority="高",
+        reporter_name="张三",
+        workshop_code="201-1",
+    )
+    assert result is None
+

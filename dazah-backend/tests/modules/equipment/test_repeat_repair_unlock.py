@@ -236,3 +236,51 @@ async def test_verify_reject_notifies_assignee(monkeypatch):
     assert notified and notified[0]["feishu_union_id"] == "fu_1"
     assert notified[0]["remark"] == "没修好，还是漏"
     assert notified[0]["equipment_name"] == "102A"
+
+
+@pytest.mark.asyncio
+async def test_notify_rework_sends_card_with_complete_button(monkeypatch):
+    """直接执行 _notify_rework 真实函数体：union_id 寻址 + 卡片带返修完成按钮。"""
+    sent: list[dict] = []
+
+    async def _fake_send(**kw):
+        sent.append(kw)
+        return True
+
+    monkeypatch.setattr(
+        "app.modules.equipment.feishu.notification.send_user_card", _fake_send
+    )
+
+    await wo_svc._notify_rework(
+        feishu_union_id="on_1",
+        work_order_no="WO-N1",
+        equipment_name="离心泵A",
+        remark="没修好，还是漏",
+    )
+
+    assert len(sent) == 1
+    card = sent[0]
+    assert card["open_id"] == "on_1"
+    assert card["receive_id_type"] == "union_id"
+    assert "WO-N1" in card["title"] and "不合格" in card["title"]
+    assert "没修好，还是漏" in card["content"]
+    button = card["elements"][0]["actions"][0]
+    assert button["value"] == {"act": "complete", "oid": "WO-N1"}
+
+
+@pytest.mark.asyncio
+async def test_notify_rework_send_failure_only_logs(monkeypatch):
+    """发送失败仅记日志不抛异常（非关键路径）。"""
+    async def _fake_send(**kw):
+        return False
+
+    monkeypatch.setattr(
+        "app.modules.equipment.feishu.notification.send_user_card", _fake_send
+    )
+    await wo_svc._notify_rework(  # 不应抛异常
+        feishu_union_id="on_1",
+        work_order_no="WO-N2",
+        equipment_name="设备",
+        remark="",
+    )
+
