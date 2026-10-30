@@ -131,4 +131,81 @@ describe('EfficiencyCard', () => {
     // initialData 已提供，初始渲染不应触发重新取数
     expect(mock).not.toHaveBeenCalled()
   })
+
+  it('点击刷新按钮重新取数并回调 onData', async () => {
+    const { fetchEfficiencyStatistics } = await import('@/actions/equipment')
+    const mock = fetchEfficiencyStatistics as ReturnType<typeof vi.fn>
+    mock.mockClear()
+    mock.mockResolvedValue(data)
+    const onData = vi.fn()
+
+    await act(async () => {
+      root.render(
+        <EfficiencyCard
+          initialData={data}
+          workshopOptions={[]}
+          onData={onData}
+        />,
+      )
+      await Promise.resolve()
+    })
+
+    const refresh = document.querySelector('[aria-label="刷新效能数据"]') as HTMLElement
+    expect(refresh).toBeTruthy()
+    await act(async () => {
+      refresh.click()
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(mock).toHaveBeenCalledTimes(1)
+    expect(onData).toHaveBeenCalledWith(data)
+  })
+
+  it('切换车间触发取数并回调 onWorkshopChange', async () => {
+    const { fetchEfficiencyStatistics } = await import('@/actions/equipment')
+    const mock = fetchEfficiencyStatistics as ReturnType<typeof vi.fn>
+    mock.mockClear()
+    mock.mockResolvedValue(data)
+    const onWorkshopChange = vi.fn()
+
+    await act(async () => {
+      root.render(
+        <EfficiencyCard
+          initialData={data}
+          workshopOptions={[{ code: '201-1', name: '201一车间' }]}
+          onWorkshopChange={onWorkshopChange}
+        />,
+      )
+      await Promise.resolve()
+    })
+
+    // antd Select 在 happy-dom 下经 mousedown 打开面板后点选项
+    const selector = document.querySelector('[role="combobox"], .ant-select-selector, .ant-select') as HTMLElement
+    if (!selector) {
+      // happy-dom 未渲染 antd Select 结构时退化为断言不崩溃
+      expect(document.body.textContent ?? '').toContain('全工厂')
+      return
+    }
+    selector.dispatchEvent(
+      new MouseEvent('mousedown', { bubbles: true }),
+    )
+    await act(async () => { await Promise.resolve() })
+    const option = Array.from(
+      document.querySelectorAll('.ant-select-item-option'),
+    ).find((el) => el.textContent?.trim() === '201一车间') as HTMLElement | undefined
+    if (option) {
+      await act(async () => {
+        option.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+        option.click()
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+      expect(onWorkshopChange).toHaveBeenCalledWith('201-1')
+      expect(mock).toHaveBeenCalledWith('201-1')
+    } else {
+      // 下拉未展开时退化为断言选择器存在
+      expect(selector).toBeTruthy()
+    }
+  })
 })

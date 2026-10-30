@@ -4,8 +4,9 @@
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { KpiCard } from './KpiCard'
 import { RepairerRankCard } from './RepairerRankCard'
 import { ResponseBucketCard } from './ResponseBucketCard'
 import type { EfficiencyRepairerRank, EfficiencyResponseBucket } from '@/types/equipment'
@@ -50,6 +51,23 @@ describe('RepairerRankCard', () => {
     expect(text).toContain('共 2 人接单 · 合计 30 单')
     // 均修复 72 分钟 → 1小时12分
     expect(text).toContain('1小时12分')
+  })
+
+  it('行 hover 高亮与移出还原', async () => {
+    await act(async () => {
+      root.render(<RepairerRankCard ranking={ranking} workshopLabel="全工厂" />)
+    })
+    const row = container.querySelector('[data-testid="repairer-rank-row"]') as HTMLElement
+    expect(row).toBeTruthy()
+    // React 的 onMouseEnter/Leave 由 mouseover/mouseout 派生
+    await act(async () => {
+      row.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, relatedTarget: document.body }))
+    })
+    expect(row.style.background).toContain('faf9f8')
+    await act(async () => {
+      row.dispatchEvent(new MouseEvent('mouseout', { bubbles: true, relatedTarget: document.body }))
+    })
+    expect(row.style.background).toBe('transparent')
   })
 
   it('空排行显示引导文案', async () => {
@@ -100,5 +118,64 @@ describe('ResponseBucketCard', () => {
       )
     })
     expect(container.textContent ?? '').toContain('暂无工单数据')
+  })
+})
+
+describe('KpiCard', () => {
+  let container: HTMLDivElement
+  let root: Root
+
+  beforeEach(() => {
+    container = document.createElement('div')
+    document.body.append(container)
+    root = createRoot(container)
+  })
+
+  afterEach(() => {
+    act(() => root.unmount())
+    container.remove()
+  })
+
+  it('可点击卡片支持鼠标与键盘触发', async () => {
+    const onClick = vi.fn()
+    await act(async () => {
+      root.render(
+        <KpiCard
+          label="待处理工单"
+          value={1}
+          suffix="单"
+          icon={<span>icon</span>}
+          accentColor="#fa8c16"
+          index={0}
+          onClick={onClick}
+        />,
+      )
+    })
+    const card = container.querySelector('.kpi-card') as HTMLElement
+    expect(card).toBeTruthy()
+    expect(card.getAttribute('role')).toBe('button')
+
+    await act(async () => { card.click() })
+    expect(onClick).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      card.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }),
+      )
+    })
+    expect(onClick).toHaveBeenCalledTimes(2)
+    await act(async () => {
+      card.dispatchEvent(
+        new KeyboardEvent('keydown', { key: ' ', bubbles: true }),
+      )
+    })
+    expect(onClick).toHaveBeenCalledTimes(3)
+    // 非触发键不调用
+    await act(async () => {
+      card.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }),
+      )
+    })
+    expect(onClick).toHaveBeenCalledTimes(3)
   })
 })
