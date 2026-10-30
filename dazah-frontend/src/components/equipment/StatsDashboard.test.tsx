@@ -55,7 +55,12 @@ it('待处理工单 KPI 可点击跳转，车间切换更新联动标签', async
   }
   const data: React.ComponentProps<typeof StatsDashboard>['initialData'] = {
     equipmentStats: { total: 12, by_status: { 在用: 10, 维修中: 2, 备用: 0, 停用: 0, 报废: 0 }, by_category: {}, by_location: {} },
-    workOrderStats: { total: 1, by_status: { 待处理: 1, 执行中: 0, 待验收: 0, 已完成: 0, 已关闭: 0 }, by_type: {}, by_priority: {} },
+    workOrderStats: {
+      total: 1,
+      by_status: { 待处理: 1, 执行中: 0, 待验收: 0, 已完成: 0, 已关闭: 0 },
+      by_type: { 故障维修: 1, 计划维护: 0, 巡检: 0, 校准: 0, 异常处理: 0, 日常维护: 0 },
+      by_priority: { 紧急: 0, 高: 1, 中: 0, 低: 0 },
+    },
     efficiency,
     stockWarnings: [], overduePlans: [], calibrationPlans: [], recentWorkOrders: [], inspectionSummaries: [],
     workshopOptions: [{ code: '201-1', name: '201一车间' }],
