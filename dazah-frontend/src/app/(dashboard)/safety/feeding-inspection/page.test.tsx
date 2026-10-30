@@ -24,6 +24,10 @@ for (const [dir, pageName] of cases) {
 }
 
 import FeedingInspectionPage from './page'
+import {
+  SAFETY_PAGE_TABLE_CREATE_URLS,
+  SAFETY_PAGE_TABLE_KEYS,
+} from '@/lib/safety-page-tables'
 
 describe('feeding inspection mirror page', () => {
   it('renders the mirror with the feeding page key', async () => {
@@ -33,6 +37,17 @@ describe('feeding inspection mirror page', () => {
     expect((mocks.SafetyPageFeishuMirror.mock.calls.at(-1) as unknown as [Record<string, unknown>] | undefined)?.[0]).toMatchObject({
       pageKey: 'safety:ops-safety:feeding-inspection',
       pageName: '投料巡查表',
+    })
+  })
+
+  it('passes the Feishu form create url for this page', () => {
+    renderToStaticMarkup(FeedingInspectionPage())
+
+    expect(
+      (mocks.SafetyPageFeishuMirror.mock.calls.at(-1) as unknown as [Record<string, unknown>] | undefined)?.[0],
+    ).toMatchObject({
+      createUrl:
+        SAFETY_PAGE_TABLE_CREATE_URLS[SAFETY_PAGE_TABLE_KEYS.feedingInspection],
     })
   })
 })

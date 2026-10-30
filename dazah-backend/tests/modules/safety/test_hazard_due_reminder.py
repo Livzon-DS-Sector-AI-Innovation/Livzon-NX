@@ -297,7 +297,19 @@ class _SettingsSession:
         return _FakeResult(self._settings)
 
 
-async def test_daily_generator_respects_enabled_switch() -> None:
+class _EnvStub:
+    """绕过生产环境变量校验的配置替身。"""
+
+    def __init__(self, app_env: str) -> None:
+        self.APP_ENV = app_env
+
+
+async def test_daily_generator_respects_enabled_switch(monkeypatch) -> None:
+    # 生产环境：按开关决定是否执行（直接 stub 配置，避免触发生产环境
+    # 变量完整性校验）
+    monkeypatch.setattr(
+        "app.core.config.get_settings", lambda: _EnvStub("production")
+    )
     generator = SafetyHazardDueReminderGenerator()
 
     disabled = await generator.find_due(
@@ -307,6 +319,22 @@ async def test_daily_generator_respects_enabled_switch() -> None:
 
     enabled = await generator.find_due(_SettingsSession(_settings()))
     assert enabled == [True]
+
+
+async def test_daily_generator_never_auto_runs_outside_production(
+    monkeypatch,
+) -> None:
+    """开发/测试环境的定时任务不自动推送真实飞书消息（防开发栈骚扰真实群）。"""
+    monkeypatch.setattr(
+        "app.core.config.get_settings", lambda: _EnvStub("development")
+    )
+    generator = SafetyHazardDueReminderGenerator()
+
+    # 即使开关打开，非生产环境也跳过
+    enabled_session = _SettingsSession(
+        _settings(hazard_due_notify_enabled=True)
+    )
+    assert await generator.find_due(enabled_session) == []
 
 
 async def test_all_targets_failed_writes_no_log(monkeypatch) -> None:

@@ -1,5 +1,8 @@
 import { SafetyPageFeishuMirror } from '@/components/safety'
-import { SAFETY_PAGE_TABLE_KEYS } from '@/lib/safety-page-tables'
+import {
+  SAFETY_PAGE_TABLE_CREATE_URLS,
+  SAFETY_PAGE_TABLE_KEYS,
+} from '@/lib/safety-page-tables'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
@@ -14,6 +17,11 @@ export default function HazchemUnloadingInspectionPage() {
       <SafetyPageFeishuMirror
         pageKey={SAFETY_PAGE_TABLE_KEYS.hazchemUnloadingInspection}
         pageName="危险化学品卸车巡查表"
+        createUrl={
+          SAFETY_PAGE_TABLE_CREATE_URLS[
+            SAFETY_PAGE_TABLE_KEYS.hazchemUnloadingInspection
+          ]
+        }
       />
     </div>
   )
