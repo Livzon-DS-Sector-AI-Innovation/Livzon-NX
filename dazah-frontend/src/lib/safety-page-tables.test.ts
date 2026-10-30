@@ -7,6 +7,7 @@ import {
   columnOptions,
   displayFieldText,
   isPreviewableAttachment,
+  SAFETY_PAGE_TABLE_CREATE_URLS,
   SAFETY_PAGE_TABLE_KEYS,
   SAFETY_PAGE_TABLE_PREFERRED_COLUMNS,
   toPageTableStats,
@@ -142,5 +143,17 @@ describe('toPageTableStats', () => {
       due_summary: null,
       groups: [{ field: '值班日期', kind: 'date', mode: 'month', buckets: [] }],
     })
+  })
+
+  it('provides Feishu form create urls for the shop-floor inspection pages', () => {
+    for (const key of [
+      SAFETY_PAGE_TABLE_KEYS.feedingInspection,
+      SAFETY_PAGE_TABLE_KEYS.hazchemUnloadingInspection,
+      SAFETY_PAGE_TABLE_KEYS.centrifugeDischargeInspection,
+    ]) {
+      expect(SAFETY_PAGE_TABLE_CREATE_URLS[key]).toMatch(
+        /^https:\/\/[a-z0-9]+\.feishu\.cn\/share\/base\/form\/shr/,
+      )
+    }
   })
 })
