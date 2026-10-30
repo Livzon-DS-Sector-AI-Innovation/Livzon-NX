@@ -696,7 +696,8 @@ async def _notify_low_stock(db: AsyncSession, items: list[dict[str, Any]]) -> No
                         "text": {
                             "tag": "lark_md",
                             "content": (
-                                f"备件 **{spare_part.name}** 库存 **{stock.current_qty:g}**，"
+                                f"备件 **{spare_part.name}** "
+                                f"库存 **{stock.current_qty:g}**，"
                                 f"已低于安全线 **{stock.safety_qty}**，请及时补充"
                             ),
                         },

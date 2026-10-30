@@ -171,7 +171,9 @@ class EfficiencyRepairerRank(BaseModel):
 class EfficiencyResponseBucket(BaseModel):
     """响应时效分布档位"""
 
-    bucket: str = Field(description="档位（≤5分钟/5-30分钟/30-120分钟/>120分钟/未接单）")
+    bucket: str = Field(
+        description="档位（≤5分钟/5-30分钟/30-120分钟/>120分钟/未接单）"
+    )
     count: int = Field(description="档内工单数")
     ratio: float = Field(description="占全部工单比例（0~1）")
 

@@ -8,14 +8,12 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 
 import app.modules.equipment.service.maintenance_plan as mp
-import app.modules.equipment.service.work_order as wo_svc
 import app.modules.equipment.service.spare_part as sp_service
 from app.modules.equipment.service.maintenance_plan import (
     _dispatch_generated_orders,
     generate_due_work_orders,
 )
 from app.modules.equipment.service.work_order import _notify_low_stock
-
 
 # ── 计划维护生成后派单 ──────────────────────────────────────────────
 

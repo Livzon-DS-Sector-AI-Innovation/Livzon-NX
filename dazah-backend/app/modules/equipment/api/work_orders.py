@@ -19,7 +19,6 @@ from app.modules.equipment import service
 from app.modules.equipment.models.equipment import Equipment
 from app.modules.equipment.models.work_order import WorkOrder
 from app.modules.equipment.models.workshop import EquipmentWorkshop
-from app.modules.equipment.service.work_order_feishu import dispatch_repair_card
 from app.modules.equipment.schemas import (
     MaterialConsumeRequest,
     MaterialConsumeResponse,
@@ -31,6 +30,7 @@ from app.modules.equipment.schemas import (
     WorkOrderUpdate,
     WorkOrderVerify,
 )
+from app.modules.equipment.service.work_order_feishu import dispatch_repair_card
 
 logger = logging.getLogger(__name__)
 

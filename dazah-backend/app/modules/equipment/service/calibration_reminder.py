@@ -73,7 +73,10 @@ def _build_reminder_card(
                 "elements": [
                     {
                         "tag": "plain_text",
-                        "content": "请安排校准并在「校准管理」录入校准记录，录入后提醒自动停止",
+                        "content": (
+                            "请安排校准并在「校准管理」录入校准记录，"
+                            "录入后提醒自动停止"
+                        ),
                     },
                 ],
             },
@@ -137,7 +140,11 @@ async def remind_due_calibration_plans(db: AsyncSession) -> tuple[int, int]:
             continue
 
         equipment = plan.equipment
-        equipment_label = f"{equipment.name}（{equipment.equipment_no}）" if equipment else str(plan.equipment_id)
+        equipment_label = (
+            f"{equipment.name}（{equipment.equipment_no}）"
+            if equipment
+            else str(plan.equipment_id)
+        )
         days_left = (plan.next_calibration_date - today).days
         card = _build_reminder_card(
             equipment_label=equipment_label,
@@ -154,7 +161,10 @@ async def remind_due_calibration_plans(db: AsyncSession) -> tuple[int, int]:
                 dm_sent = await send_user_card(
                     open_id=union_id,
                     title="校准到期提醒",
-                    content=f"{equipment_label} 下次校准 {plan.next_calibration_date.isoformat()}",
+                    content=(
+                        f"{equipment_label} 下次校准 "
+                        f"{plan.next_calibration_date.isoformat()}"
+                    ),
                     receive_id_type="union_id",
                 )
             except Exception:

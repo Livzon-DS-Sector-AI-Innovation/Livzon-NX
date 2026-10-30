@@ -248,7 +248,9 @@ async def generate_due_work_orders(
                 dispatch_payloads.append(
                     {
                         "work_order_no": wo_no,
-                        "equipment_label": f"{equipment.name}（{equipment.equipment_no}）",
+                        "equipment_label": (
+                            f"{equipment.name}（{equipment.equipment_no}）"
+                        ),
                         "workshop_code": equipment.workshop_code or "",
                         "plan_name": plan.plan_name,
                     }
