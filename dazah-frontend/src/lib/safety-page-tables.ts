@@ -68,6 +68,12 @@ export const SAFETY_PAGE_TABLE_PREFERRED_COLUMNS: Record<string, string[]> = {
 export const SAFETY_PAGE_TABLE_CREATE_URLS: Record<string, string> = {
   [SAFETY_PAGE_TABLE_KEYS.ehsChangeReview]: 'https://applink.feishu.cn/T9aVmYNY9oKR',
   [SAFETY_PAGE_TABLE_KEYS.ehsChangeAcceptance]: 'https://applink.feishu.cn/T9aVn44berv1',
+  [SAFETY_PAGE_TABLE_KEYS.feedingInspection]:
+    'https://j0eukrlohu.feishu.cn/share/base/form/shrcn8Y3hpT0nSxXGj568RSBVQf',
+  [SAFETY_PAGE_TABLE_KEYS.hazchemUnloadingInspection]:
+    'https://j0eukrlohu.feishu.cn/share/base/form/shrcn3vWz3Am9ygOLco8wyLTb8v',
+  [SAFETY_PAGE_TABLE_KEYS.centrifugeDischargeInspection]:
+    'https://j0eukrlohu.feishu.cn/share/base/form/shrcn2VwVcu3LfuJRYjNc8O7bld',
 }
 
 /**

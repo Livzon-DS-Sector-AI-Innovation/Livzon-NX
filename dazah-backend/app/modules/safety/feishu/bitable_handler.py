@@ -2116,6 +2116,57 @@ async def handle_bitable_record_changed(event: dict[str, Any]) -> None:
     )
 
 
+@on_event("drive.file.bitable_record_changed_v1")
+async def handle_mirror_page_record_changed(event: dict[str, Any]) -> None:
+    """镜像页绑定表的记录变更 → 事件级即时同步（不等 15 分钟定时轮询）。
+
+    与上面的隐患台账处理器共用同一事件：这里按 ``page_feishu_configs``
+    绑定匹配 (app_token, table_id)，命中即调度该页镜像的即时刷新；
+    特殊危险作业页刷新完成后自动转录台账 + 重算关键作业。
+    """
+    file_token = str(event.get("file_token") or "")
+    table_id = str(event.get("table_id") or "")
+    logger.info(
+        "收到多维表格记录变更事件: file_token=%s table_id=%s",
+        file_token,
+        table_id,
+    )
+    if not file_token or not table_id:
+        return
+
+    from sqlalchemy import select
+
+    from app.core.database import async_session_factory
+    from app.modules.safety.models import SafetyPageFeishuConfig
+    from app.modules.safety.service.page_mirror_refresh import (
+        schedule_page_mirror_refresh,
+    )
+
+    try:
+        async with async_session_factory() as session:
+            result = await session.execute(
+                select(SafetyPageFeishuConfig.page_key).where(
+                    SafetyPageFeishuConfig.is_deleted.is_(False),
+                    SafetyPageFeishuConfig.is_enabled.is_(True),
+                    SafetyPageFeishuConfig.is_mirrored.is_(True),
+                    SafetyPageFeishuConfig.app_token == file_token,
+                    SafetyPageFeishuConfig.table_id == table_id,
+                )
+            )
+            page_keys = [str(key) for key in result.scalars().all()]
+    except Exception:
+        logger.exception(
+            "查询镜像页绑定失败: file_token=%s table_id=%s",
+            file_token,
+            table_id,
+        )
+        return
+
+    for page_key in page_keys:
+        logger.info("事件触发镜像即时同步: page=%s", page_key)
+        schedule_page_mirror_refresh(page_key)
+
+
 @on_event("drive.file.bitable_field_changed_v1")
 async def handle_bitable_field_changed(event: dict[str, Any]) -> None:
     """处理多维表格字段级变更事件（补充处理器）。

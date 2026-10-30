@@ -89,7 +89,14 @@ class SafetyHazardDueReminderGenerator(TaskGenerator):
     timeout_seconds = 300
 
     async def find_due(self, session: Any) -> list[Any]:
+        from app.core.config import get_settings
         from app.modules.safety.models import SafetyFeishuAppSettings
+
+        # 开发环境的定时任务不自动推送真实飞书消息（开发栈热重载/重启
+        # 频繁，且推送目标常指向真实群）；验证发送走设置页「发送测试提醒」。
+        if get_settings().APP_ENV != "production":
+            logger.info("非生产环境（APP_ENV!=production），到期提醒自动推送跳过")
+            return []
 
         row = (
             await session.execute(
