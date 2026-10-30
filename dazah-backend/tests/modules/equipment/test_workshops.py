@@ -216,3 +216,32 @@ async def test_workshops_api_crud_flow(client: Any) -> None:
         json={"name": "不存在"},
     )
     assert resp.status_code == 404
+
+
+async def test_workshop_feishu_chat_id_roundtrip(
+    db_session, _clean_workshops_table, client
+) -> None:
+    """车间维修群 chat_id：创建可带、更新可改可清空。"""
+    from app.modules.equipment.schemas.workshop import (
+        WorkshopCreateRequest,
+        WorkshopUpdateRequest,
+    )
+    from app.modules.equipment.service import workshop as ws_svc
+
+    created = await ws_svc.create_workshop(
+        db_session,
+        WorkshopCreateRequest(
+            code="204-1", name="204一车间", feishu_chat_id="oc_chat_204"
+        ),
+    )
+    assert created.feishu_chat_id == "oc_chat_204"
+
+    updated = await ws_svc.update_workshop(
+        db_session, "204-1", WorkshopUpdateRequest(feishu_chat_id="oc_new")
+    )
+    assert updated.feishu_chat_id == "oc_new"
+
+    cleared = await ws_svc.update_workshop(
+        db_session, "204-1", WorkshopUpdateRequest(feishu_chat_id="")
+    )
+    assert cleared.feishu_chat_id is None

@@ -205,6 +205,17 @@ async def close_work_order(
     return success_response(data=_to_response(wo))
 
 
+@router.delete("/{work_order_id}", summary="删除工单")
+async def delete_work_order(
+    work_order_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> JSONResponse:
+    """软删除工单；开放状态工单删除时同步恢复设备到建单前状态。"""
+    wo = await service.delete_work_order(db, work_order_id)
+    return success_response(data=_to_response(wo))
+
+
 @router.post("/{work_order_id}/materials", summary="领料")
 async def consume_materials(
     work_order_id: uuid.UUID,

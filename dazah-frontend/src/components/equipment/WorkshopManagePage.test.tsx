@@ -174,4 +174,24 @@ describe('WorkshopManagePage（车间管理页）', () => {
       is_enabled: false,
     })
   })
+
+  it('绑定群：弹窗预填会话 ID 并提交绑定', async () => {
+    api.updateEquipmentWorkshop.mockResolvedValue({ ...rowsFixture[0] })
+    await renderPage()
+    const row101 = rowOf('101-1')!
+    const bindBtn = row101.querySelector('button[aria-label="绑定群 101一车间"]') as HTMLButtonElement
+    expect(bindBtn).toBeTruthy()
+    await act(async () => { bindBtn.click() })
+    await act(async () => { await new Promise((r) => setTimeout(r, 40)) })
+
+    const input = document.querySelector('input[placeholder="oc_ 开头的会话 ID"]') as HTMLInputElement
+    expect(input).toBeTruthy()
+    await act(async () => { setInputValue(input, 'oc_chat_101') })
+    await act(async () => { findButtonByText('保存', true).click() })
+    await act(async () => { await new Promise((r) => setTimeout(r, 40)) })
+
+    expect(api.updateEquipmentWorkshop).toHaveBeenCalledWith('101-1', {
+      feishu_chat_id: 'oc_chat_101',
+    })
+  })
 })

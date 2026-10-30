@@ -127,10 +127,9 @@ def test_single_head_retains_the_safety_reminder_history() -> None:
     cfg.set_main_option("script_location", str(_VERSIONS.parent))
     script = ScriptDirectory.from_config(cfg)
     heads = script.get_heads()
-    # 单 head 链：目标责任书（a7c3e5f1b8d2）→ 设备安全 schema 修复（f4a6c8e0b2d5）
-    # → 迁移链 merge（b8d2f4a6c0e9）→ 职业病检测报告（b2e9d4f7a6c3）
-    # → 危化品统计表镜像+MSDS 多附件（b9e4f7a2c5d1）
-    assert len(heads) == 1, f"迁移必须保持单 head，当前: {heads}"
+    # 单 head 链：主线（…→ b8d2f4a6c0e9 → b2e9d4f7a6c3 → b9e4f7a2c5d1）
+    # + 车间维修群链（da5f78a06d60 → ada9041499a5）→ 合并点 9af3c6bb8778
+    assert heads == ["9af3c6bb8778"], f"迁移必须保持单 head，当前: {heads}"
     history = {
         revision.revision for revision in script.walk_revisions(head=heads[0])
     }
@@ -139,7 +138,11 @@ def test_single_head_retains_the_safety_reminder_history() -> None:
     assert "d4e7f1a9c3b5" in history
     assert "d1f2a3b4c5d6" in history
     assert "f4a6c8e0b2d5" in history
+    assert "a7c3e5f1b8d2" in history
+    assert "da5f78a06d60" in history
     assert "b8d2f4a6c0e9" in history
+    assert "b9e4f7a2c5d1" in history
+    assert "ada9041499a5" in history
 
 
 def test_multi_table_tabs_upgrade_adds_columns_and_upgrades_index(monkeypatch) -> None:

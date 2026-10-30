@@ -287,8 +287,13 @@ async def process_repair_photo(
     image_key: str,
     chat_id: str,
     chat_type: str,
+    fault_hint: str = "",
 ) -> None:
-    """处理报修拍照（无巡检会话时由 inspection_feishu 转交）。"""
+    """处理报修拍照（无巡检会话时由 inspection_feishu 转交）。
+
+    fault_hint：群内「照片 + @报修 文字」配对时随文字带来的故障描述，
+    视觉未识别到故障现象时作为兜底。
+    """
     from app.core.redis import redis_client
     from app.modules.equipment.service.inspection_feishu import _download_image
 
@@ -326,6 +331,8 @@ async def process_repair_photo(
         if intent is None:
             await _send_fallback_card(open_id)
             return
+        if fault_hint and not intent.get("fault"):
+            intent["fault"] = fault_hint
 
         matched = await _match_equipments(db, intent, workshops)
         if not matched:

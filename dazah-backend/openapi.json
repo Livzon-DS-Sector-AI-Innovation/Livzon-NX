@@ -97966,6 +97966,19 @@
             "title": "Code",
             "type": "string"
           },
+          "feishu_chat_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "车间维修群 chat_id（oc_ 开头，可后补）",
+            "title": "Feishu Chat Id"
+          },
           "name": {
             "description": "车间显示名（如 204一车间 / 动力站）",
             "maxLength": 50,
@@ -97982,8 +97995,21 @@
         "type": "object"
       },
       "WorkshopUpdateRequest": {
-        "description": "更新车间请求（改名/启停；代码不可改）",
+        "description": "更新车间请求（改名/启停/维修群；代码不可改）",
         "properties": {
+          "feishu_chat_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "车间维修群 chat_id；传空字符串清除",
+            "title": "Feishu Chat Id"
+          },
           "is_enabled": {
             "anyOf": [
               {
@@ -114263,6 +114289,62 @@
       }
     },
     "/api/v1/equipment/maintenance/work-orders/{work_order_id}": {
+      "delete": {
+        "description": "软删除工单；开放状态工单删除时同步恢复设备到建单前状态。",
+        "operationId": "delete_work_order_api_v1_equipment_maintenance_work_orders__work_order_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "work_order_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Work Order Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "删除工单",
+        "tags": [
+          "设备管理"
+        ]
+      },
       "get": {
         "operationId": "get_work_order_api_v1_equipment_maintenance_work_orders__work_order_id__get",
         "parameters": [

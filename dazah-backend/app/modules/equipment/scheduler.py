@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.database import async_session_factory
@@ -101,7 +104,7 @@ stop_timeout_flag = asyncio.Event()
 
 async def scan_timeout_work_orders() -> None:
     """扫描超时未接单的工单"""
-    from datetime import UTC, datetime
+    from datetime import datetime
 
     from sqlalchemy import select
 
@@ -145,10 +148,35 @@ async def scan_timeout_work_orders() -> None:
                 if elapsed > timeout_minutes:
                     leader = await get_department_leader(dept_id)
                     leader_name = leader.get("name", "主管") if leader else "主管"
+                    # 超时提醒发到工单所属车间的维修群（未配置回落全局默认群）
+                    from app.modules.equipment.models.equipment import Equipment
+                    from app.modules.equipment.service.work_order_feishu import (
+                        resolve_repair_chat_id,
+                    )
+
+                    equipment = (
+                        (
+                            await db.execute(
+                                select(Equipment).where(
+                                    Equipment.id == order.equipment_id
+                                )
+                            )
+                        )
+                        .scalars()
+                        .first()
+                    )
+                    workshop_chat = (
+                        await resolve_repair_chat_id(
+                            equipment.workshop_code if equipment else ""
+                        )
+                        if equipment is not None
+                        else ""
+                    )
                     await send_timeout_notification(
                         order.work_order_no,
                         "设备",
                         leader_name,
+                        chat_id=workshop_chat,
                     )
                     logger.info(
                         "Timeout WO %s (%.0f min > %d min)",
@@ -156,10 +184,51 @@ async def scan_timeout_work_orders() -> None:
                         elapsed,
                         timeout_minutes,
                     )
+
+            # 待验收超时自动结单：完成超 24 小时无人验收 → 系统自动验收并关闭，
+            # 防止设备被「待验收」永久占用（重复故障无法再报修）
+            await _auto_finish_stale_pending_verify(db, now)
+            await db.commit()
         except Exception:
             logger.exception("Timeout scan error")
         finally:
             await db.rollback()
+
+
+# 待验收超时阈值（小时）：完成超过该时长仍未验收则自动结单
+_AUTO_VERIFY_TIMEOUT_HOURS = 24
+
+
+async def _auto_finish_stale_pending_verify(
+    db: AsyncSession, now: datetime
+) -> None:
+    """把完成超时的待验收工单自动验收并关闭（恢复设备状态）。"""
+    from app.modules.equipment.models.work_order import WorkOrder
+    from app.modules.equipment.service.work_order import auto_finish_pending_verify
+
+    verify_result = await db.execute(
+        select(WorkOrder).where(
+            WorkOrder.status == "待验收",
+            WorkOrder.is_deleted == False,  # noqa: E712
+        )
+    )
+    for order in verify_result.scalars().all():
+        if order.completed_at is None:
+            continue
+        hours = (now - order.completed_at).total_seconds() / 3600
+        if hours <= _AUTO_VERIFY_TIMEOUT_HOURS:
+            continue
+        try:
+            await auto_finish_pending_verify(
+                db, order, reason="完成超24小时未验收，系统自动结单"
+            )
+            logger.info(
+                "待验收超时自动结单: %s (%.0fh)", order.work_order_no, hours
+            )
+        except Exception:
+            logger.exception(
+                "待验收超时自动结单失败: %s", order.work_order_no
+            )
 
 
 async def timeout_scan_loop() -> None:

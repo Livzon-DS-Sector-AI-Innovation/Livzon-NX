@@ -266,3 +266,306 @@ async def test_inspection_unbound_user_hands_off_to_repair_photo(monkeypatch):
         chat_type="group",
     )
     assert handed and handed[0]["open_id"] == "ou_2"
+
+
+@pytest.mark.asyncio
+async def test_inspection_empty_user_id_hands_off_to_repair_photo(monkeypatch):
+    """user_id 缺失（企业未开通 user_id 权限）的图片也必须转交拍照报修。
+
+    回归：此前该分支直接丢弃图片，拍照报修在此类企业永远无法触发。
+    """
+    handed: list[dict] = []
+
+    async def _fake_handoff(**kw):
+        handed.append(kw)
+
+    monkeypatch.setattr(insp, "_handoff_to_repair_photo", _fake_handoff)
+
+    await insp.process_feishu_image(
+        user_id="",
+        open_id="ou_3",
+        message_id="om_3",
+        image_key="img_3",
+        chat_id="oc_1",
+        chat_type="p2p",
+    )
+    assert handed and handed[0]["image_key"] == "img_3"
+
+
+@pytest.mark.asyncio
+async def test_card_trigger_event_allows_photo_actions(monkeypatch):
+    """事件通道的卡片动作过滤器必须放行 photo_repair/photo_cancel。
+
+    回归：过滤器曾硬编码只认 accept/complete，确认卡片的回调被静默丢弃，
+    拍照报修在事件通道下永远无法建单。
+    """
+    import app.modules.equipment.feishu.ws_client as ws
+
+    handled: list[dict] = []
+
+    async def _fake_handle(payload):
+        handled.append(payload)
+        return {"code": 0}
+
+    monkeypatch.setattr(
+        "app.modules.equipment.service.work_order_feishu.handle_card_action",
+        _fake_handle,
+    )
+    for act in ("photo_repair", "photo_cancel", "accept", "complete"):
+        event = {
+            "action": {"tag": "button", "value": {"act": act}},
+            "operator": {"open_id": "ou_1"},
+        }
+        await ws._handle_card_trigger_event(event)
+    assert len(handled) == 4
+
+    await ws._handle_card_trigger_event(
+        {"action": {"tag": "button", "value": {"act": "other"}}}
+    )
+    assert len(handled) == 4  # 未知动作仍被过滤
+
+
+# ── 群消息 @机器人 过滤与「照片 + @报修」配对 ──────────────
+
+
+def _msg_event(msg_type="text", chat_type="p2p", text="", image_key="", mentions=None):
+    content = (
+        {"text": text} if msg_type == "text" else {"image_key": image_key}
+    )
+    return {
+        "message": {
+            "message_type": msg_type,
+            "message_id": "om_g1",
+            "chat_id": "oc_group",
+            "chat_type": chat_type,
+            "content": __import__("json").dumps(content),
+            "mentions": mentions or [],
+        },
+        "sender": {"sender_id": {"open_id": "ou_1", "user_id": "", "union_id": ""}},
+    }
+
+
+@pytest.mark.asyncio
+async def test_group_text_without_mention_is_ignored(monkeypatch):
+    import app.modules.equipment.feishu.ws_client as ws
+
+    monkeypatch.setattr("app.core.redis.redis_client", _fake_redis())
+    text_cmd = AsyncMock()
+    monkeypatch.setattr(ws, "_handle_text_command", text_cmd)
+
+    await ws._handle_message_event(_msg_event(chat_type="group", text="今天下午开会"))
+
+    text_cmd.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_group_image_without_mention_is_buffered(monkeypatch):
+    import app.modules.equipment.feishu.ws_client as ws
+
+    redis = _fake_redis()
+    monkeypatch.setattr("app.core.redis.redis_client", redis)
+    process_image = AsyncMock()
+    monkeypatch.setattr(
+        "app.modules.equipment.service.inspection_feishu.process_feishu_image",
+        process_image,
+    )
+
+    await ws._handle_message_event(
+        _msg_event(msg_type="image", chat_type="group", image_key="img_g1")
+    )
+
+    process_image.assert_not_awaited()  # 未 @机器人：不进识别流程
+    redis.set.assert_awaited_once()  # 但已进缓冲
+    buffered_key = redis.set.await_args.args[0]
+    assert "oc_group" in buffered_key and "ou_1" in buffered_key
+
+
+@pytest.mark.asyncio
+async def test_group_mention_repair_pairs_buffered_photo(monkeypatch):
+    """群内「照片缓冲 + @机器人 报修」→ 拍照报修并携带文字故障提示。"""
+    import json as json_mod
+
+    import app.modules.equipment.feishu.ws_client as ws
+
+    photo = {"message_id": "om_g1", "image_key": "img_g1"}
+    monkeypatch.setattr(
+        ws,
+        "_take_buffered_group_photo",
+        AsyncMock(return_value=photo),
+    )
+    process_photo = AsyncMock()
+    monkeypatch.setattr(
+        "app.modules.equipment.service.repair_photo.process_repair_photo",
+        process_photo,
+    )
+    text_repair = AsyncMock()
+    monkeypatch.setattr(
+        "app.modules.equipment.service.work_order_feishu.create_repair_by_text",
+        text_repair,
+    )
+    monkeypatch.setattr("app.core.redis.redis_client", _fake_redis())
+
+    await ws._handle_text_command(
+        user_id="",
+        open_id="ou_1",
+        union_id="",
+        chat_id="oc_group",
+        chat_type="group",
+        content=json_mod.dumps({"text": "@_user_1 报修 密封漏了"}),
+    )
+
+    process_photo.assert_awaited_once()
+    kwargs = process_photo.await_args.kwargs
+    assert kwargs["image_key"] == "img_g1"
+    assert kwargs["fault_hint"] == "密封漏了"
+    text_repair.assert_not_awaited()  # 配对成功则不走文字报修
+
+
+@pytest.mark.asyncio
+async def test_group_mention_repair_without_photo_falls_back_to_text(monkeypatch):
+    import json as json_mod
+
+    import app.modules.equipment.feishu.ws_client as ws
+
+    monkeypatch.setattr(
+        ws, "_take_buffered_group_photo", AsyncMock(return_value=None)
+    )
+    text_repair = AsyncMock()
+    monkeypatch.setattr(
+        "app.modules.equipment.service.work_order_feishu.create_repair_by_text",
+        text_repair,
+    )
+    monkeypatch.setattr("app.core.redis.redis_client", _fake_redis())
+
+    await ws._handle_text_command(
+        user_id="",
+        open_id="ou_1",
+        union_id="",
+        chat_id="oc_group",
+        chat_type="group",
+        content=json_mod.dumps({"text": "@_user_1 报修 201一车间 离心泵A 漏了"}),
+    )
+
+    text_repair.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_photo_fault_hint_fills_missing_fault(monkeypatch, _photo_env):
+    """视觉未识别出故障现象时，群配对文字的描述作为兜底。"""
+    sent, _dl = _photo_env
+    import app.modules.equipment.service.inspection_feishu as insp_mod
+
+    monkeypatch.setattr(insp_mod, "_download_image", AsyncMock(
+        return_value=(_TINY_JPEG, "image/jpeg")
+    ))
+    monkeypatch.setattr("app.core.redis.redis_client", _fake_redis())
+    eq = _eq(no="LB-001")
+    db = SimpleNamespace(
+        execute=AsyncMock(side_effect=[_Result([_ws()]), _Result([eq])])
+    )
+    monkeypatch.setattr(rp, "async_session_factory", _factory(db))
+    monkeypatch.setattr(
+        type(rp.llm_client),
+        "chat_vision_json",
+        _vision_mock(_intent(fault="")),
+    )
+
+    await process_repair_photo(
+        user_id="u1",
+        open_id="ou_1",
+        message_id="om_1",
+        image_key="img_1",
+        chat_id="oc_group",
+        chat_type="group",
+        fault_hint="密封漏了",
+    )
+
+    actions = sent[0]["elements"][0]["actions"]
+    assert actions[0]["value"]["ft"] == "密封漏了"
+
+
+@pytest.mark.asyncio
+async def test_group_repair_prefix_text_passes_without_mention(monkeypatch):
+    """方案 Y：群里不带 @ 的「报修 …」文字直接放行（扫码粘贴一步到位）。"""
+    import app.modules.equipment.feishu.ws_client as ws
+
+    monkeypatch.setattr("app.core.redis.redis_client", _fake_redis())
+    text_cmd = AsyncMock()
+    monkeypatch.setattr(ws, "_handle_text_command", text_cmd)
+
+    await ws._handle_message_event(
+        _msg_event(chat_type="group", text="报修 201一车间 离心泵A LB-001")
+    )
+
+    text_cmd.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_group_normal_chat_stays_silent_even_with_selection(monkeypatch):
+    """普通聊天（非指令、无@、无选择会话）在群里被忽略。"""
+    import app.modules.equipment.feishu.ws_client as ws
+
+    monkeypatch.setattr("app.core.redis.redis_client", _fake_redis())
+    text_cmd = AsyncMock()
+    monkeypatch.setattr(ws, "_handle_text_command", text_cmd)
+
+    await ws._handle_message_event(
+        _msg_event(chat_type="group", text="今天下午三点开会")
+    )
+
+    text_cmd.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_group_photo_repair_alias_triggers_pairing(monkeypatch):
+    """「拍照报修」别名同样触发照片配对，且归一化后描述提取正确。"""
+    import json as json_mod
+
+    import app.modules.equipment.feishu.ws_client as ws
+
+    monkeypatch.setattr(
+        ws,
+        "_take_buffered_group_photo",
+        AsyncMock(return_value={"message_id": "om_g2", "image_key": "img_g2"}),
+    )
+    process_photo = AsyncMock()
+    monkeypatch.setattr(
+        "app.modules.equipment.service.repair_photo.process_repair_photo",
+        process_photo,
+    )
+    text_repair = AsyncMock()
+    monkeypatch.setattr(
+        "app.modules.equipment.service.work_order_feishu.create_repair_by_text",
+        text_repair,
+    )
+    monkeypatch.setattr("app.core.redis.redis_client", _fake_redis())
+
+    await ws._handle_text_command(
+        user_id="",
+        open_id="ou_1",
+        union_id="",
+        chat_id="oc_group",
+        chat_type="group",
+        content=json_mod.dumps({"text": "拍照报修 密封漏了"}),
+    )
+
+    process_photo.assert_awaited_once()
+    assert process_photo.await_args.kwargs["fault_hint"] == "密封漏了"
+    assert process_photo.await_args.kwargs["image_key"] == "img_g2"
+    text_repair.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_group_photo_repair_alias_passes_gate(monkeypatch):
+    """群门槛放行「拍照报修 …」前缀（不带 @ 也进路由）。"""
+    import app.modules.equipment.feishu.ws_client as ws
+
+    monkeypatch.setattr("app.core.redis.redis_client", _fake_redis())
+    text_cmd = AsyncMock()
+    monkeypatch.setattr(ws, "_handle_text_command", text_cmd)
+
+    await ws._handle_message_event(
+        _msg_event(chat_type="group", text="拍照报修 轴承异响")
+    )
+
+    text_cmd.assert_awaited_once()
