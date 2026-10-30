@@ -603,9 +603,33 @@ async def create_repair_by_text(
             fault=fault,
             priority=priority,
             reporter_name=reporter_label,
+            workshop_code=workshop.code,
         )
     except Exception:
         logger.exception("报修派单群通知失败（工单已创建，不影响）")
+
+
+async def resolve_repair_chat_id(workshop_code: str) -> str:
+    """按车间解析维修群 chat_id：车间已配 → 用车间群；否则回落全局默认群。"""
+    from app.core.config import get_settings
+
+    if workshop_code:
+        async with async_session_factory() as db:
+            row = (
+                (
+                    await db.execute(
+                        select(EquipmentWorkshop).where(
+                            EquipmentWorkshop.code == workshop_code,
+                            EquipmentWorkshop.is_deleted == False,  # noqa: E712
+                        )
+                    )
+                )
+                .scalars()
+                .first()
+            )
+        if row is not None and row.feishu_chat_id:
+            return str(row.feishu_chat_id)
+    return get_settings().FEISHU_EQUIPMENT_CHAT_ID or ""
 
 
 async def dispatch_repair_card(
@@ -616,18 +640,25 @@ async def dispatch_repair_card(
     fault: str,
     priority: str,
     reporter_name: str,
+    workshop_code: str = "",
 ) -> str | None:
-    """向维修群发送可接单的交互卡片，message_id 存 Redis 供后续更新。"""
-    from app.core.config import get_settings
+    """向维修群发送可接单的交互卡片，message_id 存 Redis 供后续更新。
+
+    派单群按工单所属车间路由（车间注册表的 feishu_chat_id），
+    未配置的车间回落全局默认群。
+    """
     from app.core.redis import redis_client
     from app.modules.equipment.feishu.repair_card import (
         build_dispatch_card,
         send_card_to_chat,
     )
 
-    chat_id = get_settings().FEISHU_EQUIPMENT_CHAT_ID
+    chat_id = await resolve_repair_chat_id(workshop_code)
     if not chat_id:
-        logger.warning("FEISHU_EQUIPMENT_CHAT_ID 未配置，跳过派单卡片")
+        logger.warning(
+            "车间 %s 未配维修群且全局默认群未配置，跳过派单卡片",
+            workshop_code or "-",
+        )
         return None
     card = build_dispatch_card(
         work_order_no=work_order_no,
@@ -776,6 +807,7 @@ async def _handle_photo_action(
             fault=fault_text,
             priority="高",
             reporter_name=user.name,
+            workshop_code=workshop_name,
         )
     except Exception:
         logger.exception("拍照报修派单群通知失败（工单已创建，不影响）")

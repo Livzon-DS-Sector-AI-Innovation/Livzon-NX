@@ -75,10 +75,14 @@ async def send_claim_notification(work_order_no: str, claimer_name: str) -> bool
 
 
 async def send_timeout_notification(
-    work_order_no: str, equipment_name: str, leader_name: str
+    work_order_no: str,
+    equipment_name: str,
+    leader_name: str,
+    *,
+    chat_id: str = "",
 ) -> bool:
-    """超时未接单通知主管"""
-    chat_id = settings.FEISHU_EQUIPMENT_CHAT_ID
+    """超时未接单通知主管（chat_id 可指定车间维修群，空则全局默认群）"""
+    chat_id = chat_id or settings.FEISHU_EQUIPMENT_CHAT_ID
     if not chat_id:
         return False
 
