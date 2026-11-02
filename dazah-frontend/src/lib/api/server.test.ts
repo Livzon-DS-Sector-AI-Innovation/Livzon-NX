@@ -23,6 +23,7 @@ describe('migrated server API clients', () => {
   afterEach(() => vi.unstubAllGlobals())
 
   it('forwards the server auth token while reading system roles', async () => {
+    mocks.headers.mockResolvedValueOnce(new Headers({ 'X-Forwarded-For': '198.51.100.23' }))
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ data: [] }), { status: 200 }),
     )
@@ -33,7 +34,11 @@ describe('migrated server API clients', () => {
     expect(String(fetchMock.mock.calls[0][0])).toContain('/api/v1/identity/admin/roles')
     expect(fetchMock.mock.calls[0][1]).toEqual(
       expect.objectContaining({
-        headers: { Authorization: 'Bearer server-api-token' },
+        headers: {
+          Authorization: 'Bearer server-api-token',
+          'Content-Type': 'application/json',
+          'X-Forwarded-For': '198.51.100.23',
+        },
         cache: 'no-store',
       }),
     )
