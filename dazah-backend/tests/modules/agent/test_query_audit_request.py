@@ -103,8 +103,10 @@ async def test_automation_query_saves_bounded_result_and_request_link(
         assert [record.action for record in session.records] == ["platform_api_request"]
         return
     assert response.json()["data"] == result.model_dump(mode="json")
-    event, operation = session.records
-    assert event.request_id == operation.request_id == response.headers["X-Request-ID"]
+    # Routine list requests keep the explicit business snapshot without a
+    # duplicate request-level row.
+    (event,) = session.records
+    assert event.request_id == response.headers["X-Request-ID"]
     assert event.action == "list_agent_automations"
     assert event.old_value is None
     assert event.new_value["total"] == result.total
@@ -191,7 +193,14 @@ async def test_tool_search_records_result_and_http_metadata_without_query_text(
     assert response.status_code == (401 if outcome == "forbidden" else 200)
     if outcome == "forbidden":
         query.assert_not_awaited()
-        assert session.records == []
+        (event,) = session.records
+        assert event.action == "platform_api_request"
+        assert event.status_code == 401
+        assert event.user_id is None
+        assert event.request_id == response.headers["X-Request-ID"]
+        assert event.extra["audit_reason"] == "security"
+        assert event.extra["actor_identified"] is False
+        assert "private" not in str(event.extra)
         return
     assert response.json()["data"] == [item.model_dump(mode="json") for item in result]
     (event,) = session.records

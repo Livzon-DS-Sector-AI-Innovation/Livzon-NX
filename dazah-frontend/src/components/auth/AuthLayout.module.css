@@ -558,6 +558,11 @@
 
 .completionCard {
   text-align: center;
+  animation: auth-reveal 280ms ease-out both;
+}
+
+.completionSnapshot {
+  animation: none;
 }
 
 .completionVisual {
@@ -569,6 +574,11 @@
   border-radius: 50%;
   background: var(--color-primary-bg, #ede9f8);
   color: var(--color-primary);
+  transition: background-color 200ms ease, color 200ms ease;
+}
+
+.completionCard[data-state="ready"] .statusSymbol {
+  animation: auth-reveal 240ms ease-out both;
 }
 
 .completionVisual[data-tone="success"] {
@@ -741,9 +751,13 @@
   }
 
   .loginPanel,
-  .localForm {
+  .localForm,
+  .completionCard,
+  .completionCard[data-state="ready"] .statusSymbol {
     animation: none;
   }
+
+  .completionVisual { transition: none; }
 
   .buttonSpinner,
   .statusSpinner {

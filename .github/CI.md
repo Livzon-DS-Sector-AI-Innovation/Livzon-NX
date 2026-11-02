@@ -108,10 +108,13 @@ FastAPI 路由。后端下一轮基线提升前，先确保主分支至少连续
 `Backend Quality` 执行 AgentBackend V2 残留检查、变更 Python 文件 Ruff、
 compileall、现有 `mypy app/core` 基线及变更运行文件与依赖链的 Mypy。
 unit/core 测试包含在 Integration 全量覆盖率套件中，不重复运行。
+CI 将依赖安装与质量检查拆成独立步骤；本地 `ci.sh quality` 仍保留安装后检查的入口。
 
 `Backend Integration` 使用独立 PostgreSQL 17 和 Redis 8，检查唯一 Alembic
 head、空库 upgrade、model/migration drift、FastAPI import、OpenAPI 漂移，
 然后运行全量 Pytest、60% 行覆盖率、33.5% 分支覆盖率和 80% 变更行覆盖率。
+安装、环境预检、迁移/契约、全量测试和覆盖率分别计时，顺序执行且均阻塞。
+本地 `ci.sh integration` 仍组合执行全部阶段；拆分没有减少任何测试或门禁。
 
 `Backend Image Verify` 使用 `${GITHUB_SHA}` 标记镜像并通过 Buildx/GHA cache
 构建交付镜像及开发镜像，并验证两者的 app 用户 Chromium 能力。完整漏洞报告作为 artifact；存在有修复版本的 High/Critical
@@ -166,12 +169,62 @@ CI Gate 在执行门禁判定之后，通过 `.github/scripts/ci_metrics.py` 将
 
 统计使用 GitHub 临时 token、Action 输出及 CI 进程变量，不引入应用环境配置。
 比较优化效果时，按变更范围、attempt 和缓存状态分别比较成功运行，避免将失败
-提前结束的耗时或部分 Job 重跑的耗时当作加速结果。尚无本次新 DAG 的线上测量
-结果；首轮 PR CI 需要验证 E2E 在镜像未结束时可启动、缓存计数及 artifact 均正常。
+提前结束的耗时或部分 Job 重跑的耗时当作加速结果。第一阶段 PR #182 已核验
+E2E 在质量任务结束后 2 秒启动，pnpm 两项均命中、Docker 缓存 4/19，
+12 项检查成功；不要求为了证明独立性而人为延迟镜像制造重叠。
 
 本地回归命令：`python -m pytest .github/scripts/tests -q`。测试覆盖独立镜像
 依赖、E2E bundle 复用、必需 Job 到 Gate 的完整映射，以及镜像失败/取消/缺失/
 意外跳过必须阻塞、统计分页与 attempt 隔离、缓存不可用语义和敏感元数据过滤。
+
+## 第二阶段：依赖与环境稳定性
+
+- 所有 runner 固定为 `ubuntu-24.04`，Node/pnpm 沿用已固定版本，uv 固定为
+  与两种 Dockerfile 一致的 `0.13.4`；Python 保持 3.12 系列补丁更新。
+  Python 在 setup-uv 前安装，并向 setup-uv 显式传 Python 版本，避免缓存键
+  受 runner 预装 Python 影响。更新工具时需同步对应验证，不静默跟随 latest。
+- 后端和 Hermes 安装统一经 `.github/scripts/ci_support.py install`，命令仍为
+  `uv sync --frozen` 及原有 dev 参数。每个 HTTP 请求最多重试 3 次，连接超时
+  10 秒、读取超时 60 秒、并发下载上限 8；单次安装进程总预算 600 秒。
+  使用 uv 的请求级重试，不在外层循环重跑整个命令；锁错误、测试、迁移和
+  覆盖率失败不会自动重试或被视为成功。安装超时返回 124，启动失败返回 127。
+- 保留现有清华 index 和锁内 wheel URL，不增加跨 index 静默回退，也不修改
+  依赖版本或 hash。冻结锁文件中的绝对 URL 不会因简单增加另一 index 就可靠
+  切换；镜像长期不可用时应独立审查依赖源变更。
+- uv 命中状态按 Backend Quality、Backend Integration、Hermes Quality、
+  Hermes Contract 分别输出到 Summary/JSON，缺失不算 miss。前两者共享后端
+  锁文件键；Hermes Quality 使用 Hermes 锁；Contract 确实安装两个项目，因此
+  保留两锁组合键，任一依赖变化时失效是必要行为，不为提高命中率忽略锁文件。
+- `.github/scripts/ci_support.py run` 记录 environment、dependencies、quality、
+  migration、contract、tests、coverage 阶段的耗时及退出码。每个 Job 使用
+  独立的 RUNNER_TEMP 文件，always 步骤只导出白名单字段给 Gate；统计失败不
+  覆盖原命令失败。阶段类别定位失败发生在安装/环境/迁移/测试等哪一步，依赖
+  下载的具体网络原因仍从 uv 日志判断，不把所有依赖错误都误报为网络故障。
+- 后端集成与契约 runner 显式安装 PostgreSQL 客户端和 fonts-noto-cjk；在连接
+  测试库/跑套件前检查客户端及实际中文字体渲染。稳定 E2E 安装 Chromium 后先
+  启动并关闭一个空浏览器，尽早暴露缺二进制/动态库的问题，不改变测试重试策略。
+- 仅使用已有 CI 合成测试配置，不读取开发机环境文件。`PYTHONUTF8=1` 只作用于
+  CI 进程，文本夹具仍显式声明 UTF-8；候选清理夹具给同龄文件安排至少 1 秒的
+  mtime 间隔，避免依赖文件写入速度和枚举顺序。生产清理逻辑不变。
+
+本地故障注入回归使用合成 wheel 和临时 loopback HTTP 服务，验证 503 后恢复、
+有限重试耗尽、冷缓存安装、在全新虚拟环境中从热缓存离线安装及锁文件不变。
+Change Scope 固定安装 uv 后运行该回归；不接触公共依赖源、真实凭证或数据库。
+环境与编排测试使用命令 fake，断言失败必须向上传播、测试不能进入重试循环。
+
+第二阶段尚未进行线上冷/热缓存全项目安装和连续多轮 CI 采样。上线验收需保留
+至少 5 次同范围成功运行的 metrics artifact，按 uv hit/miss、Job、phase 分组
+比较安装耗时的中位数及 P95，并单列下载故障、测试失败和取消；失败提前结束、
+缓存不可用或不同测试范围不能混入加速结论。已有 React Scheduler 收尾回归可
+重复运行，但定向重复通过不等于完整套件已无随机失败。
+
+2026-10-29 本地验证记录：`python -m pytest .github/scripts/tests scripts/tests -q`
+为 273 passed、16 skipped、43 subtests passed；16 项为既有平台/工具相关跳过。
+固定 uv 0.13.4 的合成 wheel 冷/热缓存和故障注入单测通过；既有 Linux 开发
+镜像（uv 0.11.32）以只读源码、`--network none` 独立容器运行同一用例也通过。
+React Scheduler 收尾回归连续 5 轮、每轮 3 项通过；中文字体及 Chromium
+启动/关闭预检通过，Ruff、actionlint 和 Bash 语法检查通过。这些结果不替代
+新 workflow 在 Ubuntu 24.04 上的完整项目门禁与线上缓存统计验收。
 
 ## CI Gate 语义
 

@@ -38,6 +38,26 @@ def test_nginx_uses_dynamic_docker_dns_for_application_upstreams() -> None:
     assert "proxy_pass http://frontend:3000" not in config
 
 
+def test_client_ip_is_sanitized_at_edge_and_trusted_only_from_proxy_networks() -> None:
+    for template in ("nginx.default.conf.template", "nginx.http.conf.template"):
+        config = (ROOT / "deploy" / template).read_text(encoding="utf-8")
+        assert config.count("proxy_set_header X-Forwarded-For $remote_addr;") == 2
+        assert "$proxy_add_x_forwarded_for" not in config
+
+    for filename in ("compose.yml", "compose.dev.yml"):
+        config = (ROOT / filename).read_text(encoding="utf-8")
+        # Check the app environment, rather than an unrelated service.
+        app = config.split("\n  app:\n", 1)[1].split("\n  hermes-lite:", 1)[0]
+        assert (
+            "FORWARDED_ALLOW_IPS: "
+            "${FORWARDED_ALLOW_IPS:-127.0.0.1,::1,172.16.0.0/12}"
+        ) in app
+
+    for filename in (".env.example", ".env.local.example"):
+        config = (ROOT / filename).read_text(encoding="utf-8")
+        assert "FORWARDED_ALLOW_IPS=127.0.0.1,::1,172.16.0.0/12" in config
+
+
 def test_nginx_injects_page_context_from_referer() -> None:
     """nginx 直连后端时必须补齐前端 proxy.ts 的页面上下文注入。
 

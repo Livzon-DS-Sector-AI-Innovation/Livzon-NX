@@ -181,6 +181,18 @@ def test_operation_list_item_exposes_target_without_request_body() -> None:
     assert item.operation == "查看质量记录"
 
 
+def test_security_event_summary_does_not_attribute_an_unknown_actor() -> None:
+    log = _log(action="platform_api_request", resource_type="identity")
+    log.extra = {
+        "audit_reason": "security",
+        "actor_identified": False,
+        "request": {"body_omitted": "sensitive_route"},
+    }
+    item = GeneralAuditLogService._item(log, actor_name=None, actor_username=None)
+    assert item.actor_user_id is None
+    assert item.summary == {"audit_reason": "security", "actor_identified": False}
+
+
 @pytest.mark.asyncio
 async def test_operation_detail_includes_correlated_business_change() -> None:
     operation = _log(action="platform_api_request", resource_type="quality")

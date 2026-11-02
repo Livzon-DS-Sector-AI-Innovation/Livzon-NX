@@ -42,7 +42,7 @@ _FEISHU_RESOURCE_TYPES = frozenset(
     }
 )
 _CATEGORY_SUMMARY_KEYS: dict[AuditCategory, tuple[str, ...]] = {
-    "operations": ("target",),
+    "operations": ("target", "audit_reason", "actor_identified"),
     "permissions": (
         "grant_version",
         "reason",

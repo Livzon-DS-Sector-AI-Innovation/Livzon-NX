@@ -36,6 +36,7 @@ const FORWARDED_REQUEST_HEADERS = [
   'x-dazah-operation-id',
   'x-dazah-page-key',
   'x-dazah-page-path',
+  'x-forwarded-for',
 ]
 
 function buildForwardHeaders(request: NextRequest): Headers {

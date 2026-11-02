@@ -2,7 +2,7 @@
  * 权限管理 - 服务器端 API（Server Component / Server Action 使用）
  * 使用 API_BASE_URL 环境变量（Docker 内部网络）
  */
-import { cookies } from "next/headers"
+import { getAuthHeaders } from "@/lib/auth"
 import type { MenuFlatItem } from "@/lib/menu-tree"
 
 const API_BASE =
@@ -59,13 +59,6 @@ interface ApiResponse<T> {
   code: number
   message: string
   data: T
-}
-
-/** 服务端读取 auth_token cookie，供请求后端时携带 Bearer 认证头 */
-async function getAuthHeaders(): Promise<Record<string, string> | undefined> {
-  const cookieStore = await cookies()
-  const token = cookieStore.get("auth_token")?.value
-  return token ? { Authorization: `Bearer ${token}` } : undefined
 }
 
 async function handleResponse<T>(res: Response): Promise<T> {

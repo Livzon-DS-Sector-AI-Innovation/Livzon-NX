@@ -22,6 +22,33 @@ SPEC.loader.exec_module(metrics)
 
 
 class MetricsTests(unittest.TestCase):
+    def test_python_cache_and_failed_phase_observations_are_not_hidden(self) -> None:
+        record = {
+            "phase": "backend-install",
+            "category": "dependencies",
+            "duration_seconds": 4,
+            "exit_code": 9,
+            "command": "synthetic-private",
+        }
+        needs = {
+            "backend-quality": {
+                "outputs": {"uv_cache_hit": "false", "phases": json.dumps([record])}
+            }
+        }
+        self.assertEqual(
+            metrics.cache_observations(needs)["uv"]["backend-quality"], "miss"
+        )
+        self.assertEqual(metrics.cache_observations(needs)["uv_hit_percent"], 0)
+        observed = metrics.phase_observations(needs)
+        self.assertEqual(observed["backend-quality"]["records"][0]["exit_code"], 9)
+        self.assertNotIn("synthetic-private", json.dumps(observed))
+        self.assertEqual(observed["hermes-contract"]["status"], "unavailable")
+        for data in ("null", "{}", '[{"phase":"bad"}]'):
+            observed = metrics.phase_observations(
+                {"backend-quality": {"outputs": {"phases": data}}}
+            )
+            self.assertEqual(observed["backend-quality"]["status"], "unavailable")
+
     def test_duration_ignores_missing_and_invalid_intervals(self) -> None:
         self.assertEqual(
             metrics.seconds("2026-10-29T00:00:00Z", "2026-10-29T08:01:02+08:00"), 62

@@ -9,7 +9,10 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('next/headers', () => ({ cookies: mocks.cookies,
-  headers: vi.fn(async () => new Headers({ 'X-Dazah-Page-Path': '/hr/position-transfers' })),
+  headers: vi.fn(async () => new Headers({
+    'X-Dazah-Page-Path': '/hr/position-transfers',
+    'X-Forwarded-For': '198.51.100.23',
+  })),
 }))
 
 import * as admin from './server/admin'
@@ -116,7 +119,12 @@ describe('migrated server API contracts', () => {
     expect(String(url)).toContain('/api/v1/identity/admin/users?limit=500')
     expect(init).toEqual(expect.objectContaining({
       cache: 'no-store',
-      headers: { Authorization: 'Bearer migration-server-token' },
+      headers: {
+        Authorization: 'Bearer migration-server-token',
+        'Content-Type': 'application/json',
+        'X-Dazah-Page-Path': '/hr/position-transfers',
+        'X-Forwarded-For': '198.51.100.23',
+      },
     }))
   })
 

@@ -5,15 +5,25 @@ const mocks = vi.hoisted(() => ({
     get: vi.fn().mockReturnValue({ value: 'system-admin-token' }),
   }),
   revalidatePath: vi.fn(),
+  headers: vi.fn().mockResolvedValue(new Headers()),
 }))
 
-vi.mock('next/headers', () => ({ cookies: mocks.cookies, headers: vi.fn().mockResolvedValue(new Headers()) }))
+vi.mock('next/headers', () => ({ cookies: mocks.cookies, headers: mocks.headers }))
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }))
 
 import * as adminActions from './admin'
 import { createRole } from './admin'
 
 describe('system permission server actions', () => {
+  it('keeps the client IP when forwarding an administrator operation', async () => {
+    mocks.headers.mockResolvedValueOnce(new Headers({ 'x-forwarded-for': '198.51.100.23' }))
+    const request = vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: {} })))
+    vi.stubGlobal('fetch', request)
+    await adminActions.deleteRole('role-1')
+    expect(request).toHaveBeenCalledWith(expect.stringContaining('/roles/role-1'), expect.objectContaining({
+      headers: expect.objectContaining({ 'X-Forwarded-For': '198.51.100.23', Authorization: 'Bearer system-admin-token' }),
+    }))
+  })
   it.each([undefined, { value: '' }])('blocks unauthenticated writes and exports before contacting the backend (%j)', async (token) => {
     mocks.cookies.mockResolvedValueOnce({ get: vi.fn().mockReturnValue(token) })
       .mockResolvedValueOnce({ get: vi.fn().mockReturnValue(token) })

@@ -91,6 +91,10 @@ def proxy(request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFacto
     config += '''
 server {
     listen 8081;
+    location ~ ^/(api/v1/)?client-ip-probe$ {
+        default_type application/json;
+        return 200 '{"xff":"$http_x_forwarded_for","real_ip":"$http_x_real_ip"}';
+    }
     location / {
         default_type application/json;
         return 200 '{"path":"$http_x_dazah_page_path","key":"$http_x_dazah_page_key"}';
@@ -188,3 +192,16 @@ def test_backend_locations_inherit_context(proxy: Proxy, path: str) -> None:
 def test_frontend_location_keeps_its_own_header_collection(proxy: Proxy) -> None:
     referer = f"{proxy.scheme}://example.test/warehouse/materials/dashboard"
     assert proxy.request({"Referer": referer}, "/login") == {"path": "", "key": ""}
+
+
+@pytest.mark.parametrize("path", ["/api/v1/client-ip-probe", "/client-ip-probe"])
+def test_public_edge_replaces_forged_client_ip_headers(proxy: Proxy, path: str) -> None:
+    actual = proxy.request({}, path)
+    forged = proxy.request({
+        "X-Forwarded-For": "203.0.113.99, 172.19.0.2",
+        "X-Real-IP": "203.0.113.99",
+    }, path)
+    assert actual["xff"]
+    assert actual["xff"] == actual["real_ip"]
+    assert actual["xff"] != "203.0.113.99"
+    assert forged == actual

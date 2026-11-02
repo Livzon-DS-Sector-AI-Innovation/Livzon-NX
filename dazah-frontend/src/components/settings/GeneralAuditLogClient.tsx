@@ -21,7 +21,7 @@ const { RangePicker } = DatePicker
 const categoryConfig: Record<GeneralAuditCategory, { title: string; description: string }> = {
   operations: {
     title: '用户操作审计',
-    description: '按请求追溯平台用户的查询、下载和写入操作。',
+    description: '追溯关键业务操作、敏感数据访问和安全事件。',
   },
   permissions: {
     title: '权限与授权审计',
@@ -50,7 +50,8 @@ function formatTime(value: string) {
 }
 
 function actor(record: GeneralAuditLogItem) {
-  return record.actor_name || record.actor_username || record.actor_user_id || '系统'
+  return record.actor_name || record.actor_username || record.actor_user_id ||
+    (record.summary?.actor_identified === false ? '未识别用户' : '系统')
 }
 
 function summaryOf(record: GeneralAuditLogItem) {

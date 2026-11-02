@@ -141,6 +141,8 @@ services:
     environment:
       APP_ENV: production
       DEBUG: "false"
+      # Uvicorn only accepts client IP headers from loopback / Docker proxies.
+      FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-127.0.0.1,::1,172.16.0.0/12}
       DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL in .env}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       MINIO_ENABLED: "true"

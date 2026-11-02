@@ -1,9 +1,10 @@
 "use server"
 
-import { cookies, headers as requestHeaders } from "next/headers"
+import { cookies } from "next/headers"
 import { revalidatePath } from "next/cache"
 import type { components } from "@/types/generated/schema"
 import { permissionActionResult } from "@/lib/permission-action-result"
+import { getAuthHeaders } from "@/lib/auth"
 
 const API_BASE =
   process.env.API_BASE_URL ||
@@ -50,12 +51,10 @@ async function authedFetch(path: string, init?: RequestInit): Promise<Response> 
     throw new Error("未登录或登录已过期")
   }
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
+    ...await getAuthHeaders(),
     ...(init?.headers as Record<string, string> | undefined),
     Authorization: `Bearer ${token.value}`,
   }
-  const operationId = (await requestHeaders()).get('X-Dazah-Operation-ID')
-  if (operationId) headers['X-Dazah-Operation-ID'] = operationId
   return fetch(`${API_BASE}/api/v1${path}`, { ...init, headers })
 }
 
