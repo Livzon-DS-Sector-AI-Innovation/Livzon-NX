@@ -156,4 +156,15 @@ describe('toPageTableStats', () => {
       )
     }
   })
+
+  it('provides Feishu applink create urls for the approval/registration pages', () => {
+    for (const key of [
+      SAFETY_PAGE_TABLE_KEYS.specialDangerWork,
+      SAFETY_PAGE_TABLE_KEYS.dailyRiskReport,
+    ]) {
+      expect(SAFETY_PAGE_TABLE_CREATE_URLS[key]).toMatch(
+        /^https:\/\/applink\.feishu\.cn\/T9/,
+      )
+    }
+  })
 })

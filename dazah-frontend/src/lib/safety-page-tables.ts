@@ -74,6 +74,8 @@ export const SAFETY_PAGE_TABLE_CREATE_URLS: Record<string, string> = {
     'https://j0eukrlohu.feishu.cn/share/base/form/shrcn3vWz3Am9ygOLco8wyLTb8v',
   [SAFETY_PAGE_TABLE_KEYS.centrifugeDischargeInspection]:
     'https://j0eukrlohu.feishu.cn/share/base/form/shrcn2VwVcu3LfuJRYjNc8O7bld',
+  [SAFETY_PAGE_TABLE_KEYS.specialDangerWork]: 'https://applink.feishu.cn/T9b3BZBGbJAH',
+  [SAFETY_PAGE_TABLE_KEYS.dailyRiskReport]: 'https://applink.feishu.cn/T9b3C6VcE98L',
 }
 
 /**
