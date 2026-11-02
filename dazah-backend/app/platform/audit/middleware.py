@@ -16,6 +16,10 @@ from starlette.routing import Match
 from app.core.database import async_session_factory
 from app.core.redaction import is_sensitive_key, redact_sensitive
 from app.platform.audit.models import AuditLog
+from app.platform.audit.request_policy import (
+    READ_ONLY_POST_ROUTES,
+    request_audit_reason,
+)
 from app.platform.identity.rbac import match_module
 
 logger = logging.getLogger(__name__)
@@ -90,6 +94,8 @@ async def _request_body(request: Request) -> tuple[Any, str | None]:
         return None, None
     if any(part in request.url.path for part in SENSITIVE_ROUTE_PARTS):
         return None, "sensitive_route"
+    if request.method == "POST" and request.url.path in READ_ONLY_POST_ROUTES:
+        return None, "read_only_query"
     content_type = request.headers.get("content-type", "").split(";", 1)[0]
     if content_type.strip().lower() != "application/json":
         return None, "non_json"
@@ -136,7 +142,7 @@ def _route_details(request: Request) -> tuple[str, str, str] | None:
 
 
 class AuditMiddleware(BaseHTTPMiddleware):
-    """Persist one safe audit record for each identified user's API request."""
+    """Keep meaningful operations and security evidence, excluding routine reads."""
 
     async def dispatch(
         self,
@@ -151,10 +157,8 @@ class AuditMiddleware(BaseHTTPMiddleware):
             part in request.url.path for part in SENSITIVE_ROUTE_PARTS
         )
         request_details: dict[str, Any] = {
-            "path_params": {} if sensitive_route else _route_params(request),
-            "query_params": {}
-            if sensitive_route
-            else _safe_mapping(list(request.query_params.multi_items())),
+            "path_params": {},
+            "query_params": {},
             "content_type": request.headers.get("content-type", "").split(";", 1)[0][
                 :100
             ] or None,
@@ -192,6 +196,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
             request_details,
             duration_ms,
             response.headers.get("content-length"),
+            response.headers.get("content-disposition"),
         )
         if response.background is not None:
             background.add_task(response.background)
@@ -207,14 +212,34 @@ class AuditMiddleware(BaseHTTPMiddleware):
         request_details: dict[str, Any],
         duration_ms: int | None = None,
         response_bytes: str | None = None,
+        content_disposition: str | None = None,
     ) -> None:
         actor_id = getattr(request.state, "audit_user_id", None)
-        if actor_id is None or request.method == "OPTIONS":
-            return
         route = _route_details(request)
         if route is None:
             return
         path, module, operation = route
+        required = getattr(request.state, "audit_required", False) is True
+        reason = request_audit_reason(
+            request.method,
+            path,
+            status_code,
+            content_disposition=content_disposition,
+            required=required,
+        )
+        if reason is None:
+            return
+        if actor_id is None and not required and reason not in {
+            "security", "authentication", "business_callback"
+        }:
+            return
+        # Routine reads must not pay for route-param extraction or payload
+        # sanitization. Keep sensitive routes omitted even on denied requests.
+        if request_details.get("parameters_omitted") != "sensitive_route":
+            request_details["path_params"] = _route_params(request)
+            request_details["query_params"] = _safe_mapping(
+                list(request.query_params.multi_items())
+            )
         path_params = request_details["path_params"]
         target = ", ".join(f"{key}={value}" for key, value in path_params.items())
         resource_id = None
@@ -244,6 +269,8 @@ class AuditMiddleware(BaseHTTPMiddleware):
                         ip_address=request.client.host[:64] if request.client else None,
                         user_agent=request.headers.get("user-agent", "")[:500] or None,
                         extra={
+                            "audit_reason": reason,
+                            "actor_identified": actor_id is not None,
                             "operation": operation,
                             "target": target or None,
                             "request": request_details,

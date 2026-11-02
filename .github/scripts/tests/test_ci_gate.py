@@ -30,6 +30,66 @@ def results(value: str = "success") -> dict[str, str]:
 
 
 class GateTests(unittest.TestCase):
+    def test_python_phases_and_environment_remain_blocking(self) -> None:
+        workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+        jobs = workflow["jobs"]
+        self.assertEqual(workflow["env"]["UV_VERSION"], "0.13.4")
+        for job in jobs.values():
+            self.assertEqual(job["runs-on"], "ubuntu-24.04")
+        for name in (
+            "backend-quality",
+            "backend-integration",
+            "hermes-quality",
+            "hermes-contract",
+        ):
+            steps = jobs[name]["steps"]
+            setup = next(s for s in steps if s.get("id") == "uv")
+            python = next(s for s in steps if s["name"] == "Set up Python")
+            self.assertLess(steps.index(python), steps.index(setup))
+            self.assertEqual(setup["with"]["version"], "${{ env.UV_VERSION }}")
+            self.assertEqual(
+                jobs[name]["outputs"]["uv_cache_hit"],
+                "${{ steps.uv.outputs.cache-hit }}",
+            )
+            for step in steps:
+                if (
+                    "ci_support.py" in step.get("run", "")
+                    and step.get("id") != "phases"
+                ):
+                    self.assertNotIn("continue-on-error", step)
+                    self.assertNotIn("always()", step.get("if", ""))
+            export = next(s for s in steps if s.get("id") == "phases")
+            self.assertEqual(export["if"], "${{ always() }}")
+        integration = jobs["backend-integration"]["steps"]
+        names = [s["name"] for s in integration]
+        for earlier, later in zip(
+            (
+                "Install backend dependencies",
+                "Verify backend environment",
+                "Verify backend migrations and contracts",
+                "Run backend full test suite",
+            ),
+            (
+                "Verify backend environment",
+                "Verify backend migrations and contracts",
+                "Run backend full test suite",
+                "Enforce backend coverage gates",
+            ),
+        ):
+            self.assertLess(names.index(earlier), names.index(later))
+        contract = str(jobs["hermes-contract"])
+        for filename in (
+            "test_agent_v2_contracts.py",
+            "test_tool_registry_executor.py",
+            "test_user_tool_api.py",
+            "test_dazah_feishu_tool_payload.py",
+            "test_dazah_backend_contract.py",
+        ):
+            self.assertIn(filename, contract)
+        self.assertIn(
+            'chromium.launch({channel:"chromium"})', str(jobs["frontend-e2e"])
+        )
+
     def test_independent_checks_start_after_scope_and_remain_required(self) -> None:
         jobs = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]
         independent = {

@@ -13,7 +13,11 @@ command -v uv >/dev/null 2>&1 || {
   exit 1
 }
 
-uv sync --frozen --extra dev
+case "${1:-all}" in
+  all) uv sync --frozen --extra dev ;;
+  checks) ;;
+  *) echo "Usage: $0 {all|checks}" >&2; exit 2 ;;
+esac
 
 echo "== AgentBackend V2 residual scan =="
 uv run --no-sync python "${project_dir}/../scripts/check-agent-v2-residuals.py"

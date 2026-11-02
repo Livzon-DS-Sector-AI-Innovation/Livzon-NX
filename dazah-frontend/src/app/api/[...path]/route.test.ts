@@ -71,6 +71,7 @@ describe('API proxy user feedback', () => {
       headers: {
         cookie: 'auth_token=secret',
         'x-forwarded-host': 'evil.example',
+        'x-forwarded-for': '198.51.100.23, 172.19.0.2',
         'x-dazah-operation-id': 'operation-1',
       },
     }))
@@ -79,6 +80,7 @@ describe('API proxy user feedback', () => {
     expect(forwarded.get('cookie')).toBe('auth_token=secret')
     expect(forwarded.get('x-dazah-operation-id')).toBe('operation-1')
     expect(forwarded.get('x-forwarded-host')).toBeNull()
+    expect(forwarded.get('x-forwarded-for')).toBe('198.51.100.23, 172.19.0.2')
   })
 
   it('preserves browser source evidence for backend cookie and CSRF checks', async () => {

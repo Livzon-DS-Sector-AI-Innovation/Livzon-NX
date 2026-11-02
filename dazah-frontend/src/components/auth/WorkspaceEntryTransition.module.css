@@ -1,0 +1,80 @@
+.content {
+  display: contents;
+}
+
+.cover {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+}
+
+.curtain {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  background: var(--color-canvas);
+}
+
+.cover[data-phase='revealing'] {
+  pointer-events: none;
+}
+
+.cover[data-phase='revealing'] .curtain {
+  /* Lift the authentication screen from left to right, with a slight diagonal
+     at the leading edge. The workspace beneath stays in its final position. */
+  animation: workspace-unveil 800ms cubic-bezier(0.65, 0, 0.25, 1) both;
+}
+
+.status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.recovery {
+  position: absolute;
+  right: 1.5rem;
+  bottom: 4.5rem;
+  left: 1.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem 1rem;
+  width: fit-content;
+  max-width: calc(100% - 3rem);
+  margin-inline: auto;
+  border-radius: var(--rounded-lg);
+  background: var(--color-canvas);
+  padding: 0.75rem 1rem;
+  color: var(--color-slate);
+  font-size: 0.875rem;
+}
+
+.retry {
+  border-radius: var(--rounded-md);
+  padding: 0.5rem;
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.retry:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+@keyframes workspace-unveil {
+  from { clip-path: polygon(-12% 0, 100% 0, 100% 100%, 0 100%); }
+  to { clip-path: polygon(100% 0, 100% 0, 100% 100%, 112% 100%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cover[data-phase='revealing'] .curtain {
+    animation: none;
+    visibility: hidden;
+  }
+}
