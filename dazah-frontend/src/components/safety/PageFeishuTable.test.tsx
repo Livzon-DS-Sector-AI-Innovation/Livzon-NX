@@ -85,6 +85,7 @@ vi.mock('@ant-design/icons', () => {
   return {
     ArrowUpOutlined: Icon,
     CloudUploadOutlined: Icon,
+    EditOutlined: Icon,
     PlusOutlined: Icon,
     ReloadOutlined: Icon,
     SaveOutlined: Icon,
@@ -1631,5 +1632,37 @@ describe('PageFeishuTable（列宽）', () => {
     const highlighted = rendered.container.querySelectorAll('tr.bg-red-50')
     expect(highlighted.length).toBe(1)
     expect(highlighted[0].getAttribute('data-row')).toBe('rec-1')
+  })
+
+  it('showRowActions 在行尾追加编辑列并打开详情', async () => {
+    rendered = renderTable({ showRowActions: true })
+    await settle()
+
+    // 默认两行各一个「编辑」按钮（未开启时不渲染该列）
+    const editButtons = Array.from(
+      rendered.container.querySelectorAll('button'),
+    ).filter((button) => button.textContent?.includes('编辑'))
+    expect(editButtons.length).toBe(2)
+
+    act(() => editButtons[0].click())
+    await settle()
+
+    expect(mocks.form.setFieldsValue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        记录编号: 'YH-20261011-03',
+        整改情况: '未整改',
+        值班人员: ['ou_1'],
+      }),
+    )
+  })
+
+  it('未开启 showRowActions 时不渲染编辑列', async () => {
+    rendered = renderTable()
+    await settle()
+
+    const editButtons = Array.from(
+      rendered.container.querySelectorAll('button'),
+    ).filter((button) => button.textContent?.includes('编辑'))
+    expect(editButtons.length).toBe(0)
   })
 })

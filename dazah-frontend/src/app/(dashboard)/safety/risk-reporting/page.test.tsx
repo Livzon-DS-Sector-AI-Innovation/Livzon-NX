@@ -12,6 +12,9 @@ vi.mock('@/lib/safety-page-tables', () => ({
   SAFETY_PAGE_TABLE_KEYS: {
     dailyRiskReport: 'safety:ops-safety:daily-risk-report',
   },
+  SAFETY_PAGE_TABLE_CREATE_URLS: {
+    'safety:ops-safety:daily-risk-report': 'https://applink.feishu.cn/T9b3C6VcE98L',
+  },
 }))
 
 import RiskReportingPage from './page'
@@ -30,5 +33,17 @@ describe('safety risk reporting page', () => {
       pageName: '关键风险作业报备',
     })
     expect(element).toBeTruthy()
+  })
+
+  it('passes the Feishu form create url for 报备', () => {
+    renderToStaticMarkup(RiskReportingPage())
+
+    expect(
+      (mocks.SafetyPageFeishuMirror.mock.calls.at(-1) as unknown as [
+        Record<string, unknown>,
+      ])[0]
+    ).toMatchObject({
+      createUrl: 'https://applink.feishu.cn/T9b3C6VcE98L',
+    })
   })
 })

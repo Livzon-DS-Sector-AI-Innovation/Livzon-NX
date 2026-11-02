@@ -567,6 +567,7 @@ export default function HazchemPanel({
                   summarizeColumns={false}
                   allowCreate
                   hideMetaHint
+                  showRowActions
                   defaultSortField="车间"
                 />
               ) : null,

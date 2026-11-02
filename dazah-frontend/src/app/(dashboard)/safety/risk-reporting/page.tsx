@@ -1,5 +1,8 @@
 import { SafetyPageFeishuMirror } from '@/components/safety'
-import { SAFETY_PAGE_TABLE_KEYS } from '@/lib/safety-page-tables'
+import {
+  SAFETY_PAGE_TABLE_CREATE_URLS,
+  SAFETY_PAGE_TABLE_KEYS,
+} from '@/lib/safety-page-tables'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
@@ -14,6 +17,9 @@ export default function RiskReportingPage() {
       <SafetyPageFeishuMirror
         pageKey={SAFETY_PAGE_TABLE_KEYS.dailyRiskReport}
         pageName="关键风险作业报备"
+        createUrl={
+          SAFETY_PAGE_TABLE_CREATE_URLS[SAFETY_PAGE_TABLE_KEYS.dailyRiskReport]
+        }
       />
     </div>
   )

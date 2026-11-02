@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { CloudUploadOutlined, PlusOutlined, ReloadOutlined, SaveOutlined, SearchOutlined } from '@ant-design/icons'
+import { CloudUploadOutlined, EditOutlined, PlusOutlined, ReloadOutlined, SaveOutlined, SearchOutlined } from '@ant-design/icons'
 import {
   App,
   Avatar,
@@ -310,6 +310,8 @@ export default function PageFeishuTable({
   createUrl,
   /** 隐藏「共 N 条；列与数据来自飞书」说明文字（嵌入页如危化品统计表用）。 */
   hideMetaHint = false,
+  /** 表格末尾显示「操作」列（编辑入口），嵌入页如危化品统计表用。 */
+  showRowActions = false,
 }: {
   pageKey: string
   pageName: string
@@ -373,6 +375,8 @@ export default function PageFeishuTable({
   createUrl?: string
   /** 隐藏「共 N 条；列与数据来自飞书」说明文字（嵌入页如危化品统计表用）。 */
   hideMetaHint?: boolean
+  /** 表格末尾显示「操作」列（编辑入口），嵌入页如危化品统计表用。 */
+  showRowActions?: boolean
 }) {
   const { message } = App.useApp()
   const { canOperate } = usePagePermissions(pageKey)
@@ -917,6 +921,29 @@ export default function PageFeishuTable({
       },
     }
   })
+
+  if (showRowActions) {
+    tableColumns.push({
+      title: '操作',
+      key: 'row-actions',
+      fixed: 'right',
+      width: 90,
+      render: (_: unknown, row: PageTableRecordRow) => (
+        <Button
+          type="link"
+          size="small"
+          icon={<EditOutlined />}
+          style={{ padding: 0 }}
+          onClick={(event) => {
+            event.stopPropagation()
+            openDetail(row)
+          }}
+        >
+          编辑
+        </Button>
+      ),
+    })
+  }
 
   return (
     <Space orientation="vertical" size={16} style={{ display: 'flex' }}>
