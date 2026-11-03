@@ -534,8 +534,9 @@ jobs:
 
       - name: Install backend system prerequisites
         run: |
-          sudo apt-get update -o Acquire::Retries=3
-          sudo apt-get install --yes --no-install-recommends -o Acquire::Retries=3 postgresql-client fonts-noto-cjk
+          sudo install -m 0644 docker/apt-download.conf /etc/apt/apt.conf.d/80dazah-download
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends postgresql-client fonts-noto-cjk
 
       - name: Install backend dependencies
         run: python3 .github/scripts/ci_support.py install backend
@@ -597,15 +598,15 @@ jobs:
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
 
       - name: Build backend image once
-        run: |
-          docker buildx build \
-            --load \
-            --cache-from type=gha \
-            --cache-to type=gha,mode=max \
-            --file Dockerfile \
-            --target backend \
-            --tag "$IMAGE_TAG" \
-            .
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
+        with:
+          context: .
+          file: Dockerfile
+          target: backend
+          load: true
+          tags: ${{ env.IMAGE_TAG }}
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
 
       - name: Generate complete image vulnerability report
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
@@ -628,15 +629,15 @@ jobs:
           exit-code: "1"
 
       - name: Build development backend image
-        run: |
-          docker buildx build \
-            --load \
-            --cache-from type=gha,scope=backend-dev \
-            --cache-to type=gha,scope=backend-dev,mode=max \
-            --file Dockerfile.dev \
-            --target backend \
-            --tag "${IMAGE_TAG}-dev" \
-            .
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
+        with:
+          context: .
+          file: Dockerfile.dev
+          target: backend
+          load: true
+          tags: ${{ env.IMAGE_TAG }}-dev
+          cache-from: type=gha,scope=backend-dev
+          cache-to: type=gha,scope=backend-dev,mode=max
 
       - name: Verify Chromium as app in both backend images
         shell: bash
@@ -908,8 +909,9 @@ jobs:
 
       - name: Install backend system prerequisites
         run: |
-          sudo apt-get update -o Acquire::Retries=3
-          sudo apt-get install --yes --no-install-recommends -o Acquire::Retries=3 postgresql-client fonts-noto-cjk
+          sudo install -m 0644 docker/apt-download.conf /etc/apt/apt.conf.d/80dazah-download
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends postgresql-client fonts-noto-cjk
 
       - name: Install backend contract dependencies
         run: python3 .github/scripts/ci_support.py install backend
