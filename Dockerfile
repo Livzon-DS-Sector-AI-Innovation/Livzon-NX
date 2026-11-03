@@ -9,15 +9,19 @@ FROM python:3.12-slim-bookworm@sha256:782412e85d0f0984994c290652577d4018aff08145
 
 WORKDIR /app
 
+COPY docker/apt-download.conf /etc/apt/apt.conf.d/80dazah-download
+# The base image's cleanup hook otherwise empties the BuildKit package cache.
+RUN rm -f /etc/apt/apt.conf.d/docker-clean
+
 # libreoffice-writer/draw：.doc/.wps 转 docx 及 wmf/emf 图片转 png 依赖；
 # fonts-noto-cjk 中文字体；catdoc/antiword 文本级兜底
 RUN --mount=type=cache,id=dazah-debian-apt,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=dazah-debian-apt-lists,target=/var/lib/apt/lists,sharing=locked \
     apt-get update \
     && apt-get upgrade -y --no-install-recommends \
     && apt-get install -y --no-install-recommends \
         libreoffice-writer libreoffice-draw \
-        fonts-noto-cjk catdoc antiword \
-    && rm -rf /var/lib/apt/lists/*
+        fonts-noto-cjk catdoc antiword
 
 RUN pip install --no-cache-dir uv==0.13.4 \
     && groupadd --system app \
@@ -41,7 +45,9 @@ RUN --mount=type=cache,id=dazah-backend-uv,target=/home/app/.cache/uv,sharing=lo
 
 # Playwright Chromium：法规雷达与法规跟踪（CDE）的 JS 渲染站点抓取依赖；
 # 浏览器装入 app 用户缓存目录并归属 app，运行时可被 Playwright 找到
-RUN .venv/bin/playwright install --with-deps chromium \
+RUN --mount=type=cache,id=dazah-debian-apt,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=dazah-debian-apt-lists,target=/var/lib/apt/lists,sharing=locked \
+    .venv/bin/playwright install --with-deps chromium \
     && mkdir -p /home/app/.cache \
     && chown -R app:app /home/app/.cache/ms-playwright
 

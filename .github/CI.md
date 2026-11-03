@@ -120,6 +120,28 @@ head、空库 upgrade、model/migration drift、FastAPI import、OpenAPI 漂移�
 构建交付镜像及开发镜像，并验证两者的 app 用户 Chromium 能力。完整漏洞报告作为 artifact；存在有修复版本的 High/Critical
 漏洞时阻塞。容器使用隔离 Docker network 和临时 PostgreSQL/Redis。
 
+系统依赖下载统一读取 `docker/apt-download.conf`：每个失败请求最多重试 3 次，
+HTTP/HTTPS 连接和数据超时均为 30 秒，省略翻译索引；索引刷新失败时返回失败，
+不使用旧索引把下载故障当作成功。该配置同时用于两种后端镜像（含 Playwright
+`--with-deps`）及 Backend Integration、Hermes Contract 的 runner apt 安装。
+不重试测试、迁移或整个镜像构建，不更换软件源、不放宽签名与漏洞门禁。
+
+两种后端镜像均移除基础镜像的 `docker-clean` 钩子，保留下载的 `.deb`，以相同
+缓存 ID、`sharing=locked` 挂载 `/var/cache/apt` 和 `/var/lib/apt/lists`。
+普通 apt 安装及 Playwright 依赖安装共享这些缓存；索引每次执行安装步骤时仍刷新。
+缓存挂载不进入最终镜像。开发后端 uv 缓存挂载到实际的
+`/home/app/.cache/uv`，与交付构建共享下载缓存。
+
+后端镜像构建使用与前端一致、固定 SHA 的 `docker/build-push-action`，由 Action
+注入 GHA 缓存认证；交付和开发镜像分别读写 `backend`、`backend-dev` scope，
+均以 `mode=max` 导出中间层。GHA 导出的是构建层，**不会导出 cache mount 内容**；
+apt/uv 挂载在同一持久 builder 内可复用，临时 runner 跨运行主要依靠层缓存。
+首次切换到 `backend` scope 需要预热；远程缓存命中及实际 502 改善仍须后续 CI
+验证。本地无需访问 GitHub 缓存或真实代理，故障注入命令为：
+`python .github/scripts/tests/test_apt_downloads.py AptHTTPTests -v`（Linux，需 apt-get、dpkg-deb）。
+用合成包及 loopback 仓库验证连续两次 502 后恢复、热缓存不再下载、重试耗尽失败，
+以及已有索引时刷新失败仍阻塞；Windows 会跳过 HTTP 用例，应在隔离 Linux 容器补跑。
+
 ### Hermes
 
 `Hermes Quality` 执行残留检查、编译、Dazah 自有兼容边界的 Ruff 和全量
