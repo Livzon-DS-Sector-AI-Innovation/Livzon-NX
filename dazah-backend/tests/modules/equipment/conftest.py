@@ -121,3 +121,21 @@ def _disable_repair_ledger(monkeypatch):
     from app.modules.equipment.feishu import repair_ledger
 
     monkeypatch.setattr(repair_ledger, "ledger_enabled", lambda: False)
+
+
+@pytest.fixture(autouse=True)
+def _disable_health_background_tasks(monkeypatch):
+    """禁用健康档案/知识案例的后台任务（ensure_future 会以应用库
+    会话逃逸测试事件循环，与 _disable_repair_ledger 同理）。"""
+    from app.modules.equipment.service import health as health_service
+    from app.modules.equipment.service import knowledge as knowledge_service
+
+    monkeypatch.setattr(
+        health_service, "schedule_profile_refresh", lambda *_a, **_k: None
+    )
+    monkeypatch.setattr(
+        health_service, "_schedule_jump_notification", lambda *_a, **_k: None
+    )
+    monkeypatch.setattr(
+        knowledge_service, "schedule_draft_processing", lambda *_a, **_k: None
+    )

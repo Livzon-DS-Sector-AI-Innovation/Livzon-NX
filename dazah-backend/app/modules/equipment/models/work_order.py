@@ -182,6 +182,16 @@ class WorkOrder(BaseModel):
     spare_parts_cost: Mapped[float | None] = mapped_column(
         nullable=True, comment="备件费用汇总"
     )
+    labor_cost: Mapped[float | None] = mapped_column(
+        nullable=True,
+        comment="工时成本（完成时按维修人费率×时长计算）",
+    )
+    external_cost: Mapped[float | None] = mapped_column(
+        nullable=True, comment="外委费用（人工补录）"
+    )
+    external_vendor: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, comment="外委厂商"
+    )
     inspection_task_id: Mapped[uuid.UUID | None] = mapped_column(
         nullable=True, comment="来源巡检任务ID，由巡检异常自动创建时填入"
     )

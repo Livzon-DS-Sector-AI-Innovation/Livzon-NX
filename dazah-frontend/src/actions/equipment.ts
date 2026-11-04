@@ -682,3 +682,106 @@ export async function fetchOverdueMaintenancePlans(): Promise<any> {
   const json = await res.json()
   return json.data || []
 }
+
+// ==================== 维修知识案例（方案B） ====================
+export async function verifyKnowledgeCase(caseId: string) {
+  const result = await actionFetch(
+    `${API_BASE_URL}/api/v1/equipment/repair-knowledge/cases/${caseId}/verify`,
+    { method: 'POST' },
+  )
+  revalidatePath('/equipment')
+  return result
+}
+
+export async function dismissKnowledgeCase(caseId: string) {
+  const result = await actionFetch(
+    `${API_BASE_URL}/api/v1/equipment/repair-knowledge/cases/${caseId}/dismiss`,
+    { method: 'POST' },
+  )
+  revalidatePath('/equipment')
+  return result
+}
+
+// ==================== 备件采购建议与维修成本（方案C） ====================
+export async function submitPurchaseSuggestions(ids: string[]) {
+  const result = await actionFetch(
+    `${API_BASE_URL}/api/v1/equipment/spare-parts/purchase-suggestions/submit`,
+    { method: 'POST', body: JSON.stringify({ suggestion_ids: ids }) },
+  )
+  revalidatePath('/equipment')
+  return result
+}
+
+export async function updateSuggestionQty(id: string, suggestQty: number) {
+  const result = await actionFetch(
+    `${API_BASE_URL}/api/v1/equipment/spare-parts/purchase-suggestions/${id}/qty`,
+    { method: 'PUT', body: JSON.stringify({ suggest_qty: suggestQty }) },
+  )
+  revalidatePath('/equipment')
+  return result
+}
+
+export async function registerSuggestionArrival(id: string, arrivedQty: number) {
+  const result = await actionFetch(
+    `${API_BASE_URL}/api/v1/equipment/spare-parts/purchase-suggestions/${id}/arrival`,
+    { method: 'POST', body: JSON.stringify({ arrived_qty: arrivedQty }) },
+  )
+  revalidatePath('/equipment')
+  return result
+}
+
+export async function cancelPurchaseSuggestion(id: string) {
+  const result = await actionFetch(
+    `${API_BASE_URL}/api/v1/equipment/spare-parts/purchase-suggestions/${id}/cancel`,
+    { method: 'POST' },
+  )
+  revalidatePath('/equipment')
+  return result
+}
+
+export async function saveLaborRate(data: {
+  scope: 'role' | 'person'
+  role_id?: string | null
+  person_id?: string | null
+  hourly_rate: number
+  effective_from?: string | null
+  remark?: string | null
+}) {
+  const result = await actionFetch(
+    `${API_BASE_URL}/api/v1/equipment/spare-parts/purchase-suggestions/labor-rates`,
+    { method: 'POST', body: JSON.stringify(data) },
+  )
+  revalidatePath('/equipment')
+  return result
+}
+
+export async function deleteLaborRate(id: string) {
+  const result = await actionFetch(
+    `${API_BASE_URL}/api/v1/equipment/spare-parts/purchase-suggestions/labor-rates/${id}`,
+    { method: 'DELETE' },
+  )
+  revalidatePath('/equipment')
+  return result
+}
+
+export async function updateWorkOrderExternalCost(
+  id: string,
+  data: { external_cost?: number | null; external_vendor?: string | null },
+) {
+  const result = await actionFetch(
+    `${API_BASE_URL}/api/v1/equipment/maintenance/work-orders/${id}/external-cost`,
+    { method: 'PUT', body: JSON.stringify(data) },
+  )
+  revalidatePath('/equipment')
+  return result
+}
+
+// ==================== 月度健康报告（方案B收尾） ====================
+export async function generateMonthlyReport(reportMonth: string) {
+  const result = await actionFetch(
+    `${API_BASE_URL}/api/v1/equipment/health/monthly-reports/generate`,
+    { method: 'POST', body: JSON.stringify({ report_month: reportMonth }) },
+  )
+  revalidatePath('/equipment')
+  return result
+}

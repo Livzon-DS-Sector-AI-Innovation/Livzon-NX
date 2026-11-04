@@ -9,11 +9,15 @@ const api = vi.hoisted(() => ({
   fetchMaintenancePlansClient: vi.fn(),
   fetchWorkOrdersClient: vi.fn(),
   fetchInspectionFeishuRecords: vi.fn(),
+  fetchEquipmentHealthClient: vi.fn(),
+  fetchRepairProfileClient: vi.fn(),
 }))
 
 vi.mock('@/lib/api/equipment-client', () => ({
   fetchMaintenancePlansClient: api.fetchMaintenancePlansClient,
   fetchWorkOrdersClient: api.fetchWorkOrdersClient,
+  fetchEquipmentHealthClient: api.fetchEquipmentHealthClient,
+  fetchRepairProfileClient: api.fetchRepairProfileClient,
 }))
 vi.mock('@/lib/api/inspection-feishu', () => ({
   fetchInspectionFeishuRecords: api.fetchInspectionFeishuRecords,
@@ -87,6 +91,42 @@ describe('EquipmentDetailDrawer', () => {
   beforeEach(() => {
     api.fetchMaintenancePlansClient.mockResolvedValue({ items: [], total: 0 })
     api.fetchWorkOrdersClient.mockResolvedValue({ items: [], total: 0 })
+    api.fetchEquipmentHealthClient.mockResolvedValue({
+      equipment_id: 'eq-1',
+      latest: {
+        id: 'snap-1',
+        equipment_id: 'eq-1',
+        snapshot_date: '2026-11-03',
+        score: 76.5,
+        grade: 'Y' as const,
+        metrics: {
+          fault_count_90d: 2,
+          mttr_min_90d: 90,
+          overdue_maintenance_count: 1,
+          overdue_calibration_count: 0,
+          max_repeat_fault_90d: 1,
+        },
+      },
+      snapshots: [],
+    })
+    api.fetchRepairProfileClient.mockResolvedValue({
+      id: 'profile-1',
+      equipment_id: 'eq-1',
+      total_orders: 5,
+      total_faults: 3,
+      total_downtime_min: 480,
+      total_spare_cost: 1250.5,
+      mtbf_days: 120.5,
+      last_3_faults: [
+        {
+          work_order_no: 'WO-20261101-0002',
+          reported_at: '2026-11-01T10:00:00Z',
+          symptom: null,
+          cause: null,
+        },
+      ],
+      updated_at: '2026-11-02T19:30:00Z',
+    })
     api.fetchInspectionFeishuRecords.mockResolvedValue({
       items: [historyRecord],
       total: 1,
@@ -143,6 +183,30 @@ describe('EquipmentDetailDrawer', () => {
     expect(text).toContain('历史记录')
     expect(text).toContain('异常')
     expect(text).toContain('下午清洁异常')
+  })
+
+  it('renders the health tab with score, metrics and repair profile', async () => {
+    renderDrawer(root)
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 60))
+    })
+
+    const healthTab = [...document.body.querySelectorAll('.ant-tabs-tab')].find(
+      (tab) => tab.textContent?.includes('健康档案'),
+    ) as HTMLElement | undefined
+    expect(healthTab).toBeTruthy()
+    await act(async () => {
+      healthTab!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((r) => setTimeout(r, 60))
+    })
+    const text = document.body.textContent || ''
+    expect(text).toContain('77')
+    expect(text).toContain('黄档')
+    expect(text).toContain('近90天故障')
+    expect(text).toContain('2 次')
+    expect(text).toContain('维修病历')
+    expect(text).toContain('WO-20261101-0002')
+    expect(text).toContain('1,250.5')
   })
 
   it('reports inspection load failures without breaking the drawer', async () => {

@@ -814,6 +814,56 @@ async def _handle_photo_action(
     return _card_ok_payload("已建单并派发维修群")
 
 
+async def _handle_knowledge_action(
+    value: dict[str, Any], *, open_id: str, union_id: str
+) -> dict[str, Any]:
+    """维修知识案例确认卡片回调：case_verify=入库，case_dismiss=忽略。"""
+    import uuid as uuid_mod
+
+    from app.core.exceptions import AppException
+    from app.modules.equipment.service import knowledge as knowledge_service
+
+    async def _fail(message: str) -> dict[str, Any]:
+        if open_id:
+            try:
+                await send_user_card(
+                    open_id=open_id,
+                    title="❌ 案例操作未生效",
+                    receive_id_type="open_id",
+                    content=message,
+                )
+            except Exception:
+                logger.exception("案例操作失败提示发送失败")
+        return _card_error_payload(message)
+
+    cid = str(value.get("cid", "") or "")
+    if not cid:
+        return await _fail("卡片数据缺失")
+    try:
+        case_uuid = uuid_mod.UUID(cid)
+    except ValueError:
+        return await _fail("案例信息无效")
+
+    async with async_session_factory() as db:
+        user = await _find_user_by_feishu(db, open_id=open_id, union_id=union_id)
+        if user is None:
+            return await _fail("未绑定平台账号，请先用飞书登录一次平台后重试")
+        try:
+            if value.get("act") == "case_verify":
+                await knowledge_service.verify_case(db, case_uuid, user.id)
+                message = "维修经验已入库，感谢沉淀！"
+            else:
+                await knowledge_service.dismiss_case(db, case_uuid, user.id)
+                message = "已忽略该案例草稿"
+            await db.commit()
+        except AppException as exc:
+            return await _fail(exc.message)
+        except Exception:
+            logger.exception("案例卡片操作失败: %s", cid)
+            return await _fail("操作失败，请稍后在平台「维护保养→维修知识」中处理")
+    return _card_ok_payload(message)
+
+
 # 后台补丁任务引用（防止被 GC 中断）
 _patch_tasks: set[asyncio.Task[None]] = set()
 
@@ -893,6 +943,11 @@ async def handle_card_action(payload: dict[str, Any]) -> dict[str, Any]:
 
     if act in ("photo_repair", "photo_cancel"):
         return await _handle_photo_action(value, open_id=open_id, union_id=union_id)
+
+    if act in ("case_verify", "case_dismiss"):
+        return await _handle_knowledge_action(
+            value, open_id=open_id, union_id=union_id
+        )
 
     if act not in ("accept", "complete") or not wo_no:
         return await _fail("未知操作")

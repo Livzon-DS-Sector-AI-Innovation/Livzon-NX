@@ -11,6 +11,8 @@ import {
   MaintenancePlanFilters, MaintenancePlanListResponse, MaintenancePlan,
   MaterialRecord,
   ClaimTimeoutConfig, Maintainer, WorkOrderImage,
+  EquipmentHealth, RepairProfile, HealthBoard, KnowledgeCaseHit, KnowledgeCase, KnowledgeCaseStatus, MonthlyReport,
+  PurchaseSuggestion, PurchaseSuggestionStatus, LaborRate, CostReport,
 } from '@/types/equipment'
 
 interface FetchEquipmentsParams {
@@ -319,4 +321,152 @@ export async function fetchDepartmentsClient(): Promise<import('@/types/equipmen
   if (!response.ok) throw new Error(`请求失败: ${response.status}`)
   const result = await response.json()
   return result.data || []
+}
+
+// ==================== 设备健康档案与维修知识库（方案B） ====================
+export async function fetchEquipmentHealthClient(
+  equipmentId: string,
+  days = 30,
+): Promise<EquipmentHealth> {
+  const response = await fetch(
+    `/api/v1/equipment/health/equipment/${equipmentId}?days=${days}`,
+  )
+  if (!response.ok) {
+    throw new Error(`请求失败: ${response.status} ${response.statusText}`)
+  }
+  const result = await response.json()
+  return (
+    result.data || { equipment_id: equipmentId, latest: null, snapshots: [] }
+  )
+}
+
+export async function fetchRepairProfileClient(
+  equipmentId: string,
+): Promise<RepairProfile | null> {
+  const response = await fetch(
+    `/api/v1/equipment/health/repair-profile/${equipmentId}`,
+  )
+  if (!response.ok) {
+    throw new Error(`请求失败: ${response.status} ${response.statusText}`)
+  }
+  const result = await response.json()
+  return result.data || null
+}
+
+export async function fetchHealthBoardClient(
+  workshop?: string,
+  grade?: 'G' | 'Y' | 'R',
+): Promise<HealthBoard> {
+  const searchParams = new URLSearchParams()
+  if (workshop) searchParams.append('workshop', workshop)
+  if (grade) searchParams.append('grade', grade)
+  const qs = searchParams.toString()
+  const response = await fetch(
+    `/api/v1/equipment/health/board${qs ? `?${qs}` : ''}`,
+  )
+  if (!response.ok) {
+    throw new Error(`请求失败: ${response.status} ${response.statusText}`)
+  }
+  const result = await response.json()
+  return result.data || { items: [], summary: { total: 0, G: 0, Y: 0, R: 0 } }
+}
+
+export async function searchKnowledgeCasesClient(params: {
+  q: string
+  equipment_id?: string
+  symptom_code?: string
+  top?: number
+}): Promise<KnowledgeCaseHit[]> {
+  const searchParams = new URLSearchParams({ q: params.q })
+  if (params.equipment_id) searchParams.append('equipment_id', params.equipment_id)
+  if (params.symptom_code) searchParams.append('symptom_code', params.symptom_code)
+  if (params.top) searchParams.append('top', String(params.top))
+  const response = await fetch(
+    `/api/v1/equipment/repair-knowledge/search?${searchParams.toString()}`,
+  )
+  if (!response.ok) {
+    throw new Error(`请求失败: ${response.status} ${response.statusText}`)
+  }
+  const result = await response.json()
+  return result.data?.items || []
+}
+
+export async function fetchKnowledgeCasesClient(params: {
+  status?: KnowledgeCaseStatus
+  page?: number
+  page_size?: number
+}): Promise<{ items: KnowledgeCase[]; total: number }> {
+  const searchParams = new URLSearchParams()
+  if (params.status) searchParams.append('status', params.status)
+  if (params.page) searchParams.append('page', String(params.page))
+  if (params.page_size) searchParams.append('page_size', String(params.page_size))
+  const response = await fetch(
+    `/api/v1/equipment/repair-knowledge/cases?${searchParams.toString()}`,
+  )
+  if (!response.ok) {
+    throw new Error(`请求失败: ${response.status} ${response.statusText}`)
+  }
+  const result = await response.json()
+  return { items: result.data || [], total: result.meta?.total || 0 }
+}
+
+export async function fetchMonthlyReportsClient(): Promise<MonthlyReport[]> {
+  const response = await fetch(`/api/v1/equipment/health/monthly-reports`)
+  if (!response.ok) {
+    throw new Error(`请求失败: ${response.status} ${response.statusText}`)
+  }
+  const result = await response.json()
+  return result.data || []
+}
+
+// ==================== 备件采购建议与维修成本（方案C） ====================
+export async function fetchPurchaseSuggestionsClient(params: {
+  status?: PurchaseSuggestionStatus
+  workshop?: string
+  page?: number
+  page_size?: number
+}): Promise<{ items: PurchaseSuggestion[]; total: number }> {
+  const searchParams = new URLSearchParams()
+  if (params.status) searchParams.append('status', params.status)
+  if (params.workshop) searchParams.append('workshop', params.workshop)
+  if (params.page) searchParams.append('page', String(params.page))
+  if (params.page_size) searchParams.append('page_size', String(params.page_size))
+  const response = await fetch(
+    `/api/v1/equipment/spare-parts/purchase-suggestions?${searchParams.toString()}`,
+  )
+  if (!response.ok) {
+    throw new Error(`请求失败: ${response.status} ${response.statusText}`)
+  }
+  const result = await response.json()
+  return { items: result.data || [], total: result.meta?.total || 0 }
+}
+
+export async function fetchLaborRatesClient(): Promise<LaborRate[]> {
+  const response = await fetch(
+    `/api/v1/equipment/spare-parts/purchase-suggestions/labor-rates`,
+  )
+  if (!response.ok) {
+    throw new Error(`请求失败: ${response.status} ${response.statusText}`)
+  }
+  const result = await response.json()
+  return result.data || []
+}
+
+export async function fetchCostReportClient(params: {
+  workshop?: string
+  month?: string
+  group_by?: 'equipment' | 'workshop' | 'fault_type'
+}): Promise<CostReport | null> {
+  const searchParams = new URLSearchParams()
+  if (params.workshop) searchParams.append('workshop', params.workshop)
+  if (params.month) searchParams.append('month', params.month)
+  if (params.group_by) searchParams.append('group_by', params.group_by)
+  const response = await fetch(
+    `/api/v1/equipment/maintenance/work-orders/cost-report?${searchParams.toString()}`,
+  )
+  if (!response.ok) {
+    throw new Error(`请求失败: ${response.status} ${response.statusText}`)
+  }
+  const result = await response.json()
+  return result.data || null
 }

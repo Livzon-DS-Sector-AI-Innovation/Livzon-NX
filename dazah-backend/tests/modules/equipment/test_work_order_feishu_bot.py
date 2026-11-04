@@ -568,3 +568,87 @@ async def test_dispatch_skips_when_no_chat_configured(monkeypatch):
     )
     assert result is None
 
+
+
+# ── 知识案例确认卡片回调（方案B）─────────────────────────
+
+
+def _case_payload(act="case_verify", cid=None):
+    return {
+        "operator": {"open_id": "ou_1", "union_id": "on_1", "user_id": ""},
+        "action": {
+            "value": {"act": act, "cid": cid or str(uuid.uuid4())},
+            "tag": "button",
+        },
+        "context": {"open_message_id": "om_1", "open_chat_id": "oc_1"},
+    }
+
+
+def _patch_knowledge_env(monkeypatch, db, *, user):
+    monkeypatch.setattr(wof, "async_session_factory", _factory(db), raising=False)
+    monkeypatch.setattr(wof, "_find_user_by_feishu", AsyncMock(return_value=user))
+    sends: list = []
+
+    async def _send(**kw):
+        sends.append(kw)
+
+    monkeypatch.setattr(wof, "send_user_card", _send)
+    return sends
+
+
+@pytest.mark.asyncio
+async def test_card_action_case_verify_commits(monkeypatch):
+    db = _db_mock()
+    user_obj = SimpleNamespace(id=USER_ID, name="秦佳豪", username="q")
+    sends = _patch_knowledge_env(monkeypatch, db, user=user_obj)
+
+    from app.modules.equipment.service import knowledge as knowledge_service
+
+    case = SimpleNamespace(id=uuid.uuid4(), status="draft")
+
+    async def _verify(db_arg, case_id, user_id):
+        case.status = "verified"
+        return case
+
+    monkeypatch.setattr(knowledge_service, "verify_case", _verify)
+
+    result = await handle_card_action(_case_payload(cid=str(case.id)))
+
+    assert result["code"] == 0
+    db.commit.assert_awaited()
+    assert not sends  # 成功路径只回 toast，不私聊
+
+
+@pytest.mark.asyncio
+async def test_card_action_case_dismiss_on_verified_case_fails(monkeypatch):
+    db = _db_mock()
+    user_obj = SimpleNamespace(id=USER_ID, name="秦佳豪", username="q")
+    sends = _patch_knowledge_env(monkeypatch, db, user=user_obj)
+
+    from app.modules.equipment.service import knowledge as knowledge_service
+
+    async def _dismiss(db_arg, case_id, user_id):
+        from app.core.exceptions import AppException as _AppExc
+
+        raise _AppExc(message="案例当前状态为「verified」，只有草稿可忽略")
+
+    monkeypatch.setattr(knowledge_service, "dismiss_case", _dismiss)
+
+    result = await handle_card_action(
+        _case_payload(act="case_dismiss", cid=str(uuid.uuid4()))
+    )
+
+    assert result["toast"]["type"] == "error"
+    db.commit.assert_not_awaited()
+    assert sends  # 失败私聊兜底
+
+
+@pytest.mark.asyncio
+async def test_card_action_case_unbound_user(monkeypatch):
+    db = _db_mock()
+    sends = _patch_knowledge_env(monkeypatch, db, user=None)
+
+    result = await handle_card_action(_case_payload())
+
+    assert result["toast"]["type"] == "error"
+    assert any("未绑定平台账号" in (s.get("content") or "") for s in sends)

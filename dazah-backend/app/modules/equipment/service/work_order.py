@@ -278,6 +278,14 @@ async def complete_work_order(
         delta = now - wo.started_at
         wo.actual_duration = int(delta.total_seconds() / 60)
 
+    # 方案C：按维修人费率计算工时成本（无费率记 0，失败不阻断完成）
+    try:
+        from app.modules.equipment.service.cost import apply_labor_cost
+
+        await apply_labor_cost(db, wo)
+    except Exception:
+        logger.exception("工时成本计算失败: %s", wo.work_order_no)
+
     await db.flush()
 
     # 计划维护工单完成时，联动更新维护计划日期
@@ -464,6 +472,18 @@ async def verify_work_order(
     if data.result == "合格":
         _validate_transition(wo.status, "已完成")
         wo.status = "已完成"
+        # 方案B：故障维修验收合格 → 生成维修知识案例草稿（去重跳过，
+        # 失败不影响验收主流程）
+        try:
+            from app.modules.equipment.service import (
+                knowledge as knowledge_service,
+            )
+
+            case = await knowledge_service.create_case_draft(db, wo)
+            if case is not None:
+                knowledge_service.schedule_draft_processing(case.id)
+        except Exception:
+            logger.exception("维修案例草稿生成失败: %s", wo.work_order_no)
     else:
         # 打回重修
         _validate_transition(wo.status, "执行中")
@@ -510,6 +530,11 @@ async def close_work_order(
     # 恢复设备到创建工单前的原始状态
     restore_status = wo.original_equipment_status or "在用"
     await _update_equipment_status(db, wo.equipment_id, restore_status)
+
+    # 方案B：工单闭环后异步刷新该设备的维修病历（非关键路径）
+    from app.modules.equipment.service.health import schedule_profile_refresh
+
+    schedule_profile_refresh(wo.equipment_id)
 
     await db.refresh(wo)
     # 飞书台账镜像（延迟后台任务，失败不影响主流程）
@@ -641,9 +666,9 @@ async def consume_materials(
         )
         transactions.append(transaction)
 
-        # 累加费用
+        # 累加费用（Numeric 列返回 Decimal，统一转 float 参与累加）
         if spare_part.unit_price:
-            total_cost += spare_part.unit_price * item["quantity"]
+            total_cost += float(spare_part.unit_price) * float(item["quantity"])
 
     # 更新工单备件费用
     current_cost = wo.spare_parts_cost or 0.0

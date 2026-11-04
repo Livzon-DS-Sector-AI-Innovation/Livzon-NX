@@ -40,6 +40,9 @@ import { InspectionProgressCard } from './inspection/InspectionProgressCard'
 import { EfficiencyCard } from './stats/EfficiencyCard'
 import { RepairerRankCard } from './stats/RepairerRankCard'
 import { ResponseBucketCard } from './stats/ResponseBucketCard'
+import { HealthBoardCard } from './stats/HealthBoardCard'
+import { CostCard } from './stats/CostCard'
+import { MonthlyReportPanel } from './stats/MonthlyReportPanel'
 
 // ============================================================
 // 类型定义
@@ -291,6 +294,21 @@ export function StatsDashboard({ initialData }: StatsDashboardProps) {
             buckets={efficiency?.response_buckets ?? []}
             workshopLabel={workshopLabel}
           />
+        </div>
+
+        {/* ========== 设备健康度榜单（方案B：每日快照） ========== */}
+        <div style={{ marginBottom: 28 }}>
+          <HealthBoardCard />
+        </div>
+
+        {/* ========== 维修成本（方案C：三段成本） ========== */}
+        <div style={{ marginBottom: 28 }}>
+          <CostCard />
+        </div>
+
+        {/* ========== 月度健康报告（方案B收尾） ========== */}
+        <div style={{ marginBottom: 28 }}>
+          <MonthlyReportPanel />
         </div>
 
         {/* ========== 第二行：设备全景 + 工单概览 ========== */}

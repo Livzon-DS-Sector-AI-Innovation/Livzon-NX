@@ -1,13 +1,13 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { App, Drawer, Form, Input, Select, Button, Space, Upload } from 'antd'
-import { PlusOutlined } from '@ant-design/icons'
+import { PlusOutlined, BookOutlined } from '@ant-design/icons'
 import type { UploadFile } from 'antd/es/upload'
 import { useEquipmentStore } from '@/stores/equipment'
 import { createWorkOrder, uploadWorkOrderImages } from '@/actions/equipment'
-import { CreateWorkOrderInput, FailureCode, Maintainer } from '@/types/equipment'
-import { fetchAllUsersClient } from '@/lib/api/equipment-client'
+import { CreateWorkOrderInput, FailureCode, Maintainer, KnowledgeCaseHit } from '@/types/equipment'
+import { fetchAllUsersClient, searchKnowledgeCasesClient } from '@/lib/api/equipment-client'
 
 const { TextArea } = Input
 
@@ -23,9 +23,34 @@ export function RepairDrawer({ equipments, symptoms, onRefresh }: RepairDrawerPr
   const [fileList, setFileList] = useState<UploadFile[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [maintainers, setMaintainers] = useState<Maintainer[]>([])
+  const [similarCases, setSimilarCases] = useState<KnowledgeCaseHit[]>([])
+  const similarTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const { repairDrawerOpen, repairEquipmentId, closeRepairDrawer } = useEquipmentStore()
 
   const selectedEquipment = equipments.find(e => e.id === repairEquipmentId)
+
+  // 相似案例是辅助信息：所有 setState 都在首个 await 之后（避免 effect 内
+  // 同步 setState），检索失败静默返回空列表，不打断报修主流程
+  const searchSimilar = useCallback(
+    async (q: string) => {
+      const query = q.trim()
+      const equipmentId = repairEquipmentId
+      const hits = await (async () => {
+        if (!equipmentId || query.length < 2) return []
+        try {
+          return await searchKnowledgeCasesClient({
+            q: query,
+            equipment_id: equipmentId,
+            top: 3,
+          })
+        } catch {
+          return []
+        }
+      })()
+      setSimilarCases(hits)
+    },
+    [repairEquipmentId],
+  )
 
   useEffect(() => {
     if (repairDrawerOpen) {
@@ -38,12 +63,29 @@ export function RepairDrawer({ equipments, symptoms, onRefresh }: RepairDrawerPr
       })
       setFileList([])
       fetchAllUsersClient().then(setMaintainers).catch(() => {})
+      // 打开时先按设备名检索一次该设备的过往案例
+      if (selectedEquipment?.name) {
+        void searchSimilar(selectedEquipment.name)
+      }
       // 默认填入设备责任人
       if (selectedEquipment?.responsible_person_id) {
         form.setFieldsValue({ responsible_person_id: selectedEquipment.responsible_person_id })
       }
     }
-  }, [repairDrawerOpen, repairEquipmentId, form, selectedEquipment?.importance])
+  }, [repairDrawerOpen, repairEquipmentId, form, selectedEquipment, searchSimilar])
+
+  // 故障描述输入变化时防抖检索相似案例
+  const handleDescriptionChange = (e: { target: { value: string } }) => {
+    const value = e.target.value
+    if (similarTimer.current) clearTimeout(similarTimer.current)
+    similarTimer.current = setTimeout(() => searchSimilar(value), 500)
+  }
+
+  useEffect(() => {
+    return () => {
+      if (similarTimer.current) clearTimeout(similarTimer.current)
+    }
+  }, [])
 
   const handleSubmit = async () => {
     try {
@@ -132,8 +174,51 @@ export function RepairDrawer({ equipments, symptoms, onRefresh }: RepairDrawerPr
           />
         </Form.Item>
         <Form.Item name="fault_description" label="故障描述">
-          <TextArea placeholder="请描述故障情况" rows={4} maxLength={500} showCount />
+          <TextArea
+            placeholder="请描述故障情况"
+            rows={4}
+            maxLength={500}
+            showCount
+            onChange={handleDescriptionChange}
+          />
         </Form.Item>
+        {similarCases.length > 0 && (
+          <div
+            style={{
+              marginBottom: 16,
+              padding: '10px 12px',
+              background: 'var(--color-surface)',
+              borderRadius: 6,
+              fontSize: 12,
+            }}
+            data-testid="similar-cases-panel"
+          >
+            <div style={{ fontWeight: 600, marginBottom: 6 }}>
+              <BookOutlined /> 相似历史案例（供参考）
+            </div>
+            {similarCases.map((c) => (
+              <div key={c.id} style={{ padding: '4px 0', borderBottom: '1px dashed var(--color-border, #e5e3df)' }}>
+                <div>
+                  <span style={{ color: '#5d5b54' }}>
+                    {c.symptom_name || '未记录现象'} → {c.cause_name || '未记录原因'} →{' '}
+                    <span style={{ color: '#1f7a4d' }}>{c.action_name || '未记录措施'}</span>
+                  </span>
+                  {c.use_count > 0 && (
+                    <span style={{ color: '#8a867d', marginLeft: 8 }}>被参考 {c.use_count} 次</span>
+                  )}
+                </div>
+                {c.repair_summary && (
+                  <div style={{ color: '#8a867d', marginTop: 2 }}>{c.repair_summary}</div>
+                )}
+                {c.key_steps.length > 0 && (
+                  <div style={{ color: '#8a867d', marginTop: 2 }}>
+                    步骤：{c.key_steps.join('；')}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
         <Form.Item name="responsible_person_id" label="责任人" rules={[{ required: true, message: '请选择责任人' }]}>
           <Select
             placeholder="选择责任人"
