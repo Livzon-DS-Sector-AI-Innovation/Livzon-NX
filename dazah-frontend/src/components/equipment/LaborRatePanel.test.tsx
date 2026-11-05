@@ -114,9 +114,19 @@ describe('LaborRatePanel', () => {
     expect(modalText).toContain('新增费率')
     expect(modalText).toContain('费率范围')
     expect(modalText).toContain('人员级（优先）')
-    // 目标选择器与时薪输入已渲染（保存链路由后端测试覆盖）
+    // 目标选择器与时薪输入已渲染
     expect(modalText).toContain('人员')
     expect(modalText).toContain('时薪（元/小时）')
     expect(modalText).toContain('生效日期')
+    // 未选人直接保存：触发校验分支，动作不被调用、弹窗保持
+    const okBtn = [...document.querySelectorAll('button')].find(
+      (b) => b.textContent === '确 定' || b.textContent === 'OK',
+    ) as HTMLButtonElement
+    expect(okBtn).toBeTruthy()
+    await act(async () => {
+      okBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((r) => setTimeout(r, 60))
+    })
+    expect(api.saveLaborRate).not.toHaveBeenCalled()
   })
 })
