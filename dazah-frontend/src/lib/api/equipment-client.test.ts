@@ -16,6 +16,7 @@ import {
   fetchCostReportClient,
   fetchKnowledgeCasesClient,
   fetchMonthlyReportsClient,
+  fetchPurchaseSuggestionsClient,
 } from './equipment-client'
 
 function jsonResponse(body: unknown, status = 200) {
@@ -264,5 +265,73 @@ describe('方案B/C client 函数（健康/成本/知识/月报）', () => {
     const reports = await fetchMonthlyReportsClient()
     expect(lastUrl(fetchMock)).toContain('/monthly-reports')
     expect(reports[0].report_month).toBe('2026-10')
+  })
+})
+
+
+describe('client 参数分支补齐（门禁收口）', () => {
+  it('fetchHealthBoardClient 无参调用不附加查询串', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    fetchMock.mockResolvedValueOnce(jsonResponse({ code: 200, data: null }))
+    const board = await fetchHealthBoardClient()
+    expect(lastUrl(fetchMock)).toBe('/api/v1/quipment'.length > 0 ? '/api/v1/equipment/health/board' : '')
+    expect(board?.summary.G).toBe(0)
+  })
+
+  it('fetchCostReportClient 无参数默认请求', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ code: 200, data: { month: '2026-11', totals: {}, top: [] } }),
+    )
+    const rep = await fetchCostReportClient()
+    expect(lastUrl(fetchMock)).toBe('/api/v1/equipment/maintenance/work-orders/cost-report')
+    expect(rep?.month).toBe('2026-11')
+  })
+
+  it('fetchLaborRatesClient/fetchMonthlyReportsClient 失败抛错', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    fetchMock.mockResolvedValueOnce(jsonResponse({ code: 500 }, 500))
+    await expect(fetchLaborRatesClient()).rejects.toThrow('500')
+    fetchMock.mockResolvedValueOnce(jsonResponse({ code: 502 }, 502))
+    await expect(fetchMonthlyReportsClient()).rejects.toThrow('502')
+  })
+
+  it('fetchKnowledgeCasesClient 仅关键词必选', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    fetchMock.mockResolvedValueOnce(jsonResponse({ code: 200, data: [], meta: { total: 3 } }))
+    const res = await fetchKnowledgeCasesClient({ q: '漏' })
+    expect(lastUrl(fetchMock)).toContain('q=')
+    expect(res.total).toBe(3)
+  })
+
+  it('fetchPurchaseSuggestionsClient 全参数组装', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    fetchMock.mockResolvedValueOnce(jsonResponse({ code: 200, data: [], meta: { total: 7 } }))
+    const res = await fetchPurchaseSuggestionsClient({
+      status: 'suggested',
+      workshop: '201-1',
+      page: 2,
+      page_size: 50,
+    })
+    expect(lastUrl(fetchMock)).toBe(
+      '/api/v1/equipment/spare-parts/purchase-suggestions?status=suggested&workshop=201-1&page=2&page_size=50',
+    )
+    expect(res.total).toBe(7)
+  })
+
+  it('fetchPurchaseSuggestionsClient 无参与失败分支', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    fetchMock.mockResolvedValueOnce(jsonResponse({ code: 200, data: [] }))
+    const res = await fetchPurchaseSuggestionsClient({})
+    expect(lastUrl(fetchMock)).toBe('/api/v1/equipment/spare-parts/purchase-suggestions?')
+    expect(res.items).toEqual([])
+    fetchMock.mockResolvedValueOnce(jsonResponse({ code: 500 }, 500))
+    await expect(fetchPurchaseSuggestionsClient({ status: 'done' })).rejects.toThrow('500')
   })
 })
