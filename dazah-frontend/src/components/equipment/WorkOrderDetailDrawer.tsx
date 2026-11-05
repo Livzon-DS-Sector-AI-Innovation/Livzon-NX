@@ -156,7 +156,7 @@ export function WorkOrderDetailDrawer({ onRefresh }: WorkOrderDetailDrawerProps)
       onOk: async () => {
         if (!selectedId) {
           message.warning('请选择新维修人')
-          return Promise.reject()
+          return false // 返回 false 阻止弹窗关闭；禁止裸 reject（逃逸 Unhandled Rejection）
         }
         try {
           await transferWorkOrder(wo.id, {
@@ -167,7 +167,7 @@ export function WorkOrderDetailDrawer({ onRefresh }: WorkOrderDetailDrawerProps)
           onRefresh?.()
         } catch (error) {
           message.error(error instanceof Error ? error.message : '转派失败')
-          return Promise.reject(error)
+          return false
         }
       },
     })
