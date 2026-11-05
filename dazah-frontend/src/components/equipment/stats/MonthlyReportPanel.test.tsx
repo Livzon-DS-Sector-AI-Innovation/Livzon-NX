@@ -103,4 +103,53 @@ describe('MonthlyReportPanel', () => {
     })
     expect(document.body.textContent).toContain('暂无报告')
   })
+
+  it('点击生成调用 action 并刷新列表', async () => {
+    api.generateMonthlyReport.mockResolvedValue({ id: 'r-new' })
+    api.fetchMonthlyReportsClient.mockResolvedValue([
+      { id: 'r-new', report_month: '2026-10', metrics: null, content_md: '# x', generated_at: '2026-11-05T08:00:00Z' },
+    ])
+    act(() => {
+      root.render(
+        <AntApp>
+          <MonthlyReportPanel />
+        </AntApp>,
+      )
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 60))
+    })
+    const genBtn = [...document.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes('生成报告'),
+    ) as HTMLButtonElement
+    expect(genBtn).toBeTruthy()
+    await act(async () => {
+      genBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((r) => setTimeout(r, 100))
+    })
+    expect(api.generateMonthlyReport).toHaveBeenCalledWith('2026-10')
+    expect(api.fetchMonthlyReportsClient.mock.calls.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('生成失败提示错误', async () => {
+    api.generateMonthlyReport.mockRejectedValue(new Error('LLM 未配置'))
+    act(() => {
+      root.render(
+        <AntApp>
+          <MonthlyReportPanel />
+        </AntApp>,
+      )
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 60))
+    })
+    const genBtn = [...document.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes('生成报告'),
+    ) as HTMLButtonElement
+    await act(async () => {
+      genBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((r) => setTimeout(r, 100))
+    })
+    expect(document.body.textContent || '').toContain('LLM 未配置')
+  })
 })

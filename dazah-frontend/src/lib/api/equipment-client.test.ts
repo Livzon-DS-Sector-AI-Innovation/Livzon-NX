@@ -10,6 +10,12 @@ import {
   fetchWorkOrderStatisticsClient,
   fetchWorkOrdersClient,
   fetchWorkOrderEventsClient,
+  fetchHealthBoardClient,
+  fetchRepairProfileClient,
+  fetchLaborRatesClient,
+  fetchCostReportClient,
+  fetchKnowledgeCasesClient,
+  fetchMonthlyReportsClient,
 } from './equipment-client'
 
 function jsonResponse(body: unknown, status = 200) {
@@ -177,5 +183,86 @@ describe('fetchWorkOrderEventsClient（方案E 转派事件）', () => {
     vi.stubGlobal('fetch', fetchMock)
     fetchMock.mockResolvedValueOnce(jsonResponse({ code: 200, data: null }))
     expect(await fetchWorkOrderEventsClient('wo-3')).toEqual([])
+  })
+})
+
+
+describe('方案B/C client 函数（健康/成本/知识/月报）', () => {
+  it('fetchHealthBoardClient 组装 workshop/grade 参数并返回 data', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        code: 200,
+        data: { items: [], summary: { total: 0, G: 0, Y: 0, R: 0 } },
+      }),
+    )
+    const board = await fetchHealthBoardClient('201-1', 'R')
+    expect(lastUrl(fetchMock)).toBe(
+      '/api/v1/equipment/health/board?workshop=201-1&grade=R',
+    )
+    expect(board?.summary.total).toBe(0)
+  })
+
+  it('fetchRepairProfileClient 失败抛错', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ code: 500, message: 'err' }, 500),
+    )
+    await expect(fetchRepairProfileClient('eq-1')).rejects.toThrow('500')
+  })
+
+  it('fetchLaborRatesClient 返回费率数组', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ code: 200, data: [{ id: 'r1', scope: 'person', hourly_rate: 60, effective_from: '2026-11-01' }] }),
+    )
+    const rates = await fetchLaborRatesClient()
+    expect(lastUrl(fetchMock)).toContain('/labor-rates')
+    expect(rates[0].hourly_rate).toBe(60)
+  })
+
+  it('fetchCostReportClient 透传 group_by 并返回报表', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        code: 200,
+        data: {
+          month: '2026-11',
+          workshop: null,
+          group_by: 'equipment',
+          totals: { orders: 0, spare_cost: 0, labor_cost: 0, external_cost: 0, total_cost: 0 },
+          top: [],
+        },
+      }),
+    )
+    const rep = await fetchCostReportClient({ group_by: 'equipment', month: '2026-11' })
+    expect(lastUrl(fetchMock)).toContain('group_by=equipment')
+    expect(rep?.month).toBe('2026-11')
+  })
+
+  it('fetchKnowledgeCasesClient 组装状态与分页', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ code: 200, data: [], meta: { total: 0 } }),
+    )
+    const res = await fetchKnowledgeCasesClient({ status: 'draft', page: 1, page_size: 20 })
+    expect(lastUrl(fetchMock)).toContain('status=draft')
+    expect(res.total).toBe(0)
+  })
+
+  it('fetchMonthlyReportsClient 返回报告列表', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ code: 200, data: [{ id: 'm1', report_month: '2026-10' }] }),
+    )
+    const reports = await fetchMonthlyReportsClient()
+    expect(lastUrl(fetchMock)).toContain('/monthly-reports')
+    expect(reports[0].report_month).toBe('2026-10')
   })
 })

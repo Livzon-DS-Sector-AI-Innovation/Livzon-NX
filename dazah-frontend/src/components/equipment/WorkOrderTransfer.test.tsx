@@ -6,6 +6,7 @@ import { App as AntApp } from 'antd'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const api = vi.hoisted(() => ({
+  updateWorkOrderExternalCost: vi.fn(),
   fetchMaintainersClient: vi.fn(),
   fetchWorkOrderByIdClient: vi.fn(),
   fetchSparePartsClient: vi.fn(),
@@ -29,7 +30,7 @@ vi.mock('@/actions/equipment', () => ({
   verifyWorkOrder: vi.fn(),
   closeWorkOrder: vi.fn(),
   claimWorkOrder: vi.fn(),
-  updateWorkOrderExternalCost: vi.fn(),
+  updateWorkOrderExternalCost: api.updateWorkOrderExternalCost,
 }))
 
 import { WorkOrderDetailDrawer } from './WorkOrderDetailDrawer'
@@ -159,5 +160,35 @@ describe('WorkOrderDetailDrawer 转派（方案E）', () => {
     })
     expect(api.transferWorkOrder).not.toHaveBeenCalled()
     expect(document.body.textContent || '').toContain('选择新维修人')
+  })
+
+  it('补录外委：打开弹窗保存调用 updateWorkOrderExternalCost', async () => {
+    api.updateWorkOrderExternalCost.mockResolvedValue({ id: 'wo-1' })
+    openDrawer()
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 60))
+    })
+    const btn = [...document.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes('补录外委'),
+    ) as HTMLButtonElement
+    expect(btn).toBeTruthy()
+    await act(async () => {
+      btn.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((r) => setTimeout(r, 60))
+    })
+    const modalText = document.body.textContent || ''
+    expect(modalText).toContain('外委金额')
+    expect(modalText).toContain('外委厂商')
+    const ok = [...document.querySelectorAll('button')].find(
+      (b) => b.textContent === '确 定' || b.textContent === 'OK',
+    ) as HTMLButtonElement
+    await act(async () => {
+      ok.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    expect(api.updateWorkOrderExternalCost).toHaveBeenCalledWith(
+      'wo-1',
+      expect.objectContaining({ external_cost: 0 }),
+    )
   })
 })

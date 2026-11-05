@@ -151,4 +151,102 @@ describe('PurchaseSuggestionPanel', () => {
     expect(api.submitPurchaseSuggestions).toHaveBeenCalledWith(['sg-1'])
     expect(api.fetchPurchaseSuggestionsClient).toHaveBeenCalledTimes(2)
   })
+
+
+  it('登记到货弹窗确认后调用 registerSuggestionArrival', async () => {
+    api.registerSuggestionArrival.mockResolvedValue({ id: 'sg-2', arrived_qty: 8, status: 'done' })
+    act(() => {
+      root.render(
+        <AntApp>
+          <PurchaseSuggestionPanel workshopCode="201-1" />
+        </AntApp>,
+      )
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 60))
+    })
+    const btn = [...document.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes('登记到货'),
+    ) as HTMLButtonElement
+    expect(btn).toBeTruthy()
+    await act(async () => {
+      btn.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    // okText 为「入库 」
+    const ok = [...document.querySelectorAll('button')].find((b) =>
+      (b.textContent || '').includes('入库'),
+    ) as HTMLButtonElement
+    expect(ok).toBeTruthy()
+    await act(async () => {
+      ok.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    expect(api.registerSuggestionArrival).toHaveBeenCalledWith('sg-2', 5)
+  })
+
+
+  it('批量提交含失败明细时提示失败原因并刷新', async () => {
+    api.submitPurchaseSuggestions.mockResolvedValue({
+      submitted: 1,
+      purchase_request_id: 'pr-f1',
+      failed: [{ id: 'sg-x', reason: '状态为 done，仅待提交可提交' }],
+    })
+    act(() => {
+      root.render(
+        <AntApp>
+          <PurchaseSuggestionPanel workshopCode="201-1" />
+        </AntApp>,
+      )
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 60))
+    })
+    const cb = document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')[1]
+    await act(async () => {
+      cb.click()
+      await new Promise((r) => setTimeout(r, 30))
+    })
+    const submitBtn = [...document.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes('提交采购'),
+    ) as HTMLButtonElement
+    await act(async () => {
+      submitBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    // 失败后列表重新加载
+    expect(api.fetchPurchaseSuggestionsClient.mock.calls.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('空结果渲染空态文案与总数', async () => {
+    api.fetchPurchaseSuggestionsClient.mockResolvedValue({ items: [], total: 0 })
+    act(() => {
+      root.render(
+        <AntApp>
+          <PurchaseSuggestionPanel workshopCode="201-1" />
+        </AntApp>,
+      )
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 60))
+    })
+    const text = document.body.textContent || ''
+    expect(text).toContain('暂无采购建议')
+    expect(text).toContain('共 0 条')
+  })
+
+  it('网络失败静默渲染空列表', async () => {
+    api.fetchPurchaseSuggestionsClient.mockRejectedValue(new Error('network'))
+    act(() => {
+      root.render(
+        <AntApp>
+          <PurchaseSuggestionPanel workshopCode="201-1" />
+        </AntApp>,
+      )
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 60))
+    })
+    expect(document.body.textContent || '').toContain('暂无采购建议')
+  })
 })

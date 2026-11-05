@@ -11,6 +11,7 @@ const api = vi.hoisted(() => ({
   fetchRoles: vi.fn(),
   saveLaborRate: vi.fn(),
   deleteLaborRate: vi.fn(),
+  updateLaborRate: vi.fn(),
 }))
 
 vi.mock('@/lib/api/equipment-client', () => ({
@@ -23,6 +24,7 @@ vi.mock('@/lib/api/equipment-personnel', () => ({
 vi.mock('@/actions/equipment', () => ({
   saveLaborRate: api.saveLaborRate,
   deleteLaborRate: api.deleteLaborRate,
+  updateLaborRate: api.updateLaborRate,
 }))
 
 import { LaborRatePanel } from './LaborRatePanel'
@@ -128,5 +130,23 @@ describe('LaborRatePanel', () => {
       await new Promise((r) => setTimeout(r, 60))
     })
     expect(api.saveLaborRate).not.toHaveBeenCalled()
+  })
+
+  it('列表渲染费率金额与生效日期', async () => {
+    act(() => {
+      root.render(
+        <AntApp>
+          <LaborRatePanel />
+        </AntApp>,
+      )
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    const text = document.body.textContent || ''
+    expect(text).toContain('¥80.00')
+    expect(text).toContain('¥50.00')
+    expect(text).toContain('2026-11-01')
+    expect(text).toContain('高级维修工')
   })
 })
