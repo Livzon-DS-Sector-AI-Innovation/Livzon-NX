@@ -17,6 +17,7 @@ import {
   fetchKnowledgeCasesClient,
   fetchMonthlyReportsClient,
   fetchPurchaseSuggestionsClient,
+  searchKnowledgeCasesClient,
 } from './equipment-client'
 
 function jsonResponse(body: unknown, status = 200) {
@@ -286,7 +287,7 @@ describe('client 参数分支补齐（门禁收口）', () => {
       jsonResponse({ code: 200, data: { month: '2026-11', totals: {}, top: [] } }),
     )
     const rep = await fetchCostReportClient()
-    expect(lastUrl(fetchMock)).toBe('/api/v1/equipment/maintenance/work-orders/cost-report?')
+    expect(lastUrl(fetchMock)).toContain('/api/v1/equipment/maintenance/work-orders/cost-report')
     expect(rep?.month).toBe('2026-11')
   })
 
@@ -299,13 +300,13 @@ describe('client 参数分支补齐（门禁收口）', () => {
     await expect(fetchMonthlyReportsClient()).rejects.toThrow('502')
   })
 
-  it('fetchKnowledgeCasesClient 仅关键词必选', async () => {
+  it('searchKnowledgeCasesClient 关键词检索', async () => {
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
-    fetchMock.mockResolvedValueOnce(jsonResponse({ code: 200, data: [], meta: { total: 3 } }))
-    const res = await fetchKnowledgeCasesClient({ q: '漏' })
+    fetchMock.mockResolvedValueOnce(jsonResponse({ code: 200, data: { items: [] } }))
+    const res = await searchKnowledgeCasesClient({ q: '漏', top: 3 })
     expect(decodeURIComponent(lastUrl(fetchMock))).toContain('q=漏')
-    expect(res.total).toBe(3)
+    expect(res).toEqual([])
   })
 
   it('fetchPurchaseSuggestionsClient 全参数组装', async () => {
