@@ -26,12 +26,11 @@ from app.modules.equipment.service import (
     refresh_repair_profile,
 )
 from app.modules.equipment.service.health import (
-    HealthMetrics,
     GRADE_GREEN_THRESHOLD,
     GRADE_YELLOW_THRESHOLD,
+    HealthMetrics,
 )
 from app.platform.identity.models import User
-
 
 # ==================== 评分纯函数 ====================
 
