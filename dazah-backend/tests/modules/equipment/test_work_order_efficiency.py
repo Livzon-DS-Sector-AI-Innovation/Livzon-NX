@@ -22,6 +22,10 @@ async def _hide_foreign_work_orders(db_session: AsyncSession):
 
     delete 发生在回滚事务里，不会真正删除库中数据。
     """
+    # 方案E：work_order_events 外键引用工单，须先清事件再删工单
+    from app.modules.equipment.models import WorkOrderEvent
+
+    await db_session.execute(delete(WorkOrderEvent))
     await db_session.execute(delete(WorkOrder))
     await db_session.flush()
     yield
