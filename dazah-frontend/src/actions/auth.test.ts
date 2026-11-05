@@ -1,15 +1,15 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
-  fetch: vi.fn(), setCookie: vi.fn(),
+  fetch: vi.fn(), setCookie: vi.fn(), getCookie: vi.fn(), deleteCookie: vi.fn(),
   redirect: vi.fn(() => { throw new Error('NEXT_REDIRECT') }),
 }))
-vi.mock('next/headers', () => ({ cookies: async () => ({ set: mocks.setCookie }) }))
+vi.mock('next/headers', () => ({ cookies: async () => ({ set: mocks.setCookie, get: mocks.getCookie, delete: mocks.deleteCookie }) }))
 vi.mock('next/navigation', () => ({ redirect: mocks.redirect }))
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
-vi.mock('@/lib/auth', () => ({ getAuthHeaders: async () => ({ Authorization: 'Bearer synthetic' }) }))
+vi.mock('@/lib/auth', () => ({ getAuthHeaders: async () => ({ Authorization: 'Bearer synthetic', 'X-Forwarded-For': '198.51.100.23' }) }))
 
-import { getCurrentUser, loginWithPassword } from './auth'
+import { getCurrentUser, loginWithPassword, logout } from './auth'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -40,7 +40,7 @@ it('never retries a bearer against another host after a connection failure', asy
   expect(mocks.fetch).toHaveBeenCalledTimes(1)
   expect(mocks.fetch).toHaveBeenCalledWith(
     'http://trusted.test:8000/api/v1/identity/me',
-    expect.objectContaining({ redirect: 'error', headers: { Authorization: 'Bearer synthetic' } }),
+    expect.objectContaining({ redirect: 'error', headers: { Authorization: 'Bearer synthetic', 'X-Forwarded-For': '198.51.100.23' } }),
   )
 })
 
@@ -50,5 +50,18 @@ it('still stores the session after successful authentication', async () => {
   form.set('username', 'audit-user')
   form.set('password', 'synthetic-password')
   await expect(loginWithPassword({}, form)).rejects.toThrow('NEXT_REDIRECT')
+  expect(mocks.fetch).toHaveBeenCalledWith(expect.stringContaining('/identity/auth/local/login'), expect.objectContaining({
+    headers: expect.objectContaining({ 'X-Forwarded-For': '198.51.100.23' }),
+  }))
   expect(mocks.setCookie).toHaveBeenCalledWith('auth_token', 'synthetic', expect.objectContaining({ httpOnly: true }))
+})
+
+it('keeps the client IP when revoking a session', async () => {
+  mocks.getCookie.mockReturnValueOnce({ value: 'synthetic' })
+  mocks.fetch.mockResolvedValue(new Response('{}'))
+  await expect(logout()).rejects.toThrow('NEXT_REDIRECT')
+  expect(mocks.fetch).toHaveBeenCalledWith(expect.stringContaining('/identity/auth/session/logout'), expect.objectContaining({
+    headers: expect.objectContaining({ 'X-Forwarded-For': '198.51.100.23', Authorization: 'Bearer synthetic' }),
+  }))
+  expect(mocks.deleteCookie).toHaveBeenCalledWith('auth_token')
 })

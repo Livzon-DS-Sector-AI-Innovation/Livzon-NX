@@ -136,6 +136,7 @@ services:
       - ${DAZAH_ENV_FILE:-.env.local}
     environment:
       APP_ENV: development
+      FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-127.0.0.1,::1,172.16.0.0/12}
       DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:postgres@db:5432/dazah}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       MINIO_ENABLED: "true"

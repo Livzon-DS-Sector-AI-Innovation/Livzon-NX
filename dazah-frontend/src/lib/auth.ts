@@ -16,6 +16,10 @@ export async function getAuthHeaders(): Promise<Record<string, string>> {
   const rawCookie = requestHeaders.get('cookie')
   const pagePath = requestHeaders.get('X-Dazah-Page-Path')
   const operationId = requestHeaders.get('X-Dazah-Operation-ID')
+  // Nginx replaces this header at the public edge; preserve its client IP
+  // through Server Components and Actions instead of logging the Node host.
+  const forwardedFor = requestHeaders.get('X-Forwarded-For')
+  if (forwardedFor) authHeaders['X-Forwarded-For'] = forwardedFor
   if (operationId) authHeaders['X-Dazah-Operation-ID'] = operationId
   if (pagePath) authHeaders['X-Dazah-Page-Path'] = pagePath
   const rawToken = rawCookie?.match(/(?:^|;\s*)auth_token=([^;]+)/)?.[1]

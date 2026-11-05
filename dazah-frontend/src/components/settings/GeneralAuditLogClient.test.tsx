@@ -2,7 +2,7 @@
 
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { App } from 'antd'
+import { App, ConfigProvider, theme } from 'antd'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const api = vi.hoisted(() => ({
@@ -111,6 +111,27 @@ describe('user operation audit tab', () => {
     expect(host.textContent).toContain('item_id=123')
     expect(host.textContent).toContain('质量管理')
     expect(host.textContent).toContain('2026-09-22')
+  })
+
+  it.each(['light', 'dark'])('labels anonymous security events without attributing them to the system (%s)', async (mode) => {
+    api.fetchGeneralAuditLogs.mockResolvedValue({
+      items: [{
+        id: 'anonymous-login', category: 'operations', action: 'platform_api_request',
+        operation: '本地账号登录', method: 'POST', status_code: 401,
+        path: '/api/v1/identity/auth/local/login', resource_type: 'identity',
+        actor_user_id: null, actor_name: null, actor_username: null,
+        summary: { audit_reason: 'security', actor_identified: false },
+        created_at: '2026-11-02T08:00:00Z',
+      }], page: 1, page_size: 20, total: 1,
+    })
+    await act(async () => root.render(createElement(ConfigProvider, {
+      theme: { algorithm: mode === 'dark' ? theme.darkAlgorithm : theme.defaultAlgorithm },
+    }, createElement(App, null, createElement(GeneralAuditLogClient, { category: 'operations' })))))
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)) })
+    expect(host.textContent).toContain('未识别用户')
+    expect(host.textContent).toContain('本地账号登录')
+    expect(host.textContent).toContain('401')
+    expect(host.textContent).toContain('关键业务操作、敏感数据访问和安全事件')
   })
 
   it('shows Chinese descriptions for recorded route names, including historical entries', async () => {

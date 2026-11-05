@@ -14,6 +14,11 @@ import { saveDirectReadings } from '@/actions/energy-ledger'
 import { EnergyEntryClient } from './EnergyEntryClient'
 let root: Root | undefined
 const data: DirectReading = { reading_date: '2026-10-20', dataset: '电量', items: [{ point_id: 'p1', name: '101车间电量', unit: 'kWh', precision: 3, value: null, draft_value: null, version: 0 }] }
+// 「本月初」快捷项按运行时的当前月份计算，测试期望值不能写死具体月份，否则每到下个月必挂
+const currentMonthStartLabel = () => {
+  const now = new Date()
+  return `${now.getFullYear()}年${String(now.getMonth() + 1).padStart(2, '0')}月01日`
+}
 afterEach(async () => { await act(async () => root?.unmount()); root = undefined; state.data = undefined; state.error = undefined; state.canOperate = true; vi.clearAllMocks(); vi.unstubAllGlobals(); document.body.replaceChildren() })
 async function render(dark = false) {
   const host = document.createElement('div'); document.body.append(host); root = createRoot(host)
@@ -105,7 +110,7 @@ it('discards inputs only after confirming a date change in the Ant Design modal'
   await act(async () => document.querySelector<HTMLInputElement>('[aria-label="数据日期"]')!.click())
   await click('本月初')
   await click('放弃并切换', document.querySelector('[role="dialog"]')!)
-  expect(document.querySelector<HTMLInputElement>('[aria-label="数据日期"]')?.value).toBe('2026年10月01日')
+  expect(document.querySelector<HTMLInputElement>('[aria-label="数据日期"]')?.value).toBe(currentMonthStartLabel())
   expect(document.querySelector<HTMLInputElement>('[aria-label="101车间电量本次填写"]')?.value).toBe('')
 })
 it('guards link navigation with a themed confirmation and continues only after approval', async () => {

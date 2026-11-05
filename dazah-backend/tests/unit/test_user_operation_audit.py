@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects import postgresql
 from starlette.background import BackgroundTask
 from starlette.responses import JSONResponse
+from uvicorn import Config
 
 from app.platform.audit import middleware as audit_middleware
 from app.platform.audit import retention
@@ -49,13 +50,62 @@ class FakeSession:
 
 
 @pytest.mark.asyncio
-async def test_user_api_requests_record_one_safe_row_each(monkeypatch: Any) -> None:
+@pytest.mark.parametrize(
+    ("peer", "forwarded_for", "expected_ip"),
+    [
+        ("172.19.0.4", "198.51.100.23", "198.51.100.23"),
+        ("172.19.0.4", "2001:db8::23", "2001:db8::23"),
+        ("172.19.0.4", "192.168.40.23", "192.168.40.23"),
+        ("172.19.0.4", "198.51.100.23, 172.19.0.2", "198.51.100.23"),
+        # Ignore forged entries to the left of the first untrusted peer.
+        ("172.19.0.4", "203.0.113.99, 198.51.100.23", "198.51.100.23"),
+        ("198.51.100.23", "203.0.113.99", "198.51.100.23"),
+        ("172.19.0.4", None, "172.19.0.4"),
+    ],
+)
+async def test_operation_audit_records_client_ip_through_trusted_proxies(
+    monkeypatch: pytest.MonkeyPatch,
+    peer: str,
+    forwarded_for: str | None,
+    expected_ip: str,
+) -> None:
+    session = FakeSession()
+    monkeypatch.setattr(audit_middleware, "async_session_factory", lambda: session)
+    # Exercise the same Uvicorn environment setting used by Compose.
+    monkeypatch.setenv("FORWARDED_ALLOW_IPS", "127.0.0.1,::1,172.16.0.0/12")
+    app = FastAPI()
+
+    @app.post("/api/v1/quality/items")
+    async def me(request: Request) -> dict[str, bool]:
+        request.state.audit_user_id = uuid.uuid4()
+        return {"ok": True}
+
+    app.add_middleware(AuditMiddleware)
+    config = Config(app, log_config=None)
+    config.load()
+    async with AsyncClient(
+        transport=ASGITransport(app=config.loaded_app, client=(peer, 12345)),
+        base_url="http://test",
+    ) as client:
+        response = await client.post(
+            "/api/v1/quality/items",
+            headers={"X-Forwarded-For": forwarded_for} if forwarded_for else {},
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
+    assert len(session.records) == 1
+    assert session.records[0].ip_address == expected_ip
+
+
+@pytest.mark.asyncio
+async def test_audited_api_requests_record_one_safe_row_each(monkeypatch: Any) -> None:
     actor_id = uuid.uuid4()
     session = FakeSession()
     monkeypatch.setattr(audit_middleware, "async_session_factory", lambda: session)
     app = FastAPI()
 
-    @app.get("/api/v1/quality/items/{item_id}", summary="查看质量记录")
+    @app.get("/api/v1/quality/items/{item_id}/export", summary="导出质量记录")
     async def read_item(request: Request, item_id: str) -> JSONResponse:
         request.state.audit_user_id = actor_id
         return JSONResponse({"id": item_id})
@@ -88,7 +138,8 @@ async def test_user_api_requests_record_one_safe_row_each(monkeypatch: Any) -> N
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
         await client.get(
-            "/api/v1/quality/items/item-123?token=secret&clientSecret=hidden&page=1&page=2"
+            "/api/v1/quality/items/item-123/export"
+            "?token=secret&clientSecret=hidden&page=1&page=2"
         )
         await client.post(
             "/api/v1/quality/items/item-123",
@@ -104,9 +155,11 @@ async def test_user_api_requests_record_one_safe_row_each(monkeypatch: Any) -> N
     assert {row.user_id for row in session.records} == {actor_id}
     assert all(row.action == OPERATION_ACTION for row in session.records)
     assert session.records[0].resource_type == "quality"
-    assert session.records[0].path == "/api/v1/quality/items/{item_id}"
+    assert session.records[0].path == "/api/v1/quality/items/{item_id}/export"
     assert session.records[0].extra == {
-        "operation": "查看质量记录",
+        "audit_reason": "sensitive_read",
+        "actor_identified": True,
+        "operation": "导出质量记录",
         "target": "item_id=item-123",
         "request": {
             "path_params": {"item_id": "item-123"},
@@ -232,7 +285,7 @@ async def test_audit_storage_failure_preserves_api_result(monkeypatch: Any) -> N
     monkeypatch.setattr(audit_middleware, "async_session_factory", lambda: session)
     app = FastAPI()
 
-    @app.get("/api/v1/audit/logs", summary="查询审计")
+    @app.post("/api/v1/quality/items", summary="更新记录")
     async def list_logs(request: Request) -> JSONResponse:
         request.state.audit_user_id = uuid.uuid4()
         return JSONResponse({"ok": True})
@@ -241,7 +294,7 @@ async def test_audit_storage_failure_preserves_api_result(monkeypatch: Any) -> N
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as client:
-        response = await client.get("/api/v1/audit/logs")
+        response = await client.post("/api/v1/quality/items")
     assert response.status_code == 200
     assert response.json() == {"ok": True}
     assert len(session.records) == 1

@@ -9,6 +9,7 @@ import type { User } from '@/types/user'
 import { getPostLoginPath } from '@/lib/menu-config'
 
 import { AuthLayout } from './AuthLayout'
+import { useWorkspaceEntryTransition } from './WorkspaceEntryTransition'
 import styles from './AuthLayout.module.css'
 
 interface AuthCompletionProps {
@@ -19,8 +20,7 @@ interface CurrentUserResponse {
   data?: User | null
 }
 
-const READY_DURATION_MS = 850
-const ENTER_DURATION_MS = 900
+const READY_DURATION_MS = 650
 const IDENTITY_TIMEOUT_MS = 10_000
 
 export type AuthCompletionState =
@@ -49,9 +49,10 @@ export function getAuthCompletionPresentation(
       }
     case 'entering':
       return {
-        title: '正在进入系统',
-        description: '工作台准备完成，即将为你打开。',
-        tone: 'primary',
+        title: '身份验证成功',
+        description: '正在为你打开工作台。',
+        tone: 'success',
+        symbol: '✓',
       }
     case 'error':
       return {
@@ -69,11 +70,29 @@ export function getAuthCompletionPresentation(
   }
 }
 
+function AuthCompletionStatus({ state, user }: { state: AuthCompletionState; user: User | null }) {
+  const presentation = getAuthCompletionPresentation(state)
+  return (
+    <>
+      <div className={styles.completionVisual} data-tone={presentation.tone} aria-hidden="true">
+        {presentation.symbol
+          ? <span className={styles.statusSymbol}>{presentation.symbol}</span>
+          : <span className={styles.statusSpinner} />}
+      </div>
+      <h2>{presentation.title}</h2>
+      <p className={styles.completionDescription}>{presentation.description}</p>
+      {(state === 'ready' || state === 'entering') && (user?.name || user?.username) && (
+        <span className={styles.identityName}>{user.name || user.username}</span>
+      )}
+    </>
+  )
+}
+
 export function AuthCompletion({ nextPath }: AuthCompletionProps) {
   const router = useRouter()
+  const beginWorkspaceEntry = useWorkspaceEntryTransition()
   const abortController = useRef<AbortController | null>(null)
   const readyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const enterTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [state, setState] = useState<AuthCompletionState>('checking')
   const [user, setUser] = useState<User | null>(null)
   const [failureMessage, setFailureMessage] = useState<string | null>(null)
@@ -81,7 +100,6 @@ export function AuthCompletion({ nextPath }: AuthCompletionProps) {
   const clearPendingWork = useCallback(() => {
     abortController.current?.abort()
     if (readyTimer.current) clearTimeout(readyTimer.current)
-    if (enterTimer.current) clearTimeout(enterTimer.current)
   }, [])
 
   const verifyIdentity = useCallback(async () => {
@@ -116,16 +134,23 @@ export function AuthCompletion({ nextPath }: AuthCompletionProps) {
         )
       }
 
-      setUser(payload.data)
-      const landingPath = getPostLoginPath(payload.data, nextPath)
+      const verifiedUser = payload.data
+      setUser(verifiedUser)
+      const landingPath = getPostLoginPath(verifiedUser, nextPath)
+      router.prefetch(landingPath)
       setState('ready')
       readyTimer.current = setTimeout(() => {
         setState('entering')
-        enterTimer.current = setTimeout(() => {
-          // Keep navigation independent of snapshot animations, which can be
-          // aborted when the authentication tab is hidden.
-          router.replace(landingPath)
-        }, ENTER_DURATION_MS)
+        beginWorkspaceEntry(landingPath, (
+          <AuthLayout footerText="企业身份认证 · 安全访问">
+            <div className={`${styles.completionCard} ${styles.completionSnapshot}`} data-state="entering">
+              <AuthCompletionStatus state="entering" user={verifiedUser} />
+            </div>
+          </AuthLayout>
+        ))
+        // Navigation does not depend on browser snapshot APIs or animation
+        // events; the retained authentication screen unveils on route commit.
+        router.replace(landingPath)
       }, READY_DURATION_MS)
     } catch (error) {
       if (controller.signal.aborted) return
@@ -138,7 +163,7 @@ export function AuthCompletion({ nextPath }: AuthCompletionProps) {
     } finally {
       clearTimeout(verificationTimeout)
     }
-  }, [clearPendingWork, nextPath, router])
+  }, [beginWorkspaceEntry, clearPendingWork, nextPath, router])
 
   useEffect(() => {
     const startTimer = window.setTimeout(() => {
@@ -155,38 +180,15 @@ export function AuthCompletion({ nextPath }: AuthCompletionProps) {
     router.replace(loginUrl)
   }
 
-  const presentation = getAuthCompletionPresentation(state)
-
   return (
     <AuthLayout footerText="企业身份认证 · 安全访问">
       <div
         className={styles.completionCard}
+        data-state={state}
         aria-live="polite"
         aria-atomic="true"
       >
-        <div
-          className={styles.completionVisual}
-          data-tone={presentation.tone}
-          aria-hidden="true"
-        >
-          {presentation.symbol ? (
-            <span className={styles.statusSymbol}>{presentation.symbol}</span>
-          ) : (
-            <span className={styles.statusSpinner} />
-          )}
-        </div>
-
-        <h2>{presentation.title}</h2>
-        <p className={styles.completionDescription}>
-          {presentation.description}
-        </p>
-
-        {(state === 'ready' || state === 'entering') &&
-          (user?.name || user?.username) && (
-            <span className={styles.identityName}>
-              {user.name || user.username}
-            </span>
-          )}
+        <AuthCompletionStatus state={state} user={user} />
 
         {failureMessage && (
           <PlatformNotice type="error" className={styles.completionError} title={<>{failureMessage}</>} />

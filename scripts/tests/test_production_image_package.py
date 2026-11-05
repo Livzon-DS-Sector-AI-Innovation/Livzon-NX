@@ -125,9 +125,9 @@ def test_release_exports_exactly_the_images_built_for_this_version(tmp_path: Pat
     assert exports == [["save", *images, "-o", str(archive)]]
     assert calls.index(bake) < calls.index(exports[0])
     digest = hashlib.sha256(archive.read_bytes()).hexdigest()
-    assert archive.with_suffix(".tar.sha256").read_text() == f"{digest}  {archive.name}"
+    assert archive.with_suffix(".tar.sha256").read_text(encoding="utf-8") == f"{digest}  {archive.name}"
     assert (release / "compose.yml").read_bytes() == (ROOT / "compose.yml").read_bytes()
-    assert "__PUBLIC_HOST__" not in (release / "nginx.default.conf").read_text()
+    assert "__PUBLIC_HOST__" not in (release / "nginx.default.conf").read_text(encoding="utf-8")
     assert (release / "deploy-production.sh").is_file()
 
 

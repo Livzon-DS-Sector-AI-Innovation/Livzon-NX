@@ -23,6 +23,10 @@ install_dependencies() {
 
 run_quality() {
   install_dependencies
+  run_quality_checks
+}
+
+run_quality_checks() {
   echo "== Page authorization lifecycle =="
   uv run --no-sync python "${repository_dir}/scripts/check-page-permission-lifecycle.py"
   echo "== AgentBackend V2 residual scan =="
@@ -40,6 +44,12 @@ run_quality() {
 
 run_integration() {
   install_dependencies
+  prepare_integration
+  run_integration_tests
+  run_coverage
+}
+
+prepare_integration() {
   bash "${repository_dir}/scripts/wait-for-database.sh"
 
   echo "== Verify one Alembic head =="
@@ -59,6 +69,9 @@ run_integration() {
   echo "== Stable OpenAPI contract check =="
   uv run --no-sync python scripts/export_openapi.py
   git diff --exit-code -- openapi.json
+}
+
+run_integration_tests() {
   echo "== Backend database and API integration tests =="
   uv run --no-sync pytest \
     -p no:anyio \
@@ -68,6 +81,9 @@ run_integration() {
     --cov-report=xml \
     --junitxml=.pytest_cache/backend-integration-junit.xml \
     -ra
+}
+
+run_coverage() {
   echo "== Backend line and branch coverage floors =="
   uv run --no-sync python "${repository_dir}/scripts/check-coverage-floor.py" \
     --coverage-file coverage.xml \
@@ -106,13 +122,17 @@ run_security() {
 }
 
 usage() {
-  echo "Usage: $0 {quality|integration|container|security|all}" >&2
+  echo "Usage: $0 {quality|quality-checks|integration|prepare-integration|integration-tests|coverage|container|security|all}" >&2
   exit 2
 }
 
 case "${1:-}" in
   quality) run_quality ;;
+  quality-checks) run_quality_checks ;;
   integration) run_integration ;;
+  prepare-integration) prepare_integration ;;
+  integration-tests) run_integration_tests ;;
+  coverage) run_coverage ;;
   container) run_container ;;
   security) run_security ;;
   all)
