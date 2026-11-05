@@ -1,8 +1,9 @@
 """方案C：备件采购建议 + 维修成本核算 测试."""
 
 from datetime import UTC, datetime, timedelta
-from httpx import AsyncClient
+
 import pytest
+from httpx import AsyncClient
 from sqlalchemy import select as _sel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,14 +14,12 @@ from app.modules.equipment.models import (
     EquipmentPersonnel,
     EquipmentRole,
     Location,
-    MaintenanceLaborRate,
     SparePart,
-    SparePartStock,
     SparePartPurchaseSuggestion,
+    SparePartStock,
     WorkOrder,
 )
 from app.modules.equipment.schemas import (
-    StockInboundRequest,
     WorkOrderComplete,
     WorkOrderCreate,
 )
@@ -289,6 +288,8 @@ async def test_labor_rate_crud_and_resolution(
 
     from app.modules.equipment.service import (
         delete_labor_rate as del_rate,
+    )
+    from app.modules.equipment.service import (
         update_labor_rate,
     )
 
@@ -508,7 +509,6 @@ async def test_consume_materials_decimal_price_regression(
     """
     from decimal import Decimal
 
-    from app.modules.equipment.schemas import MaterialConsumeRequest
     from app.modules.equipment.service import consume_materials
 
     part = SparePart(

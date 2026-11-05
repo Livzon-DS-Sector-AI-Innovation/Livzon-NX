@@ -34,6 +34,7 @@ vi.mock('@/actions/equipment', () => ({
 
 import { WorkOrderDetailDrawer } from './WorkOrderDetailDrawer'
 import { useEquipmentStore } from '@/stores/equipment'
+import type { WorkOrder } from '@/types/equipment'
 
 const baseWo = {
   id: 'wo-1',
@@ -104,7 +105,7 @@ describe('WorkOrderDetailDrawer 转派（方案E）', () => {
   function openDrawer(overrides: Record<string, unknown> = {}) {
     useEquipmentStore.setState({
       workOrderDetailOpen: true,
-      viewingWorkOrder: { ...baseWo, ...overrides },
+      viewingWorkOrder: { ...baseWo, ...overrides } as WorkOrder,
     })
     act(() => {
       root.render(
