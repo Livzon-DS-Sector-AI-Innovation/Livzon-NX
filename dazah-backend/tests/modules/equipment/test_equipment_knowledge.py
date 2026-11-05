@@ -312,7 +312,9 @@ async def test_monthly_report_fallback_without_llm(
             raise LLMError("no llm config")
 
     # 不触碰 llm 单例（anyio 测试间 teardown 交错会跨模块泄漏）
-    monkeypatch.setattr("app.core.llm.llm_client", SimpleNamespace(chat=_FailChat().chat))
+    monkeypatch.setattr(
+        "app.core.llm.llm_client", SimpleNamespace(chat=_FailChat().chat)
+    )
 
     month = f"{datetime.now(UTC).year}-01"
     report = await generate_monthly_report(db_session, month)

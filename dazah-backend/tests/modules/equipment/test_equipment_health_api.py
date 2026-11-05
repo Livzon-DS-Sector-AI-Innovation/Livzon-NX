@@ -223,7 +223,9 @@ async def test_monthly_report_generate_and_fetch(
         async def chat(self, *a: object, **k: object) -> str:
             raise RuntimeError("llm unavailable in test")
 
-    monkeypatch.setattr("app.core.llm.llm_client", SimpleNamespace(chat=_FailChat().chat))
+    monkeypatch.setattr(
+        "app.core.llm.llm_client", SimpleNamespace(chat=_FailChat().chat)
+    )
 
     month = "2026-01"
     resp = await client.post(
