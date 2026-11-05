@@ -72,7 +72,10 @@ def upgrade() -> None:
                 nullable=True,
                 comment='操作人（空=系统）',
             ),
-            sa.Column('operator_name', sa.String(100), nullable=True, comment='操作人姓名'),
+            sa.Column(
+                'operator_name', sa.String(100), nullable=True,
+                comment='操作人姓名',
+            ),
             sa.Column(
                 'source',
                 sa.String(20),

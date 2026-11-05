@@ -59,7 +59,9 @@ def upgrade() -> None:
                 nullable=False,
                 comment='备件ID',
             ),
-            sa.Column('current_qty', sa.Integer(), nullable=False, comment='生成时库存'),
+            sa.Column(
+                'current_qty', sa.Integer(), nullable=False, comment='生成时库存'
+            ),
             sa.Column('safety_qty', sa.Integer(), nullable=False, comment='安全线'),
             sa.Column(
                 'suggest_qty', sa.Integer(), nullable=False, comment='建议采购数量'
