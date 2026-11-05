@@ -127,9 +127,9 @@ def test_single_head_retains_the_safety_reminder_history() -> None:
     cfg.set_main_option("script_location", str(_VERSIONS.parent))
     script = ScriptDirectory.from_config(cfg)
     heads = script.get_heads()
-    # 单 head 链：主线（…→ b8d2f4a6c0e9 → b2e9d4f7a6c3 → b9e4f7a2c5d1）
-    # + 车间维修群链（da5f78a06d60 → ada9041499a5）→ 合并点 9af3c6bb8778
-    assert heads == ["9af3c6bb8778"], f"迁移必须保持单 head，当前: {heads}"
+    # 单 head 链：主线（…→ 9af3c6bb8778 合并点 → 后续业务迁移）
+    # 断言结构性条件而非写死具体 head，正常业务迁移前进不破坏本测试
+    assert len(heads) == 1, f"迁移必须保持单 head，当前: {heads}"
     history = {
         revision.revision for revision in script.walk_revisions(head=heads[0])
     }

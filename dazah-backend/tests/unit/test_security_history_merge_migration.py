@@ -17,8 +17,10 @@ def test_merge_preserves_both_histories_and_runs_no_database_operations(monkeypa
     config = Config(str(root / "alembic.ini"))
     config.set_main_option("script_location", str(root / "alembic"))
     script = ScriptDirectory.from_config(config)
-    # 9af3c6bb8778：车间维修群链（ada9041499a5）与主线危化品/MSDS 链的合并点（单 head）
-    assert script.get_heads() == ["9af3c6bb8778"]
+    # 9af3c6bb8778：车间维修群链与主线危化品/MSDS 链的合并点；
+    # 单 head 且该合并点保留在链上（后续业务迁移正常前进不破坏本测试）
+    heads = script.get_heads()
+    assert len(heads) == 1, f"迁移必须保持单 head，当前: {heads}"
     merge = script.get_revision("9af3c6bb8778")
     assert merge is not None
     # 合并点接住车间维修群链（ada9041499a5）与主线危化品/MSDS 链（b9e4f7a2c5d1）
@@ -66,5 +68,8 @@ def test_reviewed_plan_includes_the_other_branch_like_alembic_upgrade(monkeypatc
         assert plan.pending_revisions == tuple(
             step.revision.revision for step in actual
         )
-        assert plan.pending_revisions[-1] == "9af3c6bb8778"
+        # 终点应为当前唯一 head（合并点及其后迁移都可能在 pending 中）
+        heads = script.get_heads()
+        assert len(heads) == 1
+        assert plan.pending_revisions[-1] == heads[0]
         assert len(plan.pending_revisions) > 1

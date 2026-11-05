@@ -299,17 +299,20 @@ async def test_monthly_report_fallback_without_llm(
     db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """LLM 失败时报告仍生成（模板回落文本）。"""
+    from types import SimpleNamespace as _NS
+
     from app.core.llm import LLMError
-    from app.core.llm import llm_client as real_client
     from app.modules.equipment.service import (
         generate_monthly_report,
         get_monthly_report,
     )
 
-    async def _fail_chat(*args: object, **kwargs: object) -> str:
-        raise LLMError("no llm config")
+    class _FailChat:
+        async def chat(self, *a: object, **k: object) -> str:
+            raise LLMError("no llm config")
 
-    monkeypatch.setattr(real_client, "chat", _fail_chat)
+    # 不触碰 llm 单例（anyio 测试间 teardown 交错会跨模块泄漏）
+    monkeypatch.setattr("app.core.llm.llm_client", _NS(chat=_FailChat().chat))
 
     month = f"{datetime.now(UTC).year}-01"
     report = await generate_monthly_report(db_session, month)
@@ -329,13 +332,14 @@ async def test_monthly_report_fallback_without_llm(
 async def test_monthly_report_llm_narrative(
     db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from app.core.llm import llm_client as real_client
+    from types import SimpleNamespace as _NS
+
     from app.modules.equipment.service import generate_monthly_report
 
     async def _ok_chat(*args: object, **kwargs: object) -> str:
         return "## 总体情况\n\n本月运行平稳。"
 
-    monkeypatch.setattr(real_client, "chat", _ok_chat)
+    monkeypatch.setattr("app.core.llm.llm_client", _NS(chat=_ok_chat))
 
     month = f"{datetime.now(UTC).year}-02"
     report = await generate_monthly_report(db_session, month)

@@ -214,12 +214,16 @@ async def test_knowledge_case_not_found(client: AsyncClient) -> None:
 async def test_monthly_report_generate_and_fetch(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from app.core.llm import llm_client as real_client
+    # 不触碰 llm 单例：替换 app.core.llm 模块名下的 llm_client（函数
+    # 体内局部 import 每次取该名字）。anyio 测试间对单例方法打补丁存在
+    # teardown 交错残留，会连锁影响 hr/quality 的 LLM mock。
+    from types import SimpleNamespace as _NS
 
-    async def _fallback_chat(*args: object, **kwargs: object) -> str:
-        raise RuntimeError("llm unavailable in test")
+    class _FailChat:
+        async def chat(self, *a: object, **k: object) -> str:
+            raise RuntimeError("llm unavailable in test")
 
-    monkeypatch.setattr(real_client, "chat", _fallback_chat)
+    monkeypatch.setattr("app.core.llm.llm_client", _NS(chat=_FailChat().chat))
 
     month = "2026-01"
     resp = await client.post(
