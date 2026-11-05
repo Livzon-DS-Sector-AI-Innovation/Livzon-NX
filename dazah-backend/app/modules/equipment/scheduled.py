@@ -85,3 +85,77 @@ class SparePartHardwareSyncGenerator(TaskGenerator):
         results = await spare_part_sync.sync_all(session)
         await session.commit()
         logger.info("spare part hardware sync: %s", results)
+
+
+class EquipmentHealthSnapshotGenerator(TaskGenerator):
+    """每天 03:30 生成设备健康快照并执行预警检查（跳变通知/重复故障建单）。"""
+
+    name = "equipment.health_snapshot"
+    schedule = ScheduleConfig(
+        strategy=ScheduleStrategy.FIXED_TIME,
+        time_of_day="03:30",
+        timezone="Asia/Shanghai",
+    )
+
+    async def find_due(self, session: AsyncSession) -> list[Any]:
+        return ["all"]
+
+    async def execute_one(self, session: AsyncSession, item: Any) -> None:
+        from app.modules.equipment.service.health import generate_daily_snapshots
+
+        stats = await generate_daily_snapshots(session)
+        await session.commit()
+        logger.info("equipment health snapshot: %s", stats)
+
+
+class EquipmentMonthlyHealthReportGenerator(TaskGenerator):
+    """每月 1 日 08:00 生成上月设备健康报告（SQL 聚合 + LLM 叙述）。"""
+
+    name = "equipment.monthly_health_report"
+    schedule = ScheduleConfig(
+        strategy=ScheduleStrategy.CRON,
+        expression="0 8 1 * *",
+        timezone="Asia/Shanghai",
+    )
+
+    async def find_due(self, session: AsyncSession) -> list[Any]:
+        from app.modules.equipment.service.monthly_report import previous_month
+
+        return [previous_month()]
+
+    async def execute_one(self, session: AsyncSession, item: Any) -> None:
+        from app.modules.equipment.service.monthly_report import (
+            generate_monthly_report,
+        )
+
+        report_month = str(item)
+        report = await generate_monthly_report(session, report_month)
+        await session.commit()
+        logger.info(
+            "equipment monthly health report generated: %s", report.report_month
+        )
+
+
+class SparePartPurchaseScanGenerator(TaskGenerator):
+    """每天 07:30 扫描备件安全线，生成/更新采购建议。"""
+
+    name = "equipment.spare_part_purchase_scan"
+    schedule = ScheduleConfig(
+        strategy=ScheduleStrategy.FIXED_TIME,
+        time_of_day="07:30",
+        timezone="Asia/Shanghai",
+    )
+
+    async def find_due(self, session: AsyncSession) -> list[Any]:
+        return ["all"]
+
+    async def execute_one(self, session: AsyncSession, item: Any) -> None:
+        from app.modules.equipment.service.purchase_suggestion import (
+            notify_low_stock_summary,
+            scan_and_suggest,
+        )
+
+        stats = await scan_and_suggest(session)
+        await notify_low_stock_summary(session)
+        await session.commit()
+        logger.info("spare part purchase scan: %s", stats)

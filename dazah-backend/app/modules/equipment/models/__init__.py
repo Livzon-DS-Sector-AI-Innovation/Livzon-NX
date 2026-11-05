@@ -19,6 +19,11 @@ from app.modules.equipment.models.failure_code import (
     FailureSymptom,
 )
 from app.modules.equipment.models.feishu_app import EquipmentFeishuApp
+from app.modules.equipment.models.health import (
+    EquipmentHealthSnapshot,
+    EquipmentMonthlyReport,
+    RepairProfile,
+)
 from app.modules.equipment.models.inspection import (
     InspectionPhoto,
     InspectionTask,
@@ -36,6 +41,8 @@ from app.modules.equipment.models.inspection_template import (
     InspectionTemplate,
     InspectionTemplateItem,
 )
+from app.modules.equipment.models.knowledge import RepairKnowledgeCase
+from app.modules.equipment.models.labor_rate import MaintenanceLaborRate
 from app.modules.equipment.models.maintenance_config import MaintenanceConfig
 from app.modules.equipment.models.maintenance_plan import MaintenancePlan
 from app.modules.equipment.models.personnel import (
@@ -44,6 +51,9 @@ from app.modules.equipment.models.personnel import (
     EquipmentPersonnelRole,
     EquipmentRole,
 )
+from app.modules.equipment.models.purchase_suggestion import (
+    SparePartPurchaseSuggestion,
+)
 from app.modules.equipment.models.spare_part import (
     EquipmentSparePart,
     SparePart,
@@ -51,6 +61,7 @@ from app.modules.equipment.models.spare_part import (
     SparePartTransaction,
 )
 from app.modules.equipment.models.work_order import WorkOrder
+from app.modules.equipment.models.work_order_event import WorkOrderEvent
 from app.modules.equipment.models.work_order_image import WorkOrderImage
 from app.modules.equipment.models.workshop import EquipmentWorkshop
 
@@ -61,7 +72,9 @@ __all__ = [
     "EquipmentCategory",
     "EquipmentCategoryLink",
     "EquipmentFeishuApp",
+    "EquipmentHealthSnapshot",
     "EquipmentLedgerArchive",
+    "EquipmentMonthlyReport",
     "EquipmentPersonnel",
     "EquipmentPersonnelCategory",
     "EquipmentPersonnelRole",
@@ -82,10 +95,15 @@ __all__ = [
     "MaintenancePlan",
     "EquipmentSparePart",
     "EquipmentWorkshop",
+    "RepairKnowledgeCase",
+    "RepairProfile",
     "SparePart",
     "SparePartStock",
     "SparePartTransaction",
     "MaintenanceConfig",
+    "MaintenanceLaborRate",
+    "SparePartPurchaseSuggestion",
     "WorkOrder",
+    "WorkOrderEvent",
     "WorkOrderImage",
 ]

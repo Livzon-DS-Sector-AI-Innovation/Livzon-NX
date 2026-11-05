@@ -2,11 +2,11 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { App, Drawer, Descriptions, Table, Tabs, Tag, Space, Empty, Spin } from 'antd'
-import { ToolOutlined, SearchOutlined, CalendarOutlined } from '@ant-design/icons'
+import { ToolOutlined, SearchOutlined, CalendarOutlined, HeartOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
-import type { Equipment, MaintenancePlan, WorkOrder } from '@/types/equipment'
+import type { Equipment, MaintenancePlan, WorkOrder, EquipmentHealth, RepairProfile, HealthGrade } from '@/types/equipment'
 import type { InspectionFeishuRecord } from '@/types/inspection-feishu'
-import { fetchMaintenancePlansClient, fetchWorkOrdersClient } from '@/lib/api/equipment-client'
+import { fetchMaintenancePlansClient, fetchWorkOrdersClient, fetchEquipmentHealthClient, fetchRepairProfileClient } from '@/lib/api/equipment-client'
 import { fetchInspectionFeishuRecords } from '@/lib/api/inspection-feishu'
 import { monoFont, pillNeutral, pillSuccess, pillWarning, pillError, pillInfo, pillPurple, statusPill } from '@/components/equipment/shared-styles'
 import type { EquipmentStatus, EquipmentImportance } from '@/types/equipment'
@@ -58,9 +58,15 @@ const IMPORTANCE_MAP: Record<EquipmentImportance, React.CSSProperties> = {
   '低': pillNeutral,
 }
 
+const HEALTH_GRADE_MAP: Record<HealthGrade, { label: string; style: React.CSSProperties }> = {
+  G: { label: '绿档', style: statusPill('#1aae39', '#d9f3e1') },
+  Y: { label: '黄档', style: statusPill('#dd5b00', '#ffe8d4') },
+  R: { label: '红档', style: statusPill('#e03131', '#fde0ec') },
+}
+
 export function EquipmentDetailDrawer({ open, equipment, categoryName, locationName, onClose }: EquipmentDetailDrawerProps) {
   const { message } = App.useApp()
-  const [activeTab, setActiveTab] = useState<'plans' | 'history' | 'orders'>('plans')
+  const [activeTab, setActiveTab] = useState<'plans' | 'history' | 'orders' | 'health'>('plans')
 
   // 维护保养计划
   const [plans, setPlans] = useState<MaintenancePlan[]>([])
@@ -73,6 +79,11 @@ export function EquipmentDetailDrawer({ open, equipment, categoryName, locationN
   // 维修工单
   const [orders, setOrders] = useState<WorkOrder[]>([])
   const [ordersLoading, setOrdersLoading] = useState(false)
+
+  // 健康档案
+  const [health, setHealth] = useState<EquipmentHealth | null>(null)
+  const [profile, setProfile] = useState<RepairProfile | null>(null)
+  const [healthLoading, setHealthLoading] = useState(false)
 
   const loadPlans = useCallback(async () => {
     if (!equipment) return
@@ -118,14 +129,27 @@ export function EquipmentDetailDrawer({ open, equipment, categoryName, locationN
     }
   }, [equipment, message])
 
+  // 健康档案：所有 setState 都在首个 await 之后（避免 effect 内同步 setState）
+  const loadHealth = useCallback(async () => {
+    if (!equipment) return
+    const [h, p] = await Promise.all([
+      fetchEquipmentHealthClient(equipment.id).catch(() => null),
+      fetchRepairProfileClient(equipment.id).catch(() => null),
+    ])
+    setHealth(h)
+    setProfile(p)
+    setHealthLoading(false)
+  }, [equipment])
+
   useEffect(() => {
     if (open && equipment) {
       loadPlans()
       loadHistory()
       loadOrders()
+      loadHealth()
       setActiveTab('plans')
     }
-  }, [open, equipment, loadPlans, loadHistory, loadOrders])
+  }, [open, equipment, loadPlans, loadHistory, loadOrders, loadHealth])
 
   // ── 维护保养计划列 ──
   const planColumns: ColumnsType<MaintenancePlan> = [
@@ -219,6 +243,100 @@ export function EquipmentDetailDrawer({ open, equipment, categoryName, locationN
     { title: '报修时间', dataIndex: 'reported_at', key: 'reported_at', width: 100, render: (d: string) => d?.slice(0, 10) || '-' },
   ]
 
+  // ── 健康档案内容 ──
+  const latestSnapshot = health?.latest ?? null
+  const latestMetrics = (latestSnapshot?.metrics ?? null) as Record<string, number | null> | null
+  const healthTab = (
+    <Spin spinning={healthLoading}>
+      {!latestSnapshot && !profile ? (
+        <Empty description="暂无健康快照（每日 03:30 自动生成）" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {latestSnapshot && (
+            <div>
+              <h4 style={{ fontSize: 13, fontWeight: 600, margin: '0 0 8px 0' }}>健康评分</h4>
+              <Space size={12} align="center" wrap>
+                <span style={{ fontSize: 26, fontWeight: 700, lineHeight: 1 }}>
+                  {Math.round(latestSnapshot.score)}
+                </span>
+                <span style={HEALTH_GRADE_MAP[latestSnapshot.grade]?.style ?? pillNeutral}>
+                  {HEALTH_GRADE_MAP[latestSnapshot.grade]?.label ?? latestSnapshot.grade}
+                </span>
+                <span style={{ color: '#8a867d', fontSize: 12 }}>
+                  快照日期 {latestSnapshot.snapshot_date}
+                </span>
+              </Space>
+              <Descriptions
+                bordered
+                size="small"
+                column={3}
+                style={{ marginTop: 12 }}
+                styles={{ label: { fontWeight: 500, width: 110 } }}
+              >
+                <Descriptions.Item label="近90天故障">
+                  {latestMetrics?.fault_count_90d ?? '-'} 次
+                </Descriptions.Item>
+                <Descriptions.Item label="平均修复时长">
+                  {latestMetrics?.mttr_min_90d != null ? `${latestMetrics.mttr_min_90d} 分钟` : '暂无'}
+                </Descriptions.Item>
+                <Descriptions.Item label="重复故障(90天)">
+                  {latestMetrics?.max_repeat_fault_90d ?? 0} 次
+                </Descriptions.Item>
+                <Descriptions.Item label="超期保养">
+                  <span style={{ color: (latestMetrics?.overdue_maintenance_count ?? 0) > 0 ? '#c0392b' : undefined }}>
+                    {latestMetrics?.overdue_maintenance_count ?? 0} 项
+                  </span>
+                </Descriptions.Item>
+                <Descriptions.Item label="超期校准">
+                  <span style={{ color: (latestMetrics?.overdue_calibration_count ?? 0) > 0 ? '#c0392b' : undefined }}>
+                    {latestMetrics?.overdue_calibration_count ?? 0} 项
+                  </span>
+                </Descriptions.Item>
+                <Descriptions.Item label="趋势">
+                  {(health?.snapshots ?? []).length > 1
+                    ? health!.snapshots.slice(-7).map((s) => Math.round(s.score)).join(' → ')
+                    : '首个快照'}
+                </Descriptions.Item>
+              </Descriptions>
+            </div>
+          )}
+          {profile && (
+            <div>
+              <h4 style={{ fontSize: 13, fontWeight: 600, margin: '0 0 8px 0' }}>维修病历</h4>
+              <Descriptions bordered size="small" column={3} styles={{ label: { fontWeight: 500, width: 110 } }}>
+                <Descriptions.Item label="累计工单">{profile.total_orders} 单</Descriptions.Item>
+                <Descriptions.Item label="累计故障维修">{profile.total_faults} 次</Descriptions.Item>
+                <Descriptions.Item label="累计维修用时">
+                  {Math.round(profile.total_downtime_min / 60)} 小时
+                </Descriptions.Item>
+                <Descriptions.Item label="累计备件费用">
+                  ¥{Number(profile.total_spare_cost ?? 0).toLocaleString()}
+                </Descriptions.Item>
+                <Descriptions.Item label="平均故障间隔">
+                  {profile.mtbf_days != null ? `${profile.mtbf_days} 天` : '暂无'}
+                </Descriptions.Item>
+                <Descriptions.Item label="病历更新">
+                  {profile.updated_at?.slice(0, 10) ?? '-'}
+                </Descriptions.Item>
+              </Descriptions>
+              {(profile.last_3_faults ?? []).length > 0 && (
+                <div style={{ marginTop: 8 }}>
+                  {profile!.last_3_faults!.map((f) => (
+                    <div key={f.work_order_no} style={{ fontSize: 12, color: '#5d5b54', padding: '2px 0' }}>
+                      <span style={monoFont}>{f.work_order_no}</span>
+                      {f.reported_at ? ` · ${f.reported_at.slice(0, 10)}` : ''}
+                      {f.symptom ? ` · ${f.symptom}` : ''}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </Spin>
+  )
+
   const tabItems = [
     {
       key: 'plans' as const,
@@ -258,6 +376,11 @@ export function EquipmentDetailDrawer({ open, equipment, categoryName, locationN
           )}
         </Spin>
       ),
+    },
+    {
+      key: 'health' as const,
+      label: <span><HeartOutlined /> 健康档案</span>,
+      children: healthTab,
     },
   ]
 
@@ -321,7 +444,7 @@ export function EquipmentDetailDrawer({ open, equipment, categoryName, locationN
         <h3 style={{ fontSize: 15, fontWeight: 600, color: '#1a1a1a', margin: '0 0 16px 0' }}>关联记录</h3>
         <Tabs
           activeKey={activeTab}
-          onChange={(k) => setActiveTab(k as 'plans' | 'history' | 'orders')}
+          onChange={(k) => setActiveTab(k as 'plans' | 'history' | 'orders' | 'health')}
           items={tabItems}
         />
       </div>

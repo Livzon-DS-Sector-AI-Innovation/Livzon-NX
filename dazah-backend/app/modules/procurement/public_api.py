@@ -64,3 +64,64 @@ async def aggregate_supplier_analytics(
 ) -> dict[str, Any]:
     """Aggregate supplier master data under the executor's trusted page context."""
     return await aggregate_analytics(db, data)
+
+
+async def create_equipment_purchase_request(
+    db: AsyncSession,
+    *,
+    items: list[dict[str, Any]],
+    request_department: str = "设备动力部",
+    attachment_note: str = "设备模块备件安全线预警自动生成",
+) -> dict[str, Any]:
+    """设备模块备件采购入口：按明细创建「五金」类草稿采购申请单。
+
+    契约说明（设备 → 采购）：
+    - 只创建草稿单，审批、供应商、下单全流程留在采购模块；
+    - items 字段：product_name/specification/material_code/quantity/
+      unit/unit_price/remarks（缺省字段按采购 Schema 默认值补齐）；
+    - 返回 {request_id, total_amount, status}，调用方负责回填追溯。
+    """
+    from datetime import date as _date
+    from decimal import Decimal as _Decimal
+
+    from app.modules.procurement.schemas import (
+        PurchaseRequestCategory,
+        PurchaseRequestCreate,
+        PurchaseRequestItemInput,
+    )
+    from app.modules.procurement.service import create_purchase_request
+
+    parsed = [
+        PurchaseRequestItemInput(
+            product_name=str(i.get("product_name", "")),
+            specification=str(i.get("specification", "")),
+            material_code=str(i.get("material_code", "")),
+            # 采购侧校验物料说明必填：缺省时用「名称 规格」补齐，避免明细被拒
+            material_description=str(
+                i.get("material_description")
+                or " ".join(
+                    x for x in (i.get("product_name"), i.get("specification")) if x
+                )
+            ),
+            quantity=_Decimal(str(i.get("quantity", 0))),
+            unit=str(i.get("unit", "")),
+            unit_price=_Decimal(str(i.get("unit_price", 0))),
+            remarks=str(i.get("remarks", "")),
+        )
+        for i in items
+    ]
+    response = await create_purchase_request(
+        db,
+        PurchaseRequestCreate(
+            category=PurchaseRequestCategory.hardware,
+            request_department=request_department,
+            request_date=_date.today(),
+            attachment_note=attachment_note,
+            items=parsed,
+        ),
+    )
+    return {
+        "request_id": str(response.id),
+        "total_amount": float(response.total_amount),
+        "status": response.status,
+    }

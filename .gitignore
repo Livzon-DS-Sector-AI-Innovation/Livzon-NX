@@ -24,6 +24,7 @@ desktop.ini
 /docs/*
 !/docs/module-development-ci.md
 !/docs/business-module-boundaries.md
+!/docs/equipment-procurement-purchase-contract.md
 !/docs/module-migration-audit.md
 !/docs/dazah-enterprise-agent-gateway-tool-registry-implementation-plan-2026-07-30.md
 !/docs/livzon-platform-completion-plan-2026-10-09.md

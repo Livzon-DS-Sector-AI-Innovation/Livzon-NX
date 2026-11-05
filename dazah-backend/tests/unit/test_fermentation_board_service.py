@@ -1960,3 +1960,47 @@ async def test_build_mp_board_mc_actual_times() -> None:
     assert a302["cultured_hours"] == pytest.approx(160.5)
     # KPI 不动
     assert payload["kpis"]["running"] == 1
+
+
+# ── DR 块标题列位置回归（2026-11-04 真实排产事故） ──
+# 个别月份块标题合并锚点从 B 列开始（存档后值在第 1 列），只查 row[0]
+# 会漏块，导致看板判定"当前周期无存档覆盖"，概览不更新。
+
+
+def _dr_rows_title_at_col(title_col: int):
+    """构造 DR 排产行：标题在指定列，日期行 1..5 日。"""
+    title_row = [""] * 4
+    title_row[title_col] = "102车间2026年11月份多拉计划（10.08）"
+    date_row = ["日期", 1, 2, 3, 4, 5]
+    return [title_row, date_row]
+
+
+def test_find_dr_period_block_title_in_first_column():
+    from datetime import datetime
+
+    from app.modules.production.fermentation_board_service import (
+        find_dr_period_block,
+    )
+
+    rows = _dr_rows_title_at_col(0)
+    block = find_dr_period_block(rows, datetime(2026, 11, 4, 12, 0))
+    assert block is not None
+    assert block["label"] == "10月27日～11月26日"
+
+
+def test_find_dr_period_block_title_in_second_column_regression():
+    from datetime import datetime
+
+    from app.modules.production.fermentation_board_service import (
+        find_dr_period_block,
+    )
+
+    # 事故形态：11 月块标题落在第 1 列（合并锚点 B 列）
+    rows = _dr_rows_title_at_col(1)
+    block = find_dr_period_block(rows, datetime(2026, 11, 4, 12, 0))
+    assert block is not None, "标题在第 1 列的月份块必须能被识别"
+    assert block["start_row"] == 0
+    # 12 月标题在第 3 列也应命中
+    rows2 = [["", "", "", "102车间2026年12月份多拉计划（10.08）"]]
+    block2 = find_dr_period_block(rows2, datetime(2026, 12, 10, 12, 0))
+    assert block2 is not None

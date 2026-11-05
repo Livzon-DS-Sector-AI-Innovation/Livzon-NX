@@ -2203,6 +2203,142 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/equipment/health/board": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 健康度榜单（按车间/分档筛选） */
+        get: operations["get_board_api_v1_equipment_health_board_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/health/equipment/{equipment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 设备健康档案（最新快照+趋势） */
+        get: operations["get_equipment_health_api_v1_equipment_health_equipment__equipment_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/health/monthly-reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 月度报告列表 */
+        get: operations["list_reports_api_v1_equipment_health_monthly_reports_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/health/monthly-reports/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 生成/重新生成指定月份报告 */
+        post: operations["generate_report_api_v1_equipment_health_monthly_reports_generate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/health/monthly-reports/{report_month}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查看指定月份报告 */
+        get: operations["get_report_api_v1_equipment_health_monthly_reports__report_month__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/health/repair-profile/{equipment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 设备维修病历（聚合档案） */
+        get: operations["get_profile_api_v1_equipment_health_repair_profile__equipment_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/health/repair-profile/{equipment_id}/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 手动刷新设备维修病历 */
+        post: operations["refresh_profile_api_v1_equipment_health_repair_profile__equipment_id__refresh_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/health/snapshots/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 手动触发健康快照（管理调试用） */
+        post: operations["run_snapshots_api_v1_equipment_health_snapshots_run_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/equipment/inspection/feishu/apps": {
         parameters: {
             query?: never;
@@ -2828,6 +2964,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/equipment/maintenance/work-orders/cost-report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 维修成本报表 */
+        get: operations["cost_report_api_v1_equipment_maintenance_work_orders_cost_report_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/equipment/maintenance/work-orders/efficiency": {
         parameters: {
             query?: never;
@@ -2957,6 +3110,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/equipment/maintenance/work-orders/{work_order_id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 工单事件时间线（方案E） */
+        get: operations["get_work_order_events_api_v1_equipment_maintenance_work_orders__work_order_id__events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/maintenance/work-orders/{work_order_id}/external-cost": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 补录外委费用 */
+        put: operations["set_external_cost_api_v1_equipment_maintenance_work_orders__work_order_id__external_cost_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/equipment/maintenance/work-orders/{work_order_id}/images": {
         parameters: {
             query?: never;
@@ -3037,6 +3224,23 @@ export interface paths {
         get?: never;
         /** 开始维修 */
         put: operations["start_work_order_api_v1_equipment_maintenance_work_orders__work_order_id__start_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/maintenance/work-orders/{work_order_id}/transfer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 转派维修人（方案E） */
+        put: operations["transfer_work_order_api_v1_equipment_maintenance_work_orders__work_order_id__transfer_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -3222,6 +3426,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/equipment/repair-knowledge/cases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 案例列表（含草稿） */
+        get: operations["get_cases_api_v1_equipment_repair_knowledge_cases_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/repair-knowledge/cases/{case_id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 忽略案例草稿 */
+        post: operations["dismiss_case_api_api_v1_equipment_repair_knowledge_cases__case_id__dismiss_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/repair-knowledge/cases/{case_id}/use": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 标记案例被采纳（计数） */
+        post: operations["mark_used_api_api_v1_equipment_repair_knowledge_cases__case_id__use_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/repair-knowledge/cases/{case_id}/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 确认案例入库 */
+        post: operations["verify_case_api_api_v1_equipment_repair_knowledge_cases__case_id__verify_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/repair-knowledge/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 相似案例检索（报修推荐） */
+        get: operations["search_cases_api_v1_equipment_repair_knowledge_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/equipment/spare-parts": {
         parameters: {
             query?: never;
@@ -3252,6 +3541,144 @@ export interface paths {
         put?: never;
         /** 创建备件 */
         post: operations["create_spare_part_api_v1_equipment_spare_parts__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/spare-parts/purchase-suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 采购建议列表 */
+        get: operations["get_suggestions_api_v1_equipment_spare_parts_purchase_suggestions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/spare-parts/purchase-suggestions/labor-rates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 工时费率列表 */
+        get: operations["get_labor_rates_api_v1_equipment_spare_parts_purchase_suggestions_labor_rates_get"];
+        put?: never;
+        /** 新增工时费率 */
+        post: operations["add_labor_rate_api_v1_equipment_spare_parts_purchase_suggestions_labor_rates_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/spare-parts/purchase-suggestions/labor-rates/{rate_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 编辑工时费率 */
+        put: operations["edit_labor_rate_api_v1_equipment_spare_parts_purchase_suggestions_labor_rates__rate_id__put"];
+        post?: never;
+        /** 删除工时费率 */
+        delete: operations["remove_labor_rate_api_v1_equipment_spare_parts_purchase_suggestions_labor_rates__rate_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/spare-parts/purchase-suggestions/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 手动触发安全线扫描（管理调试用） */
+        post: operations["run_scan_api_v1_equipment_spare_parts_purchase_suggestions_scan_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/spare-parts/purchase-suggestions/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 批量提交采购（生成采购草稿单） */
+        post: operations["submit_api_v1_equipment_spare_parts_purchase_suggestions_submit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/spare-parts/purchase-suggestions/{suggestion_id}/arrival": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 登记到货（入库并推进状态） */
+        post: operations["arrival_api_v1_equipment_spare_parts_purchase_suggestions__suggestion_id__arrival_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/spare-parts/purchase-suggestions/{suggestion_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 取消建议 */
+        post: operations["cancel_api_v1_equipment_spare_parts_purchase_suggestions__suggestion_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/spare-parts/purchase-suggestions/{suggestion_id}/qty": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 调整建议采购数量 */
+        put: operations["update_qty_api_v1_equipment_spare_parts_purchase_suggestions__suggestion_id__qty_put"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -49479,6 +49906,55 @@ export interface components {
             video_frame_count?: number | null;
         };
         /**
+         * LaborRateCreate
+         * @description 新增费率
+         */
+        LaborRateCreate: {
+            /**
+             * Effective From
+             * @description 生效日期
+             */
+            effective_from?: string | null;
+            /**
+             * Hourly Rate
+             * @description 时薪（元/小时）
+             */
+            hourly_rate: number;
+            /**
+             * Person Id
+             * @description 人员用户ID
+             */
+            person_id?: string | null;
+            /**
+             * Remark
+             * @description 备注
+             */
+            remark?: string | null;
+            /**
+             * Role Id
+             * @description 设备角色ID
+             */
+            role_id?: string | null;
+            /**
+             * Scope
+             * @description 范围
+             * @enum {string}
+             */
+            scope: "role" | "person";
+        };
+        /**
+         * LaborRateUpdate
+         * @description 编辑费率
+         */
+        LaborRateUpdate: {
+            /** Effective From */
+            effective_from?: string | null;
+            /** Hourly Rate */
+            hourly_rate?: number | null;
+            /** Remark */
+            remark?: string | null;
+        };
+        /**
          * LedgerExportRequest
          * @description 台账导出请求 — AI自然语言筛选
          */
@@ -50951,6 +51427,17 @@ export interface components {
              * @description 本月计划产能(kg)
              */
             planned_capacity_kg?: number | null;
+        };
+        /**
+         * MonthlyReportGenerateRequest
+         * @description 生成月报请求
+         */
+        MonthlyReportGenerateRequest: {
+            /**
+             * Report Month
+             * @description 报告月份 YYYY-MM
+             */
+            report_month: string;
         };
         /** MonthlyTrendPoint */
         MonthlyTrendPoint: {
@@ -57227,6 +57714,39 @@ export interface components {
              * @description 申购部门
              */
             request_department?: string | null;
+        };
+        /**
+         * PurchaseSuggestionArrivalRequest
+         * @description 登记到货
+         */
+        PurchaseSuggestionArrivalRequest: {
+            /**
+             * Arrived Qty
+             * @description 到货数量
+             */
+            arrived_qty: number;
+        };
+        /**
+         * PurchaseSuggestionQtyUpdate
+         * @description 调整建议数量
+         */
+        PurchaseSuggestionQtyUpdate: {
+            /**
+             * Suggest Qty
+             * @description 建议采购数量
+             */
+            suggest_qty: number;
+        };
+        /**
+         * PurchaseSuggestionSubmitRequest
+         * @description 批量提交采购
+         */
+        PurchaseSuggestionSubmitRequest: {
+            /**
+             * Suggestion Ids
+             * @description 建议ID列表
+             */
+            suggestion_ids: string[];
         };
         /**
          * QualificationLevelEnum
@@ -67401,6 +67921,33 @@ export interface components {
             responsible_person_id?: string | null;
         };
         /**
+         * WorkOrderExternalCostUpdate
+         * @description 补录外委费用
+         */
+        WorkOrderExternalCostUpdate: {
+            /** External Cost */
+            external_cost?: number | null;
+            /** External Vendor */
+            external_vendor?: string | null;
+        };
+        /**
+         * WorkOrderTransfer
+         * @description 转派工单请求（方案E）
+         */
+        WorkOrderTransfer: {
+            /**
+             * Assignee Id
+             * Format: uuid
+             * @description 新维修人ID
+             */
+            assignee_id: string;
+            /**
+             * Reason
+             * @description 转派原因
+             */
+            reason?: string | null;
+        };
+        /**
          * WorkOrderUpdate
          * @description 更新工单请求
          */
@@ -73219,6 +73766,274 @@ export interface operations {
             };
         };
     };
+    get_board_api_v1_equipment_health_board_get: {
+        parameters: {
+            query?: {
+                /** @description 车间代码（如 101-1 / dlz） */
+                workshop?: string | null;
+                /** @description 分档 G/Y/R */
+                grade?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_equipment_health_api_v1_equipment_health_equipment__equipment_id__get: {
+        parameters: {
+            query?: {
+                /** @description 趋势天数 */
+                days?: number;
+            };
+            header?: never;
+            path: {
+                equipment_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_reports_api_v1_equipment_health_monthly_reports_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_report_api_v1_equipment_health_monthly_reports_generate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MonthlyReportGenerateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_report_api_v1_equipment_health_monthly_reports__report_month__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                report_month: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_profile_api_v1_equipment_health_repair_profile__equipment_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                equipment_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    refresh_profile_api_v1_equipment_health_repair_profile__equipment_id__refresh_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                equipment_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_snapshots_api_v1_equipment_health_snapshots_run_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_feishu_apps_api_v1_equipment_inspection_feishu_apps_get: {
         parameters: {
             query?: never;
@@ -75341,6 +76156,44 @@ export interface operations {
             };
         };
     };
+    cost_report_api_v1_equipment_maintenance_work_orders_cost_report_get: {
+        parameters: {
+            query?: {
+                /** @description 车间代码 */
+                workshop?: string | null;
+                /** @description 月份 YYYY-MM */
+                month?: string | null;
+                /** @description 分组维度 */
+                group_by?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_work_order_efficiency_api_v1_equipment_maintenance_work_orders_efficiency_get: {
         parameters: {
             query?: {
@@ -75654,6 +76507,76 @@ export interface operations {
             };
         };
     };
+    get_work_order_events_api_v1_equipment_maintenance_work_orders__work_order_id__events_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                work_order_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_external_cost_api_v1_equipment_maintenance_work_orders__work_order_id__external_cost_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                work_order_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkOrderExternalCostUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_work_order_images_api_v1_equipment_maintenance_work_orders__work_order_id__images_get: {
         parameters: {
             query?: never;
@@ -75874,6 +76797,43 @@ export interface operations {
             };
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    transfer_work_order_api_v1_equipment_maintenance_work_orders__work_order_id__transfer_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                work_order_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkOrderTransfer"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -76542,6 +77502,183 @@ export interface operations {
             };
         };
     };
+    get_cases_api_v1_equipment_repair_knowledge_cases_get: {
+        parameters: {
+            query?: {
+                /** @description 状态 */
+                status?: string | null;
+                /** @description 设备ID */
+                equipment_id?: string | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    dismiss_case_api_api_v1_equipment_repair_knowledge_cases__case_id__dismiss_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_used_api_api_v1_equipment_repair_knowledge_cases__case_id__use_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    verify_case_api_api_v1_equipment_repair_knowledge_cases__case_id__verify_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                case_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_cases_api_v1_equipment_repair_knowledge_search_get: {
+        parameters: {
+            query: {
+                /** @description 故障描述关键词 */
+                q: string;
+                /** @description 设备ID（本设备层） */
+                equipment_id?: string | null;
+                /** @description 故障现象代码 */
+                symptom_code?: string | null;
+                /** @description 返回条数 */
+                top?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_spare_parts_api_v1_equipment_spare_parts_get: {
         parameters: {
             query?: {
@@ -76677,6 +77814,353 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["SparePartCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_suggestions_api_v1_equipment_spare_parts_purchase_suggestions_get: {
+        parameters: {
+            query?: {
+                /** @description 状态 */
+                status?: string | null;
+                /** @description 车间代码 */
+                workshop?: string | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_labor_rates_api_v1_equipment_spare_parts_purchase_suggestions_labor_rates_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_labor_rate_api_v1_equipment_spare_parts_purchase_suggestions_labor_rates_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LaborRateCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    edit_labor_rate_api_v1_equipment_spare_parts_purchase_suggestions_labor_rates__rate_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rate_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LaborRateUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_labor_rate_api_v1_equipment_spare_parts_purchase_suggestions_labor_rates__rate_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rate_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_scan_api_v1_equipment_spare_parts_purchase_suggestions_scan_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_api_v1_equipment_spare_parts_purchase_suggestions_submit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PurchaseSuggestionSubmitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    arrival_api_v1_equipment_spare_parts_purchase_suggestions__suggestion_id__arrival_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                suggestion_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PurchaseSuggestionArrivalRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_api_v1_equipment_spare_parts_purchase_suggestions__suggestion_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                suggestion_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_qty_api_v1_equipment_spare_parts_purchase_suggestions__suggestion_id__qty_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                suggestion_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PurchaseSuggestionQtyUpdate"];
             };
         };
         responses: {

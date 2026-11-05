@@ -328,6 +328,19 @@ def collect_dump_tanks(
 _DR_TITLE_RE = re.compile(
     r"(\d{4})年(\d{1,2})月份多拉计划"
 )
+
+
+def _dr_title_match(row: list[Any]) -> re.Match[str] | None:
+    """在行前几列中查找 DR 块标题（合并单元格锚点可能在第 0~3 列）。
+
+    真实排产表中个别月份块的标题合并锚点从 B 列开始（存档后值落在
+    第 1 列），只查 row[0] 会漏块导致看板判定周期未覆盖。
+    """
+    for cell in (row or [])[:4]:
+        match = _DR_TITLE_RE.search(str(cell))
+        if match:
+            return match
+    return None
 _DR_ROW_DATE = 1
 _DR_ROW_FERM_BATCH = 5
 _DR_ROW_FERM_TANK = 6
@@ -432,7 +445,7 @@ def find_dr_period_block(
     for index, row in enumerate(rows):
         if not row:
             continue
-        match = _DR_TITLE_RE.search(str(row[0]))
+        match = _dr_title_match(row)
         if match and (int(match.group(1)), int(match.group(2))) == (
             year,
             month,
@@ -450,7 +463,7 @@ def _dr_column_dates(
     rows: list[list[Any]], block: dict[str, Any]
 ) -> dict[int, date]:
     """块内列号 → 自然月日期（日期行 1..N = 标题月 1..N 日）。"""
-    match = _DR_TITLE_RE.search(str(rows[block["start_row"]][0]))
+    match = _dr_title_match(rows[block["start_row"]] or [])
     if match is None:
         return {}
     year, month = int(match.group(1)), int(match.group(2))
@@ -478,7 +491,7 @@ def _dr_global_ferm_events(
     """
     result: dict[str, tuple[date, str | None, float | None]] = {}
     for index, row in enumerate(rows):
-        if not row or not _DR_TITLE_RE.search(str(row[0])):
+        if not row or not _dr_title_match(row):
             continue
         col_dates = _dr_column_dates(rows, {"start_row": index})
         ferm_b = rows[index + _DR_ROW_FERM_BATCH] or []
@@ -536,7 +549,7 @@ def _dr_parse_batches(
     for index, row in enumerate(rows):
         if not row:
             continue
-        if not _DR_TITLE_RE.search(str(row[0])):
+        if not _dr_title_match(row):
             continue
         col_dates = _dr_column_dates(rows, {"start_row": index})
         ferm_b = rows[index + _DR_ROW_FERM_BATCH] or []
@@ -2629,7 +2642,7 @@ def _dr_sheet_blocks(rows: list[list[Any]]) -> list[dict[str, Any]]:
     for index, row in enumerate(rows):
         if not row:
             continue
-        match = _DR_TITLE_RE.search(str(row[0]))
+        match = _dr_title_match(row)
         if match is None:
             continue
         blocks.append(
