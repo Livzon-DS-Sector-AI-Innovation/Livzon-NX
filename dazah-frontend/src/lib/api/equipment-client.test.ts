@@ -9,6 +9,7 @@ import {
   fetchWorkOrderMaterialsClient,
   fetchWorkOrderStatisticsClient,
   fetchWorkOrdersClient,
+  fetchWorkOrderEventsClient,
 } from './equipment-client'
 
 function jsonResponse(body: unknown, status = 200) {
@@ -129,5 +130,52 @@ describe('equipment-client work order materials', () => {
 
     await fetchWorkOrderMaterialsClient('wo-1')
     expect(lastUrl(fetchMock)).toBe('/api/v1/equipment/maintenance/work-orders/wo-1/materials')
+  })
+})
+
+
+describe('fetchWorkOrderEventsClient（方案E 转派事件）', () => {
+  it('按工单ID请求事件并返回 data 数组', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        code: 200,
+        data: [
+          {
+            id: 'ev-1',
+            work_order_id: 'wo-1',
+            event_type: 'transferred',
+            operator_id: null,
+            operator_name: '王五',
+            source: 'feishu',
+            detail: { from: '李四', to: '王五' },
+            created_at: '2026-11-04T08:00:00Z',
+          },
+        ],
+      }),
+    )
+    const events = await fetchWorkOrderEventsClient('wo-1')
+    expect(lastUrl(fetchMock)).toBe(
+      '/api/v1/equipment/maintenance/work-orders/wo-1/events',
+    )
+    expect(events).toHaveLength(1)
+    expect(events[0].event_type).toBe('transferred')
+  })
+
+  it('接口失败时抛出含状态码的错误', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ code: 500, message: 'err' }, 500),
+    )
+    await expect(fetchWorkOrderEventsClient('wo-2')).rejects.toThrow('500')
+  })
+
+  it('空数据返回空数组', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    fetchMock.mockResolvedValueOnce(jsonResponse({ code: 200, data: null }))
+    expect(await fetchWorkOrderEventsClient('wo-3')).toEqual([])
   })
 })
