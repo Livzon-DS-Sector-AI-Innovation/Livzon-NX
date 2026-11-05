@@ -470,7 +470,7 @@ export async function fetchCostReportClient(params: {
   workshop?: string
   month?: string
   group_by?: 'equipment' | 'workshop' | 'fault_type'
-}): Promise<CostReport | null> {
+} = {}): Promise<CostReport | null> {
   const searchParams = new URLSearchParams()
   if (params.workshop) searchParams.append('workshop', params.workshop)
   if (params.month) searchParams.append('month', params.month)
