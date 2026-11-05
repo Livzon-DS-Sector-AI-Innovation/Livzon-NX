@@ -97782,6 +97782,35 @@
         "title": "WorkOrderExternalCostUpdate",
         "type": "object"
       },
+      "WorkOrderTransfer": {
+        "description": "转派工单请求（方案E）",
+        "properties": {
+          "assignee_id": {
+            "description": "新维修人ID",
+            "format": "uuid",
+            "title": "Assignee Id",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "转派原因",
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "assignee_id"
+        ],
+        "title": "WorkOrderTransfer",
+        "type": "object"
+      },
       "WorkOrderUpdate": {
         "description": "更新工单请求",
         "properties": {
@@ -115596,6 +115625,63 @@
         ]
       }
     },
+    "/api/v1/equipment/maintenance/work-orders/{work_order_id}/events": {
+      "get": {
+        "operationId": "get_work_order_events_api_v1_equipment_maintenance_work_orders__work_order_id__events_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "work_order_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Work Order Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "工单事件时间线（方案E）",
+        "tags": [
+          "设备管理"
+        ]
+      }
+    },
     "/api/v1/equipment/maintenance/work-orders/{work_order_id}/external-cost": {
       "put": {
         "operationId": "set_external_cost_api_v1_equipment_maintenance_work_orders__work_order_id__external_cost_put",
@@ -116095,6 +116181,73 @@
           }
         },
         "summary": "开始维修",
+        "tags": [
+          "设备管理"
+        ]
+      }
+    },
+    "/api/v1/equipment/maintenance/work-orders/{work_order_id}/transfer": {
+      "put": {
+        "operationId": "transfer_work_order_api_v1_equipment_maintenance_work_orders__work_order_id__transfer_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "work_order_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Work Order Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkOrderTransfer"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "转派维修人（方案E）",
         "tags": [
           "设备管理"
         ]

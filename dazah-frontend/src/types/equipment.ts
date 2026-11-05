@@ -271,6 +271,7 @@ export interface WorkOrder {
   labor_cost?: number | null
   external_cost?: number | null
   external_vendor?: string | null
+  transfer_count?: number
   created_at: string
   updated_at: string
   created_by: string | null
@@ -826,6 +827,23 @@ export interface MonthlyReport {
   metrics: Record<string, unknown> | null
   content_md: string | null
   generated_at: string | null
+}
+
+// ==================== 工单事件与转派（方案E） ====================
+export type WorkOrderEventType =
+  | 'created' | 'assigned' | 'transferred' | 'started' | 'completed'
+  | 'verified' | 'rejected' | 'closed' | 'claimed'
+  | 'material_requested' | 'suggested_purchase'
+
+export interface WorkOrderEvent {
+  id: string
+  work_order_id: string
+  event_type: WorkOrderEventType
+  operator_id: string | null
+  operator_name: string | null
+  source: string
+  detail: Record<string, unknown> | null
+  created_at: string | null
 }
 
 // ==================== 备件采购建议与维修成本（方案C） ====================

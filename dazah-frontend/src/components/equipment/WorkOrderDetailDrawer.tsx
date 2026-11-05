@@ -8,9 +8,9 @@ import {
   ThunderboltOutlined,
 } from '@ant-design/icons'
 import { useEquipmentStore } from '@/stores/equipment'
-import { assignWorkOrder, startWorkOrder, completeWorkOrder, verifyWorkOrder, closeWorkOrder, claimWorkOrder, updateWorkOrderExternalCost } from '@/actions/equipment'
+import { assignWorkOrder, startWorkOrder, completeWorkOrder, verifyWorkOrder, closeWorkOrder, claimWorkOrder, updateWorkOrderExternalCost, transferWorkOrder } from '@/actions/equipment'
 import { WorkOrderStatus, WorkOrderPriority, Maintainer, SparePart } from '@/types/equipment'
-import { fetchMaintainersClient, fetchWorkOrderByIdClient, fetchSparePartsClient } from '@/lib/api/equipment-client'
+import { fetchMaintainersClient, fetchWorkOrderByIdClient, fetchSparePartsClient, fetchWorkOrderEventsClient } from '@/lib/api/equipment-client'
 import { MaterialConsumeDrawer } from './MaterialConsumeDrawer'
 import { MaterialRecordTable } from './MaterialRecordTable'
 
@@ -122,6 +122,55 @@ export function WorkOrderDetailDrawer({ onRefresh }: WorkOrderDetailDrawerProps)
     } catch (error) {
       message.error(error?.message || '操作失败')
     }
+  }
+
+  const handleTransfer = () => {
+    if (!maintainers.length) {
+      message.warning('暂无可转派的维修人员')
+      return
+    }
+    let selectedId: string | undefined
+    let reason = ''
+    modal.confirm({
+      title: `转派维修人${(wo.transfer_count ?? 0) > 0 ? `（已转派 ${wo.transfer_count} 次）` : ''}`,
+      content: (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingTop: 8 }}>
+          <Select
+            placeholder="选择新维修人"
+            showSearch
+            optionFilterProp="label"
+            style={{ width: '100%' }}
+            onChange={(v) => { selectedId = v }}
+            options={maintainers
+              .filter((m) => m.user_id !== wo.assignee_id)
+              .map((m) => ({ label: `${m.name}（${m.employee_no || '-'}）`, value: m.user_id }))}
+          />
+          <Input
+            placeholder="转派原因（选填）"
+            maxLength={200}
+            onChange={(e) => { reason = e.target.value }}
+          />
+        </div>
+      ),
+      okText: '确认转派',
+      onOk: async () => {
+        if (!selectedId) {
+          message.warning('请选择新维修人')
+          return Promise.reject()
+        }
+        try {
+          await transferWorkOrder(wo.id, {
+            assignee_id: selectedId,
+            reason: reason || undefined,
+          })
+          message.success('已转派')
+          onRefresh?.()
+        } catch (error) {
+          message.error(error instanceof Error ? error.message : '转派失败')
+          return Promise.reject(error)
+        }
+      },
+    })
   }
 
   const handleComplete = () => {
@@ -400,6 +449,11 @@ export function WorkOrderDetailDrawer({ onRefresh }: WorkOrderDetailDrawerProps)
             </>
           )}
           {wo.status === '执行中' && <Button type="primary" onClick={handleComplete}>提交完成</Button>}
+          {(wo.status === '待处理' || wo.status === '执行中') && (
+            <Button onClick={handleTransfer}>
+              ↗️ 转派{(wo.transfer_count ?? 0) > 0 ? `（${wo.transfer_count}次）` : ''}
+            </Button>
+          )}
           {wo.status === '待验收' && (
             <>
               <Button type="primary" onClick={() => handleVerify('合格')}>验收通过</Button>

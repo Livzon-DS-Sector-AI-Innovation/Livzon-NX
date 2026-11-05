@@ -183,9 +183,11 @@ from app.modules.equipment.service.work_order import (
     delete_work_order,
     generate_work_order_no,
     get_work_order_by_id,
+    get_work_order_events,
     get_work_order_statistics,
     get_work_orders,
     start_work_order,
+    transfer_work_order,
     update_work_order,
     verify_work_order,
 )
@@ -207,6 +209,9 @@ __all__ = [
     "analyze_inspection_photo",
     "parse_manual_submission",
     "get_inspection_items_for_session",
+    # 方案E：转派与事件
+    "get_work_order_events",
+    "transfer_work_order",
     # purchase suggestion & cost（方案C）
     "apply_labor_cost",
     "calc_suggest_qty",

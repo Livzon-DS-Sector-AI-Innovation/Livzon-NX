@@ -124,6 +124,30 @@ def _disable_repair_ledger(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+async def _purge_dependent_rows(db_session: AsyncSession):
+    """每个测试前清空方案B/C/E 引入的从属表（事件/建议/流水/费率）。
+
+    这些表外键引用工单/备件，残留会阻塞既有测试的清理逻辑
+    （如 spare_part_sync、work_order 删除夹具）。
+    """
+    from sqlalchemy import delete
+
+    from app.modules.equipment.models import (
+        MaintenanceLaborRate,
+        SparePartPurchaseSuggestion,
+        SparePartTransaction,
+        WorkOrderEvent,
+    )
+
+    await db_session.execute(delete(WorkOrderEvent))
+    await db_session.execute(delete(SparePartPurchaseSuggestion))
+    await db_session.execute(delete(SparePartTransaction))
+    await db_session.execute(delete(MaintenanceLaborRate))
+    await db_session.commit()
+    yield
+
+
+@pytest.fixture(autouse=True)
 def _disable_health_background_tasks(monkeypatch):
     """禁用健康档案/知识案例的后台任务（ensure_future 会以应用库
     会话逃逸测试事件循环，与 _disable_repair_ledger 同理）。"""

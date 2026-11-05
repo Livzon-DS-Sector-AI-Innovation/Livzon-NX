@@ -776,6 +776,19 @@ export async function updateWorkOrderExternalCost(
   return result
 }
 
+// ==================== 转派（方案E） ====================
+export async function transferWorkOrder(
+  id: string,
+  data: { assignee_id: string; reason?: string | null },
+) {
+  const result = await actionFetch(
+    `${API_BASE_URL}/api/v1/equipment/maintenance/work-orders/${id}/transfer`,
+    { method: 'PUT', body: JSON.stringify(data) },
+  )
+  revalidatePath('/equipment')
+  return result
+}
+
 // ==================== 月度健康报告（方案B收尾） ====================
 export async function generateMonthlyReport(reportMonth: string) {
   const result = await actionFetch(

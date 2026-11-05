@@ -12,7 +12,7 @@ import {
   MaterialRecord,
   ClaimTimeoutConfig, Maintainer, WorkOrderImage,
   EquipmentHealth, RepairProfile, HealthBoard, KnowledgeCaseHit, KnowledgeCase, KnowledgeCaseStatus, MonthlyReport,
-  PurchaseSuggestion, PurchaseSuggestionStatus, LaborRate, CostReport,
+  PurchaseSuggestion, PurchaseSuggestionStatus, LaborRate, CostReport, WorkOrderEvent,
 } from '@/types/equipment'
 
 interface FetchEquipmentsParams {
@@ -412,6 +412,20 @@ export async function fetchKnowledgeCasesClient(params: {
 
 export async function fetchMonthlyReportsClient(): Promise<MonthlyReport[]> {
   const response = await fetch(`/api/v1/equipment/health/monthly-reports`)
+  if (!response.ok) {
+    throw new Error(`请求失败: ${response.status} ${response.statusText}`)
+  }
+  const result = await response.json()
+  return result.data || []
+}
+
+// ==================== 工单事件与转派（方案E） ====================
+export async function fetchWorkOrderEventsClient(
+  workOrderId: string,
+): Promise<WorkOrderEvent[]> {
+  const response = await fetch(
+    `/api/v1/equipment/maintenance/work-orders/${workOrderId}/events`,
+  )
   if (!response.ok) {
     throw new Error(`请求失败: ${response.status} ${response.statusText}`)
   }

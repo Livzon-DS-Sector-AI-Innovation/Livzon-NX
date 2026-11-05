@@ -949,6 +949,21 @@ async def handle_card_action(payload: dict[str, Any]) -> dict[str, Any]:
             value, open_id=open_id, union_id=union_id
         )
 
+    if act in ("transfer", "transfer_pick"):
+        return await _handle_transfer_action(
+            payload, open_id=open_id, union_id=union_id
+        )
+
+    if act in ("parts_list", "parts_pick"):
+        return await _handle_parts_action(
+            payload, open_id=open_id, union_id=union_id
+        )
+
+    if act in ("repay_confirm", "repay_cancel"):
+        return await _handle_repay_action(
+            payload, open_id=open_id, union_id=union_id
+        )
+
     if act not in ("accept", "complete") or not wo_no:
         return await _fail("未知操作")
 
@@ -1025,3 +1040,474 @@ async def handle_card_action(payload: dict[str, Any]) -> dict[str, Any]:
         task.add_done_callback(_patch_tasks.discard)
     logger.info("卡片按钮处理完成: act=%s, wo=%s, 操作人=%s", act, wo_no, user.name)
     return {"code": 0, "toast": {"type": "success", "content": "操作成功"}}
+
+
+# ══════════════ 方案E：转派 / 申请备件 / 再报上次 ══════════════
+
+
+async def _list_transfer_candidates(
+    db: AsyncSession, workshop_code: str, exclude_user_id: Any
+) -> list[dict[str, Any]]:
+    """同车间在岗人员（排除当前维修人）作为转派候选。"""
+    from sqlalchemy import select as _select
+
+    from app.modules.equipment.models.personnel import EquipmentPersonnel
+    from app.platform.identity.models import User
+
+    rows = (
+        (
+            await db.execute(
+                _select(EquipmentPersonnel, User)
+                .join(User, User.id == EquipmentPersonnel.user_id)
+                .where(
+                    EquipmentPersonnel.is_deleted == False,  # noqa: E712
+                    EquipmentPersonnel.is_active == True,  # noqa: E712
+                    EquipmentPersonnel.workshop_code == workshop_code,
+                    EquipmentPersonnel.user_id != exclude_user_id,
+                )
+                .order_by(EquipmentPersonnel.name)
+                .limit(10)
+            )
+        )
+        .all()
+    )
+    return [
+        {
+            "user_id": str(u.id),
+            "name": p.name,
+            "employee_no": p.employee_no,
+        }
+        for p, u in rows
+    ]
+
+
+async def _handle_transfer_action(
+    payload: dict[str, Any], *, open_id: str, union_id: str
+) -> dict[str, Any]:
+    """转派入口：transfer=发候选人卡，transfer_pick=执行转派。"""
+    from app.core.exceptions import AppException
+
+    value = payload.get("action") or {}
+    v = value.get("value") or {}
+    act = v.get("act", "")
+    wo_no = v.get("oid", "")
+
+    async def _fail(message: str) -> dict[str, Any]:
+        if open_id:
+            try:
+                await send_user_card(
+                    open_id=open_id,
+                    title="❌ 转派未完成",
+                    receive_id_type="open_id",
+                    content=message,
+                )
+            except Exception:
+                logger.exception("转派失败提示发送失败")
+        return _card_error_payload(message)
+
+    async with async_session_factory() as db:
+        user = await _find_user_by_feishu(db, open_id=open_id, union_id=union_id)
+        if user is None:
+            return await _fail("未绑定平台账号，请先用飞书登录一次平台后重试")
+        wo = await repo.get_work_order_by_no(db, wo_no)
+        if wo is None:
+            return await _fail(f"工单 {wo_no} 不存在")
+        if wo.assignee_id != user.id:
+            return await _fail("只有当前维修人可以发起转派")
+        if wo.status not in ("待处理", "执行中"):
+            return await _fail(f"工单已是「{wo.status}」状态，无需转派")
+
+        if act == "transfer":
+            workshop = wo.equipment.workshop_code if wo.equipment else ""
+            candidates = await _list_transfer_candidates(
+                db, workshop, exclude_user_id=user.id
+            )
+            if not candidates:
+                return await _fail("该车间暂无其他在岗维修人员可转派")
+
+            await send_user_card(
+                open_id=open_id,
+                title=f"↗️ 转派 {wo_no}",
+                receive_id_type="open_id",
+                content="请选择新的维修人：",
+                elements=[
+                    {
+                        "tag": "action",
+                        "actions": [
+                            {
+                                "tag": "button",
+                                "text": {
+                                    "tag": "plain_text",
+                                    "content": c["name"],
+                                },
+                                "value": {
+                                    "act": "transfer_pick",
+                                    "oid": wo_no,
+                                    "uid": c["user_id"],
+                                },
+                            }
+                            for c in candidates[:10]
+                        ],
+                    }
+                ],
+            )
+            return _card_ok_payload("已发送候选人选择卡片")
+
+        # transfer_pick
+        from app.modules.equipment.service.work_order import transfer_work_order
+
+        try:
+            wo = await transfer_work_order(
+                db,
+                wo.id,
+                uuid.UUID(str(v.get("uid", ""))),
+                operator_id=user.id,
+                reason="卡片转派",
+            )
+            await db.commit()
+        except AppException as exc:
+            return await _fail(exc.message)
+        except Exception:
+            logger.exception("卡片转派失败: %s", wo_no)
+            return await _fail("转派失败，请稍后在平台「维修工单」中操作")
+    assignee_label = wo.assignee.name if wo.assignee else "新维修人"
+    return _card_ok_payload(f"已转派给 {assignee_label}")
+
+
+async def _handle_parts_action(
+    payload: dict[str, Any], *, open_id: str, union_id: str
+) -> dict[str, Any]:
+    """申请备件（方案E）：parts_list=备件选择卡，parts_pick=领用或生成采购建议。"""
+    from sqlalchemy import select as _select
+
+    from app.modules.equipment.models.spare_part import SparePart, SparePartStock
+
+    value = payload.get("action") or {}
+    v = value.get("value") or {}
+    act = v.get("act", "")
+    wo_no = v.get("oid", "")
+
+    async def _fail(message: str) -> dict[str, Any]:
+        if open_id:
+            try:
+                await send_user_card(
+                    open_id=open_id,
+                    title="❌ 备件操作未完成",
+                    receive_id_type="open_id",
+                    content=message,
+                )
+            except Exception:
+                logger.exception("备件操作失败提示发送失败")
+        return _card_error_payload(message)
+
+    async with async_session_factory() as db:
+        user = await _find_user_by_feishu(db, open_id=open_id, union_id=union_id)
+        if user is None:
+            return await _fail("未绑定平台账号，请先用飞书登录一次平台后重试")
+        wo = await repo.get_work_order_by_no(db, wo_no)
+        if wo is None:
+            return await _fail(f"工单 {wo_no} 不存在")
+        if wo.status not in ("待处理", "执行中", "待验收"):
+            return await _fail(f"工单「{wo.status}」状态不可领料")
+
+        workshop = wo.equipment.workshop_code if wo.equipment else ""
+
+        if act == "parts_list":
+            rows = (
+                (
+                    await db.execute(
+                        _select(SparePart, SparePartStock)
+                        .outerjoin(
+                            SparePartStock,
+                            SparePartStock.spare_part_id == SparePart.id,
+                        )
+                        .where(
+                            SparePart.is_deleted == False,  # noqa: E712
+                            SparePart.is_active == True,  # noqa: E712
+                            SparePart.workshop_code == (workshop or ""),
+                        )
+                        .order_by(SparePart.name)
+                        .limit(10)
+                    )
+                )
+                .all()
+            )
+            parts = [
+                {
+                    "id": str(p.id),
+                    "name": p.name,
+                    "current_qty": s.current_qty if s else 0,
+                }
+                for p, s in rows
+            ]
+            if not parts:
+                return await _fail("该车间暂无登记备件，请到平台备件管理中维护")
+            equipment_label = (
+                f"{wo.equipment.name}（{wo.equipment.equipment_no}）"
+                if wo.equipment
+                else ""
+            )
+            from app.modules.equipment.feishu.plan_e_cards import (
+                build_parts_select_card,
+            )
+
+            card = build_parts_select_card(
+                work_order_no=wo_no,
+                equipment_label=equipment_label,
+                parts=parts,
+            )
+            await send_user_card(
+                open_id=open_id,
+                title=f"🔧 申请备件 {wo_no}",
+                receive_id_type="open_id",
+                content="请选择备件：",
+                elements=card["elements"],
+            )
+            return _card_ok_payload("已发送备件选择卡片")
+
+        return await _parts_pick(db, wo, v, part_name=str(v.get("nm", "")))
+
+
+async def _parts_pick(
+    db: AsyncSession,
+    wo: Any,
+    v: dict[str, Any],
+    *,
+    part_name: str,
+) -> dict[str, Any]:
+    """点选备件：库存≥1 领用 1 件；不足则生成/复用采购建议。"""
+    from sqlalchemy import select as _select
+
+    from app.core.exceptions import AppException
+    from app.modules.equipment.models.purchase_suggestion import (
+        SparePartPurchaseSuggestion,
+    )
+    from app.modules.equipment.models.spare_part import SparePartStock
+    from app.modules.equipment.service.work_order import consume_materials
+
+    try:
+        part_uuid = uuid.UUID(str(v.get("sp", "")))
+    except ValueError:
+        return _card_error_payload("备件信息无效")
+
+    stock = (
+        (
+            await db.execute(
+                _select(SparePartStock).where(
+                    SparePartStock.spare_part_id == part_uuid
+                )
+            )
+        )
+        .scalars()
+        .first()
+    )
+    current = stock.current_qty if stock else 0
+    if current >= 1:
+        try:
+            await consume_materials(
+                db, wo.id, [{"spare_part_id": part_uuid, "quantity": 1}]
+            )
+            await db.commit()
+            return _card_ok_payload(
+                f"已领用 {part_name} ×1（剩余 {current - 1}），费用计入工单"
+            )
+        except AppException as exc:
+            await db.rollback()
+            return _card_error_payload(exc.message)
+        except Exception:
+            await db.rollback()
+            logger.exception("卡片领料失败: %s", wo.work_order_no)
+            return _card_error_payload("领料失败，请到平台工单详情中领料")
+
+    existing = (
+        (
+            await db.execute(
+                _select(SparePartPurchaseSuggestion).where(
+                    SparePartPurchaseSuggestion.spare_part_id == part_uuid,
+                    SparePartPurchaseSuggestion.status.in_(
+                        ("suggested", "submitted", "partial")
+                    ),
+                    SparePartPurchaseSuggestion.is_deleted == False,  # noqa: E712
+                )
+            )
+        )
+        .scalars()
+        .first()
+    )
+    if existing is None:
+        db.add(
+            SparePartPurchaseSuggestion(
+                spare_part_id=part_uuid,
+                current_qty=current,
+                safety_qty=max(1, current + 1),
+                suggest_qty=2,
+                status="suggested",
+                source="work_order",
+                source_work_order_id=wo.id,
+            )
+        )
+        await db.commit()
+        return _card_ok_payload(
+            f"{part_name} 库存不足（{current}），已生成采购建议待管理员提交采购"
+        )
+    await db.rollback()
+    return _card_ok_payload(
+        f"{part_name} 库存不足，已有进行中的采购建议（{existing.status}）"
+    )
+
+
+async def _handle_repay_action(
+    payload: dict[str, Any], *, open_id: str, union_id: str
+) -> dict[str, Any]:
+    """再报上次确认卡回调（方案E）：repay_confirm=建单，repay_cancel=取消。"""
+    from app.core.exceptions import AppException
+
+    value = payload.get("action") or {}
+    v = value.get("value") or {}
+    act = v.get("act", "")
+
+    if act == "repay_cancel":
+        return _card_ok_payload("已取消；可发文字「报修 …」随时报修")
+
+    async def _fail(message: str) -> dict[str, Any]:
+        if open_id:
+            try:
+                await send_user_card(
+                    open_id=open_id,
+                    title="❌ 再报未完成",
+                    receive_id_type="open_id",
+                    content=message,
+                )
+            except Exception:
+                logger.exception("再报失败提示发送失败")
+        return _card_error_payload(message)
+
+    async with async_session_factory() as db:
+        user = await _find_user_by_feishu(db, open_id=open_id, union_id=union_id)
+        if user is None:
+            return await _fail("未绑定平台账号，请先用飞书登录一次平台后重试")
+        try:
+            eq_id = uuid.UUID(str(v.get("eq", "")))
+        except ValueError:
+            return await _fail("设备信息无效，请重新发起")
+        fault = str(v.get("ft", "")).strip() or "设备故障"
+        from app.modules.equipment.schemas import WorkOrderCreate
+        from app.modules.equipment.service.work_order import create_work_order
+
+        try:
+            wo = await create_work_order(
+                db,
+                WorkOrderCreate(
+                    equipment_id=eq_id,
+                    order_type="故障维修",
+                    priority="高",
+                    fault_description=f"[再报] {fault}",
+                ),
+                reporter_id=user.id,
+            )
+            await db.commit()
+        except AppException as exc:
+            await db.rollback()
+            return await _fail(exc.message)
+        except Exception:
+            await db.rollback()
+            logger.exception("再报建单失败")
+            return await _fail("建单失败，请用文字「报修 …」重试")
+
+    workshop_code = str(v.get("ws", ""))
+    equipment_label = str(v.get("el", "")) or "设备"
+    try:
+        await dispatch_repair_card(
+            work_order_no=wo.work_order_no,
+            equipment_label=equipment_label,
+            workshop_name=workshop_code or "未知车间",
+            fault=f"[再报] {fault}",
+            priority="高",
+            reporter_name=user.name,
+            workshop_code=workshop_code,
+        )
+    except Exception:
+        logger.exception("再报派单群通知失败（工单已创建）")
+    return _card_ok_payload(f"已建单 {wo.work_order_no} 并派发维修群")
+
+
+async def send_repay_confirm_card(
+    *, user_id: str, open_id: str, union_id: str
+) -> None:
+    """「再报上次那台」（方案E）：查该用户最近报修 → 回预填确认卡。"""
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy import select as _select
+
+    from app.modules.equipment.feishu.plan_e_cards import (
+        build_repay_confirm_card,
+    )
+    from app.modules.equipment.models import Equipment, WorkOrder
+
+    async def _reply_fail(msg: str) -> None:
+        await send_user_card(
+            open_id=open_id,
+            title="🔁 再报上次",
+            receive_id_type="open_id",
+            content=msg,
+        )
+
+    try:
+        async with async_session_factory() as db:
+            user = await _find_user_by_feishu(
+                db, open_id=open_id, union_id=union_id
+            )
+            if user is None:
+                await _reply_fail(
+                    "未绑定平台账号，请先用飞书登录一次平台后重试；"
+                    "或直接发文字「报修 车间 设备 故障」。"
+                )
+                return
+            since = datetime.now(UTC) - timedelta(days=30)
+            row = (
+                (
+                    await db.execute(
+                        _select(WorkOrder, Equipment)
+                        .join(Equipment, Equipment.id == WorkOrder.equipment_id)
+                        .where(
+                            WorkOrder.reporter_id == user.id,
+                            WorkOrder.reported_at >= since,
+                            WorkOrder.is_deleted == False,  # noqa: E712
+                        )
+                        .order_by(WorkOrder.reported_at.desc())
+                        .limit(1)
+                    )
+                )
+                .first()
+            )
+            if row is None:
+                await _reply_fail(
+                    "近 30 天没有你的报修记录。\\n\\n"
+                    "发文字报修：`报修 201一车间 离心泵 密封漏了 紧急`"
+                )
+                return
+            wo, eq = row
+            equipment_label = f"{eq.name}（{eq.equipment_no}）"
+            card = build_repay_confirm_card(
+                equipment_label=equipment_label,
+                equipment_id=str(eq.id),
+                workshop_code=eq.workshop_code or "",
+                last_fault=wo.fault_description or "",
+                work_order_no=wo.work_order_no,
+            )
+            # 把设备标签塞进按钮 value 供建单后派卡展示
+            for el in card["elements"]:
+                if el.get("tag") == "action":
+                    for btn in el["actions"]:
+                        if btn["value"].get("act") == "repay_confirm":
+                            btn["value"]["el"] = equipment_label
+            await send_user_card(
+                open_id=open_id,
+                title="🔁 再报上次那台",
+                receive_id_type="open_id",
+                content="请确认：",
+                elements=card["elements"],
+            )
+    except Exception:
+        logger.exception("再报确认卡发送失败: %s", open_id)
+        await _reply_fail("查询上次报修失败，请直接发文字「报修 …」。")

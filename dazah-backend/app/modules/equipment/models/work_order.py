@@ -192,6 +192,11 @@ class WorkOrder(BaseModel):
     external_vendor: Mapped[str | None] = mapped_column(
         String(100), nullable=True, comment="外委厂商"
     )
+    transfer_count: Mapped[int] = mapped_column(
+        default=0,
+        server_default="0",
+        comment="转派次数（方案E）",
+    )
     inspection_task_id: Mapped[uuid.UUID | None] = mapped_column(
         nullable=True, comment="来源巡检任务ID，由巡检异常自动创建时填入"
     )

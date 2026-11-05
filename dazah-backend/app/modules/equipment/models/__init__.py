@@ -61,6 +61,7 @@ from app.modules.equipment.models.spare_part import (
     SparePartTransaction,
 )
 from app.modules.equipment.models.work_order import WorkOrder
+from app.modules.equipment.models.work_order_event import WorkOrderEvent
 from app.modules.equipment.models.work_order_image import WorkOrderImage
 from app.modules.equipment.models.workshop import EquipmentWorkshop
 
@@ -103,5 +104,6 @@ __all__ = [
     "MaintenanceLaborRate",
     "SparePartPurchaseSuggestion",
     "WorkOrder",
+    "WorkOrderEvent",
     "WorkOrderImage",
 ]

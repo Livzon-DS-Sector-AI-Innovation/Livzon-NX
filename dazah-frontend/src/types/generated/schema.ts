@@ -6693,6 +6693,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/equipment/maintenance/work-orders/{work_order_id}/transfer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 转派维修人（方案E） */
+        put: operations["transfer_work_order_api_v1_equipment_maintenance_work_orders__work_order_id__transfer_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/maintenance/work-orders/{work_order_id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 工单事件时间线（方案E） */
+        get: operations["get_work_order_events_api_v1_equipment_maintenance_work_orders__work_order_id__events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/equipment/maintenance/work-orders/{work_order_id}/start": {
         parameters: {
             query?: never;
@@ -67897,6 +67931,23 @@ export interface components {
             external_vendor?: string | null;
         };
         /**
+         * WorkOrderTransfer
+         * @description 转派工单请求（方案E）
+         */
+        WorkOrderTransfer: {
+            /**
+             * Assignee Id
+             * Format: uuid
+             * @description 新维修人ID
+             */
+            assignee_id: string;
+            /**
+             * Reason
+             * @description 转派原因
+             */
+            reason?: string | null;
+        };
+        /**
          * WorkOrderUpdate
          * @description 更新工单请求
          */
@@ -86563,6 +86614,76 @@ export interface operations {
                 "application/json": components["schemas"]["WorkOrderAssign"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    transfer_work_order_api_v1_equipment_maintenance_work_orders__work_order_id__transfer_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                work_order_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkOrderTransfer"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_work_order_events_api_v1_equipment_maintenance_work_orders__work_order_id__events_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                work_order_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

@@ -142,10 +142,12 @@ from app.modules.equipment.schemas.work_order import (
     WorkOrderAssign,
     WorkOrderComplete,
     WorkOrderCreate,
+    WorkOrderEventResponse,
     WorkOrderPriority,
     WorkOrderResponse,
     WorkOrderStatistics,
     WorkOrderStatus,
+    WorkOrderTransfer,
     WorkOrderType,
     WorkOrderUpdate,
     WorkOrderVerify,
@@ -266,6 +268,8 @@ __all__ = [
     "ClaimTimeoutConfig",
     "ClaimTimeoutUpdateRequest",
     # inspection
+    "WorkOrderEventResponse",
+    "WorkOrderTransfer",
     # work order image
     "WorkOrderImageResponse",
     # personnel

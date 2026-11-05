@@ -60,6 +60,28 @@ class WorkOrderAssign(BaseModel):
     assignee_id: uuid.UUID = Field(..., description="维修人ID")
 
 
+class WorkOrderTransfer(BaseModel):
+    """转派工单请求（方案E）"""
+
+    assignee_id: uuid.UUID = Field(..., description="新维修人ID")
+    reason: str | None = Field(default=None, max_length=200, description="转派原因")
+
+
+class WorkOrderEventResponse(BaseModel):
+    """工单事件（方案E）"""
+
+    model_config = {"from_attributes": True}
+
+    id: uuid.UUID
+    work_order_id: uuid.UUID
+    event_type: str
+    operator_id: uuid.UUID | None = None
+    operator_name: str | None = None
+    source: str = "web"
+    detail: dict[str, object] | None = None
+    created_at: datetime | None = None
+
+
 class WorkOrderComplete(BaseModel):
     """完成工单请求"""
 

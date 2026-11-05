@@ -203,7 +203,7 @@ async def test_submit_to_procurement_marks_submitted(
 async def test_register_arrival_inbounds_and_completes(
     db_session: AsyncSession, c_user: User
 ) -> None:
-    await _make_part_with_stock(db_session, current=0, safety=3)
+    part = await _make_part_with_stock(db_session, current=0, safety=3)
     await scan_and_suggest(db_session)
     sug = (
         (
@@ -226,13 +226,15 @@ async def test_register_arrival_inbounds_and_completes(
     stock = (
         (
             await db_session.execute(
-                _sel(SparePartStock)
+                _sel(SparePartStock).where(
+                    SparePartStock.spare_part_id == part.id
+                )
             )
         )
         .scalars()
         .first()
     )
-    assert stock.current_qty == 2  # 已入库
+    assert int(stock.current_qty) == 2  # 已入库
 
     done = await register_arrival(db_session, sug.id, 4, user_id=c_user.id)
     assert done.status == "done"
