@@ -286,7 +286,7 @@ describe('client 参数分支补齐（门禁收口）', () => {
       jsonResponse({ code: 200, data: { month: '2026-11', totals: {}, top: [] } }),
     )
     const rep = await fetchCostReportClient()
-    expect(lastUrl(fetchMock)).toBe('/api/v1/equipment/maintenance/work-orders/cost-report')
+    expect(lastUrl(fetchMock)).toBe('/api/v1/equipment/maintenance/work-orders/cost-report?')
     expect(rep?.month).toBe('2026-11')
   })
 
@@ -304,7 +304,7 @@ describe('client 参数分支补齐（门禁收口）', () => {
     vi.stubGlobal('fetch', fetchMock)
     fetchMock.mockResolvedValueOnce(jsonResponse({ code: 200, data: [], meta: { total: 3 } }))
     const res = await fetchKnowledgeCasesClient({ q: '漏' })
-    expect(lastUrl(fetchMock)).toContain('q=')
+    expect(decodeURIComponent(lastUrl(fetchMock))).toContain('q=漏')
     expect(res.total).toBe(3)
   })
 
