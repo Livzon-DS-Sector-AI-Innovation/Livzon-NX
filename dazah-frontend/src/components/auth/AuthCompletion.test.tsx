@@ -2,6 +2,7 @@
 
 import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
@@ -9,10 +10,18 @@ import {
   getAuthCompletionPresentation,
 } from './AuthCompletion'
 
-const routerReplace = vi.hoisted(() => vi.fn())
+const { routerReplace, routerPrefetch, beginWorkspaceEntry, router } = vi.hoisted(() => {
+  const routerReplace = vi.fn()
+  const routerPrefetch = vi.fn()
+  return { routerReplace, routerPrefetch, beginWorkspaceEntry: vi.fn(), router: { replace: routerReplace, prefetch: routerPrefetch } }
+})
 
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ replace: routerReplace }),
+  useRouter: () => router,
+}))
+
+vi.mock('./WorkspaceEntryTransition', () => ({
+  useWorkspaceEntryTransition: () => beginWorkspaceEntry,
 }))
 
 vi.mock('./AuthLayout', () => ({
@@ -26,6 +35,8 @@ describe('AuthCompletion', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     routerReplace.mockReset()
+    routerPrefetch.mockReset()
+    beginWorkspaceEntry.mockReset()
     Object.defineProperty(document, 'startViewTransition', { configurable: true, value: undefined })
     container = document.createElement('div')
     document.body.append(container)
@@ -45,7 +56,7 @@ describe('AuthCompletion', () => {
   it.each([
     ['checking', '正在验证身份', '正在读取企业身份和访问权限，请稍候。'],
     ['ready', '身份验证成功', '企业身份和访问权限已确认。'],
-    ['entering', '正在进入系统', '工作台准备完成，即将为你打开。'],
+    ['entering', '身份验证成功', '正在为你打开工作台。'],
     ['error', '身份验证未完成', '请检查认证状态后重新登录。'],
   ] as const)(
     'provides clear user-facing copy for the %s state',
@@ -94,6 +105,8 @@ describe('AuthCompletion', () => {
     })
 
     expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(beginWorkspaceEntry).not.toHaveBeenCalled()
+    expect(routerPrefetch).not.toHaveBeenCalled()
   })
 
   it('enters the first visible module after identity verification', async () => {
@@ -124,6 +137,41 @@ describe('AuthCompletion', () => {
     })
 
     expect(routerReplace).toHaveBeenCalledWith('/rd/project-initiation')
+  })
+
+  it('prefetches the authorized destination and retains the success screen for the route reveal', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: {
+        id: 'energy-owner', name: '能源填报人', role: 'user',
+        page_permissions: [{ page_key: 'energy:entry', module_code: 'energy', permissions: ['access'] }],
+      } }),
+    }))
+    act(() => root.render(<AuthCompletion nextPath="/production" />))
+    await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+    expect(container.textContent).toContain('身份验证成功')
+    expect(routerPrefetch).toHaveBeenCalledExactlyOnceWith('/energy/entry')
+    expect(beginWorkspaceEntry).not.toHaveBeenCalled()
+    await act(async () => { await vi.advanceTimersByTimeAsync(650) })
+    expect(beginWorkspaceEntry).toHaveBeenCalledExactlyOnceWith('/energy/entry', expect.anything())
+    const frame = renderToStaticMarkup(beginWorkspaceEntry.mock.calls[0][1])
+    expect(frame).toContain('身份验证成功')
+    expect(frame).toContain('能源填报人')
+    expect(frame).not.toContain('正在打开工作台')
+    expect(container.querySelector('[data-state="entering"]')).not.toBeNull()
+    expect(routerReplace).toHaveBeenCalledExactlyOnceWith('/energy/entry')
+  })
+
+  it('cancels entry when the verification page unmounts before navigation', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true, json: async () => ({ data: { id: 'admin', role: 'admin' } }),
+    }))
+    act(() => root.render(<AuthCompletion nextPath="/production" />))
+    await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+    act(() => root.render(null))
+    await act(async () => { await vi.runAllTimersAsync() })
+    expect(beginWorkspaceEntry).not.toHaveBeenCalled()
+    expect(routerReplace).not.toHaveBeenCalled()
   })
 
   it('returns to an authorized energy task with its Feishu source after SSO', async () => {

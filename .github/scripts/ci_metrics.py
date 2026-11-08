@@ -7,10 +7,63 @@ import argparse
 import json
 import os
 import re
+import math
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.request import Request, urlopen
+
+PYTHON_JOBS = (
+    "backend-quality",
+    "backend-integration",
+    "hermes-quality",
+    "hermes-contract",
+)
+
+
+def phase_observations(needs: dict) -> dict:
+    phases = {}
+    for job in PYTHON_JOBS:
+        try:
+            records = json.loads(needs[job]["outputs"]["phases"])
+            if not isinstance(records, list):
+                raise ValueError("Invalid phase list")
+            safe = []
+            for item in records:
+                duration = item["duration_seconds"]
+                if (
+                    not re.fullmatch(r"[a-z][a-z0-9-]*", item["phase"])
+                    or item["category"]
+                    not in (
+                        "environment",
+                        "dependencies",
+                        "quality",
+                        "migration",
+                        "contract",
+                        "tests",
+                        "coverage",
+                    )
+                    or type(duration) not in (int, float)
+                    or not math.isfinite(duration)
+                    or duration < 0
+                    or type(item["exit_code"]) is not int
+                ):
+                    raise ValueError("Invalid phase observation")
+                safe.append(
+                    {
+                        key: item[key]
+                        for key in (
+                            "phase",
+                            "category",
+                            "duration_seconds",
+                            "exit_code",
+                        )
+                    }
+                )
+            phases[job] = {"status": "available", "records": safe}
+        except (KeyError, ValueError, TypeError):
+            phases[job] = {"status": "unavailable", "records": []}
+    return phases
 
 
 def seconds(start: str | None, end: str | None) -> float | None:
@@ -105,8 +158,19 @@ def cache_observations(needs: dict) -> dict:
     except (KeyError, TypeError, ValueError):
         cached = total = None
     known = [value for value in pnpm.values() if value != "unavailable"]
+    uv = {
+        job: {"true": "hit", "false": "miss"}.get(
+            needs.get(job, {}).get("outputs", {}).get("uv_cache_hit"), "unavailable"
+        )
+        for job in PYTHON_JOBS
+    }
+    known_uv = [value for value in uv.values() if value != "unavailable"]
     return {
         "pnpm": pnpm,
+        "uv": uv,
+        "uv_hit_percent": round(100 * known_uv.count("hit") / len(known_uv), 2)
+        if known_uv
+        else None,
         "pnpm_hit_percent": round(100 * known.count("hit") / len(known), 2)
         if known
         else None,
@@ -221,6 +285,32 @@ def render_summary(report: dict) -> str:
         "Docker measures BuildKit cached steps, not GHA cache-download success. "
         "Missing observations are unavailable, never counted as misses.",
     ]
+    lines += [
+        "",
+        "### Python caches and phases",
+        "",
+        "| uv cache / job | Observation |",
+        "| --- | --- |",
+    ]
+    for job, value in caches["uv"].items():
+        lines.append(f"| {cell(job)} | {value} |")
+    percent = caches["uv_hit_percent"]
+    lines.append(
+        f"Known uv cache hit rate: {str(percent) + '%' if percent is not None else 'unavailable'}"
+    )
+    lines += [
+        "",
+        "| Job / phase | Category | Exit code | Duration |",
+        "| --- | --- | --- | --- |",
+    ]
+    for job, observations in report["phases"].items():
+        if observations["status"] == "unavailable":
+            lines.append(f"| {cell(job)} | unavailable | unavailable | unavailable |")
+        for phase in observations["records"]:
+            lines.append(
+                f"| {cell(job)} / {cell(phase['phase'])} | {phase['category']} | "
+                f"{phase['exit_code']} | {duration(phase['duration_seconds'])} |"
+            )
     return "\n".join(lines) + "\n"
 
 
@@ -249,6 +339,7 @@ def main() -> int:
         "timing_status": "unavailable",
         "jobs": [],
         "caches": cache_observations(json.loads(os.getenv("CI_NEEDS_JSON", "{}"))),
+        "phases": phase_observations(json.loads(os.getenv("CI_NEEDS_JSON", "{}"))),
     }
     try:
         report["jobs"] = observations(collect_jobs(repository, run_id, attempt))

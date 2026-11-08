@@ -69,7 +69,7 @@ export async function loginWithPassword(
   try {
     const res = await fetchBackend('/api/v1/identity/auth/local/login', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: await getAuthHeaders(),
       body: JSON.stringify({ username, password }),
     })
 
@@ -108,7 +108,7 @@ export async function logout() {
   if (token) {
     const res = await fetchBackend('/api/v1/identity/auth/session/logout', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { ...await getAuthHeaders(), Authorization: `Bearer ${token}` },
     })
     if (!res.ok && res.status !== 401) {
       throw new Error('退出登录暂时失败，请稍后重试')

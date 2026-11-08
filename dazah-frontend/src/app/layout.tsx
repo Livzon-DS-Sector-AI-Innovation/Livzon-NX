@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import "./globals.css"
 import { appearanceInitScript } from "@/lib/appearance"
+import { WorkspaceEntryTransition } from "@/components/auth/WorkspaceEntryTransition"
 
 export const metadata: Metadata = {
   title: "工厂管理平台",
@@ -16,7 +17,7 @@ export default function RootLayout({
     <html lang="zh-CN" className="h-full" suppressHydrationWarning>
       <head><script dangerouslySetInnerHTML={{ __html: appearanceInitScript }} /></head>
       <body className="h-full antialiased">
-        {children}
+        <WorkspaceEntryTransition>{children}</WorkspaceEntryTransition>
       </body>
     </html>
   )

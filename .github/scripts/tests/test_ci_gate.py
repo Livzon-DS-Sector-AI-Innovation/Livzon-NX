@@ -30,6 +30,121 @@ def results(value: str = "success") -> dict[str, str]:
 
 
 class GateTests(unittest.TestCase):
+    def test_backend_builds_use_authenticated_action_and_separate_layer_caches(self):
+        jobs = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]
+        steps = jobs["backend-image-verify"]["steps"]
+        for name, filename, scope, tag in (
+            (
+                "Build backend image once",
+                "Dockerfile",
+                "backend",
+                "${{ env.IMAGE_TAG }}",
+            ),
+            (
+                "Build development backend image",
+                "Dockerfile.dev",
+                "backend-dev",
+                "${{ env.IMAGE_TAG }}-dev",
+            ),
+        ):
+            with self.subTest(scope=scope):
+                build = next(step for step in steps if step["name"] == name)
+                self.assertEqual(
+                    build["uses"],
+                    "docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8",
+                )
+                self.assertEqual(build["with"]["file"], filename)
+                self.assertEqual(build["with"]["context"], ".")
+                self.assertEqual(build["with"]["target"], "backend")
+                self.assertIs(build["with"]["load"], True)
+                self.assertFalse(build["with"].get("push", False))
+                self.assertEqual(build["with"]["tags"], tag)
+                self.assertEqual(build["with"]["cache-from"], f"type=gha,scope={scope}")
+                self.assertIn("mode=max", build["with"]["cache-to"])
+                self.assertIn(f"scope={scope}", build["with"]["cache-to"])
+                self.assertNotIn("ignore-error", build["with"]["cache-to"])
+                self.assertNotIn("continue-on-error", build)
+
+    def test_runner_apt_installations_share_strict_download_policy(self):
+        jobs = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]
+        for job in ("backend-integration", "hermes-contract"):
+            with self.subTest(job=job):
+                step = next(
+                    step
+                    for step in jobs[job]["steps"]
+                    if step["name"] == "Install backend system prerequisites"
+                )
+                command = step["run"]
+                self.assertLess(
+                    command.index("sudo install -m 0644 docker/apt-download.conf"),
+                    command.index("sudo apt-get update"),
+                )
+                self.assertIn(
+                    "sudo apt-get install --yes --no-install-recommends", command
+                )
+                self.assertNotIn("|| true", command)
+                self.assertNotIn("continue-on-error", step)
+
+    def test_python_phases_and_environment_remain_blocking(self) -> None:
+        workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+        jobs = workflow["jobs"]
+        self.assertEqual(workflow["env"]["UV_VERSION"], "0.13.4")
+        for job in jobs.values():
+            self.assertEqual(job["runs-on"], "ubuntu-24.04")
+        for name in (
+            "backend-quality",
+            "backend-integration",
+            "hermes-quality",
+            "hermes-contract",
+        ):
+            steps = jobs[name]["steps"]
+            setup = next(s for s in steps if s.get("id") == "uv")
+            python = next(s for s in steps if s["name"] == "Set up Python")
+            self.assertLess(steps.index(python), steps.index(setup))
+            self.assertEqual(setup["with"]["version"], "${{ env.UV_VERSION }}")
+            self.assertEqual(
+                jobs[name]["outputs"]["uv_cache_hit"],
+                "${{ steps.uv.outputs.cache-hit }}",
+            )
+            for step in steps:
+                if (
+                    "ci_support.py" in step.get("run", "")
+                    and step.get("id") != "phases"
+                ):
+                    self.assertNotIn("continue-on-error", step)
+                    self.assertNotIn("always()", step.get("if", ""))
+            export = next(s for s in steps if s.get("id") == "phases")
+            self.assertEqual(export["if"], "${{ always() }}")
+        integration = jobs["backend-integration"]["steps"]
+        names = [s["name"] for s in integration]
+        for earlier, later in zip(
+            (
+                "Install backend dependencies",
+                "Verify backend environment",
+                "Verify backend migrations and contracts",
+                "Run backend full test suite",
+            ),
+            (
+                "Verify backend environment",
+                "Verify backend migrations and contracts",
+                "Run backend full test suite",
+                "Enforce backend coverage gates",
+            ),
+        ):
+            self.assertLess(names.index(earlier), names.index(later))
+        contract = str(jobs["hermes-contract"])
+        for filename in (
+            "test_agent_v2_contracts.py",
+            "test_tool_registry_executor.py",
+            "test_user_tool_api.py",
+            "test_dazah_feishu_tool_payload.py",
+            "test_dazah_backend_contract.py",
+        ):
+            self.assertIn(filename, contract)
+        self.assertIn(
+            'chromium.launch({channel:"chromium"})', str(jobs["frontend-e2e"])
+        )
+
     def test_independent_checks_start_after_scope_and_remain_required(self) -> None:
         jobs = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]
         independent = {

@@ -1,4 +1,4 @@
-import { cookies } from 'next/headers'
+import { getAuthHeaders } from '@/lib/auth'
 
 const API_BASE_URL =
   process.env.API_BASE_URL ||
@@ -139,11 +139,9 @@ function buildListSearchParams(params: RegulatoryTrackerListParams = {}): URLSea
 }
 
 async function serverFetch<T>(path: string): Promise<T> {
-  const cookieStore = await cookies()
-  const authToken = cookieStore.get('auth_token')?.value
   const response = await fetch(`${API_BASE_URL}${path}`, {
     cache: 'no-store',
-    headers: authToken ? { Authorization: `Bearer ${authToken}` } : undefined,
+    headers: await getAuthHeaders(),
   })
 
   return parseApiResponse<T>(response)

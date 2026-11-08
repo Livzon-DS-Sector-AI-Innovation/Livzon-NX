@@ -691,10 +691,13 @@ def candidate_fixture(tmp_path, monkeypatch, shas, *, ages_days, state=None):
     monkeypatch.setattr(cd, "CANDIDATES", directory)
     if state is not None:
         cd.atomic_json(control.state_file, state)
-    for sha, age in zip(shas, ages_days, strict=True):
+    now = time.time()
+    for index, (sha, age) in enumerate(zip(shas, ages_days, strict=True)):
         path = directory / f"{sha}.json"
         path.write_text('{"run_id": 1}')
-        os.utime(path, (time.time() - age * 86400,) * 2)
+        # Keep equal-age samples ordered even on coarse Windows filesystem clocks.
+        timestamp = now - age * 86400 - (len(shas) - index)
+        os.utime(path, (timestamp,) * 2)
     return control, directory
 
 
@@ -726,6 +729,14 @@ def test_candidate_prune_minimum_floor_keeps_newest_even_when_all_are_stale(tmp_
     control.prune_candidates(keep_days=30, keep_newest=3)
     kept = sorted(path.stem for path in directory.glob("*.json"))
     assert kept == sorted(shas[-3:])
+
+
+def test_candidate_fixture_orders_equal_ages_with_a_coarse_clock(tmp_path, monkeypatch):
+    monkeypatch.setattr(time, "time", lambda: 1_800_000_000.0)
+    shas = [sha_of(index) for index in range(8)]
+    _, directory = candidate_fixture(tmp_path, monkeypatch, shas, ages_days=[400] * 8)
+    timestamps = [(directory / f"{sha}.json").stat().st_mtime for sha in shas]
+    assert all(later - earlier >= 1 for earlier, later in zip(timestamps, timestamps[1:]))
 
 
 @pytest.mark.parametrize("name", ["notes.json", "not-a-sha.txt", ".hidden.json"])
