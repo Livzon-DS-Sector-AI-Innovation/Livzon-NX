@@ -416,3 +416,102 @@ def test_certificate_categories_cover_cert_ledger() -> None:
     ):
         assert required in values
         assert CERTIFICATE_CATEGORY_LABELS[required]
+
+
+async def test_certificate_endpoints_require_login(
+    db_session: AsyncSession,
+) -> None:
+    """未登录调用证件端点统一 401（依赖返回 None 的匿名客户端）。"""
+    application = FastAPI()
+    application.include_router(work_certificates_router, prefix="/api/v1/safety")
+    application.dependency_overrides[get_current_user] = lambda: None
+
+    async def _override_get_db() -> AsyncIterator[AsyncSession]:
+        yield db_session
+
+    application.dependency_overrides[get_db] = _override_get_db
+    transport = ASGITransport(app=application)
+    try:
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            created = await ac.post(
+                "/api/v1/safety/work-certificates", json=_cert_payload()
+            )
+            updated = await ac.put(
+                f"/api/v1/safety/work-certificates/{uuid4()}",
+                json=_cert_payload(),
+            )
+            deleted = await ac.delete(
+                f"/api/v1/safety/work-certificates/{uuid4()}"
+            )
+            imported = await ac.post(
+                "/api/v1/safety/work-certificates/import",
+                files={"file": ("a.xlsx", b"junk")},
+            )
+            uploaded = await ac.post(
+                f"/api/v1/safety/work-certificates/{uuid4()}/files",
+                files={"file": ("a.png", b"junk")},
+            )
+        assert created.status_code == 401
+        assert updated.status_code == 401
+        assert deleted.status_code == 401
+        assert imported.status_code == 401
+        assert uploaded.status_code == 401
+    finally:
+        application.dependency_overrides.pop(get_current_user, None)
+        application.dependency_overrides.pop(get_db, None)
+
+
+async def test_import_rejects_invalid_sheets_param(
+    cert_client: AsyncClient,
+) -> None:
+    """import 的 sheets 表单参数必须是合法的字符串数组 JSON。"""
+    files = {"file": ("a.xlsx", b"junk")}
+    bad_json = await cert_client.post(
+        "/api/v1/safety/work-certificates/import",
+        data={"sheets": "not-json"},
+        files=files,
+    )
+    assert bad_json.status_code == 400
+    assert "子表参数格式错误" in bad_json.text
+
+    non_str_items = await cert_client.post(
+        "/api/v1/safety/work-certificates/import",
+        data={"sheets": '["电焊", 1]'},
+        files=files,
+    )
+    assert non_str_items.status_code == 400
+    assert "子表参数格式错误" in non_str_items.text
+
+
+async def test_certificate_file_missing_storage_returns_404(
+    cert_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """附件记录存在但存储对象缺失：下载与重识别均返回 404。"""
+    created = await cert_client.post(
+        "/api/v1/safety/work-certificates", json=_cert_payload()
+    )
+    assert created.status_code == 200
+    cert_id = created.json()["data"]["id"]
+    file_row = SpecialWorkCertificateFile(
+        certificate_id=cert_id,
+        file_name="missing.pdf",
+        storage_key="work-certificates/__missing__/missing.pdf",
+        content_type="application/pdf",
+        size_bytes=1,
+    )
+    db_session.add(file_row)
+    await db_session.flush()
+    file_id = file_row.id
+    try:
+        download = await cert_client.get(
+            f"/api/v1/safety/work-certificates/{cert_id}/files/{file_id}/content"
+        )
+        assert download.status_code == 404
+
+        extract = await cert_client.post(
+            f"/api/v1/safety/work-certificates/{cert_id}/files/{file_id}/extract"
+        )
+        assert extract.status_code == 404
+    finally:
+        await db_session.delete(file_row)
+        await db_session.flush()

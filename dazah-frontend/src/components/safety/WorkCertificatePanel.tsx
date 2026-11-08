@@ -121,15 +121,29 @@ export function WorkCertificatePanel({
   const [importOpen, setImportOpen] = useState(false)
 
   const load = useCallback(
-    async (targetPage = page) => {
+    async (
+      targetPage = page,
+      overrides?: {
+        category?: string | null
+        status?: string | null
+        keyword?: string | null
+      }
+    ) => {
+      // 筛选按钮先 setState 再 load：state 尚未生效，必须用显式覆盖值
+      const effCategory =
+        overrides?.category !== undefined ? overrides.category : category
+      const effStatus =
+        overrides?.status !== undefined ? overrides.status : status
+      const effKeyword =
+        overrides?.keyword !== undefined ? overrides.keyword : keyword
       setLoading(true)
       const [listRes, summaryRes] = await Promise.all([
         getWorkCertificates({
           pageKey: WORK_CERTIFICATES_PAGE_KEY,
           page: targetPage,
-          certificateCategory: category,
-          status,
-          keyword,
+          certificateCategory: effCategory,
+          status: effStatus,
+          keyword: effKeyword,
         }),
         getCertificateExpirySummary(WORK_CERTIFICATES_PAGE_KEY),
       ])
@@ -357,18 +371,20 @@ export function WorkCertificatePanel({
       )}
       <Card size="small">
         <Space wrap size={16}>
-          <Button onClick={() => { setStatus(null); setPage(1); void load(1) }}>
+          <Button
+            onClick={() => { setStatus(null); setPage(1); void load(1, { status: null }) }}
+          >
             全部：{summary?.total ?? 0}
           </Button>
           <Button
-            onClick={() => { setStatus('expiring'); setPage(1); void load(1) }}
+            onClick={() => { setStatus('expiring'); setPage(1); void load(1, { status: 'expiring' }) }}
             type={status === 'expiring' ? 'primary' : 'default'}
           >
             30天内到期：{summary?.expiring_in_30d ?? 0}
           </Button>
           <Button
             danger
-            onClick={() => { setStatus('expired'); setPage(1); void load(1) }}
+            onClick={() => { setStatus('expired'); setPage(1); void load(1, { status: 'expired' }) }}
             type={status === 'expired' ? 'primary' : 'default'}
           >
             已过期：{summary?.expired ?? 0}
@@ -386,6 +402,7 @@ export function WorkCertificatePanel({
             onChange={(value) => {
               setCategory(value ?? null)
               setPage(1)
+              void load(1, { category: value ?? null })
             }}
           />
           <Input.Search
@@ -395,7 +412,7 @@ export function WorkCertificatePanel({
             onSearch={(value) => {
               setKeyword(value || null)
               setPage(1)
-              void load(1)
+              void load(1, { keyword: value || null })
             }}
           />
           <Button onClick={() => void load(page)}>刷新</Button>

@@ -26,7 +26,6 @@ from app.core.deps import get_current_user
 from app.modules.safety.api.work_certificates import work_certificates_router
 from app.modules.safety.models import SpecialWorkCertificate
 from app.modules.safety.service.work_certificate_import import (
-    CertificateImportService,
     match_sheet_rule,
     merge_records,
     parse_certificate_workbook,

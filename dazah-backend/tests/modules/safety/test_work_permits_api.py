@@ -477,7 +477,9 @@ async def test_verify_gas_accept_flow(
         # 无指派的确认节点由创建人处理，审批节点由指派审批人签
         _switch_user(
             work_app,
-            users["creator"] if pending[0]["assigned_approver_id"] is None else approver,
+            users["creator"]
+            if pending[0]["assigned_approver_id"] is None
+            else approver,
         )
         approved = await api_client.post(
             f"/api/v1/safety/work-permits/{permit['id']}/nodes/{pending[0]['id']}/approve"
@@ -723,7 +725,9 @@ async def test_submit_cert_category_and_holder_mismatch(
 ) -> None:
     """证件类别不符 + 持有人姓名不一致：两条软提示同时返回。"""
     await _cleanup(db_session)
-    cert = await _add_certificate(db_session, f"{_PERMIT_MARK}王五", category="forklift")
+    cert = await _add_certificate(
+        db_session, f"{_PERMIT_MARK}王五", category="forklift"
+    )
     permit = await _create_permit(
         api_client,
         persons=[

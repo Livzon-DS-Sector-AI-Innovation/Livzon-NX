@@ -264,3 +264,54 @@ async def test_certificate_expiry_notifications_dedupe(
     generator = SafetyCertificateExpiryReminderGenerator()
     assert await generator.find_due(db_session) == []
     await _cleanup(db_session)
+
+
+async def test_generators_production_paths(
+    monkeypatch: pytest.MonkeyPatch, db_session: AsyncSession
+) -> None:
+    """生产环境 + 开关启用时生成器返回待办并委托推送；开关关闭则跳过。"""
+
+    class _ProdSettings:
+        APP_ENV = "production"
+
+    import app.core.config as config_module
+
+    monkeypatch.setattr(config_module, "get_settings", lambda: _ProdSettings())
+
+    settings = SafetyFeishuAppSettings(
+        app_id=f"cli_gas_{uuid4().hex[:8]}",
+        app_secret="enc",
+        permit_notify_enabled=True,
+        cert_expiry_notify_enabled=True,
+    )
+    db_session.add(settings)
+    await db_session.flush()
+
+    gas_gen = SafetyWorkPermitGasDueGenerator()
+    cert_gen = SafetyCertificateExpiryReminderGenerator()
+    try:
+        assert await gas_gen.find_due(db_session) == [True]
+        assert await cert_gen.find_due(db_session) == [True]
+
+        settings.permit_notify_enabled = False
+        await db_session.flush()
+        assert await gas_gen.find_due(db_session) == []
+
+        settings.permit_notify_enabled = True
+        settings.cert_expiry_notify_enabled = False
+        await db_session.flush()
+        assert await cert_gen.find_due(db_session) == []
+
+        async def _fake_send(session: AsyncSession) -> tuple[int, list[str]]:
+            return (1, ["boom"])
+
+        monkeypatch.setattr(reminders, "send_gas_due_reminders", _fake_send)
+        monkeypatch.setattr(
+            reminders, "send_certificate_expiry_notifications", _fake_send
+        )
+        # execute_one 只记日志不抛错
+        await gas_gen.execute_one(db_session, True)
+        await cert_gen.execute_one(db_session, True)
+    finally:
+        await db_session.delete(settings)
+        await db_session.flush()

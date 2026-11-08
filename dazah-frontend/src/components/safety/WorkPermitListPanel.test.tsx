@@ -8,6 +8,11 @@ const mocks = vi.hoisted(() => ({
   getWorkPermits: vi.fn(),
   getWorkPermitStats: vi.fn(),
   getWorkPermitMeta: vi.fn(),
+  getApproverConfigs: vi.fn(),
+  getWorkPermitSettings: vi.fn(),
+  updateWorkPermitSettings: vi.fn(),
+  upsertApproverConfig: vi.fn(),
+  message: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
   canOperate: true,
   canAccess: true,
 }))
@@ -16,8 +21,17 @@ vi.mock('@/actions/safety', () => ({
   getWorkPermits: mocks.getWorkPermits,
   getWorkPermitStats: mocks.getWorkPermitStats,
   getWorkPermitMeta: mocks.getWorkPermitMeta,
+  getApproverConfigs: mocks.getApproverConfigs,
+  getWorkPermitSettings: mocks.getWorkPermitSettings,
+  updateWorkPermitSettings: mocks.updateWorkPermitSettings,
+  upsertApproverConfig: mocks.upsertApproverConfig,
   WORK_PERMITS_PAGE_KEY: 'safety:ops-safety:work-permits',
 }))
+
+vi.mock('antd', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('antd')>()
+  return { ...actual, message: mocks.message }
+})
 
 vi.mock('@/hooks/usePagePermissions', () => ({
   usePagePermissions: () => ({
@@ -104,10 +118,15 @@ const META = {
   gas_types: ['hot_work'],
   gas_cycle_minutes: { hot_work: 60 },
   certificate_categories: [],
+  nodes: {
+    blind_plate: [
+      { key: 'work_leader_approve', name: '作业负责人审批', kind: 'approve', levels: null },
+    ],
+  },
 }
 
-function flush() {
-  return new Promise((resolve) => setTimeout(resolve, 60))
+function flush(ms = 60) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 function buttons(text: string) {
@@ -186,5 +205,160 @@ describe('作业票列表面板', () => {
     // PlatformNotice 正文展示简明 message；完整 description 收进「了解访问规则」弹窗
     expect(document.body.textContent?.includes('作业票列表加载失败')).toBe(true)
     expect(buttons('重试').length).toBeGreaterThan(0)
+  })
+})
+
+describe('作业票列表面板：默认审批人配置抽屉', () => {
+  let localRoot: Root | undefined
+  let localContainer: HTMLElement | undefined
+
+  beforeEach(() => {
+    localContainer = document.body.appendChild(document.createElement('div'))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              data: {
+                items: [{ id: 'ou_1', name: '王主任', department: '安全科' }],
+              },
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          ),
+        ),
+      ),
+    )
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('打开配置抽屉：加载配置与开关并渲染节点', async () => {
+    mocks.getApproverConfigs.mockResolvedValue({
+      code: 200,
+      data: {
+        items: [
+          {
+            permit_type: 'blind_plate',
+            node_key: 'work_leader_approve',
+            approver_user_id: 'ou_1',
+          },
+        ],
+      },
+    })
+    mocks.getWorkPermitSettings.mockResolvedValue({
+      code: 200,
+      data: { cert_check_strict: true },
+    })
+    await act(async () => {
+      localRoot = createRoot(localContainer!)
+      localRoot.render(<WorkPermitListPanel initialList={null} initialStats={STATS} initialError={null} />)
+    })
+    await flush()
+    await act(async () => {
+      buttons('默认审批人配置')[0].click()
+    })
+    await flush()
+    expect(document.body.textContent).toContain('节点默认审批人配置')
+    expect(document.body.textContent).toContain('作业负责人审批')
+    expect(mocks.getApproverConfigs).toHaveBeenCalled()
+    expect(mocks.getWorkPermitSettings).toHaveBeenCalled()
+    // 开关处于开启态（cert_check_strict=true）
+    const switchButton = document.body.querySelector<HTMLButtonElement>(
+      'button[role="switch"]',
+    )
+    expect(switchButton?.getAttribute('aria-checked')).toBe('true')
+  })
+
+  it('切换证件强校验开关：成功提示与失败回退', async () => {
+    mocks.getApproverConfigs.mockResolvedValue({ code: 200, data: { items: [] } })
+    mocks.getWorkPermitSettings.mockResolvedValue({
+      code: 200,
+      data: { cert_check_strict: false },
+    })
+    mocks.updateWorkPermitSettings.mockResolvedValue({ code: 200, data: null })
+    await act(async () => {
+      localRoot = createRoot(localContainer!)
+      localRoot.render(<WorkPermitListPanel initialList={null} initialStats={STATS} initialError={null} />)
+    })
+    await flush()
+    await act(async () => {
+      buttons('默认审批人配置')[0].click()
+    })
+    await flush()
+    const switchButton = document.body.querySelector<HTMLButtonElement>(
+      'button[role="switch"]',
+    )
+    expect(switchButton?.getAttribute('aria-checked')).toBe('false')
+    await act(async () => {
+      switchButton!.click()
+    })
+    await flush()
+    expect(mocks.updateWorkPermitSettings).toHaveBeenCalledWith(true)
+    expect(mocks.message).not.toBeUndefined()
+    // 失败路径：保存失败回退开关并报错
+    mocks.updateWorkPermitSettings.mockResolvedValue({
+      code: 500,
+      message: '保存失败',
+    })
+    await act(async () => {
+      switchButton!.click()
+    })
+    await flush()
+    expect(mocks.updateWorkPermitSettings).toHaveBeenLastCalledWith(false)
+  })
+
+  it('选择节点审批人后保存配置', async () => {
+    mocks.getApproverConfigs.mockResolvedValue({ code: 200, data: { items: [] } })
+    mocks.getWorkPermitSettings.mockResolvedValue({
+      code: 200,
+      data: { cert_check_strict: false },
+    })
+    mocks.upsertApproverConfig.mockResolvedValue({ code: 200, data: null })
+    await act(async () => {
+      localRoot = createRoot(localContainer!)
+      localRoot.render(<WorkPermitListPanel initialList={null} initialStats={STATS} initialError={null} />)
+    })
+    await flush()
+    await act(async () => {
+      buttons('默认审批人配置')[0].click()
+    })
+    await flush()
+    // 抽屉内多个下拉：最后一个输入框是节点审批人选择器
+    const selectInputs = Array.from(
+      document.body.querySelectorAll<HTMLElement>('.ant-drawer input.ant-select-input'),
+    )
+    expect(selectInputs.length).toBeGreaterThanOrEqual(2)
+    const nodeSelect = selectInputs[selectInputs.length - 1]
+    await act(async () => {
+      nodeSelect.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    })
+    await flush(30)
+    // showSearch 下拉靠输入关键词触发 onSearch 拉取人员
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        'value',
+      )?.set
+      setter?.call(nodeSelect, '王')
+      nodeSelect.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await flush(60)
+    const option = Array.from(
+      document.body.querySelectorAll<HTMLElement>('.ant-select-item-option'),
+    ).find((o) => o.textContent?.includes('王主任'))
+    expect(option, '人员下拉应出现王主任').toBeTruthy()
+    await act(async () => {
+      option!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+      option!.click()
+    })
+    await flush()
+    expect(mocks.upsertApproverConfig).toHaveBeenCalledWith({
+      permit_type: 'blind_plate',
+      node_key: 'work_leader_approve',
+      approver_user_id: 'ou_1',
+    })
   })
 })
