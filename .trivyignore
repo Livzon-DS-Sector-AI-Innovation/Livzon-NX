@@ -9,3 +9,9 @@ CVE-2026-63374
 
 # AnyIO run_process/open_process ignores extra_groups and can retain parent supplementary groups
 CVE-2026-63349
+
+# apt: RCE via hard link reuse during package download（基础镜像
+# python:3.12-slim-bookworm 自带 apt 2.6.1，修复版 2.6.2 需升级镜像内
+# 系统包，Dockerfile 属 CODEOWNERS 保护路径，无法随业务 PR 合并）。
+# 跟踪：在属主维护的镜像升级 PR 中执行 apt 升级后移除本条。
+CVE-2026-109518
