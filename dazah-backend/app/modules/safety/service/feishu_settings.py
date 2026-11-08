@@ -124,6 +124,19 @@ def _build_detail(
         fire_expiry_notify_user_ids=list(
             model.fire_expiry_notify_user_ids or []
         ),
+        permit_notify_enabled=model.permit_notify_enabled,
+        permit_notify_chat_ids=list(model.permit_notify_chat_ids or []),
+        permit_notify_user_ids=list(model.permit_notify_user_ids or []),
+        cert_expiry_notify_enabled=model.cert_expiry_notify_enabled,
+        cert_expiry_notify_milestones=list(
+            model.cert_expiry_notify_milestones or [30, 15, 7]
+        ),
+        cert_expiry_notify_chat_ids=list(
+            model.cert_expiry_notify_chat_ids or []
+        ),
+        cert_expiry_notify_user_ids=list(
+            model.cert_expiry_notify_user_ids or []
+        ),
         is_enabled=model.is_enabled,
         knowledge_last_sync_status=model.knowledge_last_sync_status,
         knowledge_last_sync_error=model.knowledge_last_sync_error,
@@ -183,6 +196,19 @@ async def update_safety_feishu_app_settings(
                 fire_expiry_notify_user_ids=list(
                     data.fire_expiry_notify_user_ids or []
                 ),
+                permit_notify_enabled=data.permit_notify_enabled,
+                permit_notify_chat_ids=list(data.permit_notify_chat_ids or []),
+                permit_notify_user_ids=list(data.permit_notify_user_ids or []),
+                cert_expiry_notify_enabled=data.cert_expiry_notify_enabled,
+                cert_expiry_notify_milestones=list(
+                    data.cert_expiry_notify_milestones or [30, 15, 7]
+                ),
+                cert_expiry_notify_chat_ids=list(
+                    data.cert_expiry_notify_chat_ids or []
+                ),
+                cert_expiry_notify_user_ids=list(
+                    data.cert_expiry_notify_user_ids or []
+                ),
                 is_enabled=data.is_enabled,
             )
             db.add(model)
@@ -239,6 +265,32 @@ async def update_safety_feishu_app_settings(
             if "fire_expiry_notify_user_ids" in data.model_fields_set:
                 model.fire_expiry_notify_user_ids = list(
                     data.fire_expiry_notify_user_ids or []
+                )
+            if "permit_notify_enabled" in data.model_fields_set:
+                model.permit_notify_enabled = data.permit_notify_enabled
+            if "permit_notify_chat_ids" in data.model_fields_set:
+                model.permit_notify_chat_ids = list(
+                    data.permit_notify_chat_ids or []
+                )
+            if "permit_notify_user_ids" in data.model_fields_set:
+                model.permit_notify_user_ids = list(
+                    data.permit_notify_user_ids or []
+                )
+            if "cert_expiry_notify_enabled" in data.model_fields_set:
+                model.cert_expiry_notify_enabled = (
+                    data.cert_expiry_notify_enabled
+                )
+            if "cert_expiry_notify_milestones" in data.model_fields_set:
+                model.cert_expiry_notify_milestones = list(
+                    data.cert_expiry_notify_milestones or []
+                )
+            if "cert_expiry_notify_chat_ids" in data.model_fields_set:
+                model.cert_expiry_notify_chat_ids = list(
+                    data.cert_expiry_notify_chat_ids or []
+                )
+            if "cert_expiry_notify_user_ids" in data.model_fields_set:
+                model.cert_expiry_notify_user_ids = list(
+                    data.cert_expiry_notify_user_ids or []
                 )
         await db.commit()
         return _build_detail(model)

@@ -129,7 +129,8 @@ def test_single_head_retains_the_safety_reminder_history() -> None:
     heads = script.get_heads()
     # 单 head 链：主线（…→ b8d2f4a6c0e9 → b2e9d4f7a6c3 → b9e4f7a2c5d1）
     # + 车间维修群链（da5f78a06d60 → ada9041499a5）→ 合并点 9af3c6bb8778
-    assert heads == ["9af3c6bb8778"], f"迁移必须保持单 head，当前: {heads}"
+    # → 8大作业票与证件（c3a8e5f2b7d4）
+    assert heads == ["c3a8e5f2b7d4"], f"迁移必须保持单 head，当前: {heads}"
     history = {
         revision.revision for revision in script.walk_revisions(head=heads[0])
     }
