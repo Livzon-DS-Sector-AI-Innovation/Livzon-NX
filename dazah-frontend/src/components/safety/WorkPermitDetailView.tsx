@@ -12,7 +12,6 @@ import {
 import Link from 'next/link'
 import { useCallback, useEffect, useState } from 'react'
 import {
-  Alert,
   Button,
   Card,
   DatePicker,
@@ -422,7 +421,7 @@ export function WorkPermitDetailView({ initialDetail }: { initialDetail: WorkPer
           ]}
         />
         {detail.reject_opinion && detail.status === 'rejected' && (
-          <Alert
+          <PlatformNotice
             type="error"
             showIcon
             message={`驳回意见：${detail.reject_opinion}`}
@@ -430,7 +429,7 @@ export function WorkPermitDetailView({ initialDetail }: { initialDetail: WorkPer
           />
         )}
         {detail.gas_overdue && (
-          <Alert
+          <PlatformNotice
             type="warning"
             showIcon
             message={`气体复检已超期（下次要求：${fmt(detail.next_gas_due_at)}），请立即复检`}

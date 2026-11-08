@@ -83,7 +83,7 @@ vi.mock('antd', async (importOriginal) => {
 
 vi.mock('@ant-design/icons', () => {
   const Icon = () => null
-  return { ReloadOutlined: Icon }
+  return { ReloadOutlined: Icon, ArrowUpOutlined: Icon, CheckOutlined: Icon }
 })
 
 import { WorkPermitDetailView } from './WorkPermitDetailView'
