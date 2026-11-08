@@ -254,7 +254,7 @@ def upgrade() -> None:
         ),
         sa.Column("opinion", sa.Text(), nullable=True, comment="审批/确认意见"),
         sa.ForeignKeyConstraint(
-            ["permit_id"], ["safety.work_permits.id"], ondelete="CASCADE"
+            ["permit_id"], ["safety.work_permits.id"]
         ),
         sa.ForeignKeyConstraint(
             ["assigned_approver_id"], ["identity.users.id"]
@@ -319,7 +319,7 @@ def upgrade() -> None:
         ),
         sa.Column("remark", sa.Text(), nullable=True, comment="备注"),
         sa.ForeignKeyConstraint(
-            ["permit_id"], ["safety.work_permits.id"], ondelete="CASCADE"
+            ["permit_id"], ["safety.work_permits.id"]
         ),
         *_base_constraints(),
         schema="safety",
@@ -348,10 +348,10 @@ def upgrade() -> None:
             comment="关联票",
         ),
         sa.ForeignKeyConstraint(
-            ["permit_id"], ["safety.work_permits.id"], ondelete="CASCADE"
+            ["permit_id"], ["safety.work_permits.id"]
         ),
         sa.ForeignKeyConstraint(
-            ["related_permit_id"], ["safety.work_permits.id"], ondelete="CASCADE"
+            ["related_permit_id"], ["safety.work_permits.id"]
         ),
         sa.UniqueConstraint(
             "permit_id",
@@ -405,7 +405,7 @@ def upgrade() -> None:
             comment="文件字节数",
         ),
         sa.ForeignKeyConstraint(
-            ["permit_id"], ["safety.work_permits.id"], ondelete="CASCADE"
+            ["permit_id"], ["safety.work_permits.id"]
         ),
         *_base_constraints(),
         schema="safety",
@@ -528,7 +528,6 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["certificate_id"],
             ["safety.special_work_certificates.id"],
-            ondelete="CASCADE",
         ),
         *_base_constraints(),
         schema="safety",
@@ -637,7 +636,6 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(
             ["certificate_id"],
             ["safety.special_work_certificates.id"],
-            ondelete="CASCADE",
         ),
         sa.ForeignKeyConstraint(["created_by"], ["identity.users.id"]),
         sa.ForeignKeyConstraint(["updated_by"], ["identity.users.id"]),
