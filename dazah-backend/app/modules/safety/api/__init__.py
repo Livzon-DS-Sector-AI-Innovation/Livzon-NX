@@ -34,6 +34,8 @@ from app.modules.safety.api.special_ops_permits import special_ops_permits_route
 from app.modules.safety.api.special_ops_personnel import special_ops_personnel_router
 from app.modules.safety.api.targets import safety_targets_router
 from app.modules.safety.api.trainings import trainings_router
+from app.modules.safety.api.work_certificates import work_certificates_router
+from app.modules.safety.api.work_permits import work_permits_router
 
 router = APIRouter()
 
@@ -64,3 +66,5 @@ router.include_router(special_operation_reports_router)
 router.include_router(special_ops_permits_router)
 router.include_router(special_ops_personnel_router)
 router.include_router(trainings_router)
+router.include_router(work_certificates_router)
+router.include_router(work_permits_router)

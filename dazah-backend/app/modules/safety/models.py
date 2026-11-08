@@ -2814,6 +2814,38 @@ class SafetyFeishuAppSettings(BaseModel):
     fire_expiry_notify_user_ids: Mapped[list[Any] | None] = mapped_column(
         JSON, nullable=True, default=list, comment="有效期提醒个人 open_id 列表"
     )
+    permit_notify_enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+        comment="是否启用 8 大作业票飞书卡片通知（提交/审批/验票/完工/驳回/复检催办）",
+    )
+    permit_notify_chat_ids: Mapped[list[Any] | None] = mapped_column(
+        JSON, nullable=True, default=list, comment="作业票通知群 chat_id 列表（备用）"
+    )
+    permit_notify_user_ids: Mapped[list[Any] | None] = mapped_column(
+        JSON, nullable=True, default=list, comment="作业票通知抄送个人 open_id 列表"
+    )
+    cert_expiry_notify_enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+        comment="是否启用特种作业证件到期提醒（每天检查，进入提醒节点才推送）",
+    )
+    cert_expiry_notify_milestones: Mapped[list[Any] | None] = mapped_column(
+        JSON,
+        nullable=True,
+        default=list,
+        comment="证件到期提醒节点天数列表（如 [30,15,7]；0 = 已过期节点）",
+    )
+    cert_expiry_notify_chat_ids: Mapped[list[Any] | None] = mapped_column(
+        JSON, nullable=True, default=list, comment="证件到期提醒群 chat_id 列表"
+    )
+    cert_expiry_notify_user_ids: Mapped[list[Any] | None] = mapped_column(
+        JSON, nullable=True, default=list, comment="证件到期提醒个人 open_id 列表"
+    )
 
 
 class HazardDueNotificationLog(BaseModel):
@@ -4735,4 +4767,498 @@ class OhDetectionResult(BaseModel):
     )
     extra: Mapped[dict[str, Any] | None] = mapped_column(
         JSON, nullable=True, comment="类别特有字段（噪声LEX、高温接触时间率等）"
+    )
+
+
+# ==================== 8大特殊作业票（新版作业票） ====================
+
+
+class WorkPermit(BaseModel):
+    """8 大特殊作业票主表（动火/受限空间/盲板抽堵/高处/吊装/临时用电/动土/断路）。
+
+    票面差异字段统一存 ``type_data`` JSONB（按 service.work_permit_templates
+    的 type_fields 校验）；安全措施勾选存 ``safety_measures``；风险辨识勾选存
+    ``risk_identifications``；作业相关人员（含证件快照）存 ``persons``。
+    """
+
+    __tablename__ = "work_permits"
+    __table_args__ = (
+        Index(
+            "uq_work_permits_permit_no",
+            "permit_no",
+            unique=True,
+            postgresql_where=text("is_deleted = false"),
+        ),
+        Index("ix_work_permits_type_status", "permit_type", "status"),
+        Index("ix_work_permits_apply_time", "apply_time"),
+        {"schema": "safety"},
+    )
+
+    permit_no: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        comment=(
+            "作业票编号（DH/SX/MB/GC/DZ/LD/DT/DL-日期-序号）"
+        ),
+    )
+    permit_type: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        comment=(
+            "票种: hot_work/confined_space/blind_plate/height_work/"
+            "lifting/temporary_electricity/excavation/road_breaking"
+        ),
+    )
+    permit_level: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="none",
+        server_default="none",
+        comment="作业级别: special/grade1/grade2/grade3/none",
+    )
+    status: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="draft",
+        server_default="draft",
+        comment=(
+            "状态: draft/pending_approval/approved/active/completed/"
+            "rejected/cancelled"
+        ),
+    )
+
+    apply_department: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, comment="申请单位"
+    )
+    apply_time: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="作业申请时间"
+    )
+    work_description: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="作业内容"
+    )
+    work_location: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, comment="作业地点"
+    )
+    work_unit: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, comment="作业单位"
+    )
+
+    planned_start_time: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="实施开始时间"
+    )
+    planned_end_time: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="实施结束时间"
+    )
+    actual_start_time: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="实际开始时间（验票时写入）"
+    )
+    actual_end_time: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="实际结束时间（完工验收时写入）"
+    )
+
+    persons: Mapped[list[Any] | None] = mapped_column(
+        JSONB,
+        nullable=True,
+        default=list,
+        comment=(
+            "作业相关人员 [{role,name,user_id?,certificate_id?,"
+            "certificate_no,certificate_category}]"
+        ),
+    )
+    risk_identifications: Mapped[list[Any] | None] = mapped_column(
+        JSONB,
+        nullable=True,
+        default=list,
+        comment="风险辨识结果勾选（票面 22 项的子集）",
+    )
+    safety_measures: Mapped[list[Any] | None] = mapped_column(
+        JSONB,
+        nullable=True,
+        default=list,
+        comment="安全措施勾选 [{key,status:yes/not_applicable,fills:{}}]",
+    )
+    type_data: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB, nullable=True, default=dict, comment="票种差异字段（按模板校验）"
+    )
+
+    related_legacy_no_text: Mapped[str | None] = mapped_column(
+        String(500),
+        nullable=True,
+        comment=(
+            "关联的其他特殊作业及安全作业票编号（自由文本，历史口径）"
+        ),
+    )
+    current_node_seq: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+        comment="当前轮次待处理节点 seq（0=未提交/已完结）",
+    )
+    approval_round: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+        comment="当前审批轮次（驳回重签递增）",
+    )
+
+    reject_opinion: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="最近一次驳回意见"
+    )
+    remark: Mapped[str | None] = mapped_column(Text, nullable=True, comment="备注")
+
+
+class WorkPermitNode(BaseModel):
+    """作业票审批/确认/验票/验收节点实例（逐级串行，保留历史轮次）。"""
+
+    __tablename__ = "work_permit_nodes"
+    __table_args__ = (
+        Index("ix_work_permit_nodes_permit_round_seq", "permit_id", "round", "seq"),
+        Index(
+            "ix_work_permit_nodes_approver_pending",
+            "assigned_approver_id",
+            "status",
+        ),
+        {"schema": "safety"},
+    )
+
+    permit_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("safety.work_permits.id"),
+        nullable=False,
+        comment="所属作业票",
+    )
+    round: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=1,
+        server_default="1",
+        comment="审批轮次（驳回重签 +1）",
+    )
+    seq: Mapped[int] = mapped_column(
+        Integer, nullable=False, comment="节点顺序（同轮次内从 1 递增）"
+    )
+    node_key: Mapped[str] = mapped_column(
+        String(64), nullable=False, comment="节点标识（模板 node key）"
+    )
+    node_name: Mapped[str] = mapped_column(
+        String(100), nullable=False, comment="节点名称（票面签字行原文）"
+    )
+    node_kind: Mapped[str] = mapped_column(
+        String(16), nullable=False, comment="节点类型: approve/confirm/verify/accept"
+    )
+    status: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="waiting",
+        server_default="waiting",
+        comment=(
+            "状态: waiting/pending/approved/rejected/skipped"
+        ),
+    )
+    assigned_approver_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("identity.users.id"),
+        nullable=True,
+        comment="指派审批人（identity.users）",
+    )
+    acted_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("identity.users.id"),
+        nullable=True,
+        comment="实际签字人",
+    )
+    acted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="签字时间"
+    )
+    opinion: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="审批/确认意见"
+    )
+
+
+class WorkPermitGasAnalysis(BaseModel):
+    """作业票气体分析记录（作业前分析 + 作业期间周期复检）。"""
+
+    __tablename__ = "work_permit_gas_analyses"
+    __table_args__ = (
+        Index("ix_work_permit_gas_permit_phase", "permit_id", "phase"),
+        {"schema": "safety"},
+    )
+
+    permit_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("safety.work_permits.id"),
+        nullable=False,
+        comment="所属作业票",
+    )
+    phase: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="pre_work",
+        server_default="pre_work",
+        comment="阶段: pre_work=作业前分析 / on_duty=作业期间复检",
+    )
+    sampled_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, comment="取样分析时间"
+    )
+    analysis_point: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, comment="分析部位/分析点"
+    )
+    items: Mapped[list[Any] | None] = mapped_column(
+        JSONB,
+        nullable=True,
+        default=list,
+        comment=(
+            "分析项目 [{name,standard,value,unit}]"
+            "（代表性气体/可燃/有毒等）"
+        ),
+    )
+    oxygen_value: Mapped[str | None] = mapped_column(
+        String(32),
+        nullable=True,
+        comment="氧气含量（体积分数），合格标准 19.5%~21%",
+    )
+    analyst_name: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, comment="分析人"
+    )
+    remark: Mapped[str | None] = mapped_column(Text, nullable=True, comment="备注")
+
+
+class WorkPermitRelation(BaseModel):
+    """作业票关联关系（「关联的其他特殊作业及安全作业票」结构化互链）。"""
+
+    __tablename__ = "work_permit_relations"
+    __table_args__ = (
+        UniqueConstraint(
+            "permit_id", "related_permit_id", name="uq_work_permit_relations_pair"
+        ),
+        Index("ix_work_permit_relations_related", "related_permit_id"),
+        {"schema": "safety"},
+    )
+
+    permit_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("safety.work_permits.id"),
+        nullable=False,
+        comment="本票",
+    )
+    related_permit_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("safety.work_permits.id"),
+        nullable=False,
+        comment="关联票",
+    )
+
+
+class WorkPermitAttachment(BaseModel):
+    """作业票附件（盲板位置图/动土简图/断路示意图/现场照片等）。"""
+
+    __tablename__ = "work_permit_attachments"
+    __table_args__ = (
+        Index("ix_work_permit_attachments_permit", "permit_id", "is_deleted"),
+        {"schema": "safety"},
+    )
+
+    permit_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("safety.work_permits.id"),
+        nullable=False,
+        comment="所属作业票",
+    )
+    category: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="other",
+        server_default="other",
+        comment="附件类别: blind_map/sketch/photo/other",
+    )
+    file_name: Mapped[str] = mapped_column(
+        String(255), nullable=False, comment="原始文件名"
+    )
+    storage_key: Mapped[str] = mapped_column(
+        String(500), nullable=False, comment="存储 key（MinIO 或本地回退）"
+    )
+    content_type: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, comment="MIME 类型（魔数嗅探）"
+    )
+    size_bytes: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0", comment="文件字节数"
+    )
+
+
+class SpecialWorkCertificate(BaseModel):
+    """人员特殊作业证件（特种作业操作证/特种设备作业人员证等）。"""
+
+    __tablename__ = "special_work_certificates"
+    __table_args__ = (
+        Index(
+            "uq_special_work_certificates_no",
+            "certificate_no",
+            "certificate_category",
+            unique=True,
+            postgresql_where=text(
+                "is_deleted = false and certificate_no is not null "
+                "and certificate_no <> ''"
+            ),
+        ),
+        Index(
+            "ix_special_work_certificates_category",
+            "certificate_category",
+            "status",
+        ),
+        Index("ix_special_work_certificates_expiry", "expiry_date"),
+        {"schema": "safety"},
+    )
+
+    person_name: Mapped[str] = mapped_column(
+        String(100), nullable=False, comment="持证人姓名"
+    )
+    identity_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("identity.users.id"),
+        nullable=True,
+        comment="关联平台账号（可空）",
+    )
+    department: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, comment="所属部门"
+    )
+    certificate_category: Mapped[str] = mapped_column(
+        String(64), nullable=False, comment="证件类别（CERTIFICATE_CATEGORIES 字典）"
+    )
+    certificate_no: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, comment="证件号"
+    )
+    issuing_authority: Mapped[str | None] = mapped_column(
+        String(200), nullable=True, comment="发证机关"
+    )
+    issue_date: Mapped[date | None] = mapped_column(
+        Date, nullable=True, comment="发证日期"
+    )
+    expiry_date: Mapped[date | None] = mapped_column(
+        Date, nullable=True, comment="有效期至"
+    )
+    qualification_scope: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="准操项目/资质范围"
+    )
+    status: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="valid",
+        server_default="valid",
+        comment=(
+            "状态: valid/expiring/expired/revoked（保存时按有效期计算）"
+        ),
+    )
+    remark: Mapped[str | None] = mapped_column(Text, nullable=True, comment="备注")
+
+
+class SpecialWorkCertificateFile(BaseModel):
+    """人员特殊作业证件附件（扫描件/照片，供 AI 识别与查阅）。"""
+
+    __tablename__ = "special_work_certificate_files"
+    __table_args__ = (
+        Index("ix_special_work_cert_files_cert", "certificate_id", "is_deleted"),
+        {"schema": "safety"},
+    )
+
+    certificate_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("safety.special_work_certificates.id"),
+        nullable=False,
+        comment="所属证件",
+    )
+    file_name: Mapped[str] = mapped_column(
+        String(255), nullable=False, comment="原始文件名"
+    )
+    storage_key: Mapped[str] = mapped_column(
+        String(500), nullable=False, comment="存储 key（MinIO 或本地回退）"
+    )
+    content_type: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, comment="MIME 类型（魔数嗅探）"
+    )
+    size_bytes: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0", comment="文件字节数"
+    )
+
+
+class WorkPermitApproverConfig(BaseModel):
+    """作业票节点默认审批人配置（票种+节点 → identity.users）。"""
+
+    __tablename__ = "work_permit_approver_configs"
+    __table_args__ = (
+        UniqueConstraint(
+            "permit_type", "node_key", name="uq_work_permit_approver_configs_node"
+        ),
+        {"schema": "safety"},
+    )
+
+    permit_type: Mapped[str] = mapped_column(String(32), nullable=False, comment="票种")
+    node_key: Mapped[str] = mapped_column(
+        String(64), nullable=False, comment="节点标识"
+    )
+    node_name: Mapped[str] = mapped_column(
+        String(100), nullable=False, comment="节点名称（冗余展示）"
+    )
+    approver_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("identity.users.id"),
+        nullable=True,
+        comment="默认审批人（空=提交时必填改派）",
+    )
+    remark: Mapped[str | None] = mapped_column(Text, nullable=True, comment="备注")
+
+
+class WorkPermitSetting(BaseModel):
+    """作业票运行参数（复检间隔/有效期/校验强度等），key 唯一 value JSONB。"""
+
+    __tablename__ = "work_permit_settings"
+    __table_args__ = (
+        Index(
+            "uq_work_permit_settings_key",
+            "setting_key",
+            unique=True,
+            postgresql_where=text("is_deleted = false"),
+        ),
+        {"schema": "safety"},
+    )
+
+    setting_key: Mapped[str] = mapped_column(
+        String(100), nullable=False, comment="参数键（如 gas_cycle_minutes.hot_work）"
+    )
+    setting_value: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB, nullable=True, default=dict, comment="参数值"
+    )
+    description: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="参数说明"
+    )
+
+
+class SpecialWorkCertificateReminderLog(BaseModel):
+    """证件到期提醒推送记录：每证每个提醒节点只推一次（0 = 已过期节点）。"""
+
+    __tablename__ = "special_work_certificate_reminder_log"
+    __table_args__ = (
+        UniqueConstraint(
+            "certificate_id",
+            "milestone_days",
+            name="uq_special_work_cert_reminder_milestone",
+        ),
+        {"schema": "safety"},
+    )
+
+    certificate_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("safety.special_work_certificates.id"),
+        nullable=False,
+        comment="证件",
+    )
+    milestone_days: Mapped[int] = mapped_column(
+        Integer, nullable=False, comment="提醒节点（距到期天数，0=已过期）"
+    )
+    notified_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default="now()",
+        comment="推送时间",
     )
