@@ -516,6 +516,20 @@ async def _handle_message_event(event_data: dict[str, Any]) -> None:
             chat_type=chat_type,
             content=content,
         )
+    elif msg_type == "audio":
+        # 方案E：语音报修（私聊；ASR 失败回落文字引导）
+        if chat_type != "p2p":
+            logger.info("群语音暂不支持: message_id=%s", message_id)
+            return
+        from app.modules.equipment.service.voice_repair import process_voice_repair
+
+        await process_voice_repair(
+            user_id=user_id or "",
+            open_id=open_id,
+            union_id=sender_id.get("union_id", "") or "",
+            message_id=message_id,
+            content=content,
+        )
     else:
         logger.info("忽略非图片/文本消息: type=%s", msg_type)
 
@@ -695,6 +709,15 @@ async def _handle_text_command(
                 "`完成 WO-20260615-0001`\n"
                 "`完成 1 更换了密封圈`"
             ),
+        )
+    elif text in ("再报", "再报上次", "报修 上次", "上次那台"):
+        # 方案E：再报上次那台 → 查最近报修 → 回预填确认卡
+        from app.modules.equipment.service.work_order_feishu import (
+            send_repay_confirm_card,
+        )
+
+        await send_repay_confirm_card(
+            user_id=user_id, open_id=open_id, union_id=union_id
         )
     elif text.startswith(("报修", "拍照报修")):
         # 「拍照报修」归一化为「报修」前缀，配对/文字报修共用下游逻辑

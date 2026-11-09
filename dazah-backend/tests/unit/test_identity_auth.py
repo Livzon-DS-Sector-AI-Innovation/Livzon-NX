@@ -923,3 +923,23 @@ async def test_get_valid_feishu_user_access_token_refreshes_and_replaces_tokens(
     assert stored.status == "active"
     assert stored.last_error is None
     assert stored.last_refreshed_at is not None
+
+
+def test_browser_origins_includes_configured_extra_origins() -> None:
+    """BROWSER_EXTRA_ORIGINS：局域网来源显式加入写请求白名单。"""
+    from app.core.config import get_settings
+
+    settings = get_settings()
+    original = settings.BROWSER_EXTRA_ORIGINS
+    try:
+        settings.BROWSER_EXTRA_ORIGINS = (
+            "http://192.168.40.125:3000, http://172.22.112.1:3000,,bad-value,http://localhost:3000"
+        )
+        origins = settings.browser_origins
+        assert "http://192.168.40.125:3000" in origins
+        assert "http://172.22.112.1:3000" in origins
+        assert "bad-value" not in origins
+        # FRONTEND_URL 与 localhost 互备不重复
+        assert origins.count("http://localhost:3000") == 1
+    finally:
+        settings.BROWSER_EXTRA_ORIGINS = original

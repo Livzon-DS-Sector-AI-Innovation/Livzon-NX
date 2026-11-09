@@ -62,8 +62,12 @@ def test_accepted_card_switches_to_complete_action():
     )
     assert card["header"]["template"] == "green"
     assert "已接单" in card["header"]["title"]["content"]
-    action = card["elements"][-1]["actions"][0]
-    assert action["value"] == {"act": "complete", "oid": "WO-1"}
+    # 方案E：末组动作变为 [转派, 申请备件]，完成按钮在倒数第二组
+    complete_actions = card["elements"][-2]["actions"]
+    assert complete_actions[0]["value"] == {"act": "complete", "oid": "WO-1"}
+    plan_e_actions = card["elements"][-1]["actions"]
+    assert plan_e_actions[0]["value"] == {"act": "transfer", "oid": "WO-1"}
+    assert plan_e_actions[1]["value"] == {"act": "parts_list", "oid": "WO-1"}
 
 
 def test_completed_card_has_no_actions():

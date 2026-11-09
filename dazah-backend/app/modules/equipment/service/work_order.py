@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppException, NotFoundException
 from app.modules.equipment import repository as repo
-from app.modules.equipment.models import WorkOrder
+from app.modules.equipment.models import WorkOrder, WorkOrderEvent
 from app.modules.equipment.schemas import (
     WorkOrderComplete,
     WorkOrderCreate,
@@ -50,6 +50,148 @@ def _validate_transition(current: str, target: str) -> None:
     allowed = _VALID_TRANSITIONS.get(current, [])
     if target not in allowed:
         raise AppException(message=f"状态不允许从 '{current}' 转换到 '{target}'")
+
+
+def _record_event(
+    db: AsyncSession,
+    wo: WorkOrder,
+    event_type: str,
+    *,
+    operator_id: uuid.UUID | None = None,
+    operator_name: str | None = None,
+    source: str = "web",
+    detail: dict[str, Any] | None = None,
+) -> None:
+    """记录工单事件（时间线/审计事实源，方案E）。"""
+    db.add(
+        WorkOrderEvent(
+            work_order_id=wo.id,
+            event_type=event_type,
+            operator_id=operator_id,
+            operator_name=operator_name,
+            source=source,
+            detail=detail,
+        )
+    )
+
+
+async def transfer_work_order(
+    db: AsyncSession,
+    work_order_id: uuid.UUID,
+    new_assignee_id: uuid.UUID,
+    operator_id: uuid.UUID | None = None,
+    reason: str | None = None,
+) -> WorkOrder:
+    """转派维修人（方案E）：仅 待处理/执行中 可转派。
+
+    执行中转派保留 started_at（维修时长按开始→完成连续计算）；
+    事件记录 from/to/reason，transfer_count 累加。
+    """
+    wo = await _get_work_order(db, work_order_id)
+    if wo.status not in ("待处理", "执行中"):
+        raise AppException(message=f"工单状态为「{wo.status}」，仅待处理/执行中可转派")
+    if new_assignee_id == wo.assignee_id:
+        raise AppException(message="新维修人与当前维修人相同，无需转派")
+
+    old_assignee = wo.assignee
+    old_name = old_assignee.name if old_assignee else "（未指派）"
+    from app.platform.identity.models import User
+
+    new_user = await db.get(User, new_assignee_id)
+    if new_user is None:
+        raise AppException(message="新维修人不存在")
+
+    wo.assignee_id = new_assignee_id
+    wo.assigned_at = datetime.now(UTC)
+    wo.transfer_count = (wo.transfer_count or 0) + 1
+    detail: dict[str, Any] = {"from": old_name, "to": new_user.name}
+    if reason:
+        detail["reason"] = reason
+    _record_event(
+        db, wo, "transferred", operator_id=operator_id,
+        operator_name=new_user.name, detail=detail,
+    )
+    await db.flush()
+    await db.refresh(wo)
+    # 飞书台账镜像（非关键路径）
+    from app.modules.equipment.feishu.repair_ledger import schedule_ledger_sync
+
+    schedule_ledger_sync(wo.work_order_no)
+    # 双方通知（非关键路径）
+    asyncio.ensure_future(
+        _notify_transfer(
+            old_union_id=(
+                getattr(old_assignee, "feishu_union_id", None)
+                if old_assignee
+                else None
+            ),
+            new_union_id=getattr(new_user, "feishu_union_id", None),
+            work_order_no=wo.work_order_no,
+            equipment_name=wo.equipment.name if wo.equipment else "",
+            reason=reason or "",
+        )
+    )
+    return wo
+
+
+async def _notify_transfer(
+    *,
+    old_union_id: str | None,
+    new_union_id: str | None,
+    work_order_no: str,
+    equipment_name: str,
+    reason: str,
+) -> None:
+    """转派后私聊通知新旧维修人（失败只记日志）。"""
+    try:
+        from app.modules.equipment.feishu.notification import send_user_card
+
+        async def _send(uid: str | None, title: str, lines: list[str]) -> None:
+            if not uid:
+                return
+            await send_user_card(
+                open_id=uid,
+                title=title,
+                content="\n".join(lines),
+                receive_id_type="union_id",
+            )
+
+        base = [f"**工单：**{work_order_no}", f"**设备：**{equipment_name}"]
+        if reason:
+            base.append(f"**原因：**{reason}")
+        await _send(
+            old_union_id,
+            f"↗️ 工单已转派 - {work_order_no}",
+            [*base, "", "该工单已转派给其他维修人，无需继续处理。"],
+        )
+        await _send(
+            new_union_id,
+            f"🛠 转派给你 - {work_order_no}",
+            [*base, "", "请接手处理；进度卡片可在群里查看。"],
+        )
+    except Exception:
+        logger.exception("转派通知发送失败: %s", work_order_no)
+
+
+async def get_work_order_events(
+    db: AsyncSession, work_order_id: uuid.UUID
+) -> list[WorkOrderEvent]:
+    """工单事件列表（时间升序）。"""
+    rows = (
+        (
+            await db.execute(
+                select(WorkOrderEvent)
+                .where(
+                    WorkOrderEvent.work_order_id == work_order_id,
+                    WorkOrderEvent.is_deleted == False,  # noqa: E712
+                )
+                .order_by(WorkOrderEvent.created_at.asc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+    return list(rows)
 
 
 async def _get_work_order(db: AsyncSession, work_order_id: uuid.UUID) -> WorkOrder:
@@ -181,6 +323,11 @@ async def create_work_order(
             saved_work_order = await repo.get_work_order_by_id(db, work_order.id)
             if saved_work_order is None:
                 raise AppException(message="工单创建后读取失败")
+            _record_event(
+                db, saved_work_order, "created",
+                operator_id=reporter_id,
+                detail={"order_type": data.order_type},
+            )
             return saved_work_order
         except IntegrityError:
             if attempt < _MAX_RETRIES - 1:
@@ -226,6 +373,7 @@ async def assign_work_order(
 
     wo.assignee_id = assignee_id
     wo.assigned_at = datetime.now(UTC)
+    _record_event(db, wo, "assigned", operator_id=assignee_id)
     await db.flush()
     await db.refresh(wo)
     # 飞书台账镜像（延迟后台任务，失败不影响主流程）
@@ -246,6 +394,7 @@ async def start_work_order(
 
     wo.status = "执行中"
     wo.started_at = datetime.now(UTC)
+    _record_event(db, wo, "started", operator_id=wo.assignee_id)
     await db.flush()
     await db.refresh(wo)
     # 飞书台账镜像（延迟后台任务，失败不影响主流程）
@@ -272,11 +421,20 @@ async def complete_work_order(
     wo.status = target
     wo.completed_at = now
     wo.repair_detail = data.repair_detail
+    _record_event(db, wo, "completed", detail={"to": target})
 
     # 计算耗时
     if wo.started_at:
         delta = now - wo.started_at
         wo.actual_duration = int(delta.total_seconds() / 60)
+
+    # 方案C：按维修人费率计算工时成本（无费率记 0，失败不阻断完成）
+    try:
+        from app.modules.equipment.service.cost import apply_labor_cost
+
+        await apply_labor_cost(db, wo)
+    except Exception:
+        logger.exception("工时成本计算失败: %s", wo.work_order_no)
 
     await db.flush()
 
@@ -464,10 +622,31 @@ async def verify_work_order(
     if data.result == "合格":
         _validate_transition(wo.status, "已完成")
         wo.status = "已完成"
+        _record_event(
+            db, wo, "verified",
+            operator_id=verifier_id, detail={"result": "合格"},
+        )
+        # 方案B：故障维修验收合格 → 生成维修知识案例草稿（去重跳过，
+        # 失败不影响验收主流程）
+        try:
+            from app.modules.equipment.service import (
+                knowledge as knowledge_service,
+            )
+
+            case = await knowledge_service.create_case_draft(db, wo)
+            if case is not None:
+                knowledge_service.schedule_draft_processing(case.id)
+        except Exception:
+            logger.exception("维修案例草稿生成失败: %s", wo.work_order_no)
     else:
         # 打回重修
         _validate_transition(wo.status, "执行中")
         wo.status = "执行中"
+        _record_event(
+            db, wo, "rejected",
+            operator_id=verifier_id,
+            detail={"remark": data.remark or ""},
+        )
         wo.started_at = None
         wo.completed_at = None
         wo.actual_duration = None
@@ -505,11 +684,17 @@ async def close_work_order(
     _validate_transition(wo.status, "已关闭")
 
     wo.status = "已关闭"
+    _record_event(db, wo, "closed", source="system")
     await db.flush()
 
     # 恢复设备到创建工单前的原始状态
     restore_status = wo.original_equipment_status or "在用"
     await _update_equipment_status(db, wo.equipment_id, restore_status)
+
+    # 方案B：工单闭环后异步刷新该设备的维修病历（非关键路径）
+    from app.modules.equipment.service.health import schedule_profile_refresh
+
+    schedule_profile_refresh(wo.equipment_id)
 
     await db.refresh(wo)
     # 飞书台账镜像（延迟后台任务，失败不影响主流程）
@@ -593,6 +778,7 @@ async def claim_work_order(
 
     wo.assignee_id = user_id
     wo.assigned_at = datetime.now(UTC)
+    _record_event(db, wo, "claimed", operator_id=user_id, source="feishu")
     await db.flush()
     await db.refresh(wo)
     return wo
@@ -641,13 +827,20 @@ async def consume_materials(
         )
         transactions.append(transaction)
 
-        # 累加费用
+        # 累加费用（Numeric 列返回 Decimal，统一转 float 参与累加）
         if spare_part.unit_price:
-            total_cost += spare_part.unit_price * item["quantity"]
+            total_cost += float(spare_part.unit_price) * float(item["quantity"])
 
     # 更新工单备件费用
     current_cost = wo.spare_parts_cost or 0.0
     wo.spare_parts_cost = current_cost + total_cost
+    _record_event(
+        db, wo, "material_requested",
+        detail={"items": [
+            {"spare_part_id": str(i["spare_part_id"]), "quantity": i["quantity"]}
+            for i in items
+        ], "total_cost": float(total_cost)},
+    )
     await db.flush()
 
     # 领料后检查安全线：事务内可读到刚扣减的库存值

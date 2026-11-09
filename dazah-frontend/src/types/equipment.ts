@@ -267,6 +267,11 @@ export interface WorkOrder {
   verification_remark: string | null
   repair_detail: string | null
   actual_duration: number | null
+  spare_parts_cost?: number | null
+  labor_cost?: number | null
+  external_cost?: number | null
+  external_vendor?: string | null
+  transfer_count?: number
   created_at: string
   updated_at: string
   created_by: string | null
@@ -721,4 +726,180 @@ export interface DepartmentOption {
   leader_name: string | null
   leader_user_id: string | null
   leader_id: string | null
+}
+
+// ==================== 设备健康档案与维修知识库（方案B） ====================
+export type HealthGrade = 'G' | 'Y' | 'R'
+
+export interface HealthSnapshot {
+  id: string
+  equipment_id: string
+  snapshot_date: string
+  score: number
+  grade: HealthGrade
+  metrics: Record<string, unknown> | null
+}
+
+export interface EquipmentHealth {
+  equipment_id: string
+  latest: HealthSnapshot | null
+  snapshots: HealthSnapshot[]
+}
+
+export interface HealthBoardItem {
+  equipment_id: string
+  equipment_no: string | null
+  equipment_name: string | null
+  workshop_code: string | null
+  score: number
+  grade: HealthGrade
+  metrics: Record<string, unknown> | null
+  snapshot_date: string | null
+}
+
+export interface HealthBoard {
+  items: HealthBoardItem[]
+  summary: { total: number; G: number; Y: number; R: number }
+}
+
+export interface RepairProfileFaultSummary {
+  work_order_no: string
+  reported_at: string | null
+  symptom: string | null
+  cause: string | null
+}
+
+export interface RepairProfile {
+  id: string | null
+  equipment_id: string
+  total_orders: number
+  total_faults: number
+  total_downtime_min: number
+  total_spare_cost: number
+  mtbf_days: number | null
+  last_3_faults: RepairProfileFaultSummary[] | null
+  updated_at: string | null
+}
+
+export interface KnowledgeCaseHit {
+  id: string
+  equipment_name: string | null
+  equipment_no: string | null
+  symptom_name: string | null
+  cause_name: string | null
+  action_name: string | null
+  fault_description: string | null
+  repair_summary: string | null
+  key_steps: string[]
+  use_count: number
+  score: number
+}
+
+export type KnowledgeCaseStatus = 'draft' | 'verified' | 'dismissed'
+
+export interface KnowledgeCase {
+  id: string
+  source_work_order_id: string | null
+  equipment_id: string | null
+  equipment_name: string | null
+  equipment_no: string | null
+  workshop_code: string | null
+  symptom_code: string | null
+  symptom_name: string | null
+  cause_code: string | null
+  cause_name: string | null
+  action_code: string | null
+  action_name: string | null
+  fault_description: string | null
+  repair_summary: string | null
+  key_steps: string[] | null
+  parts_used: Array<{ spare_part_id?: string; name?: string; qty?: number }> | null
+  status: KnowledgeCaseStatus
+  verified_by: string | null
+  verified_at: string | null
+  use_count: number
+  created_at: string | null
+}
+
+export interface MonthlyReport {
+  id: string
+  report_month: string
+  metrics: Record<string, unknown> | null
+  content_md: string | null
+  generated_at: string | null
+}
+
+// ==================== 工单事件与转派（方案E） ====================
+export type WorkOrderEventType =
+  | 'created' | 'assigned' | 'transferred' | 'started' | 'completed'
+  | 'verified' | 'rejected' | 'closed' | 'claimed'
+  | 'material_requested' | 'suggested_purchase'
+
+export interface WorkOrderEvent {
+  id: string
+  work_order_id: string
+  event_type: WorkOrderEventType
+  operator_id: string | null
+  operator_name: string | null
+  source: string
+  detail: Record<string, unknown> | null
+  created_at: string | null
+}
+
+// ==================== 备件采购建议与维修成本（方案C） ====================
+export type PurchaseSuggestionStatus = 'suggested' | 'submitted' | 'partial' | 'done' | 'cancelled'
+
+export interface PurchaseSuggestion {
+  id: string
+  spare_part_id: string
+  spare_part_code: string | null
+  spare_part_name: string | null
+  specification: string | null
+  unit: string | null
+  workshop_code: string | null
+  default_supplier: string | null
+  current_qty: number
+  safety_qty: number
+  suggest_qty: number
+  arrived_qty: number
+  status: PurchaseSuggestionStatus
+  source: string
+  purchase_request_id: string | null
+  purchase_ref: string | null
+  unit_price: number | null
+  submitted_at: string | null
+  created_at: string | null
+}
+
+export interface PurchaseSuggestionSubmitResult {
+  submitted: number
+  purchase_request_id: string | null
+  failed: Array<{ id: string; reason: string }>
+}
+
+export interface LaborRate {
+  id: string
+  scope: 'role' | 'person'
+  role_id: string | null
+  person_id: string | null
+  hourly_rate: number
+  effective_from: string
+  remark: string | null
+}
+
+export interface CostReportBucket {
+  label: string
+  orders: number
+  spare_cost: number
+  labor_cost: number
+  external_cost: number
+  total_cost: number
+}
+
+export interface CostReport {
+  month: string
+  workshop: string | null
+  group_by: string
+  totals: { orders: number; spare_cost: number; labor_cost: number; external_cost: number; total_cost: number }
+  top: CostReportBucket[]
 }

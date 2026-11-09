@@ -4,6 +4,7 @@
 """
 
 import uuid
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -131,3 +132,27 @@ async def list_roles(
 async def get_role_by_code(db: AsyncSession, code: str) -> RoleResponse | None:
     """按编码查角色（供其他模块调用）"""
     return await service.get_role_by_code(db, code)
+
+
+async def spare_part_purchase_arrived(
+    db: AsyncSession,
+    *,
+    suggestion_id: uuid.UUID,
+    arrived_qty: int,
+    operator_id: uuid.UUID | None = None,
+) -> dict[str, Any]:
+    """采购到货回写入口（采购 → 设备契约，供采购到货自动化接入）。
+
+    执行备件入库并推进建议状态（partial/done）；幂等性由调用方
+    （如采购事件 correlation_id）保证，本接口按到达数量累加。
+    """
+    from app.modules.equipment.service import purchase_suggestion
+
+    sug = await purchase_suggestion.register_arrival(
+        db, suggestion_id, arrived_qty, user_id=operator_id
+    )
+    return {
+        "suggestion_id": str(sug.id),
+        "arrived_qty": sug.arrived_qty,
+        "status": sug.status,
+    }

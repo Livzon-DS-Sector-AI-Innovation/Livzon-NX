@@ -171,6 +171,21 @@ def build_accepted_card(
                     }
                 ],
             },
+            {
+                "tag": "action",
+                "actions": [
+                    {
+                        "tag": "button",
+                        "text": {"tag": "plain_text", "content": "↗️ 转派"},
+                        "value": {"act": "transfer", "oid": work_order_no},
+                    },
+                    {
+                        "tag": "button",
+                        "text": {"tag": "plain_text", "content": "🔧 申请备件"},
+                        "value": {"act": "parts_list", "oid": work_order_no},
+                    },
+                ],
+            },
         ],
     }
 

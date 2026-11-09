@@ -16,6 +16,16 @@ from app.modules.equipment.service.calibration import (
     get_overdue_calibration_plans,
     update_calibration_plan,
 )
+from app.modules.equipment.service.cost import (
+    apply_labor_cost,
+    create_labor_rate,
+    delete_labor_rate,
+    get_cost_report,
+    list_labor_rates,
+    resolve_hourly_rate,
+    update_external_cost,
+    update_labor_rate,
+)
 from app.modules.equipment.service.equipment import (
     create_equipment,
     create_equipment_category,
@@ -45,6 +55,17 @@ from app.modules.equipment.service.failure_code import (
     get_failure_code_by_id,
     get_failure_codes,
     update_failure_code,
+)
+from app.modules.equipment.service.health import (
+    collect_metrics,
+    compute_health_score,
+    generate_daily_snapshots,
+    get_health_board,
+    get_health_trend,
+    get_latest_health,
+    get_repair_profile,
+    refresh_repair_profile,
+    schedule_profile_refresh,
 )
 from app.modules.equipment.service.inspection import (
     close_task as close_inspection_task,
@@ -83,6 +104,16 @@ from app.modules.equipment.service.inspection_template import (
     update_inspection_template,
     update_template_item,
 )
+from app.modules.equipment.service.knowledge import (
+    create_case_draft,
+    dismiss_case,
+    extract_key_steps,
+    list_cases,
+    mark_case_used,
+    schedule_draft_processing,
+    search_similar_cases,
+    verify_case,
+)
 from app.modules.equipment.service.maintenance_config import (
     get_claim_timeout_config,
     update_claim_timeout_config,
@@ -95,6 +126,13 @@ from app.modules.equipment.service.maintenance_plan import (
     get_maintenance_plans,
     get_overdue_maintenance_plans,
     update_maintenance_plan,
+)
+from app.modules.equipment.service.monthly_report import (
+    aggregate_monthly_metrics,
+    generate_monthly_report,
+    get_monthly_report,
+    list_monthly_reports,
+    previous_month,
 )
 from app.modules.equipment.service.personnel import (
     add_personnel,
@@ -113,6 +151,15 @@ from app.modules.equipment.service.personnel import (
     update_categories,
     update_personnel,
     update_role,
+)
+from app.modules.equipment.service.purchase_suggestion import (
+    calc_suggest_qty,
+    cancel_suggestion,
+    list_suggestions,
+    register_arrival,
+    scan_and_suggest,
+    submit_to_procurement,
+    update_suggest_qty,
 )
 from app.modules.equipment.service.spare_part import (
     adjust_stock,
@@ -136,9 +183,11 @@ from app.modules.equipment.service.work_order import (
     delete_work_order,
     generate_work_order_no,
     get_work_order_by_id,
+    get_work_order_events,
     get_work_order_statistics,
     get_work_orders,
     start_work_order,
+    transfer_work_order,
     update_work_order,
     verify_work_order,
 )
@@ -160,6 +209,48 @@ __all__ = [
     "analyze_inspection_photo",
     "parse_manual_submission",
     "get_inspection_items_for_session",
+    # 方案E：转派与事件
+    "get_work_order_events",
+    "transfer_work_order",
+    # purchase suggestion & cost（方案C）
+    "apply_labor_cost",
+    "calc_suggest_qty",
+    "cancel_suggestion",
+    "create_labor_rate",
+    "delete_labor_rate",
+    "get_cost_report",
+    "list_labor_rates",
+    "list_suggestions",
+    "register_arrival",
+    "resolve_hourly_rate",
+    "scan_and_suggest",
+    "submit_to_procurement",
+    "update_external_cost",
+    "update_labor_rate",
+    "update_suggest_qty",
+    # health & knowledge & monthly report（方案B）
+    "collect_metrics",
+    "compute_health_score",
+    "create_case_draft",
+    "dismiss_case",
+    "extract_key_steps",
+    "generate_daily_snapshots",
+    "generate_monthly_report",
+    "aggregate_monthly_metrics",
+    "get_health_board",
+    "get_health_trend",
+    "get_latest_health",
+    "get_monthly_report",
+    "get_repair_profile",
+    "list_cases",
+    "list_monthly_reports",
+    "mark_case_used",
+    "previous_month",
+    "refresh_repair_profile",
+    "schedule_draft_processing",
+    "schedule_profile_refresh",
+    "search_similar_cases",
+    "verify_case",
     # calibration
     "create_calibration_plan",
     "create_calibration_record",
