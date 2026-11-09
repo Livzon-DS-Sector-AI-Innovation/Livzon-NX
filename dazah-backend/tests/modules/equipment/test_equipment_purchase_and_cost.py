@@ -549,3 +549,95 @@ async def test_consume_materials_decimal_price_regression(
         )
     ).scalars().one()
     assert float(wo_cost.spare_parts_cost) == 25.0  # 12.50 × 2
+
+
+# ==================== 采购建议 API 错误分支 ====================
+
+
+async def test_purchase_suggestion_api_error_branches(
+    client: AsyncClient,
+    _equipment_session: AsyncSession,
+) -> None:
+    """错误分支：未登录写操作、非法参数、不存在资源均返回 4xx。"""
+    import uuid as _uuid
+
+    # 422：调整数量非法
+    resp = await client.put(
+        f"/api/v1/equipment/spare-parts/purchase-suggestions/{_uuid.uuid4()}/qty",
+        json={"suggest_qty": 0},
+    )
+    assert resp.status_code == 422
+
+    # 4xx：不存在的建议
+    resp = await client.post(
+        f"/api/v1/equipment/spare-parts/purchase-suggestions/{_uuid.uuid4()}/arrival",
+        json={"arrived_qty": 1},
+    )
+    assert 400 <= resp.status_code < 500
+
+    resp = await client.post(
+        f"/api/v1/equipment/spare-parts/purchase-suggestions/{_uuid.uuid4()}/cancel"
+    )
+    assert 400 <= resp.status_code < 500
+
+    # 422：到货数量非法
+    resp = await client.post(
+        f"/api/v1/equipment/spare-parts/purchase-suggestions/{_uuid.uuid4()}/arrival",
+        json={"arrived_qty": 0},
+    )
+    assert resp.status_code == 422
+
+    # 422：批量提交空列表
+    resp = await client.post(
+        "/api/v1/equipment/spare-parts/purchase-suggestions/submit",
+        json={"suggestion_ids": []},
+    )
+    assert resp.status_code == 422
+
+    # 4xx：费率不存在
+    resp = await client.put(
+        f"/api/v1/equipment/spare-parts/purchase-suggestions/labor-rates/{_uuid.uuid4()}",
+        json={"hourly_rate": 50},
+    )
+    assert 400 <= resp.status_code < 500
+
+    resp = await client.delete(
+        f"/api/v1/equipment/spare-parts/purchase-suggestions/labor-rates/{_uuid.uuid4()}"
+    )
+    assert 400 <= resp.status_code < 500
+
+    # 4xx：外委费用补录工单不存在
+    resp = await client.put(
+        f"/api/v1/equipment/maintenance/work-orders/{_uuid.uuid4()}/external-cost",
+        json={"external_cost": -1},
+    )
+    assert resp.status_code == 422
+
+
+async def test_transfer_and_events_api_branches(
+    client: AsyncClient,
+    _equipment_session: AsyncSession,
+    test_reporter,
+) -> None:
+    """方案E 转派/事件 API 错误分支。"""
+    import uuid as _uuid
+
+    # 422：转派 body 缺字段
+    resp = await client.put(
+        f"/api/v1/equipment/maintenance/work-orders/{_uuid.uuid4()}/transfer",
+        json={},
+    )
+    assert resp.status_code == 422
+
+    # 4xx：工单不存在
+    resp = await client.put(
+        f"/api/v1/equipment/maintenance/work-orders/{_uuid.uuid4()}/transfer",
+        json={"assignee_id": str(test_reporter.id)},
+    )
+    assert 400 <= resp.status_code < 500
+
+    # 200：事件列表空（不存在的工单也返回空数组）
+    resp = await client.get(
+        f"/api/v1/equipment/maintenance/work-orders/{_uuid.uuid4()}/events"
+    )
+    assert resp.status_code == 200
