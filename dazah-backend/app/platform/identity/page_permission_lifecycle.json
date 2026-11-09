@@ -5230,6 +5230,36 @@
           "category": "destructive"
         }
       }
+    },
+    "safety:ops-safety:work-permits": {
+      "status": "active",
+      "module_code": "safety",
+      "route_path": "/safety/work-permits",
+      "actions": {
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        },
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        }
+      }
+    },
+    "safety:ops-safety:work-certificates": {
+      "status": "active",
+      "module_code": "safety",
+      "route_path": "/safety/work-certificates",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        }
+      }
     }
   }
 }

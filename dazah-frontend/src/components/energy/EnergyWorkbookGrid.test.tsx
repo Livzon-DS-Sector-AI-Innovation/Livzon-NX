@@ -38,6 +38,7 @@ function copy() {
 
 it.each([false, true])('selects rectangular ranges and copies plain values for Excel (dark=%s)', async dark => {
   const node = await mount(dark)
+  expect(node.querySelector('table[role="grid"]')?.getAttribute('aria-label')).toBe('能源报表数据')
   await act(async () => cell(0, 1).dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 })))
   expect(document.activeElement).toBe(cell(0, 1))
   await key(cell(0, 1), 'ArrowRight', { shiftKey: true })

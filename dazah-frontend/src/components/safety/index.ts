@@ -54,3 +54,17 @@ export { default as HazchemPanel } from './HazchemPanel'
 export { default as OhDetectionReportPanel } from './OhDetectionReportPanel'
 export { default as OhDetectionImportModal } from './OhDetectionImportModal'
 export { default as EmergencyMgmtPanel } from './EmergencyMgmtPanel'
+
+export {
+  WorkPermitListPanel,
+} from './WorkPermitListPanel'
+export {
+  WorkPermitDetailView,
+} from './WorkPermitDetailView'
+export {
+  WorkPermitFormDrawer,
+} from './WorkPermitFormDrawer'
+export {
+  WorkCertificatePanel,
+} from './WorkCertificatePanel'
+export { default as WorkCertificateImportModal } from './WorkCertificateImportModal'

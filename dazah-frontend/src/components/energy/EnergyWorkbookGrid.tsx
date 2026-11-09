@@ -1,5 +1,5 @@
 import { useRef, useState, type ComponentProps, type KeyboardEvent, type MouseEvent } from 'react'
-import { Space, Table, Tag, Typography } from 'antd'
+import { Space, Table, Tag, Tooltip, Typography } from 'antd'
 import type { ReactNode } from 'react'
 import { formatAmount, type WorkbookReport } from '@/lib/api/energy-ledger'
 import { reviewDetails, sourceComparisonDetails } from './energy-review'
@@ -10,12 +10,34 @@ type Position = { row: number; column: number }
 type Selection = { start: Position; end: Position }
 type Cell = WorkbookReport['rows'][number]['cells'][string]
 
-function WorkbookTable(props: ComponentProps<'table'>) {
-  return <table {...props} role="grid" aria-label="能源报表数据" />
+// Ant Design forwards these attributes to its table even though TableProps omits role.
+const tableAccessibility = {
+  role: 'grid',
+  'aria-label': '能源报表数据',
+} satisfies Pick<ComponentProps<'table'>, 'role' | 'aria-label'>
+
+function formulaEvidence(cell: Cell | undefined) {
+  const provenance = cell?.provenance
+  if (!provenance || typeof provenance.formula !== 'string' || !provenance.formula) return null
+  const reference = provenance.reference
+  const reported = reference && typeof reference === 'object' && 'reported_value' in reference
+    ? reference.reported_value : undefined
+  return <>
+    <div>{provenance.calculation_policy ? '系统公式' : '原表公式'}：{provenance.formula}</div>
+    {(typeof reported === 'string' || typeof reported === 'number') && <div>参考表手填值：{reported}（仅留痕，不参与计算）</div>}
+  </>
+}
+
+function WorkbookTableCell({ workbookEvidence, ...props }: ComponentProps<'td'> & { workbookEvidence?: ReactNode }) {
+  const cell = <td {...props} />
+  return workbookEvidence ? <Tooltip title={workbookEvidence} trigger={['hover', 'focus']}>{cell}</Tooltip> : cell
 }
 
 function renderCell(cell: Cell | undefined) {
-  if (!cell || ['complete', 'adjusted', 'source_blank'].includes(cell.status)) return readableWorkbookNumber(workbookCellText(cell))
+  if (!cell || ['complete', 'adjusted', 'source_blank'].includes(cell.status)) {
+    const value = readableWorkbookNumber(workbookCellText(cell))
+    return cell?.provenance?.formula ? <Typography.Text underline>{value}</Typography.Text> : value
+  }
   if (cell.status === 'not_applicable') return <Typography.Text type="secondary">不适用</Typography.Text>
   if (cell.status !== 'pending_review') return <Tag color="warning">{workbookCellText(cell)}</Tag>
   const reviews = reviewDetails(cell.provenance)
@@ -81,8 +103,10 @@ export function EnergyWorkbookGrid({ report, loading, density = 'middle', sort, 
   }
   function cellProps(row: number, column: number) {
     const selected = row >= top && row <= bottom && column >= left && column <= right
+    const source = column > 0 ? rows[row].cells[columns[column - 1].key] : undefined
     return {
       'data-grid-row': row, 'data-grid-column': column,
+      workbookEvidence: formulaEvidence(source),
       'aria-selected': selected,
       role: 'gridcell',
       'aria-readonly': !editable(row, column),
@@ -111,7 +135,7 @@ export function EnergyWorkbookGrid({ report, loading, density = 'middle', sort, 
     event.preventDefault()
     event.clipboardData.setData('text/plain', text)
   }}>
-    <Table rowKey="date" size={density} components={{ table: WorkbookTable }} loading={loading} dataSource={rows} pagination={false} scroll={{ x: columns.length * 160 + 128 }} onChange={(_, __, sorter) => {
+    <Table {...tableAccessibility} components={{ body: { cell: WorkbookTableCell } }} rowKey="date" size={density} loading={loading} dataSource={rows} pagination={false} scroll={{ x: columns.length * 160 + 128 }} onChange={(_, __, sorter) => {
       if (Array.isArray(sorter)) return
       onSort?.(sorter.order && sorter.columnKey ? { key: String(sorter.columnKey), order: sorter.order } : undefined)
     }} columns={[

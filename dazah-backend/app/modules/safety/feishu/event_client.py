@@ -350,6 +350,9 @@ async def start_ws() -> None:
 
                 await ensure_bitable_subscribed()
 
+                # 3.1 注册 8 大作业票卡片回调（导入即完成 @on_event 注册）
+                import app.modules.safety.feishu.work_permit_card_handler as _wp_handler  # noqa: F401
+
                 # 4. 启动 protobuf PING 心跳循环
                 ping_task = asyncio.create_task(_ping_loop(ws, service_id))
 

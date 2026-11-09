@@ -96,6 +96,16 @@ _LEGACY_SEED_MENUS: list[dict[str, Any]] = [
                 children=[
                     _n("special-ops-mgmt", "特殊作业管理", "/safety/special-ops"),
                     _n(
+                        "work-permits",
+                        "作业票审批",
+                        "/safety/work-permits",
+                    ),
+                    _n(
+                        "work-certificates",
+                        "特种作业证件",
+                        "/safety/work-certificates",
+                    ),
+                    _n(
                         "daily-risk-report",
                         "关键风险作业报备",
                         "/safety/risk-reporting",

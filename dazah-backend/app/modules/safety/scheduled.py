@@ -207,6 +207,109 @@ class SafetyFireExpiryReminderGenerator(TaskGenerator):
         )
 
 
+class SafetyWorkPermitGasDueGenerator(TaskGenerator):
+    """每 15 分钟扫描「作业中」的动火/受限空间作业票：气体复检到期或
+    超期时向监护人与作业负责人推送飞书催办（同一到期窗口只催一次）。
+
+    尊重设置页开关（permit_notify_enabled）；复检间隔可经
+    work_permit_settings 覆盖（默认动火 60 分钟、受限空间 120 分钟）。
+    """
+
+    name = "safety.work_permit_gas_due"
+    schedule = ScheduleConfig(
+        strategy=ScheduleStrategy.INTERVAL,
+        interval_seconds=15 * 60,
+        timezone="Asia/Shanghai",
+    )
+    timeout_seconds = 120
+
+    async def find_due(self, session: Any) -> list[Any]:
+        from app.core.config import get_settings
+        from app.modules.safety.models import SafetyFeishuAppSettings
+
+        # 非生产环境不自动推送真实飞书消息（护栏同隐患到期提醒）
+        if get_settings().APP_ENV != "production":
+            logger.info(
+                "非生产环境（APP_ENV!=production），作业票复检催办跳过"
+            )
+            return []
+
+        row = (
+            await session.execute(
+                select(SafetyFeishuAppSettings)
+                .where(SafetyFeishuAppSettings.is_deleted.is_(False))
+                .order_by(SafetyFeishuAppSettings.updated_at.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if row is None or not row.permit_notify_enabled:
+            logger.info(
+                "作业票飞书通知未启用（permit_notify_enabled=false），本轮跳过"
+            )
+            return []
+        return [True]
+
+    async def execute_one(self, session: Any, item: Any) -> None:
+        from app.modules.safety.service.work_permit_reminders import (
+            send_gas_due_reminders,
+        )
+
+        sent, errors = await send_gas_due_reminders(session)
+        if errors:
+            logger.warning("作业票复检催办存在失败: %s", errors)
+
+
+class SafetyCertificateExpiryReminderGenerator(TaskGenerator):
+    """每天 08:40 检查特种作业证件台账：有效期进入提醒节点（默认
+    30/15/7 天）或已过期时推送飞书提醒，同一证件同一节点只推一次。
+
+    尊重设置页的开关与节点天数（safety.feishu_app_settings.cert_expiry_*）。
+    """
+
+    name = "safety.cert_expiry_daily"
+    schedule = ScheduleConfig(
+        strategy=ScheduleStrategy.CRON,
+        # 分 时 日 月 周 —— 每天 08:40（错开消防提醒的 08:20）
+        expression="40 8 * * *",
+        timezone="Asia/Shanghai",
+    )
+    timeout_seconds = 300
+
+    async def find_due(self, session: Any) -> list[Any]:
+        from app.core.config import get_settings
+        from app.modules.safety.models import SafetyFeishuAppSettings
+
+        if get_settings().APP_ENV != "production":
+            logger.info(
+                "非生产环境（APP_ENV!=production），证件到期提醒自动推送跳过"
+            )
+            return []
+
+        row = (
+            await session.execute(
+                select(SafetyFeishuAppSettings)
+                .where(SafetyFeishuAppSettings.is_deleted.is_(False))
+                .order_by(SafetyFeishuAppSettings.updated_at.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if row is None or not row.cert_expiry_notify_enabled:
+            logger.info(
+                "证件到期提醒未启用（cert_expiry_notify_enabled=false），本轮跳过"
+            )
+            return []
+        return [True]
+
+    async def execute_one(self, session: Any, item: Any) -> None:
+        from app.modules.safety.service.work_permit_reminders import (
+            send_certificate_expiry_notifications,
+        )
+
+        sent, errors = await send_certificate_expiry_notifications(session)
+        if errors:
+            logger.warning("证件到期提醒存在失败: %s", errors)
+
+
 # ── 独立同步循环（自建，不依赖平台调度引擎） ──
 # 平台 SchedulerEngine 的循环协程缺少外层异常保护，曾被其它模块的异常
 # 静默杀死（循环停止推进所有 generator）。镜像同步是安全模块的核心数据

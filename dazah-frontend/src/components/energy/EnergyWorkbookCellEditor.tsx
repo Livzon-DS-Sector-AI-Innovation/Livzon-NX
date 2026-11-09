@@ -67,7 +67,7 @@ export function EnergyWorkbookCellEditor({ date, dataset, pointId, onClose }: { 
     <InputNumber<string> autoFocus stringMode min="0" aria-label="单元格数值" value={current} disabled={busy || !item || query.isFetching} onFocus={event => event.target.select()} onChange={next => setValue(next ?? '')} />
     {item?.value !== null && item?.value !== undefined && <Input aria-label="更正原因" placeholder="更正原因" value={reason} maxLength={1000} disabled={busy} onChange={event => setReason(event.target.value)} />}
     <Space><Button size="small" type="primary" loading={busy} disabled={!item || query.isFetching} onClick={submit}>保存</Button><Button size="small" disabled={busy} onClick={onClose}>取消</Button></Space>
-    {(error || query.error) && <Typography.Text role="alert" type="danger">{error || query.error?.message}</Typography.Text>}
+    <Typography.Text aria-live="assertive" aria-atomic="true" type="danger">{error || query.error?.message}</Typography.Text>
     {query.error && <Button size="small" onClick={() => void query.refetch()}>重试</Button>}
     {!query.isPending && !query.error && !item && <Typography.Text>该字段不可填写</Typography.Text>}
   </Space>

@@ -325,6 +325,26 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     except Exception:
         logger.exception("注册安全模块消防器材有效期提醒调度任务失败")
 
+    # ── 安全模块作业票气体复检催办（每 15 分钟） ──
+    try:
+        from app.modules.safety.scheduled import SafetyWorkPermitGasDueGenerator
+
+        scheduler_registry.register_generator(SafetyWorkPermitGasDueGenerator())
+    except Exception:
+        logger.exception("注册安全模块作业票复检催办调度任务失败")
+
+    # ── 安全模块特种作业证件到期提醒（每天 08:40） ──
+    try:
+        from app.modules.safety.scheduled import (
+            SafetyCertificateExpiryReminderGenerator,
+        )
+
+        scheduler_registry.register_generator(
+            SafetyCertificateExpiryReminderGenerator()
+        )
+    except Exception:
+        logger.exception("注册安全模块证件到期提醒调度任务失败")
+
     # ── 法规跟踪三阶段流水线（00:10 抓取 / 02:00 AI 分析 / 10:00 推送） ──
     try:
         from app.modules.regulatory_tracker.scheduled import (

@@ -3822,3 +3822,504 @@ export async function deleteEmergencySupply(id: string) {
   revalidatePath('/safety/emergency-mgmt')
   return response
 }
+
+import {
+  WORK_CERTIFICATES_PAGE_KEY,
+  WORK_PERMITS_PAGE_KEY,
+} from '@/lib/work-permit-api'
+
+// ============ 8 大特殊作业票（work permits） ============
+
+type WorkPermitMeta = components['schemas']['WorkPermitMetaResponse']
+type WorkPermitListData = components['schemas']['WorkPermitListResponse']
+type WorkPermitStats = components['schemas']['WorkPermitStatsResponse']
+type WorkPermitDetail = components['schemas']['WorkPermitDetailResponse']
+type WorkPermitAction = components['schemas']['ActionResponse']
+type ApproverConfigListData =
+  components['schemas']['ApproverConfigListResponse']
+type CertificateListData =
+  components['schemas']['SpecialWorkCertificateListResponse']
+type CertificateItem = components['schemas']['SpecialWorkCertificateResponse']
+type CertificateExpirySummary =
+  components['schemas']['CertificateExpirySummaryResponse']
+type CertificateUploadResult =
+  components['schemas']['CertificateUploadResponse']
+type CertificateCategories =
+  components['schemas']['CertificateStatusOptionsResponse']
+
+function workPermitHeaders(pageKey?: string): Record<string, string> {
+  return { 'X-Dazah-Page-Key': pageKey ?? WORK_PERMITS_PAGE_KEY }
+}
+
+function workCertificateHeaders(pageKey?: string): Record<string, string> {
+  return { 'X-Dazah-Page-Key': pageKey ?? WORK_CERTIFICATES_PAGE_KEY }
+}
+
+export type WorkPermitCreateInput = {
+  permit_type: string
+  permit_level: string
+  apply_department?: string | null
+  work_description?: string | null
+  work_location?: string | null
+  work_unit?: string | null
+  planned_start_time?: string | null
+  planned_end_time?: string | null
+  persons?: Record<string, unknown>[]
+  risk_identifications?: string[]
+  safety_measures?: Record<string, unknown>[]
+  type_data?: Record<string, unknown>
+  related_legacy_no_text?: string | null
+  remark?: string | null
+}
+
+export async function getWorkPermitMeta(pageKey?: string) {
+  return fetchApi<WorkPermitMeta>('/safety/work-permits/meta', {
+    headers: workPermitHeaders(pageKey),
+  })
+}
+
+export async function getWorkPermitStats(pageKey?: string) {
+  return fetchApi<WorkPermitStats>('/safety/work-permits/stats', {
+    headers: workPermitHeaders(pageKey),
+  })
+}
+
+export async function getWorkPermits(params: {
+  pageKey?: string
+  page?: number
+  pageSize?: number
+  permitType?: string | null
+  permitLevel?: string | null
+  status?: string | null
+  keyword?: string | null
+}) {
+  const search = new URLSearchParams()
+  search.set('page', String(params.page ?? 1))
+  search.set('page_size', String(params.pageSize ?? 20))
+  if (params.permitType) search.set('permit_type', params.permitType)
+  if (params.permitLevel) search.set('permit_level', params.permitLevel)
+  if (params.status) search.set('status', params.status)
+  if (params.keyword) search.set('keyword', params.keyword)
+  return fetchApi<WorkPermitListData>(`/safety/work-permits?${search.toString()}`, {
+    headers: workPermitHeaders(params.pageKey),
+  })
+}
+
+export async function getWorkPermitDetail(permitId: string, pageKey?: string) {
+  return fetchApi<WorkPermitDetail>(`/safety/work-permits/${permitId}`, {
+    headers: workPermitHeaders(pageKey),
+  })
+}
+
+export async function createWorkPermit(
+  data: WorkPermitCreateInput,
+  pageKey?: string
+) {
+  const response = await fetchApi<WorkPermitDetail>('/safety/work-permits', {
+    method: 'POST',
+    headers: workPermitHeaders(pageKey),
+    body: JSON.stringify(data),
+  })
+  if (response.code === 200) revalidatePath('/safety/work-permits')
+  return response
+}
+
+export async function updateWorkPermit(
+  permitId: string,
+  data: Partial<WorkPermitCreateInput>,
+  pageKey?: string
+) {
+  const response = await fetchApi<WorkPermitDetail>(
+    `/safety/work-permits/${permitId}`,
+    {
+      method: 'PUT',
+      headers: workPermitHeaders(pageKey),
+      body: JSON.stringify(data),
+    }
+  )
+  if (response.code === 200) revalidatePath('/safety/work-permits')
+  return response
+}
+
+export async function deleteWorkPermit(permitId: string, pageKey?: string) {
+  const response = await fetchApi<null>(`/safety/work-permits/${permitId}`, {
+    method: 'DELETE',
+    headers: workPermitHeaders(pageKey),
+  })
+  if (response.code === 200) revalidatePath('/safety/work-permits')
+  return response
+}
+
+export async function submitWorkPermit(
+  permitId: string,
+  assignments: { node_key: string; approver_user_id: string | null }[]
+) {
+  const response = await fetchApi<WorkPermitAction>(
+    `/safety/work-permits/${permitId}/submit`,
+    {
+      method: 'POST',
+      headers: workPermitHeaders(),
+      body: JSON.stringify({ assignments }),
+    }
+  )
+  if (response.code === 200) revalidatePath('/safety/work-permits')
+  return response
+}
+
+/** 作业票运行参数（当前仅人员证件校验开关）。 */
+export async function getWorkPermitSettings() {
+  return fetchApi<components['schemas']['WorkPermitSettingsResponse']>(
+    '/safety/work-permit-settings',
+    { headers: workPermitHeaders() }
+  )
+}
+
+export async function updateWorkPermitSettings(
+  certCheckStrict: boolean
+) {
+  const response = await fetchApi<
+    components['schemas']['WorkPermitSettingsResponse']
+  >('/safety/work-permit-settings', {
+    method: 'PUT',
+    headers: workPermitHeaders(),
+    body: JSON.stringify({ cert_check_strict: certCheckStrict }),
+  })
+  if (response.code === 200) revalidatePath('/safety/work-permits')
+  return response
+}
+
+export async function approveWorkPermitNode(
+  permitId: string,
+  nodeId: string,
+  opinion?: string | null
+) {
+  const response = await fetchApi<WorkPermitAction>(
+    `/safety/work-permits/${permitId}/nodes/${nodeId}/approve`,
+    {
+      method: 'POST',
+      headers: workPermitHeaders(),
+      body: JSON.stringify({ opinion: opinion ?? null }),
+    }
+  )
+  if (response.code === 200) revalidatePath('/safety/work-permits')
+  return response
+}
+
+export async function rejectWorkPermitNode(
+  permitId: string,
+  nodeId: string,
+  opinion: string
+) {
+  const response = await fetchApi<WorkPermitAction>(
+    `/safety/work-permits/${permitId}/nodes/${nodeId}/reject`,
+    {
+      method: 'POST',
+      headers: workPermitHeaders(),
+      body: JSON.stringify({ opinion }),
+    }
+  )
+  if (response.code === 200) revalidatePath('/safety/work-permits')
+  return response
+}
+
+export async function verifyWorkPermit(permitId: string) {
+  const response = await fetchApi<WorkPermitAction>(
+    `/safety/work-permits/${permitId}/verify`,
+    { method: 'POST', headers: workPermitHeaders() }
+  )
+  if (response.code === 200) revalidatePath('/safety/work-permits')
+  return response
+}
+
+export async function acceptWorkPermit(
+  permitId: string,
+  typeData?: Record<string, unknown>
+) {
+  const response = await fetchApi<WorkPermitAction>(
+    `/safety/work-permits/${permitId}/accept`,
+    {
+      method: 'POST',
+      headers: workPermitHeaders(),
+      body: JSON.stringify({ type_data: typeData ?? {} }),
+    }
+  )
+  if (response.code === 200) revalidatePath('/safety/work-permits')
+  return response
+}
+
+export async function reassignWorkPermitNode(
+  permitId: string,
+  nodeId: string,
+  approverUserId: string
+) {
+  return fetchApi<WorkPermitAction>(
+    `/safety/work-permits/${permitId}/nodes/${nodeId}/reassign`,
+    {
+      method: 'POST',
+      headers: workPermitHeaders(),
+      body: JSON.stringify({ approver_user_id: approverUserId }),
+    }
+  )
+}
+
+export async function cancelWorkPermit(permitId: string) {
+  const response = await fetchApi<WorkPermitAction>(
+    `/safety/work-permits/${permitId}/cancel`,
+    { method: 'POST', headers: workPermitHeaders() }
+  )
+  if (response.code === 200) revalidatePath('/safety/work-permits')
+  return response
+}
+
+export async function addWorkPermitGasAnalysis(
+  permitId: string,
+  data: Record<string, unknown>
+) {
+  return fetchApi<components['schemas']['GasAnalysisItem']>(
+    `/safety/work-permits/${permitId}/gas-analyses`,
+    {
+      method: 'POST',
+      headers: workPermitHeaders(),
+      body: JSON.stringify(data),
+    }
+  )
+}
+
+export async function addWorkPermitRelation(
+  permitId: string,
+  relatedPermitId: string
+) {
+  return fetchApi<WorkPermitDetail>(`/safety/work-permits/${permitId}/relations`, {
+    method: 'POST',
+    headers: workPermitHeaders(),
+    body: JSON.stringify({ related_permit_id: relatedPermitId }),
+  })
+}
+
+export async function getApproverConfigs(pageKey?: string) {
+  return fetchApi<ApproverConfigListData>('/safety/work-permit-configs', {
+    headers: workPermitHeaders(pageKey),
+  })
+}
+
+export async function upsertApproverConfig(
+  data: {
+    permit_type: string
+    node_key: string
+    approver_user_id: string | null
+    remark?: string | null
+  },
+  pageKey?: string
+) {
+  return fetchApi<ApproverConfigListData>('/safety/work-permit-configs', {
+    method: 'PUT',
+    headers: workPermitHeaders(pageKey),
+    body: JSON.stringify(data),
+  })
+}
+
+// ============ 人员特殊作业证件（work certificates） ============
+
+export async function getCertificateCategories(pageKey?: string) {
+  return fetchApi<CertificateCategories>('/safety/work-certificates/categories', {
+    headers: workCertificateHeaders(pageKey),
+  })
+}
+
+export async function getCertificateExpirySummary(pageKey?: string) {
+  return fetchApi<CertificateExpirySummary>(
+    '/safety/work-certificates/expiry-summary',
+    { headers: workCertificateHeaders(pageKey) }
+  )
+}
+
+export async function getWorkCertificates(params: {
+  pageKey?: string
+  page?: number
+  pageSize?: number
+  certificateCategory?: string | null
+  status?: string | null
+  keyword?: string | null
+  expiringDays?: number | null
+}) {
+  const search = new URLSearchParams()
+  search.set('page', String(params.page ?? 1))
+  search.set('page_size', String(params.pageSize ?? 20))
+  if (params.certificateCategory)
+    search.set('certificate_category', params.certificateCategory)
+  if (params.status) search.set('status', params.status)
+  if (params.keyword) search.set('keyword', params.keyword)
+  if (params.expiringDays !== null && params.expiringDays !== undefined)
+    search.set('expiring_days', String(params.expiringDays))
+  return fetchApi<CertificateListData>(
+    `/safety/work-certificates?${search.toString()}`,
+    { headers: workCertificateHeaders(params.pageKey) }
+  )
+}
+
+export async function createWorkCertificate(
+  data: Record<string, unknown>,
+  pageKey?: string
+) {
+  const response = await fetchApi<CertificateItem>('/safety/work-certificates', {
+    method: 'POST',
+    headers: workCertificateHeaders(pageKey),
+    body: JSON.stringify(data),
+  })
+  if (response.code === 200) revalidatePath('/safety/work-certificates')
+  return response
+}
+
+export async function updateWorkCertificate(
+  certificateId: string,
+  data: Record<string, unknown>,
+  pageKey?: string
+) {
+  const response = await fetchApi<CertificateItem>(
+    `/safety/work-certificates/${certificateId}`,
+    {
+      method: 'PUT',
+      headers: workCertificateHeaders(pageKey),
+      body: JSON.stringify(data),
+    }
+  )
+  if (response.code === 200) revalidatePath('/safety/work-certificates')
+  return response
+}
+
+export async function deleteWorkCertificate(certificateId: string) {
+  const response = await fetchApi<null>(
+    `/safety/work-certificates/${certificateId}`,
+    { method: 'DELETE', headers: workCertificateHeaders() }
+  )
+  if (response.code === 200) revalidatePath('/safety/work-certificates')
+  return response
+}
+
+/**
+ * 上传证件附件（multipart）：去 JSON Content-Type 后直传后端，
+ * 返回附件与 AI 识别建议（参照 MSDS 上传 action）。
+ */
+export async function uploadWorkCertificateFile(
+  certificateId: string,
+  file: File,
+  pageKey?: string
+): Promise<ApiResponse<CertificateUploadResult>> {
+  const authHeaders = await getAuthHeaders()
+  // 上传为 multipart，须去掉 JSON Content-Type（与 MSDS 上传口径一致）
+  const headers: Record<string, string> = { ...authHeaders }
+  delete headers['Content-Type']
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+    const response = await fetch(
+      `${API_BASE}/safety/work-certificates/${certificateId}/files`,
+      {
+        method: 'POST',
+        headers: { ...headers, ...workCertificateHeaders(pageKey) },
+        body: formData,
+      }
+    )
+    if (!response.ok) {
+      const text = await response.text().catch(() => '')
+      let message = `HTTP ${response.status}`
+      try {
+        const parsed = JSON.parse(text)
+        message = parsed.message ?? parsed.detail ?? message
+      } catch {
+        // 非 JSON 错误体
+      }
+      return {
+        code: response.status,
+        message,
+      } as ApiResponse<CertificateUploadResult>
+    }
+    revalidatePath('/safety/work-certificates')
+    return (await response.json()) as ApiResponse<CertificateUploadResult>
+  } catch {
+    return {
+      code: -1,
+      message: '网络请求失败，无法连接到后端服务',
+    } as ApiResponse<CertificateUploadResult>
+  }
+}
+
+/** 证件台账 Excel 导入结果（结构与生成类型一致，导入先行先用手写类型）。 */
+type CertificateImportPreviewData = import('@/types/safety').CertificateImportPreview
+type CertificateImportResultData = import('@/types/safety').CertificateImportResult
+
+/**
+ * 解析持证人员汇总表 Excel：预览子表、类别与行数，不落库。
+ * multipart 直传，去 JSON Content-Type（与证件附件上传口径一致）。
+ */
+export async function parseCertificateImport(
+  file: File,
+  pageKey?: string
+): Promise<ApiResponse<CertificateImportPreviewData>> {
+  const authHeaders = await getAuthHeaders()
+  const headers: Record<string, string> = { ...authHeaders }
+  delete headers['Content-Type']
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+    const response = await fetch(
+      `${API_BASE}/safety/work-certificates/import/parse`,
+      {
+        method: 'POST',
+        headers: { ...headers, ...workCertificateHeaders(pageKey) },
+        body: formData,
+      }
+    )
+    return (await response.json()) as ApiResponse<CertificateImportPreviewData>
+  } catch {
+    return {
+      code: -1,
+      message: '网络请求失败，无法连接到后端服务',
+    } as ApiResponse<CertificateImportPreviewData>
+  }
+}
+
+/** 导入持证人员汇总表：同类别同证件号合并，已有记录更新、缺失新建。 */
+export async function importCertificates(
+  file: File,
+  sheets: string[],
+  pageKey?: string
+): Promise<ApiResponse<CertificateImportResultData>> {
+  const authHeaders = await getAuthHeaders()
+  const headers: Record<string, string> = { ...authHeaders }
+  delete headers['Content-Type']
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('sheets', JSON.stringify(sheets))
+    const response = await fetch(
+      `${API_BASE}/safety/work-certificates/import`,
+      {
+        method: 'POST',
+        headers: { ...headers, ...workCertificateHeaders(pageKey) },
+        body: formData,
+      }
+    )
+    if (!response.ok) {
+      const text = await response.text().catch(() => '')
+      let message = `HTTP ${response.status}`
+      try {
+        const parsed = JSON.parse(text)
+        message = parsed.message ?? parsed.detail ?? message
+      } catch {
+        // 非 JSON 错误体
+      }
+      return {
+        code: response.status,
+        message,
+      } as ApiResponse<CertificateImportResultData>
+    }
+    revalidatePath('/safety/work-certificates')
+    return (await response.json()) as ApiResponse<CertificateImportResultData>
+  } catch {
+    return {
+      code: -1,
+      message: '网络请求失败，无法连接到后端服务',
+    } as ApiResponse<CertificateImportResultData>
+  }
+}
