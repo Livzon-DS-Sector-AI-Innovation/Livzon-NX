@@ -1155,6 +1155,7 @@ async def _handle_transfer_action(
 
         # transfer_pick
         from app.modules.equipment.service.work_order import transfer_work_order
+        from app.platform.identity.models import User
 
         try:
             wo = await transfer_work_order(
@@ -1164,13 +1165,15 @@ async def _handle_transfer_action(
                 operator_id=user.id,
                 reason="卡片转派",
             )
+            # 会话提交会过期 ORM 对象，新维修人姓名须在 commit 前取出
+            to_user = await db.get(User, uuid.UUID(str(v.get("uid", ""))))
+            assignee_label = to_user.name if to_user else "新维修人"
             await db.commit()
         except AppException as exc:
             return await _fail(exc.message)
         except Exception:
             logger.exception("卡片转派失败: %s", wo_no)
             return await _fail("转派失败，请稍后在平台「维修工单」中操作")
-    assignee_label = wo.assignee.name if wo.assignee else "新维修人"
     return _card_ok_payload(f"已转派给 {assignee_label}")
 
 
@@ -1350,9 +1353,11 @@ async def _parts_pick(
         return _card_ok_payload(
             f"{part_name} 库存不足（{current}），已生成采购建议待管理员提交采购"
         )
+    status_label = existing.status
     await db.rollback()
+    # 回滚会过期 ORM 属性，状态须在 rollback 前取出
     return _card_ok_payload(
-        f"{part_name} 库存不足，已有进行中的采购建议（{existing.status}）"
+        f"{part_name} 库存不足，已有进行中的采购建议（{status_label}）"
     )
 
 

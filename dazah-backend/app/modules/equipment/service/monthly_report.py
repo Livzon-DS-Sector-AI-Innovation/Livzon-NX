@@ -28,16 +28,16 @@ logger = logging.getLogger(__name__)
 
 
 def _month_bounds(report_month: str) -> tuple[date, date]:
-    """'YYYY-MM' → (起日, 止日)。"""
+    """'YYYY-MM' → (起日, 止日)。非法月份统一转业务异常。"""
     try:
         year, month = (int(x) for x in report_month.split("-"))
+        start = date(year, month, 1)
+        if month == 12:
+            end = date(year + 1, 1, 1)
+        else:
+            end = date(year, month + 1, 1)
     except ValueError as e:
         raise AppException(message="月份格式必须为 YYYY-MM") from e
-    start = date(year, month, 1)
-    if month == 12:
-        end = date(year + 1, 1, 1)
-    else:
-        end = date(year, month + 1, 1)
     return start, end
 
 
