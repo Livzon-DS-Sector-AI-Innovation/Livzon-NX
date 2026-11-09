@@ -32,6 +32,15 @@ from app.modules.equipment.schemas.failure_code import (
     FailureCodeType,
     FailureCodeUpdate,
 )
+from app.modules.equipment.schemas.health import (
+    HealthBoardItem,
+    HealthBoardResponse,
+    HealthSnapshotResponse,
+    HealthTrendResponse,
+    MonthlyReportGenerateRequest,
+    MonthlyReportResponse,
+    RepairProfileResponse,
+)
 from app.modules.equipment.schemas.inspection import (
     CheckResult,
     EquipmentCheckResult,
@@ -62,6 +71,11 @@ from app.modules.equipment.schemas.inspection_template import (
     InspectionTemplateResponse,
     InspectionTemplateUpdate,
 )
+from app.modules.equipment.schemas.knowledge import (
+    KnowledgeCaseResponse,
+    KnowledgeSearchHit,
+    KnowledgeSearchResponse,
+)
 from app.modules.equipment.schemas.maintenance_config import (
     ClaimTimeoutConfig,
     ClaimTimeoutUpdateRequest,
@@ -91,6 +105,19 @@ from app.modules.equipment.schemas.personnel import (
     RoleResponse,
     RoleUpdate,
 )
+from app.modules.equipment.schemas.purchase_suggestion import (
+    CostReportItem,
+    CostReportResponse,
+    LaborRateCreate,
+    LaborRateItem,
+    LaborRateUpdate,
+    PurchaseSuggestionArrivalRequest,
+    PurchaseSuggestionItem,
+    PurchaseSuggestionQtyUpdate,
+    PurchaseSuggestionSubmitRequest,
+    PurchaseSuggestionSubmitResult,
+    WorkOrderExternalCostUpdate,
+)
 from app.modules.equipment.schemas.spare_part import (
     EquipmentSparePartCreate,
     EquipmentSparePartResponse,
@@ -115,10 +142,12 @@ from app.modules.equipment.schemas.work_order import (
     WorkOrderAssign,
     WorkOrderComplete,
     WorkOrderCreate,
+    WorkOrderEventResponse,
     WorkOrderPriority,
     WorkOrderResponse,
     WorkOrderStatistics,
     WorkOrderStatus,
+    WorkOrderTransfer,
     WorkOrderType,
     WorkOrderUpdate,
     WorkOrderVerify,
@@ -239,9 +268,34 @@ __all__ = [
     "ClaimTimeoutConfig",
     "ClaimTimeoutUpdateRequest",
     # inspection
+    "WorkOrderEventResponse",
+    "WorkOrderTransfer",
     # work order image
     "WorkOrderImageResponse",
     # personnel
+    # purchase suggestion & cost（方案C）
+    "CostReportItem",
+    "CostReportResponse",
+    "LaborRateCreate",
+    "LaborRateItem",
+    "LaborRateUpdate",
+    "PurchaseSuggestionArrivalRequest",
+    "PurchaseSuggestionItem",
+    "PurchaseSuggestionQtyUpdate",
+    "PurchaseSuggestionSubmitRequest",
+    "PurchaseSuggestionSubmitResult",
+    "WorkOrderExternalCostUpdate",
+    # health & knowledge（方案B）
+    "HealthBoardItem",
+    "HealthBoardResponse",
+    "HealthSnapshotResponse",
+    "HealthTrendResponse",
+    "KnowledgeCaseResponse",
+    "KnowledgeSearchHit",
+    "KnowledgeSearchResponse",
+    "MonthlyReportGenerateRequest",
+    "MonthlyReportResponse",
+    "RepairProfileResponse",
     "CandidateResponse",
     "FeishuRefreshResult",
     "PersonnelAddRequest",

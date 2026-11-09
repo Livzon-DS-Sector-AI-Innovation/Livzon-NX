@@ -14,6 +14,20 @@ from app.modules.equipment.service import spare_part_sync
 @pytest.fixture(autouse=True)
 async def _clean_spare_tables(db_session: AsyncSession) -> Any:
     async def cleanup() -> None:
+        # 采购建议引用备件（FK），须先清；交易流水引用备件+工单
+        from app.modules.equipment.models import (
+            SparePartPurchaseSuggestion,
+            SparePartTransaction,
+        )
+
+        for row in (
+            await db_session.execute(select(SparePartPurchaseSuggestion))
+        ).scalars().all():
+            await db_session.delete(row)
+        for row in (
+            await db_session.execute(select(SparePartTransaction))
+        ).scalars().all():
+            await db_session.delete(row)
         for row in (await db_session.execute(select(SparePartStock))).scalars().all():
             await db_session.delete(row)
         for row in (await db_session.execute(select(SparePart))).scalars().all():

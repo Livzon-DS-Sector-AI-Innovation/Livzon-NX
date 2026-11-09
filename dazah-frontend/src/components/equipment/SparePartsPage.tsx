@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useCallback } from 'react'
-import { App, ConfigProvider, Button, Spin } from 'antd'
+import { App, ConfigProvider, Button, Spin, Tabs } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
 import { PlusOutlined } from '@ant-design/icons'
 import { SparePart, StockWarning } from '@/types/equipment'
@@ -10,6 +10,7 @@ import { fetchSparePartsClient, fetchStockWarningsClient } from '@/lib/api/equip
 import { SparePartTable } from './SparePartTable'
 import { SparePartDrawer } from './SparePartDrawer'
 import { StockInboundDrawer } from './StockInboundDrawer'
+import { PurchaseSuggestionPanel } from './PurchaseSuggestionPanel'
 import { StockWarningTable } from './StockWarningTable'
 
 interface SparePartsPageProps {
@@ -91,7 +92,21 @@ export function SparePartsPage({
             border: '1px solid #e5e3df',
           }}
         >
-          <SparePartTable onRefresh={fetchData} />
+          <Tabs
+            defaultActiveKey="parts"
+            items={[
+              {
+                key: 'parts',
+                label: '备件台账',
+                children: <SparePartTable onRefresh={fetchData} />,
+              },
+              {
+                key: 'suggestions',
+                label: '采购建议',
+                children: <PurchaseSuggestionPanel workshopCode={workshopCode} />,
+              },
+            ]}
+          />
         </div>
 
         <SparePartDrawer onRefresh={fetchData} workshopCode={workshopCode} />

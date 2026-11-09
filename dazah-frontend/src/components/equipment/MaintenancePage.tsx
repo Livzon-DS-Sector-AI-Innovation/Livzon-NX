@@ -24,6 +24,7 @@ import { CalibrationPlanTable } from './CalibrationPlanTable'
 import { CalibrationPlanDrawer } from './CalibrationPlanDrawer'
 import { CalibrationRecordTable } from './CalibrationRecordTable'
 import { CalibrationRecordDrawer } from './CalibrationRecordDrawer'
+import { LaborRatePanel } from './LaborRatePanel'
 import { MaintenancePlanTable } from './MaintenancePlanTable'
 import { MaintenancePlanDrawer } from './MaintenancePlanDrawer'
 import { InspectionCompleteDrawer } from './InspectionCompleteDrawer'
@@ -249,6 +250,11 @@ export function MaintenancePage({
           <MaintenancePlanTable onRefresh={fetchMaintenancePlanData} equipments={equipments} />
         </div>
       ),
+    },
+    {
+      key: 'cost-config',
+      label: '成本配置',
+      children: <LaborRatePanel />,
     },
   ]
 

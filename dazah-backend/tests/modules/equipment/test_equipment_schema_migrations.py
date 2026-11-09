@@ -8,6 +8,10 @@
 - f1c7e9a3d4b6：巡检飞书镜像三张表（记录/设备/同步状态）
 - a3d8f2c6e1b9：巡检飞书镜像配置表（App Secret 加密存储）
 - c4e6f8a0b2d1：台账上传存档表（表格快照 + 导入摘要 + 查询索引）
+- b3c7e9f1a5d4：方案B 健康快照/维修病历/知识案例/月报四张表
+- c2d8f4b6e7a9：方案C 采购建议/费率表 + 工单成本三列
+- c5f1a8d3b6e2：费率表 role_id 外键恢复（含脏引用清理）
+- d8a3c7e1f5b4：方案E 工单事件表 + transfer_count 列
 """
 
 import importlib.util
@@ -30,6 +34,7 @@ def _mock_ops(monkeypatch, module) -> dict[str, Mock]:
             "create_table", "create_index", "drop_index", "drop_table",
             "add_column", "drop_column", "execute",
             "drop_constraint", "create_unique_constraint",
+            "create_foreign_key",
         )
     }
     for name, mock in mocks.items():
@@ -314,3 +319,60 @@ def test_equipment_workshop_registry_migration(monkeypatch):
 
     module.downgrade()
     mocks["drop_table"].assert_called_once_with("workshops", schema="equipment")
+
+
+def test_plan_b_health_tables_migration(monkeypatch):
+    module = _load("b3c7e9f1a5d4_add_equipment_health_and_knowledge.py")
+    mocks = _mock_ops(monkeypatch, module)
+
+    module.upgrade()
+    tables = {c.args[0] for c in mocks["create_table"].call_args_list}
+    assert tables == {
+        "equipment_health_snapshots",
+        "repair_profiles",
+        "repair_knowledge_cases",
+        "equipment_monthly_reports",
+    }
+    module.downgrade()
+    assert mocks["drop_table"].call_count == 4
+
+
+def test_plan_c_purchase_cost_migration(monkeypatch):
+    module = _load("c2d8f4b6e7a9_add_purchase_suggestions_and_labor_costs.py")
+    mocks = _mock_ops(monkeypatch, module)
+
+    module.upgrade()
+    tables = {c.args[0] for c in mocks["create_table"].call_args_list}
+    assert tables == {
+        "spare_part_purchase_suggestions",
+        "maintenance_labor_rates",
+    }
+    added = {c.args[1].name for c in mocks["add_column"].call_args_list}
+    assert added == {"labor_cost", "external_cost", "external_vendor"}
+    module.downgrade()
+    assert mocks["drop_table"].call_count == 2
+    assert mocks["drop_column"].call_count == 3
+
+
+def test_plan_c_role_fk_restore_migration(monkeypatch):
+    module = _load("c5f1a8d3b6e2_restore_labor_rate_role_fk.py")
+    mocks = _mock_ops(monkeypatch, module)
+
+    module.upgrade()
+    assert mocks["execute"].call_count == 1  # 脏引用清理
+    module.downgrade()
+    assert mocks["drop_constraint"].call_count == 1
+
+
+def test_plan_e_work_order_events_migration(monkeypatch):
+    module = _load("d8a3c7e1f5b4_add_work_order_events_and_transfer.py")
+    mocks = _mock_ops(monkeypatch, module)
+
+    module.upgrade()
+    tables = {c.args[0] for c in mocks["create_table"].call_args_list}
+    assert tables == {"work_order_events"}
+    added = {c.args[1].name for c in mocks["add_column"].call_args_list}
+    assert added == {"transfer_count"}
+    module.downgrade()
+    assert mocks["drop_table"].call_count == 1
+    assert mocks["drop_column"].call_count == 1

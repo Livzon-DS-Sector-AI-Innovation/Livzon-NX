@@ -1,16 +1,16 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { App, Drawer, Descriptions, Tag, Timeline, Button, Space, Select, Input, Image } from 'antd'
+import { App, Drawer, Descriptions, Tag, Timeline, Button, Space, Select, Input, Image, Modal, InputNumber } from 'antd'
 import {
   ClockCircleOutlined, UserOutlined, ToolOutlined,
   CheckCircleOutlined, CloseCircleOutlined, StopOutlined,
   ThunderboltOutlined,
 } from '@ant-design/icons'
 import { useEquipmentStore } from '@/stores/equipment'
-import { assignWorkOrder, startWorkOrder, completeWorkOrder, verifyWorkOrder, closeWorkOrder, claimWorkOrder } from '@/actions/equipment'
+import { assignWorkOrder, startWorkOrder, completeWorkOrder, verifyWorkOrder, closeWorkOrder, claimWorkOrder, updateWorkOrderExternalCost, transferWorkOrder } from '@/actions/equipment'
 import { WorkOrderStatus, WorkOrderPriority, Maintainer, SparePart } from '@/types/equipment'
-import { fetchMaintainersClient, fetchWorkOrderByIdClient, fetchSparePartsClient } from '@/lib/api/equipment-client'
+import { fetchMaintainersClient, fetchWorkOrderByIdClient, fetchSparePartsClient, fetchWorkOrderEventsClient } from '@/lib/api/equipment-client'
 import { MaterialConsumeDrawer } from './MaterialConsumeDrawer'
 import { MaterialRecordTable } from './MaterialRecordTable'
 
@@ -122,6 +122,55 @@ export function WorkOrderDetailDrawer({ onRefresh }: WorkOrderDetailDrawerProps)
     } catch (error) {
       message.error(error?.message || '操作失败')
     }
+  }
+
+  const handleTransfer = () => {
+    if (!maintainers.length) {
+      message.warning('暂无可转派的维修人员')
+      return
+    }
+    let selectedId: string | undefined
+    let reason = ''
+    modal.confirm({
+      title: `转派维修人${(wo.transfer_count ?? 0) > 0 ? `（已转派 ${wo.transfer_count} 次）` : ''}`,
+      content: (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingTop: 8 }}>
+          <Select
+            placeholder="选择新维修人"
+            showSearch
+            optionFilterProp="label"
+            style={{ width: '100%' }}
+            onChange={(v) => { selectedId = v }}
+            options={maintainers
+              .filter((m) => m.user_id !== wo.assignee_id)
+              .map((m) => ({ label: `${m.name}（${m.employee_no || '-'}）`, value: m.user_id }))}
+          />
+          <Input
+            placeholder="转派原因（选填）"
+            maxLength={200}
+            onChange={(e) => { reason = e.target.value }}
+          />
+        </div>
+      ),
+      okText: '确认转派',
+      onOk: async () => {
+        if (!selectedId) {
+          message.warning('请选择新维修人')
+          return false // 返回 false 阻止弹窗关闭；禁止裸 reject（逃逸 Unhandled Rejection）
+        }
+        try {
+          await transferWorkOrder(wo.id, {
+            assignee_id: selectedId,
+            reason: reason || undefined,
+          })
+          message.success('已转派')
+          onRefresh?.()
+        } catch (error) {
+          message.error(error instanceof Error ? error.message : '转派失败')
+          return false
+        }
+      },
+    })
   }
 
   const handleComplete = () => {
@@ -322,6 +371,28 @@ export function WorkOrderDetailDrawer({ onRefresh }: WorkOrderDetailDrawerProps)
         <Descriptions.Item label="维修耗时">{formatDuration(wo.actual_duration)}</Descriptions.Item>
       </Descriptions>
 
+      {/* 维修成本（方案C）：备件 + 工时（完成时自动按费率计算）+ 外委（补录） */}
+      <div style={{ marginTop: 24, padding: '12px 16px', background: 'var(--color-surface)', borderRadius: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+          <span style={{ fontSize: 15, fontWeight: 600, color: '#1a1a1a' }}>维修成本</span>
+          <Space size={12}>
+            <span style={{ color: '#5d5b54', fontSize: 13 }}>
+              备件 ¥{(wo.spare_parts_cost ?? 0).toFixed(2)} · 工时 ¥{(wo.labor_cost ?? 0).toFixed(2)} · 外委 ¥
+              {(wo.external_cost ?? 0).toFixed(2)}
+            </span>
+            <ExternalCostButton workOrderId={wo.id} initialCost={wo.external_cost ?? null} initialVendor={wo.external_vendor ?? null} />
+          </Space>
+        </div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: '#1a1a1a' }}>
+          合计 ¥{((wo.spare_parts_cost ?? 0) + (wo.labor_cost ?? 0) + (wo.external_cost ?? 0)).toFixed(2)}
+          {wo.external_vendor ? (
+            <span style={{ fontSize: 12, fontWeight: 400, color: '#8a867d', marginLeft: 10 }}>
+              外委厂商：{wo.external_vendor}
+            </span>
+          ) : null}
+        </div>
+      </div>
+
       {wo.images && wo.images.length > 0 && (
         <div style={{ marginTop: 24 }}>
           <div style={{ fontSize: 15, fontWeight: 600, color: '#1a1a1a', marginBottom: 12 }}>故障图片</div>
@@ -378,6 +449,11 @@ export function WorkOrderDetailDrawer({ onRefresh }: WorkOrderDetailDrawerProps)
             </>
           )}
           {wo.status === '执行中' && <Button type="primary" onClick={handleComplete}>提交完成</Button>}
+          {(wo.status === '待处理' || wo.status === '执行中') && (
+            <Button onClick={handleTransfer}>
+              ↗️ 转派{(wo.transfer_count ?? 0) > 0 ? `（${wo.transfer_count}次）` : ''}
+            </Button>
+          )}
           {wo.status === '待验收' && (
             <>
               <Button type="primary" onClick={() => handleVerify('合格')}>验收通过</Button>
@@ -388,5 +464,77 @@ export function WorkOrderDetailDrawer({ onRefresh }: WorkOrderDetailDrawerProps)
         </Space>
       </div>
     </Drawer>
+  )
+}
+
+// 外委费用补录（方案C）：小按钮 + 弹窗，保存走 Server Action
+function ExternalCostButton({
+  workOrderId,
+  initialCost,
+  initialVendor,
+}: {
+  workOrderId: string
+  initialCost: number | null
+  initialVendor: string | null
+}) {
+  const { message } = App.useApp()
+  const [open, setOpen] = useState(false)
+  const [cost, setCost] = useState<number | null>(initialCost)
+  const [vendor, setVendor] = useState<string | null>(initialVendor)
+  const [submitting, setSubmitting] = useState(false)
+
+  const handleSave = async () => {
+    setSubmitting(true)
+    try {
+      await updateWorkOrderExternalCost(workOrderId, {
+        external_cost: cost ?? 0,
+        external_vendor: vendor,
+      })
+      message.success('外委费用已保存，刷新后生效')
+      setOpen(false)
+    } catch (e) {
+      message.error(e instanceof Error ? e.message : '保存失败')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <>
+      <Button size="small" onClick={() => setOpen(true)}>
+        补录外委
+      </Button>
+      <Modal
+        title="补录外委费用"
+        open={open}
+        onCancel={() => setOpen(false)}
+        onOk={handleSave}
+        confirmLoading={submitting}
+        destroyOnHidden
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingTop: 8 }}>
+          <label style={{ fontSize: 13, color: '#5d5b54' }}>
+            外委金额（元）
+            <InputNumber
+              min={0}
+              precision={2}
+              value={cost ?? undefined}
+              onChange={(v) => setCost(v ?? 0)}
+              style={{ width: '100%', marginTop: 4 }}
+            />
+          </label>
+          <label style={{ fontSize: 13, color: '#5d5b54' }}>
+            外委厂商
+            <Input
+              maxLength={100}
+              value={vendor ?? ''}
+              onChange={(e) => setVendor(e.target.value)}
+              placeholder="选填"
+              style={{ marginTop: 4 }}
+            />
+          </label>
+        </div>
+      </Modal>
+    </>
   )
 }

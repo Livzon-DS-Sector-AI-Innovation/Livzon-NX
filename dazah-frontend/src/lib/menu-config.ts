@@ -49,7 +49,8 @@ export const EQUIPMENT_WORKSHOPS: ReadonlyArray<{ code: string; label: string }>
   { code: "102-2", label: "102二车间" },
   { code: "103", label: "103车间" },
   { code: "201-1", label: "201一车间" },
-  { code: "201-2", label: "201二车间" },
+  { code: "201-2", label: "201二车间（MC）" },
+  { code: "201-2-dr", label: "201二车间（DR）" },
   { code: "201-3", label: "201三车间" },
   { code: "203", label: "203车间" },
 ]

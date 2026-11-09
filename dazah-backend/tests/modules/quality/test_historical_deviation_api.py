@@ -29,6 +29,25 @@ def _disable_minio(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture(autouse=True)
+def _grant_page_context_permission(monkeypatch: pytest.MonkeyPatch) -> None:
+    """页面上下文路径走 has_current_page_permission（真实查 grants）。
+
+    本文件断言的是 CRUD 与 AI 抽取行为而非页面授权；授权矩阵由
+    test_page_edit_authorization.py 用真实链路覆盖，此处按 conftest
+    同一意图（测试用户视为通配）局部放行。
+    """
+    from unittest.mock import AsyncMock as _AsyncMock
+
+    from app.modules.quality.api import deps as _quality_deps
+
+    monkeypatch.setattr(
+        _quality_deps,
+        "has_current_page_permission",
+        _AsyncMock(return_value=True),
+    )
+
+
+@pytest.fixture(autouse=True)
 async def _clean_historical_deviations(db_session: AsyncSession) -> AsyncIterator[Any]:
     await db_session.execute(text("CREATE SCHEMA IF NOT EXISTS quality"))
     await db_session.execute(
