@@ -53,7 +53,8 @@ RUN --mount=type=cache,id=dazah-debian-apt,target=/var/cache/apt,sharing=locked 
 
 COPY scripts/cd/conversion_limit.py /usr/local/bin/dazah-conversion
 COPY scripts/cd/readiness.py /opt/dazah-readiness.py
-RUN chmod 0755 /usr/local/bin/dazah-conversion \
+RUN sed -i 's/\r$//' /usr/local/bin/dazah-conversion \
+    && chmod 0755 /usr/local/bin/dazah-conversion \
     && rm /usr/bin/soffice /usr/bin/libreoffice \
     && ln -s /usr/local/bin/dazah-conversion /usr/bin/soffice \
     && ln -s /usr/local/bin/dazah-conversion /usr/bin/libreoffice

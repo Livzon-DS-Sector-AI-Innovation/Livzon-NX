@@ -166,6 +166,9 @@ jobs:
           pnpm generate:api
           git diff --exit-code -- src/types/generated/schema.ts
 
+      - name: Verify frontend page discovery inventory
+        run: python ../scripts/generate-page-routes.py --check
+
       - name: Run ESLint
         run: pnpm lint
 
@@ -438,6 +441,9 @@ jobs:
       - name: Install backend dependencies
         run: python3 .github/scripts/ci_support.py install backend
 
+      - name: Verify shipped frontend page inventory
+        run: python3 scripts/generate-page-routes.py --check
+
       - name: Run backend quality checks
         run: >-
           python3 .github/scripts/ci_support.py run --phase backend-quality --category quality --
@@ -665,6 +671,38 @@ jobs:
                   print(f"Chromium {browser.version}: app user and JavaScript rendering OK")
               finally:
                   browser.close()
+          PY
+          done
+
+      - name: Verify Chinese document conversion in both backend images
+        shell: bash
+        run: |
+          for image in "$IMAGE_TAG" "${IMAGE_TAG}-dev"; do
+            timeout 90s docker run --rm --interactive --network none \
+              --user app --entrypoint .venv/bin/python "$image" - <<'PY'
+          import subprocess
+          import tempfile
+          from pathlib import Path
+
+          import pymupdf
+          from docx import Document
+
+          with tempfile.TemporaryDirectory() as directory:
+              source = Path(directory) / "chinese.docx"
+              document = Document()
+              document.add_paragraph("原料药质量检验报告：含量99.5%，复核通过。")
+              document.save(source)
+              subprocess.run(
+                  ["soffice", "--headless", "--convert-to", "pdf",
+                   "--outdir", directory, str(source)],
+                  capture_output=True, timeout=60, check=True,
+              )
+              output = source.with_suffix(".pdf")
+              assert output.is_file(), "LibreOffice did not create a PDF"
+              with pymupdf.open(output) as pdf:
+                  text = "".join(page.get_text() for page in pdf)
+                  assert "原料药" in text and "99.5%" in text, text
+              print("soffice entrypoint and Chinese DOCX to PDF conversion OK")
           PY
           done
 

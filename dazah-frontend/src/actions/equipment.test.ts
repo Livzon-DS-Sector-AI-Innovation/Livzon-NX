@@ -1,7 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
-  getAuthHeaders: vi.fn().mockResolvedValue({ Authorization: 'Bearer server-token', 'X-Dazah-Operation-ID': 'fixture-operation' }),
+  getAuthHeaders: vi.fn().mockResolvedValue({
+    Authorization: 'Bearer server-token',
+    'X-Dazah-Operation-ID': 'fixture-operation',
+    'X-Dazah-Page-Path': '/equipment',
+    'X-Forwarded-For': '192.0.2.10',
+  }),
   revalidatePath: vi.fn(),
 }))
 
@@ -15,6 +20,11 @@ import {
   deleteCategory,
   fetchCalibrationPlans,
   fetchCalibrationRecords,
+  fetchCategories,
+  fetchCategoryTree,
+  fetchDepartments,
+  fetchFailureCodes,
+  fetchLocationTree,
   fetchEquipments,
   fetchEquipmentStatistics,
   fetchInspectionTodaySummaries,
@@ -29,12 +39,67 @@ import {
 
 const API_BASE = process.env.API_BASE_URL || 'http://localhost:8000'
 
+const protectedReads: { name: string; path: string; read: () => Promise<unknown> }[] = [
+  { name: '分类树', path: '/categories?tree=true', read: fetchCategoryTree },
+  { name: '位置树', path: '/locations?tree=true', read: fetchLocationTree },
+  { name: '设备列表', path: '/equipments?page=1&page_size=20', read: () => fetchEquipments() },
+  { name: '部门列表', path: '/departments', read: fetchDepartments },
+  ...(['symptoms', 'causes', 'actions'] as const).map(type => ({
+    name: `故障代码 ${type}`, path: `/maintenance/failure-codes/${type}`,
+    read: () => fetchFailureCodes(type),
+  })),
+  { name: '校准记录', path: '/maintenance/calibration/records?page=1&page_size=20', read: () => fetchCalibrationRecords() },
+  { name: '保养计划', path: '/maintenance/plans/?page=1&page_size=20', read: () => fetchMaintenancePlans() },
+  { name: '分类列表', path: '/categories', read: fetchCategories },
+  { name: '备件列表', path: '/spare-parts/?page=1&page_size=20', read: () => fetchSpareParts() },
+]
+
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
     headers: { 'content-type': 'application/json' },
   })
 }
+
+describe('设备服务端查询认证回归', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.clearAllMocks()
+  })
+
+  it.each(protectedReads)('$name 传递身份、页面和客户端上下文', async ({ path, read }) => {
+    const fetchMock = vi.fn(() => jsonResponse({ data: [{ id: 'row-1' }], meta: { total: 1 } }))
+    vi.stubGlobal('fetch', fetchMock)
+    const result = await read()
+    if (path.includes('page=')) {
+      expect(result).toMatchObject({ items: [{ id: 'row-1' }], total: 1 })
+    } else {
+      expect(result).toEqual([{ id: 'row-1' }])
+    }
+    expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
+      `${API_BASE}/api/v1/equipment${path}`,
+      { cache: 'no-store', headers: {
+        Authorization: 'Bearer server-token',
+        'X-Dazah-Operation-ID': 'fixture-operation',
+        'X-Dazah-Page-Path': '/equipment',
+        'X-Forwarded-For': '192.0.2.10',
+      } },
+    )
+    expect(mocks.getAuthHeaders).toHaveBeenCalledOnce()
+  })
+
+  describe.each([401, 403])('HTTP %i', status => {
+    it.each(protectedReads)('$name 保留鉴权失败，不转换为空数据', async ({ read }) => {
+      const fetchMock = vi.fn(() => jsonResponse({ message: 'internal upstream detail' }, status))
+      vi.stubGlobal('fetch', fetchMock)
+      await expect(read()).rejects.toMatchObject({
+        status,
+        message: status === 401 ? '登录已失效，请重新登录' : '没有执行此操作的权限，请联系管理员',
+      })
+      expect(fetchMock).toHaveBeenCalledOnce()
+    })
+  })
+})
 
 describe('equipment actions', () => {
   afterEach(() => {

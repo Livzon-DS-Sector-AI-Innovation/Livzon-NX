@@ -148,6 +148,7 @@ services:
       WATCHFILES_FORCE_POLLING: ${WATCHFILES_FORCE_POLLING:-true}
     volumes:
       - ./dazah-backend/app:/app/app
+      - ./dazah-frontend/src/app:/app/frontend-pages:ro
       - ./dazah-backend/alembic:/app/alembic
       - ./dazah-backend/alembic.ini:/app/alembic.ini:ro
       - ./dazah-backend/data:/app/data

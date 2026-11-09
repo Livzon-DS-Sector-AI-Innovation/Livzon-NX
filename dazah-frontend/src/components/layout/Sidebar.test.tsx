@@ -112,7 +112,7 @@ describe('Sidebar width control', () => {
     const host = document.createElement('div'); document.body.append(host)
     const root = createRoot(host)
     const modules: ModuleMenu[] = [{ key: 'energy', moduleCode: 'energy', label: '能源管理', icon: 'bolt', path: '/energy', children: [
-      { key: 'reports', label: '能源台账', path: '/energy/reports', activePaths: ['/energy/entry'] },
+      { key: 'reports', label: '能源报表', path: '/energy/reports', activePaths: ['/energy/entry'] },
     ] }]
     try {
       await act(async () => root.render(createElement(Sidebar, { user: { ...user, role: 'admin' }, modules })))

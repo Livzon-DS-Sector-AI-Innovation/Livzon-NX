@@ -13,6 +13,7 @@ export function EnergyCalculationBasis({ basis, title, unit, onClose }: { basis:
   const statusLabels: Record<string, string> = { restricted: '无查看权限', negative_usage: '负用量' }
   const statusLabel = (status: string) => statusLabels[status] || QUALITY_LABELS[status] || status
   function formula(node: Node) {
+    if (node.operation === 'source') return node.note || '按原表计算'
     const terms = nodes.filter(child => child.parent_id === node.node_id).map(child => `${formatAmount(child.coefficient)} × ${child.name}`)
     return terms.join(node.operation === 'ratio' ? ' ÷ ' : ' + ') || '来源未取得'
   }

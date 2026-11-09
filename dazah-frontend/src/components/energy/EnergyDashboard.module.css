@@ -1,0 +1,23 @@
+.dashboard { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 20px; }
+.header h3 { margin: 0; }
+.controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
+.overview { display: grid; gap: 10px; min-width: 0; }
+.overview h4 { margin: 0; }
+.field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.field { width: 300px; max-width: 100%; }
+.metrics { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; }
+.metrics .metric { display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start; height: auto; white-space: normal; gap: 6px; padding: 12px; text-align: left; border: 1px solid var(--color-hairline-soft); border-radius: var(--rounded-lg); background: var(--color-canvas); color: var(--color-ink); cursor: pointer; min-width: 0; font: inherit; }
+.metrics .metric:hover, .metrics .metric[aria-pressed='true'] { border-color: var(--color-primary); background: var(--color-primary-soft); }
+.metric:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 3px; }
+.metricLabel { display: flex; flex-direction: column; align-items: flex-start; gap: 0; font-size: 13px; line-height: 20px; font-weight: 600; }
+.metricLabel > span, .metricHint { color: var(--color-text-secondary); font-size: 12px; line-height: 16px; font-weight: 400; }
+.metricValue { font-size: 24px; line-height: 32px; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.charts { display: grid; align-items: start; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 12px; }
+.chart { min-width: 0; }
+.facts { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.facts :global(.ant-statistic-content) { font-size: 18px; }
+.facts :global(.ant-statistic-content-suffix) { font-size: 12px; }
+@media (max-width: 1199px) { .metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 1100px) { .charts { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 700px) { .header { align-items: stretch; } .header h3 { width: 100%; } .controls { width: 100%; } .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } .metrics .metric { padding: 12px; } .metricValue { font-size: 22px; } }

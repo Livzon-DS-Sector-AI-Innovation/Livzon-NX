@@ -42,6 +42,13 @@ async function render(dark: boolean, meters: Meter[] = []) {
 }
 
 describe('energy import preview flow', () => {
+  it.each([false, true])('shows the report month and original source warnings (dark=%s)', async dark => {
+    vi.mocked(previewLedgerImport).mockResolvedValue({ ok: true, data: { id: 'batch', status: 'preview', payload: { report_period: '2026-09', warnings: ['蒸汽量的日期重复，须核对原表日期'], sheets: [] } } })
+    await render(dark)
+    await clickImport('预览文件')
+    expect(document.body.textContent).toContain('识别月报：2026-09')
+    expect(document.body.textContent).toContain('原表存在需核对的数据')
+  })
   it.each([false, true])('keeps the selected period explicit and invalidates stale previews (dark=%s)', async dark => {
     vi.mocked(previewLedgerImport).mockResolvedValue({ ok: true, data: { id: 'batch', status: 'preview', payload: { start_date: '2026-06-27', end_date: '2026-07-19', sheets: [], formulas: [] } } })
     await render(dark)

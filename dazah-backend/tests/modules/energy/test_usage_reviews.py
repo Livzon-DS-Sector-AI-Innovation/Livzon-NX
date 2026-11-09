@@ -19,7 +19,7 @@ from app.modules.energy.ledger_reviews import (
     save_usage_reviews,
 )
 from app.modules.energy.ledger_schemas import RuleDefinition, RuleTerm, UsageRow
-from app.modules.energy.ledger_service import EnergyLedgerService
+from app.modules.energy.ledger_service import CALCULATION_POLICY, EnergyLedgerService
 
 
 def review() -> UsageReview:
@@ -151,7 +151,7 @@ async def test_reporting_route_excludes_pending_and_preserves_zero() -> None:
             calculated_value=Decimal(value),
             effective_value=Decimal(value),
             status="complete",
-            provenance={},
+            provenance={"calculation_policy": CALCULATION_POLICY},
         )
         for day, value in [(25, "0"), (26, "2049315"), (27, "29915")]
     ]
@@ -322,7 +322,10 @@ async def test_ratio_filter_cannot_bypass_a_review_on_its_hidden_source() -> Non
         calculated_value=Decimal("0.5"),
         effective_value=Decimal("0.5"),
         status="complete",
-        provenance={"terms": [term.model_dump(mode="json") for term in ratio.terms]},
+        provenance={
+            "calculation_policy": CALCULATION_POLICY,
+            "terms": [term.model_dump(mode="json") for term in ratio.terms],
+        },
     )
     db = SimpleNamespace(
         scalars=AsyncMock(

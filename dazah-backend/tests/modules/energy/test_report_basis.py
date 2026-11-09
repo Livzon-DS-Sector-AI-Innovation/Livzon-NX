@@ -35,6 +35,56 @@ def test_basis_explains_pending_review_without_losing_calculation() -> None:
     assert "待确认：原表值与差分冲突" in basis.nodes[0].note
 
 
+def test_reference_manual_value_does_not_replace_formula_or_hide_dependencies():
+    basis = build_report_basis(
+        DAY,
+        ["rule:total"],
+        {"rule:total": rule(), "point:water": meter()},
+        {
+            "rule:total": fact(
+                "rule:total",
+                "20",
+                provenance={
+                    "reference": {
+                        "source_sheet": "日用量",
+                        "source_column": 5,
+                        "reported_value": "999",
+                    },
+                },
+            ),
+            "point:water": fact("point:water", "40"),
+        },
+    )
+    assert basis.nodes[0].operation == "sum"
+    assert basis.nodes[0].value == 20
+    assert basis.nodes[0].source_column == "E"
+    assert "999（仅留痕，不参与计算）" in basis.nodes[0].note
+    assert basis.nodes[1].value == 40
+
+
+def test_basis_uses_actual_source_formula_instead_of_old_normalized_terms() -> None:
+    original = fact(
+        "rule:total",
+        "30",
+        provenance={
+            "source_sheet": "日用量",
+            "source_cell": "B28",
+            "formula": "=电量!B27*3",
+            "sources": [{"sheet": "电量", "cell": "B27", "value": "10"}],
+        },
+    )
+    basis = build_report_basis(
+        DAY,
+        ["rule:total"],
+        {"rule:total": rule(), "point:water": meter()},
+        {"rule:total": original},
+    )
+    assert len(basis.nodes) == 1
+    assert basis.nodes[0].operation == "source"
+    assert "原表公式：=电量!B27*3" in basis.nodes[0].note
+    assert "引用：电量!B27 = 10" in basis.nodes[0].note
+
+
 def meter() -> MeterDefinition:
     return MeterDefinition(
         code="water",
@@ -121,14 +171,10 @@ def test_basis_retains_original_field_readings_coefficients_and_adjustments() ->
 
 
 def test_basis_does_not_turn_missing_sources_into_zero_or_loop_on_cycles() -> None:
-    missing = build_report_basis(
-        DAY, ["rule:total"], {"rule:total": rule()}, {}
-    )
+    missing = build_report_basis(DAY, ["rule:total"], {"rule:total": rule()}, {})
     assert missing.nodes[1].value is None and missing.nodes[1].name == "来源配置缺失"
     cycle = rule().model_copy(update={"terms": [RuleTerm(metric_key="rule:total")]})
-    result = build_report_basis(
-        DAY, ["rule:total"], {"rule:total": cycle}, {}
-    )
+    result = build_report_basis(DAY, ["rule:total"], {"rule:total": cycle}, {})
     assert len(result.nodes) == 2 and "循环" in result.nodes[1].note
 
 
@@ -144,9 +190,7 @@ def test_basis_explains_zero_direct_usage_without_fabricating_counter_readings()
     )
     assert result.nodes[0].value == 0 and result.nodes[0].reading_type == "direct"
     assert result.nodes[0].reading_dates == []
-    missing = build_report_basis(
-        DAY, ["point:water"], {"point:water": direct}, {}
-    )
+    missing = build_report_basis(DAY, ["point:water"], {"point:water": direct}, {})
     assert missing.nodes[0].value is None
     assert missing.nodes[0].status == "missing_reading"
 

@@ -89,6 +89,45 @@ def build_report_basis(
             node.multiplier = str(definition.multiplier)
         else:
             node.operation = definition.operation
+            reference = evidence.get("reference")
+            if isinstance(reference, dict):
+                column = reference.get("source_column")
+                if isinstance(column, int):
+                    node.source_column = get_column_letter(column)
+                node.source_sheet = str(
+                    reference.get("source_sheet", node.source_sheet)
+                )
+                reported = reference.get("reported_value")
+                if reported is not None:
+                    node.note = "；".join(
+                        filter(
+                            None,
+                            [
+                                node.note,
+                                f"参考表手填值：{reported}（仅留痕，不参与计算）",
+                            ],
+                        )
+                    )
+            if isinstance(evidence.get("source_cell"), str):
+                node.operation = "source"
+                details = [
+                    f"原表：{evidence.get('source_sheet')}!{evidence['source_cell']}"
+                ]
+                formula = evidence.get("formula")
+                details.append(
+                    f"原表公式：{formula}"
+                    if isinstance(formula, str)
+                    else "原表手填结果"
+                )
+                sources = evidence.get("sources")
+                if isinstance(sources, list):
+                    details.extend(
+                        f"引用：{source.get('sheet')}!{source.get('cell')} "
+                        f"= {source.get('value')}"
+                        for source in sources
+                        if isinstance(source, dict)
+                    )
+                node.note = "；".join(filter(None, [node.note, *details]))
         reviews = evidence.get("review")
         if isinstance(reviews, list):
             reasons = [
@@ -101,6 +140,8 @@ def build_report_basis(
                     filter(None, [node.note, "待确认：" + "；".join(reasons)])
                 )
         nodes.append(node)
+        if node.operation == "source":
+            return
         if isinstance(definition, RuleDefinition):
             if key in ancestors or len(ancestors) >= 32:
                 node.note = "计算关系存在循环或超过展示深度，请核对配置"

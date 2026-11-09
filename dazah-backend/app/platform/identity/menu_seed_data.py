@@ -75,7 +75,7 @@ _LEGACY_SEED_MENUS: list[dict[str, Any]] = [
         children=[
             _n("overview", "能源仪表盘", "/energy"),
             _n("entry", "原始数据填写", "/energy/entry"),
-            _n("reports", "能源台账", "/energy/reports"),
+            _n("reports", "能源报表", "/energy/reports"),
             _n("analysis", "用量分析", "/energy/analysis"),
             _n("data-quality", "数据质量", "/energy/data-quality"),
             _n("settings", "配置管理", "/energy/settings"),

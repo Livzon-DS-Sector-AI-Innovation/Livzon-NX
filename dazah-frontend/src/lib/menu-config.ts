@@ -171,7 +171,7 @@ export const moduleMenus: ModuleMenu[] = [
     path: "/energy",
     children: [
       { key: "ledger-overview", label: "能源仪表盘", path: "/energy", feishuPageKey: "" },
-      { key: "reports", label: "能源台账", path: "/energy/reports", activePaths: ["/energy/entry"], feishuPageKey: "" },
+      { key: "reports", label: "能源报表", path: "/energy/reports", activePaths: ["/energy/entry"], feishuPageKey: "" },
       { key: "analysis", label: "用量分析", path: "/energy/analysis", feishuPageKey: "" },
       { key: "data-quality", label: "数据质量", path: "/energy/data-quality", feishuPageKey: "" },
       { key: "settings", label: "配置管理", path: "/energy/settings", placement: "bottom", feishuPageKey: "" },

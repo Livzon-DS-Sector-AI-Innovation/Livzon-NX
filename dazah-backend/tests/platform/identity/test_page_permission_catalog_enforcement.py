@@ -118,6 +118,9 @@ async def test_broken_route_contract_is_denied_before_business_handler(
 
 def _preview_facts(monkeypatch):
     monkeypatch.setattr(
+        "app.platform.identity.page_permissions.load_frontend_page_routes", lambda: []
+    )
+    monkeypatch.setattr(
         PagePermissionRepository, "get_rollout", AsyncMock(return_value=None)
     )
     monkeypatch.setattr(
@@ -183,7 +186,10 @@ async def test_preview_blocks_active_menu_without_permission_registration(
 
     preview = await PagePermissionService().rollout_preview(None, module_code="hr")
 
-    assert expected_gap in preview.catalog_gaps
+    assert any(
+        entry.route_path in gap and expected_gap.split("：", 1)[0] in gap
+        for gap in preview.catalog_gaps
+    )
 
 
 @pytest.mark.asyncio
@@ -262,7 +268,7 @@ async def test_preview_keeps_registered_module_without_pages_visible(monkeypatch
         None, module_code="environment"
     )
 
-    assert "未登记有效菜单页面" in preview.catalog_gaps
+    assert any("未登记有效菜单页面" in gap for gap in preview.catalog_gaps)
 
 
 @pytest.mark.asyncio
@@ -283,8 +289,42 @@ async def test_preview_hash_tracks_actual_route_changes_even_with_same_gap_count
         lambda: [("GET", "/api/v1/hr/unreviewed-b")],
     )
     after = await service.rollout_preview(None, module_code="hr")
-    assert before.catalog_gaps == after.catalog_gaps
+    assert len(before.catalog_gaps) == len(after.catalog_gaps)
+    assert before.catalog_gaps != after.catalog_gaps
     assert before.preview_hash != after.preview_hash
+
+
+@pytest.mark.asyncio
+async def test_preview_reuses_catalog_for_gaps_and_hash(monkeypatch):
+    _preview_facts(monkeypatch)
+    menus = PagePermissionRepository.active_menu_page_catalog
+    routes = [(item.method, item.route_path) for item in page_policy.PAGE_API_BINDINGS]
+    apis = Mock(side_effect=lambda: list(routes))
+    tools = Mock(return_value=[])
+    monkeypatch.setattr(page_policy, "_api_catalog_provider", apis)
+    monkeypatch.setattr(page_policy, "_tool_catalog_provider", tools)
+    app = FastAPI()
+    app.include_router(rbac_api.rbac_router, prefix="/api/v1/identity")
+    app.dependency_overrides[rbac_api.require_identity_admin] = lambda: SimpleNamespace(
+        role="admin"
+    )
+    app.dependency_overrides[get_db] = lambda: None
+    url = "/api/v1/identity/admin/page-permissions/modules/hr/preview"
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        first = await client.get(url)
+        assert first.status_code == 200
+        first_data = first.json()["data"]
+        assert first_data["catalog_gaps"] == []
+        assert all(mock.call_count == 1 for mock in (menus, apis, tools))
+        routes.append(("GET", "/api/v1/hr/new-preview-check"))
+        second = await client.get(url)
+        assert second.status_code == 200
+        second_data = second.json()["data"]
+        assert len(second_data["catalog_gaps"]) == 1
+        assert first_data["preview_hash"] != second_data["preview_hash"]
+        assert all(mock.call_count == 2 for mock in (menus, apis, tools))
 
 
 @pytest.mark.asyncio
@@ -349,8 +389,10 @@ async def test_integration_check_recomputes_after_policy_changes(monkeypatch):
 async def test_module_integration_api_returns_current_gaps(monkeypatch):
     gaps = ["接口绑定缺失"]
     service = SimpleNamespace(
-        integration_gaps=AsyncMock(
-            side_effect=lambda db, module_code: gaps if module_code == "hr" else []
+        integration_gaps_for_modules=AsyncMock(
+            side_effect=lambda db, module_codes: {
+                code: gaps if code == "hr" else [] for code in module_codes
+            }
         )
     )
     monkeypatch.setattr(rbac_api, "PagePermissionService", lambda: service)

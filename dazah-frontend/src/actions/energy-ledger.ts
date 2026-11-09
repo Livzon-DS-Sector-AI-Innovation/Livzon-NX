@@ -14,6 +14,7 @@ async function write<T>(path: string, payload: unknown, method = 'POST') {
     const headers = await getAuthHeaders()
     // Imports and reviews use the settings grant, not report grants.
     if (path.startsWith('/imports/') || path.startsWith('/usage-reviews')) headers['X-Dazah-Page-Path'] = '/energy/settings'
+    if (path === '/input-readings') headers['X-Dazah-Page-Path'] = '/energy/entry'
     const result = await ledgerRequest<T>(path, { method, body: JSON.stringify(payload) }, headers)
     revalidatePath('/energy', 'layout')
     return result

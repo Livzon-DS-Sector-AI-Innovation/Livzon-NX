@@ -10,11 +10,13 @@ import ThemedEChart from '@/components/shared/ThemedEChart'
 import { CATEGORY_LABELS, QUALITY_LABELS, formatAmount, ledgerRequest, reportQuery, type Report, type UsageRow, type WorkbookDataset, type EnergyMetricOption } from '@/lib/api/energy-ledger'
 import { EnergyPeriodSelect } from './EnergyPeriodSelect'
 import { EnergyWorkbookClient } from './EnergyWorkbookClient'
+import { EnergyReportNavigator } from './EnergyReportNavigator'
 import { monthPeriod, resolveMonth } from './energy-period'
 import { EnergyEvidence } from './EnergyEvidence'
 import { EnergyOverviewCards } from './EnergyOverviewCards'
 import { EnergyUsageTrends } from './EnergyUsageTrends'
 import styles from './EnergyWorkspace.module.css'
+import workbookStyles from './EnergyWorkbookGrid.module.css'
 
 type Mode = 'overview' | 'reports' | 'analysis' | 'data-quality'
 function totalKey(row: Report['totals'][number]) { return `${row.category}/${row.unit}/${row.quantity_kind}/${row.temperature}` }
@@ -32,7 +34,7 @@ export function EnergyReportsClient({ mode }: { mode: Mode }) {
   const [month, setMonth] = useState(selectedMonth.month)
   const period = monthPeriod(selectedMonth.year, selectedMonth.month)
   const selectedDataset = mode === 'reports' ? params.get('dataset') || '日总量' : ''
-  const [dataset, setDataset] = useState(selectedDataset)
+  const dataset = selectedDataset
   const datasets = useQuery({ queryKey: ['energy-ledger', 'datasets'], queryFn: () => ledgerRequest<WorkbookDataset[]>('/reporting/datasets'), enabled: mode === 'reports' })
   const [category, setCategory] = useState(params.get('category') || '')
   const [scope, setScope] = useState(params.get('report_scope') || (mode === 'overview' ? 'plant' : 'detail'))
@@ -73,7 +75,6 @@ export function EnergyReportsClient({ mode }: { mode: Mode }) {
     <div className={styles.filters}>
       <EnergyPeriodSelect year={year} month={month} onYear={setYear} onMonth={setMonth} />
       {mode === 'analysis' && <label className={`${styles.filterField} ${styles.filterFieldWide}`} htmlFor="energy-report-metric">单项指标<Select id="energy-report-metric" aria-label="单项指标" showSearch optionFilterProp="label" allowClear value={metricKey || undefined} onChange={value => setMetricKey(value || '')} placeholder="单项指标（可选）" loading={metrics.isLoading} options={metrics.data?.map(item => ({ value: item.metric_key, label: `${CATEGORY_LABELS[item.category]} · ${item.name}（${item.unit}）` }))} /></label>}
-      {mode === 'reports' && <label className={styles.filterField} htmlFor="energy-report-dataset">数据表<Select id="energy-report-dataset" aria-label="数据表" showSearch optionFilterProp="label" virtual={false} value={dataset} onChange={setDataset} loading={datasets.isLoading} options={datasets.data?.map(item => ({ value: item.name, label: item.name })) ?? []} /></label>}
       {mode !== 'reports' && <>{mode !== 'data-quality' && <label className={styles.filterField} htmlFor="energy-report-scope">统计范围<Select id="energy-report-scope" aria-label="统计范围" disabled={mode === 'analysis' && Boolean(metricKey)} value={mode === 'analysis' && metricKey ? 'all' : scope} onChange={setScope} options={[{ value: 'plant', label: '已配置能源汇总' }, { value: 'detail', label: '车间及公共区域明细' }, { value: 'source', label: '原始计量点' }, { value: 'check', label: '核对与差值' }, ...(mode === 'analysis' && metricKey ? [{ value: 'all', label: '单项指标口径' }] : [])]} /></label>}
         <label className={styles.filterField} htmlFor="energy-report-category">能源类别<Select id="energy-report-category" aria-label="能源类别" value={category || undefined} allowClear onChange={value => setCategory(value || '')} placeholder="全部能源" options={Object.entries(CATEGORY_LABELS).map(([value, label]) => ({ value, label }))} /></label>
         <label className={styles.filterField} htmlFor="energy-report-workshop">车间<Input id="energy-report-workshop" aria-label="车间" placeholder="车间名称" value={workshop} onChange={event => setWorkshop(event.target.value)} /></label></>}
@@ -85,7 +86,14 @@ export function EnergyReportsClient({ mode }: { mode: Mode }) {
     </div>
     {datasets.error && <PlatformNotice type="error" title={datasets.error.message} action={<Button onClick={() => void datasets.refetch()}>重试</Button>} />}
     {metrics.error && <PlatformNotice type="error" title={metrics.error.message} action={<Button onClick={() => void metrics.refetch()}>重试</Button>} />}
-    {selectedDataset && <EnergyWorkbookClient year={selectedMonth.year} month={selectedMonth.month} dataset={selectedDataset} />}
+    {selectedDataset && <div className={workbookStyles.reportLayout}>
+      <EnergyReportNavigator datasets={datasets.data ?? []} selected={selectedDataset} year={selectedMonth.year} month={selectedMonth.month} loading={datasets.isLoading} onSelect={name => {
+        window.history.replaceState(null, '', `${pathname}?${reportQuery({ year: selectedMonth.year, month: selectedMonth.month, dataset: name })}`)
+      }} />
+      <section className={workbookStyles.reportContent} aria-label="报表查询结果">
+        <EnergyWorkbookClient key={`${selectedMonth.year}:${selectedMonth.month}:${selectedDataset}`} year={selectedMonth.year} month={selectedMonth.month} dataset={selectedDataset} />
+      </section>
+    </div>}
     {!selectedDataset && report.isLoading && <Skeleton active />}
     {!selectedDataset && report.error && <PlatformNotice type="error" title={report.error.message} action={<Button onClick={() => void report.refetch()}>重试</Button>} />}
     {!selectedDataset && report.data && <>

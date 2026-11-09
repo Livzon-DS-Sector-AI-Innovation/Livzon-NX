@@ -6,13 +6,19 @@
 
 ## 技术与事实来源
 
-- 实际依赖、Python 版本和检查配置：`pyproject.toml`
+- 依赖声明、Python 范围和检查配置：`pyproject.toml`；解析版本：`uv.lock`
 - 模块清单与 schema 注册：`app/shared/module_registry.py`
-- API 契约：`openapi.json`
+- API 契约：路由与 Pydantic Schema；`openapi.json` 是通过项目脚本导出的快照
 - 数据库历史：`alembic/versions/` 和 Alembic 当前 head
 - 环境变量结构：工作区根目录 `.env.example`（生产）和 `.env.local.example`（开发）
 
 规范不得重复维护容易过期的版本号、当前 revision ID 或完整第三方 API 教程。涉及版本敏感用法时，以项目当前版本和官方文档为准。
+
+当前开发工具同时分布在 `[project.optional-dependencies].dev` 和
+`[dependency-groups].dev`；首次准备环境按 `scripts/ci.sh` 使用
+`uv sync --frozen --extra dev --group dev`，不得把同名 extra 和 group 当成同一集合。
+依赖齐备后的定向验证使用 `uv run --no-sync ...`，不为运行检查自动改写锁文件。
+extra 与 group 的区别见 [uv 官方依赖文档](https://docs.astral.sh/uv/concepts/projects/dependencies/)。
 
 ## 架构和目录边界
 
@@ -38,7 +44,12 @@
 ## 分层职责
 
 - API 层：认证授权、依赖注入、请求/响应转换，不承载核心业务规则
-- Schema：使用 Pydantic v2 描述输入、输出和明确校验
+- Schema：使用 Pydantic v2 描述输入、输出和明确校验；新代码采用当前版本的
+  `model_validate`、`model_dump`、`ConfigDict`、`field_validator` 等 API，
+  不复制旧版 `from_orm`、`orm_mode` 或 `@validator` 写法；既有兼容代码只在任务
+  需要时迁移，ORM 对象验证所需 `from_attributes` 按具体 Schema 配置。
+  迁移语义核对 [Pydantic 官方迁移指南](https://docs.pydantic.dev/latest/migration/)，
+  实际可用 API 仍以锁定版本为准。
 - Service：业务规则、状态流转、事务边界和跨 repository 编排
 - Repository：本模块数据查询和持久化，不处理 HTTP 语义
 - Model：SQLAlchemy 模型和数据库约束
@@ -56,12 +67,16 @@
 
 ## API 规范
 
-- 路由统一挂载在 `/api/v1` 下，并按业务模块和资源组织。
-- 入参和出参使用所属模块 Schema，禁止直接返回 ORM 对象或松散 dict 作为稳定契约。
+- 业务 API 路由统一挂载在 `/api/v1` 下，并按模块和资源组织；健康检查、内部
+  控制接口等保留已有独立契约，不为满足业务 API 前缀迁移无关基础设施入口。
+- 入参和出参使用所属模块 Schema，禁止把 ORM 对象或未校验的松散 dict 直接作为
+  稳定契约。使用 `success_response` 等统一封装时，仍须先校验业务 payload；
+  外层 `ApiResponse.data` 的宽泛类型或 `JSONResponse` 不替代业务字段校验。
 - 优先使用 `app/core/response.py` 和 `app/core/exceptions.py` 的统一能力。
 - 列表接口明确分页、筛选和排序边界；不得默认返回无上限数据。
 - 写操作必须做权限、业务状态和并发条件校验。
 - 删除业务数据默认软删除；物理删除、批量覆盖或数据清理必须由需求明确授权。
+  该约定不要求给临时表、关联表或既有不可删除记录机械新增软删除字段与删除接口。
 - 不在错误信息和日志中暴露内部堆栈、数据库结构或敏感配置。
 
 浏览器通过前端代理访问后端；前端服务端通过 `API_BASE_URL` 访问。后端不得要求前端硬编码容器地址或暴露内部端口。
@@ -76,7 +91,10 @@ HTTP 500 只用于未预期的服务端故障，不得把可预期的业务分�
 - 异步 ORM 查询必须显式加载响应所需字段和关系。不得让响应序列化触发懒加载，也不得在会话关闭后访问未加载或已过期的 ORM 属性。
 - 外部 HTTP、飞书、Redis、LLM 等依赖调用必须设置超时，并处理连接失败、超时、非成功状态码、空响应和响应结构变化；根据语义转换为明确的业务错误或 502/503/504，不得无条件转换成 500。
 - 禁止使用宽泛的 `except Exception` 静默降级、伪造成功响应或丢失异常上下文。确需在边界捕获未知异常时，必须保留异常链并记录可定位的上下文，同时对敏感信息脱敏。
-- 新增或修改接口必须使用项目的 `AsyncClient` 测试真实调用路由，至少覆盖成功路径和本次变更最可能出现的失败路径，并断言状态码与响应 Schema；仅测试 Service 或直接调用路由函数不足以证明接口不会返回 500。
+- 新增或修改接口行为必须使用项目的 `AsyncClient` 经 ASGI 测试实际路由，至少
+  覆盖成功路径和本次变更最可能出现的失败路径，并断言状态码与响应 Schema；
+  仅测试 Service 或直接调用路由函数不足以证明接口不会返回 500。仅 OpenAPI
+  文案或元数据变化时可执行定向契约检查，不据此声称运行行为已获接口测试验证。
 - 修复已出现的 500 时，必须先根据日志或可复现请求定位根因，补充能够复现该问题的回归测试，再修复根因并保留测试。不得只增加兜底异常捕获。
 - 交付前实际执行受影响接口测试，验证本次变化涉及的成功、失败和关键边界及其状态码。无法运行测试时必须说明原因、未验证范围和风险，不得声称接口已验证。
 
@@ -86,9 +104,13 @@ HTTP 500 只用于未预期的服务端故障，不得把可预期的业务分�
 - 异步数据库访问使用 `AsyncSession`，避免在响应序列化阶段触发懒加载。
 - 业务模型继承 `app/shared/base_model.py` 的 `BaseModel`，明确 `__tablename__` 和模块 schema。
 - 字段使用英文 `snake_case`；唯一约束、常用索引和必要的数据完整性约束显式声明。
-- 模块内部关系按数据完整性需要使用外键；跨模块默认不建立数据库外键，通过稳定标识和公开接口协作。偏离时必须说明理由。
+- 模块内部关系按数据完整性需要使用外键；跨业务模块默认不建立数据库外键，
+  通过稳定标识和公开接口协作。平台基类统一提供的身份审计外键继续复用，不因
+  本条移除既有外键；新增其他跨模块外键时说明数据归属与完整性理由。
 - 禁止直接赋值未加载的 relationship。写操作后按返回数据需要使用显式 `select` 和 `selectinload`，不要依赖隐式刷新或懒加载。
-- INSERT 在 `flush()` 后只返回已可靠回填的字段；UPDATE、DELETE 或需要关系数据时显式重新查询。
+- INSERT 在 `flush()` 后只返回已可靠回填的字段；UPDATE/DELETE 的结果按所需
+  字段采用可靠的 `RETURNING` 或显式查询，关系数据按需显式加载，不为返回已知
+  ID 或受影响行数机械增加查询。不得从删除、过期或未加载的 ORM 对象读取响应字段。
 
 ## Migration
 
@@ -100,7 +122,8 @@ HTTP 500 只用于未预期的服务端故障，不得把可预期的业务分�
 - 可预期的数据库完整性冲突必须在事务边界回滚并转换为 4xx 业务错误；不得让 `IntegrityError` 直接成为接口 500。
 - 迁移中出现未预期 DROP、其他模块变化、大量 drift 或多个 head 时立即停止并报告，不得自动合并或尝试一次性修复。
 - 禁止手工执行 SQL 改库来代替 migration；禁止未经确认的数据清理和破坏性 DDL。
-- 不得在规范流程中自动执行 `git pull`、merge、commit 等 Git 写操作。
+- migration 任务不自动授权 `git pull`、merge、commit 等 Git 写操作；已有明确
+  Git 授权时按根规范执行，不把本条解释为禁止用户已授权的提交或合并流程。
 
 常用 Alembic 命令见 `examples/commands.md`；最终判断以 migration 文件和当前 Alembic 状态为准。
 
@@ -112,7 +135,7 @@ HTTP 500 只用于未预期的服务端故障，不得把可预期的业务分�
 - 凭证由所属模块读取、解密和校验后显式传给平台 helper；平台 helper 不决定配置来源。
 
 现有飞书只读镜像和调度代码仍有平台层导入业务模块的历史耦合；修改这些路径时
-遵守更近的飞书规范，不把它们作为新增集成的模板。
+遵守更近的飞书规范，不把它们作为新增集成的模板，也不因触达就顺手迁移整个集成。
 
 飞书开发还必须遵守 `app/platform/integrations/feishu/AGENTS.md`。
 
@@ -147,8 +170,15 @@ HTTP 500 只用于未预期的服务端故障，不得把可预期的业务分�
 后端测试包括静态检查、单元测试、接口集成测试、数据库迁移测试和构建测试：
 
 - Service、Repository、权限、状态流转、事务、序列化和纯函数使用单元测试覆盖成功、失败及边界。
-- API 必须使用项目 `AsyncClient` 真实调用路由，覆盖认证授权、请求校验、成功响应、业务 4xx 和外部依赖失败；不能只直接调用 endpoint。
+- 新增或修改 API 行为时，使用项目 `AsyncClient` 经 ASGI 调用实际路由，按本次
+  影响覆盖认证授权、请求校验、成功响应、业务 4xx 或外部依赖失败；不要求每次
+  变化重写全部失败场景。这里不要求启动真实服务或访问真实外部系统，不能只
+  直接调用 endpoint；仅 OpenAPI 文案或元数据变化可用定向契约检查证明。
 - Repository 和 migration 测试使用独立 PostgreSQL 测试库，不得连接开发、共享或生产数据库；测试数据必须隔离且可清理。
+  测试库必须来自根目录 `.env.local` 的 `TEST_DATABASE_URL`，按根规范核对隔离；
+  `tests/db_safety.py` 的库名检查只是防误用措施，名称带 `test` 不证明目标获授权。
+  不使用 `PYTEST_ALLOW_UNSAFE_DATABASE_URL`，不依赖代码中的 `DATABASE_URL`
+  回退。独立会话工厂、审计与后台任务也须使用测试库或 mock。
 - 修复缺陷时先添加能复现问题的回归测试，再修复根因。
 - 测试必须断言业务结果、状态码、响应 Schema、事务提交/回滚或外部调用参数。禁止为了覆盖率无断言调用、吞掉任意异常、遍历执行接口或过度 mock 关键业务链路。
 - 外部 HTTP、飞书、Redis、MinIO、LLM 等默认使用可控 fake/mock，接口集成边界再验证超时、错误映射和降级；测试不得访问真实外部服务。
@@ -168,28 +198,29 @@ HTTP 500 只用于未预期的服务端故障，不得把可预期的业务分�
 局部代码通常从以下定向检查中选择：
 
 ```powershell
-uv run ruff check <相关路径>
-uv run pytest <相关测试>
-uv run mypy <相关路径>
+uv run --no-sync ruff check <相关路径>
+uv run --no-sync pytest <相关测试>
+uv run --no-sync mypy <相关路径>
 ```
 
 根据风险和实际影响扩大验证范围。CI 对应关系如下：
 
-- `Backend Quality`：权限生命周期、V2 残留扫描、变更文件 Ruff、编译、core Mypy，以及变更 `app/` Python 文件及其依赖链的 Mypy；不启动数据库或重复执行单测。增量 Mypy 使用默认依赖诊断，不得通过 `silent`、`skip` 或忽略导入错误绕过门禁；Git 变更范围解析失败必须使门禁失败。本地可运行 `uv run python scripts/mypy_changed.py` 检查未提交及未跟踪的运行代码。
+- `Backend Quality`：权限生命周期、V2 残留扫描、变更文件 Ruff、编译、core Mypy，以及变更 `app/` Python 文件及其依赖链的 Mypy；不启动数据库或重复执行单测。增量 Mypy 使用默认依赖诊断，不得通过 `silent`、`skip` 或忽略导入错误绕过门禁；Git 变更范围解析失败必须使门禁失败。本地可运行 `uv run --no-sync python scripts/mypy_changed.py` 检查未提交及未跟踪的运行代码。
 - `Backend Integration`：在独立 PostgreSQL/Redis 环境确认单一 Alembic head，执行迁移、模型漂移和 OpenAPI 检查，然后一次运行全量 Pytest（包含 unit/core）和完整覆盖率门禁。
 - `Backend Image Verify`：构建后端交付镜像，执行安全扫描、隔离数据库迁移和容器健康检查。
 - `CI Gate` 汇总本次范围内的必需任务；全量测试仍由 Integration 保证，不因 Quality 移除重复单测而减少覆盖。
 
-仅本地交付、复现 CI 失败或验证 CI 无法覆盖的本地风险确需完整门禁时，在独立 PostgreSQL 测试库配置好 `TEST_DATABASE_URL` 后执行：
+仅本地交付、复现 CI 失败或验证 CI 无法覆盖的本地风险确需完整门禁时，先按
+`examples/commands.md` 核对独立测试库并完成测试库迁移，再按需要执行以下命令。
+`TEST_DATABASE_URL` 不会自动改变 Alembic 的目标，禁止直接对默认 `DATABASE_URL`
+运行测试迁移；开发库迁移只走根目录显式确认流程。
 
 ```powershell
-uv sync --frozen --group dev
-uv run ruff check <本次变更的 Python 路径>
-uv run alembic heads
-uv run alembic upgrade head
-uv run pytest --cov=app --cov-branch --cov-report=term-missing --cov-report=xml
-uv run python ../scripts/check-coverage-floor.py --coverage-file coverage.xml --min-lines 60 --min-branches 33.5
-uv run python ../scripts/check-diff-coverage.py --coverage-file coverage.xml --path-prefix dazah-backend/app --minimum 80
+uv sync --frozen --extra dev --group dev
+uv run --no-sync ruff check <本次变更的 Python 路径>
+uv run --no-sync pytest --cov=app --cov-branch --cov-report=term-missing --cov-report=xml
+uv run --no-sync python ../scripts/check-coverage-floor.py --coverage-file coverage.xml --min-lines 60 --min-branches 33.5
+uv run --no-sync python ../scripts/check-diff-coverage.py --coverage-file coverage.xml --path-prefix dazah-backend/app --minimum 80
 # 本地开发镜像；交付镜像仅在 CI 或明确授权的隔离交付验证中构建
 docker build --file ../Dockerfile.dev --target backend --tag dazah-backend:dev ..
 ```

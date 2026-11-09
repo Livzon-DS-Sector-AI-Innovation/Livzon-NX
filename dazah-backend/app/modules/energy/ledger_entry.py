@@ -86,6 +86,7 @@ async def write_entries(
     payload: DirectReadingWrite,
     *,
     source: str = "platform",
+    recalculate: bool = True,
 ) -> DirectReadingResponse:
     await service.repo.serialize_write()
     fields = {item.id: item for item in await source_fields(service, payload.dataset)}
@@ -176,8 +177,9 @@ async def write_entries(
             payload.reason,
         )
     await service.db.flush()
-    if days:
+    if days and recalculate:
         await service.rebuild(days)
+    if days and source == "platform":
         from app.modules.energy.ledger_notifications import enqueue_reading_notification
 
         versions = ":".join(

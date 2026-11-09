@@ -18,7 +18,12 @@
 ## 风险与确认
 
 - 查询工具设置 `write=False`。
-- `write=True` 默认先创建确认项，用户确认后才执行。
+- 对话写工具必须先创建确认项，用户确认后才执行。`@agent_tool(write=True)`
+  在未传 `confirmation_required` 时默认开启确认；直接构造 `AgentToolSpec`
+  不使用该装饰器默认值，必须显式设置 `confirmation_required=True`。不得为
+  省略确认步骤设置 `confirmation_required=False` 或复制不适用的只读元数据。
+  自动化执行仅在统一执行器校验已有授权、作用域及工具策略后按既有机制运行，
+  不由 handler 或模型自行跳过确认。
 - 审批、驳回、批准和其他需要人工责任判断的操作设置 `human_decision_required=True`，不得由 Agent 代替责任人决定。
 - `human_decision_required=True` 必须同时设置 `workflow_allowed=False`。
 - 工作流只能包含允许自动执行且不需要人工责任判断的工具。
@@ -33,8 +38,13 @@
 - `module_registry` 能自动发现 Provider 并投影到工具目录
 - 注册、参数、权限、确认、风险拒绝和核心调用测试
 - 工具调用记录和 `audit.logs` 审计
-- OpenAPI、前端生成类型，以及 Hermes-Lite 单一 `dazah_tool` 契约
+- 工具目录实时 Schema 与 Hermes-Lite 单一 `dazah_tool` 契约；仅 HTTP 端点、
+  参数或请求/响应 Schema 改变时生成 OpenAPI 与前端类型，单纯注册业务工具
+  不自动要求改动 Hermes 或重生成无变化的 HTTP 契约
 
 工具返回分页结果或业务摘要，避免把大对象写入审计。审计不得记录 secret、token、password、key 等敏感字段。
 
-禁止在 Hermes-Lite 新增绕过后端工具网关的业务 HTTP 调用；禁止 Agent 工具直接连接 PostgreSQL、Redis、飞书业务表或第三方业务系统。
+禁止在 Hermes-Lite 新增绕过后端工具网关的业务 HTTP 调用；工具 handler 不直接
+连接 PostgreSQL、Redis、飞书业务表或第三方业务系统。所属模块 Service 可在
+权限、事务和集成边界内调用 Repository 或平台客户端，不把本条解释为禁止
+已授权业务能力正常持久化或集成。

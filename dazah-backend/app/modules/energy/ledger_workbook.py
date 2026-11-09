@@ -1,14 +1,13 @@
 """Monthly views of the original energy datasets, backed by native facts."""
 
 from calendar import monthrange
-from datetime import date, datetime, timedelta
+from datetime import date
 
 from openpyxl.utils.cell import get_column_letter
-from pydantic import JsonValue
 from sqlalchemy import select
 
 from app.core.exceptions import AppException
-from app.modules.energy.ledger_models import EnergyImportBatch, EnergyReading
+from app.modules.energy.ledger_models import EnergyReading
 from app.modules.energy.ledger_schemas import (
     MeterDefinition,
     RuleDefinition,
@@ -22,7 +21,7 @@ from app.modules.energy.ledger_schemas import (
 )
 from app.modules.energy.ledger_service import EnergyLedgerService
 from app.modules.energy.ledger_source_policy import manual_input_allowed
-from app.modules.energy.ledger_source_workbook import SourceWorkbook
+from app.modules.energy.ledger_source_workbook import SourceWorkbook, canonical_sheet
 from app.modules.energy.ledger_template import stable_code
 
 DATASETS = [
@@ -63,8 +62,9 @@ class EnergyWorkbookService:
         self.loaded: tuple[int, int] | None = None
         self.reviews: list[UsageReview] = []
         self.source_workbook: SourceWorkbook | None = None
-        self.source_batch_id: str | None = None
-        self.source_created_at: datetime | None = None
+        # Database-loaded views track which result fields have been requested.
+        # None retains support for a caller supplying a complete preloaded view.
+        self._fact_keys: set[str] | None = None
 
     async def load(self, year: int, month: int) -> None:
         if self.loaded == (year, month):
@@ -74,8 +74,6 @@ class EnergyWorkbookService:
         self.definitions.clear()
         self.headers.clear()
         self.source_workbook = None
-        self.source_batch_id = None
-        self.source_created_at = None
         self.reviews = await self.service.usage_reviews()
         start, end = date(year, month, 1), date(year, month, monthrange(year, month)[1])
         meters = await self.service.meters()
@@ -88,9 +86,7 @@ class EnergyWorkbookService:
             await self.service.db.scalars(
                 select(EnergyReading).where(
                     EnergyReading.point_id.in_([meter.id for meter in meters]),
-                    EnergyReading.reading_date.between(
-                        start - timedelta(days=32), end + timedelta(days=32)
-                    ),
+                    EnergyReading.reading_date.between(start, end),
                     EnergyReading.is_deleted.is_(False),
                 )
             )
@@ -98,141 +94,16 @@ class EnergyWorkbookService:
         codes = {meter.id: "point:" + meter.definition.code for meter in meters}
         for reading in records:
             self.readings[(codes[reading.point_id], reading.reading_date)] = reading
-        # Full-grid imports preserve source formulas and literal overrides separately
-        # from native meter inputs. Legacy imports retain the native-fact behavior.
-        batches = (
-            await self.service.db.scalars(
-                select(EnergyImportBatch)
-                .where(
-                    EnergyImportBatch.is_deleted.is_(False),
-                    EnergyImportBatch.status == "imported",
-                )
-                .order_by(EnergyImportBatch.created_at.desc())
-                .limit(20)
-            )
-        ).all()
-        for batch in reversed(batches):
-            try:
-                source = SourceWorkbook.from_payload(batch.payload)
-            except ValueError as exc:
-                raise AppException(409, "原表快照无效，请重新导入完整原表") from exc
-            if source.covers(year, month):
-                self.source_workbook = source
-                self.source_batch_id = str(batch.id)
-                self.source_created_at = batch.created_at
-            sheets = batch.payload.get("sheets")
-            if not isinstance(sheets, list):
-                continue
-            for sheet in sheets:
-                if isinstance(sheet, dict):
-                    headers = sheet.get("headers")
-                    if isinstance(headers, list):
-                        self.headers[str(sheet["name"])] = [str(x) for x in headers]
-        if self.source_workbook is not None:
-            for (key, day), reading in self.readings.items():
-                definition = self.definitions[key]
-                if self.source_created_at is not None and (
-                    reading.submitted_at is None
-                    or reading.submitted_at < self.source_created_at
-                ):
-                    # An older, rounded import must not replace the newer source's
-                    # full-precision reading. Later submissions still recalculate.
-                    continue
-                if definition.source_column and reading.value is not None:
-                    try:
-                        self.source_workbook.set_reading(
-                            definition.source_sheet,
-                            definition.source_column,
-                            day,
-                            reading.value,
-                            version=reading.version,
-                        )
-                    except ValueError as exc:
-                        raise AppException(
-                            409, "原始读数来源与原表公式冲突，请核对导入版本"
-                        ) from exc
-        if self.source_workbook is None or any(
-            item.name not in self.source_workbook.sheets for item in DATASETS
-        ):
-            report = await self.service.report(
-                start, end, report_scope="all", include_all=True
-            )
-            self.facts = {(row.metric_key, row.usage_date): row for row in report.rows}
+        # The import snapshot supplies field layout and audit evidence only.
+        # All displayed values come from submitted readings or system formulas.
+        selected = await self.service.monthly_source(start)
+        if selected is not None:
+            self.source_workbook = selected.workbook
+            self.headers = {
+                name: sheet.headers for name, sheet in selected.workbook.sheets.items()
+            }
+        self._fact_keys = set()
         self.loaded = (year, month)
-
-    def source_report(self, year: int, month: int, dataset: str) -> WorkbookReport:
-        """Keep original formulas, source dates and literals in the 21-table view."""
-        book = self.source_workbook
-        if book is None or dataset not in book.sheets:
-            raise AppException(409, "原表快照缺少工作表，请重新导入完整原表")
-        source = book.sheets[dataset]
-        columns: list[WorkbookColumn] = []
-        for column in range(2, max((len(row) for row in source.grid), default=0) + 1):
-            label = source.headers[column - 1] if column <= len(source.headers) else ""
-            if "大罐数量" in label:
-                continue
-            if not label:
-                if not any(
-                    len(row) >= column and row[column - 1] is not None
-                    for row in source.grid
-                ):
-                    continue
-                label = f"原表{get_column_letter(column)}列"
-            definition = next(
-                (
-                    item
-                    for item in self.definitions.values()
-                    if item.source_sheet == dataset and item.source_column == column
-                ),
-                None,
-            )
-            columns.append(
-                WorkbookColumn(
-                    key=str(column),
-                    label=label,
-                    unit=definition.unit if definition else "待确认",
-                    value_kind="reading" if dataset.endswith("码") else "usage",
-                    quantity_kind=definition.quantity_kind if definition else "",
-                )
-            )
-        rows: list[WorkbookDay] = []
-        available, expected = 0, 0
-        for day in range(1, monthrange(year, month)[1] + 1):
-            current = date(year, month, day)
-            cells: dict[str, WorkbookCell] = {}
-            for field in columns:
-                cell = book.cell_on(dataset, int(field.key), current)
-                cell.provenance["source_batch_id"] = self.source_batch_id
-                evidence: list[JsonValue] = [
-                    item
-                    for review in self.reviews
-                    if review.dataset == dataset and review.column == int(field.key)
-                    for item in review.evidence_on(current)
-                ]
-                if evidence:
-                    # Review notes remain evidence; the source value is retained
-                    # for inspection but no longer counts as a complete value.
-                    cell = cell.model_copy(
-                        update={
-                            "status": "pending_review"
-                            if cell.status == "complete"
-                            else cell.status,
-                            "provenance": {**cell.provenance, "review": evidence},
-                        }
-                    )
-                cells[field.key] = cell
-                expected += cell.status != "not_applicable"
-                available += cell.value is not None and cell.status == "complete"
-            rows.append(WorkbookDay(date=current, cells=cells))
-        return WorkbookReport(
-            year=year,
-            month=month,
-            dataset=dataset,
-            columns=columns,
-            rows=rows,
-            expected_count=expected,
-            available_count=available,
-        )
 
     def matches(
         self,
@@ -241,9 +112,18 @@ class EnergyWorkbookService:
         sheet: str,
         column: int,
     ) -> bool:
+        if self.source_workbook is not None and definition.source_sheet:
+            binding = self.source_workbook.field_for(definition)
+            return bool(
+                binding is not None
+                and canonical_sheet(str(binding["source_sheet"]))
+                == canonical_sheet(sheet)
+                and binding["source_column"] == column
+            )
         if definition.source_sheet:
             return (
-                definition.source_sheet == sheet and definition.source_column == column
+                canonical_sheet(definition.source_sheet) == canonical_sheet(sheet)
+                and definition.source_column == column
             )
         # Compatibility with older extracted configurations.
         code = key.split(":", 1)[1]
@@ -254,16 +134,19 @@ class EnergyWorkbookService:
         if dataset not in {item.name for item in DATASETS}:
             raise AppException(404, "能源数据表不存在")
         await self.load(year, month)
-        if self.source_workbook is not None and dataset in self.source_workbook.sheets:
-            return self.source_report(year, month, dataset)
-        headers = self.headers.get(dataset, [])
+        source_name = (
+            self.source_workbook.resolve_sheet(dataset)
+            if self.source_workbook
+            else dataset
+        )
+        headers = self.headers.get(source_name, [])
         kind = next(item.kind for item in DATASETS if item.name == dataset)
         last_column = max(
             [len(headers), 200 if not headers else 0]
             + [
                 definition.source_column or 0
                 for definition in self.definitions.values()
-                if definition.source_sheet == dataset
+                if canonical_sheet(definition.source_sheet) == canonical_sheet(dataset)
             ]
         )
         columns: list[WorkbookColumn] = []
@@ -274,9 +157,26 @@ class EnergyWorkbookService:
                 for key, definition in self.definitions.items()
                 if self.matches(key, definition, dataset, column)
             ]
+            # Legacy suffix matching is a fallback, not a second binding beside
+            # an explicit business field. Genuine explicit duplicates still conflict.
+            explicit = [key for key in keys if self.definitions[key].source_sheet]
+            keys = explicit or keys
             label = headers[column - 1].strip() if column <= len(headers) else ""
             if not label and keys:
                 label = self.definitions[keys[0]].name
+            if not label and self.source_workbook is not None:
+                binding = next(
+                    (
+                        item
+                        for item in self.source_workbook.field_mappings
+                        if item["source_sheet"] == source_name
+                        and item["source_column"] == column
+                        and item["kind"] == "calculated"
+                    ),
+                    None,
+                )
+                if binding is not None:
+                    label = str(binding["business_name"])
             if not label or "大罐数量" in label:
                 continue
             if sum(header.strip() == label for header in headers) > 1:
@@ -303,6 +203,26 @@ class EnergyWorkbookService:
                     quantity_kind=definition.quantity_kind if definition else "",
                 )
             )
+        if self._fact_keys is not None:
+            requested = {
+                key
+                for keys in candidates.values()
+                for key in keys
+                if key.startswith("rule:")
+            }
+            missing = requested - self._fact_keys
+            if missing:
+                report = await self.service.report(
+                    date(year, month, 1),
+                    date(year, month, monthrange(year, month)[1]),
+                    report_scope="all",
+                    include_all=True,
+                    metric_keys=missing,
+                )
+                self.facts.update(
+                    ((row.metric_key, row.usage_date), row) for row in report.rows
+                )
+                self._fact_keys.update(missing)
         rows: list[WorkbookDay] = []
         expected, available = 0, 0
         for day in range(1, monthrange(year, month)[1] + 1):
@@ -334,6 +254,7 @@ class EnergyWorkbookService:
                                     status="complete",
                                     reading_id=reading.id,
                                     provenance={
+                                        "source_kind": "reading",
                                         "source": reading.source,
                                         "version": reading.version,
                                         "reading_date": str(current),
