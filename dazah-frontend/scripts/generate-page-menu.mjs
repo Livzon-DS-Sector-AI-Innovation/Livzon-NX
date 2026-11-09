@@ -38,7 +38,21 @@ if (energy && ledger?.activePaths?.includes('/energy/entry')) {
   energy.children.splice(index, 0, node({ key: 'entry', label: '原始数据填写', path: '/energy/entry' }))
 }
 const target = path.resolve(root, '../dazah-backend/app/platform/identity/page_menu_catalog.json')
-const content = `${JSON.stringify(output, null, 2)}\n`
+// Reviewed permission pages can differ from navigation in other modules.
+// Scope a name update so their catalog entries remain intact.
+const moduleIndex = process.argv.indexOf('--module')
+const selectedModule = moduleIndex < 0 ? undefined : process.argv[moduleIndex + 1]
+if (moduleIndex >= 0 && !reviewedModules.has(selectedModule)) {
+  throw new Error('Unknown reviewed module for --module')
+}
+let catalog = output
+if (selectedModule) {
+  const existing = JSON.parse(fs.readFileSync(target, 'utf8'))
+  const updated = output.find(item => item.key === selectedModule)
+  if (!existing.some(item => item.key === selectedModule)) throw new Error('Module missing from reviewed catalog')
+  catalog = existing.map(item => item.key === selectedModule ? updated : item)
+}
+const content = `${JSON.stringify(catalog, null, 2)}\n`
 if (process.argv.includes('--check')) {
   if (!fs.existsSync(target) || fs.readFileSync(target, 'utf8') !== content) {
     throw new Error('页面目录与前端静态菜单不一致，请运行 generate-page-menu.mjs')

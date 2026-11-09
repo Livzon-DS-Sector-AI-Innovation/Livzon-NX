@@ -349,7 +349,7 @@
       },
       {
         "key": "reports",
-        "name": "能源台账",
+        "name": "能源报表",
         "path": "/energy/reports",
         "icon": null,
         "permission_code": null,

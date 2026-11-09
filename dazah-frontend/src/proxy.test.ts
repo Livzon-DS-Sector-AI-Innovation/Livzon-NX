@@ -5,6 +5,32 @@ import { proxy } from './proxy'
 vi.mock('@/lib/server-api', () => ({ getServerApiBaseUrl: () => 'http://backend.test' }))
 afterEach(() => vi.unstubAllGlobals())
 
+it.each([undefined, 'expired-fixture'])('设备页未登录或会话失效时仅检查身份并进入登录页：%s', async token => {
+  const fetchMock = vi.fn().mockResolvedValue(new Response('{}', { status: 401 }))
+  vi.stubGlobal('fetch', fetchMock)
+  const response = await proxy(new NextRequest('https://frontend.test/equipment?workshop=201-1&module=assets', {
+    headers: token ? { cookie: `auth_token=${token}` } : {},
+  }))
+  const location = new URL(response.headers.get('location') || '')
+  expect(location.pathname).toBe('/login')
+  expect(location.searchParams.get('next')).toBe('/equipment?workshop=201-1&module=assets')
+  expect(fetchMock).toHaveBeenCalledOnce()
+  expect(fetchMock.mock.calls[0][0]).toBe('http://backend.test/api/v1/identity/me')
+  expect(response.headers.get('x-middleware-next')).toBeNull()
+})
+
+it('重新登录后使用新会话恢复设备页访问', async () => {
+  const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: { role: 'admin' } })))
+  vi.stubGlobal('fetch', fetchMock)
+  const response = await proxy(new NextRequest('https://frontend.test/equipment?module=assets', {
+    headers: { cookie: 'auth_token=renewed-fixture' },
+  }))
+  expect(response.headers.get('x-middleware-next')).toBe('1')
+  const options = fetchMock.mock.calls[0][1]
+  expect(new Headers(options.headers).get('Authorization')).toBe('Bearer renewed-fixture')
+  expect(fetchMock).toHaveBeenCalledOnce()
+})
+
 it('retains the exact Feishu energy task destination through login', async () => {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { status: 401 })))
   const result = await proxy(new NextRequest('http://frontend.test/energy/entry?task=task-id&source=feishu'))

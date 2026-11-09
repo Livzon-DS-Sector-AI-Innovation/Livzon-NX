@@ -4,7 +4,8 @@ import hashlib
 import io
 import re
 import zipfile
-from datetime import date, datetime
+from collections import Counter
+from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
@@ -27,7 +28,7 @@ from app.modules.energy.ledger_schemas import (
     ImportResponse,
     MeterDefinition,
 )
-from app.modules.energy.ledger_service import EnergyLedgerService
+from app.modules.energy.ledger_service import EnergyLedgerService, affected_dates
 
 if TYPE_CHECKING:
     from app.modules.energy.ledger_template import TemplateDraftResponse
@@ -41,7 +42,7 @@ from app.modules.energy.ledger_source_policy import (
     input_column_allowed as input_column_allowed,
 )
 
-IMPORT_POLICY_VERSION = 3
+IMPORT_POLICY_VERSION = 8
 
 
 def validate_import_period(start: date | None, end: date | None) -> None:
@@ -101,6 +102,7 @@ def inspect_xlsx(
     sheets: list[JsonValue] = []
     warnings: list[JsonValue] = []
     formulas: list[JsonValue] = []
+    formula_count = 0
     source_cell_count = 0
     try:
         for sheet in workbook:
@@ -113,28 +115,38 @@ def inspect_xlsx(
             for row_index, row in enumerate(sheet.iter_rows(), 1):
                 if row_index > 5000 or len(row) > 200:
                     raise AppException(413, "每张工作表最多 5000 行、200 列")
-                source_cell_count += len(row)
+                # Excel formatting often extends hundreds of otherwise empty
+                # rows. Preserve cell coordinates without counting that padding.
+                source_values: list[JsonValue] = [
+                    cell.value.isoformat()
+                    if isinstance(cell.value, (date, datetime))
+                    else cell.value
+                    if isinstance(cell.value, (str, int, float, bool))
+                    or cell.value is None
+                    else str(cell.value)
+                    for cell in row
+                ]
+                while source_values and source_values[-1] is None:
+                    source_values.pop()
+                source_cell_count += len(source_values)
                 if source_cell_count > 100000:
                     raise AppException(413, "原表快照最多保留100000个单元格")
-                source_grid.append(
-                    [
-                        cell.value.isoformat()
-                        if isinstance(cell.value, (date, datetime))
-                        else cell.value
-                        if isinstance(cell.value, (str, int, float, bool))
-                        or cell.value is None
-                        else str(cell.value)
-                        for cell in row
-                    ]
-                )
+                source_grid.append(source_values)
                 if row_index == 1:
                     headers = [str(cell.value or "") for cell in row]
                     computed.update(calculated_columns(sheet.title, headers))
-                if row_index == 2 and sheet.title == "日总量":
+                if (
+                    row_index == 2
+                    and sheet.title in {"日总量", "日用量"}
+                    and parse_source_date(row[0].value if row else None, year) is None
+                ):
                     for index, cell in enumerate(row):
                         if cell.value is not None and index < len(headers):
                             headers[index] = str(cell.value)
                 day = parse_source_date(row[0].value if row else None, year)
+                formula_count += sum(cell.data_type == "f" for cell in row)
+                if day:
+                    row_dates.append({"row": row_index, "date": day.isoformat()})
                 if day and not in_import_period(day, start_date, end_date):
                     computed.update(
                         cell.column
@@ -142,8 +154,6 @@ def inspect_xlsx(
                         if cell.data_type == "f" and isinstance(cell.column, int)
                     )
                     continue
-                if day:
-                    row_dates.append({"row": row_index, "date": day.isoformat()})
                 for cell in row:
                     if cell.data_type == "f":
                         if isinstance(cell.column, int):
@@ -177,6 +187,19 @@ def inspect_xlsx(
                                     "cell": cell.coordinate,
                                 }
                             )
+            while source_grid and not source_grid[-1]:
+                source_grid.pop()
+            seen_dates: dict[str, int] = {}
+            for item in row_dates:
+                if not isinstance(item, dict):
+                    continue
+                day_text = str(item["date"])
+                if day_text in seen_dates:
+                    warnings.append(
+                        f"{sheet.title} 的 {day_text} 重复出现在第"
+                        f"{seen_dates[day_text]}、{item['row']}行，须核对原表日期"
+                    )
+                seen_dates[day_text] = int(str(item["row"]))
             sheets.append(
                 {
                     "name": sheet.title,
@@ -195,9 +218,13 @@ def inspect_xlsx(
             )
     finally:
         workbook.close()
-    return {
+    from app.modules.energy.ledger_source_workbook import SourceWorkbook, source_period
+
+    period = source_period({"sheets": sheets})
+    payload: dict[str, JsonValue] = {
         "year": year,
         "policy_version": IMPORT_POLICY_VERSION,
+        "report_period": f"{period[0]:04}-{period[1]:02}" if period else None,
         "start_date": start_date.isoformat() if start_date else None,
         "end_date": end_date.isoformat() if end_date else None,
         "sheets": sheets,
@@ -214,6 +241,33 @@ def inspect_xlsx(
             ),
         ],
     }
+    try:
+        source = SourceWorkbook.from_payload(payload, period=period)
+    except ValueError as exc:
+        raise AppException(422, str(exc)) from exc
+    errors: Counter[str] = Counter()
+    for formula in formulas:
+        if not isinstance(formula, dict):
+            continue
+        sheet_name, address = str(formula["sheet"]), str(formula["cell"])
+        evaluated = source.result(sheet_name, address)
+        if evaluated.status != "complete":
+            errors[evaluated.status] += 1
+            if sum(errors.values()) <= 30:
+                warnings.append(
+                    f"{sheet_name}!{address} 原公式需核对（{evaluated.status}）："
+                    f"{formula['formula']}"
+                )
+    payload["formula_summary"] = {
+        "total": len(formulas),
+        "workbook_total": formula_count,
+        "errors": dict(errors),
+    }
+    from app.modules.energy.ledger_fields import build_field_mappings
+
+    payload["field_mapping_version"] = 1
+    payload["field_mappings"] = list(build_field_mappings(payload))
+    return payload
 
 
 async def preview_import(
@@ -244,6 +298,7 @@ async def preview_import(
         content_hash=digest,
         status="preview",
         payload=payload,
+        created_at=datetime.now(UTC),
         created_by=service.actor_id,
     )
     service.db.add(item)
@@ -279,6 +334,26 @@ async def confirm_import(
     end_date = date.fromisoformat(end_value) if isinstance(end_value, str) else None
     validate_import_period(start_date, end_date)
     values: dict[tuple[str, date], list[DirectReadingValue]] = {}
+    affected: set[date] = set()
+    from app.modules.energy.ledger_source_workbook import source_period
+
+    period = source_period(batch.payload)
+    # Dates with formulas/literal results still need facts even when their
+    # manual input cells are empty (common at the end of these monthly files).
+    for sheet in sheets:
+        if not isinstance(sheet, dict) or "source_grid" not in sheet:
+            continue
+        dated = sheet.get("row_dates", [])
+        if not isinstance(dated, list):
+            continue
+        for entry in dated:
+            if not isinstance(entry, dict) or not isinstance(entry.get("date"), str):
+                continue
+            day = date.fromisoformat(str(entry["date"]))
+            if (day.year, day.month) == period and in_import_period(
+                day, start_date, end_date
+            ):
+                affected.add(day)
     for mapping in payload.mappings:
         meter = await service.repo.get(EnergyMeterPoint, mapping.point_id)
         definition = MeterDefinition.model_validate(meter.definition)
@@ -308,9 +383,23 @@ async def confirm_import(
         expected_type = "direct" if mapping.sheet == "电量" else "counter"
         if definition.reading_type != expected_type:
             raise AppException(422, "五类表码须为累计读数，电量须为每日直接用量")
-        if (
-            definition.source_sheet != mapping.sheet
-            or definition.source_column != mapping.column
+        from app.modules.energy.ledger_fields import (
+            build_field_mappings,
+            mapping_matches_column,
+        )
+
+        field_mappings = build_field_mappings(batch.payload)
+        same_physical_field = (
+            definition.source_sheet == mapping.sheet
+            and definition.source_column == mapping.column
+        )
+        if not same_physical_field and not (
+            mapping_matches_column(
+                field_mappings, definition, mapping.sheet, mapping.column
+            )
+            if field_mappings
+            else definition.source_sheet == mapping.sheet
+            and definition.source_column == mapping.column
         ):
             raise AppException(422, "来源与计量点已确认的原表字段不一致")
         cells = source.get("cells", [])
@@ -324,6 +413,7 @@ async def confirm_import(
             if not in_import_period(day, start_date, end_date):
                 continue
             matched += 1
+            affected.update(affected_dates(day, definition))
             value = Decimal(str(cell["value"]))
             if value < 0:
                 raise AppException(422, "原始读数不能为负数")
@@ -341,9 +431,7 @@ async def confirm_import(
                     )
                 continue
             if existing:
-                raise AppException(
-                    409, "来源日期已有填写草稿，请先处理草稿后重试导入"
-                )
+                raise AppException(409, "来源日期已有填写草稿，请先处理草稿后重试导入")
             values.setdefault((mapping.sheet, day), []).append(
                 DirectReadingValue(point_id=meter.id, value=value, version=0)
             )
@@ -358,6 +446,7 @@ async def confirm_import(
                 dataset=dataset, reading_date=day, values=entries, reason=payload.reason
             ),
             source="import",
+            recalculate=False,
         )
     batch.status = "imported"
     batch.payload = {
@@ -380,12 +469,16 @@ async def confirm_import(
         payload.reason,
     )
     await service.db.flush()
+    # The selected source must already be imported when facts are rebuilt.
+    # Recalculate once per date after all six input tables have been written.
+    await service.rebuild(affected)
     return ImportResponse(id=batch.id, status=batch.status, payload=batch.payload)
 
 
 async def prepare_import(
     service: EnergyLedgerService, batch_id: UUID
 ) -> "TemplateDraftResponse":
+    from app.modules.energy.ledger_fields import build_field_mappings, definition_key
     from app.modules.energy.ledger_models import EnergyCalculationRule
     from app.modules.energy.ledger_schemas import RuleDefinition
     from app.modules.energy.ledger_template import extract_template
@@ -400,28 +493,57 @@ async def prepare_import(
     points = await service.repo.all(EnergyMeterPoint)
     rules = await service.repo.all(EnergyCalculationRule)
     codes: dict[str, str] = {}
+    source_bindings: dict[tuple[str, int | None], str] = {}
     for field in draft.meters:
         existing_meter = next(
             (
                 item
                 for item in points
-                if item.definition.get("source_sheet") == field.source_sheet
-                and item.definition.get("source_column") == field.source_column
+                if definition_key(MeterDefinition.model_validate(item.definition))
+                == definition_key(field)
             ),
             None,
         )
+        if existing_meter is None:
+            # Existing user-named meters retain their explicit source binding.
+            existing_meter = next(
+                (
+                    item
+                    for item in points
+                    if item.definition.get("source_sheet") == field.source_sheet
+                    and item.definition.get("source_column") == field.source_column
+                ),
+                None,
+            )
         if existing_meter:
             codes["point:" + field.code] = "point:" + existing_meter.code
+            source_bindings[field.source_sheet, field.source_column] = (
+                "point:" + existing_meter.code
+            )
+            current = MeterDefinition.model_validate(existing_meter.definition)
+            if field.precision > current.precision:
+                existing_meter.version += 1
+                existing_meter.definition = current.model_copy(
+                    update={"precision": field.precision}
+                ).model_dump(mode="json")
+                service.revision(
+                    "meter",
+                    existing_meter,
+                    existing_meter.version,
+                    existing_meter.definition,
+                    "保留原表读数精度",
+                )
             continue
         field_values = field.model_dump()
         field_values.update(
+            code=definition_key(field),
             enabled=True,
             active_from=date(2000, 1, 1),
             active_to=None,
         )
         new_meter = EnergyMeterPoint(
             id=uuid4(),
-            code=field.code,
+            code=str(field_values["code"]),
             version=1,
             definition=MeterDefinition.model_validate(field_values).model_dump(
                 mode="json"
@@ -432,21 +554,28 @@ async def prepare_import(
         points.append(new_meter)
         service.revision("meter", new_meter, 1, new_meter.definition, "Excel 原始字段")
         codes["point:" + field.code] = "point:" + new_meter.code
+        source_bindings[field.source_sheet, field.source_column] = (
+            "point:" + new_meter.code
+        )
     for formula in draft.rules:
         existing_rule = next(
             (
                 item
                 for item in rules
-                if item.definition.get("source_sheet") == formula.source_sheet
-                and item.definition.get("source_column") == formula.source_column
+                if definition_key(RuleDefinition.model_validate(item.definition))
+                == definition_key(formula)
             ),
             None,
         )
         if existing_rule:
             codes["rule:" + formula.code] = "rule:" + existing_rule.code
+            source_bindings[formula.source_sheet, formula.source_column] = (
+                "rule:" + existing_rule.code
+            )
             continue
         formula_values = formula.model_dump()
         formula_values.update(
+            code=definition_key(formula),
             enabled=True,
             active_from=date(2000, 1, 1),
             active_to=None,
@@ -457,7 +586,7 @@ async def prepare_import(
         ]
         new_rule = EnergyCalculationRule(
             id=uuid4(),
-            code=formula.code,
+            code=str(formula_values["code"]),
             version=1,
             definition=RuleDefinition.model_validate(formula_values).model_dump(
                 mode="json"
@@ -468,5 +597,33 @@ async def prepare_import(
         rules.append(new_rule)
         service.revision("rule", new_rule, 1, new_rule.definition, "Excel 固定公式")
         codes["rule:" + formula.code] = "rule:" + new_rule.code
+        source_bindings[formula.source_sheet, formula.source_column] = (
+            "rule:" + new_rule.code
+        )
+    metric_keys: dict[str, str] = {}
+    for point in points:
+        metric_keys.setdefault(
+            definition_key(MeterDefinition.model_validate(point.definition)),
+            "point:" + point.code,
+        )
+    for rule in rules:
+        metric_keys.setdefault(
+            definition_key(RuleDefinition.model_validate(rule.definition)),
+            "rule:" + rule.code,
+        )
+    batch.payload = {
+        **batch.payload,
+        "field_mapping_version": 1,
+        "field_mappings": [
+            {
+                **mapping,
+                "metric_key": source_bindings.get(
+                    (str(mapping["source_sheet"]), int(str(mapping["source_column"]))),
+                    metric_keys.get(str(mapping["business_key"])),
+                ),
+            }
+            for mapping in build_field_mappings(batch.payload)
+        ],
+    }
     await service.db.flush()
     return draft

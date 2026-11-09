@@ -2058,9 +2058,10 @@ async def list_page_permission_rollouts(
 ) -> JSONResponse:
     service = PagePermissionService()
     modules = sorted(set(MODULES_BY_CODE) | set(PAGES_BY_MODULE))
+    module_gaps = await service.integration_gaps_for_modules(db, module_codes=modules)
     items = []
     for code in modules:
-        gaps = await service.integration_gaps(db, module_code=code)
+        gaps = module_gaps[code]
         items.append(PermissionModuleIntegrationOut(
             module_code=code, passed=not gaps, catalog_gaps=gaps
         ))

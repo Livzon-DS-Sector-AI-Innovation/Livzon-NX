@@ -181,14 +181,81 @@ async def test_all_21_source_tables_through_real_http_routes_and_export(
 
     book = source(
         *[
-            (item.name, [["日期", "原始或结果"], ["7/1", index], ["7/2", "=B2+1"]])
+            (
+                item.name,
+                [["日期", "原始或结果"], ["7/1", index * 100], ["7/2", "=B2+999"]],
+            )
             for index, item in enumerate(DATASETS, 1)
         ]
     )
 
     async def load(workbook: EnergyWorkbookService, year: int, month: int) -> None:
+        from types import SimpleNamespace
+        from uuid import uuid4
+
+        from app.modules.energy.ledger_schemas import (
+            MeterDefinition,
+            RuleDefinition,
+            RuleTerm,
+            UsageRow,
+        )
+
         workbook.source_workbook = book
-        workbook.source_batch_id = "reviewed-test-batch"
+        workbook.headers = {name: sheet.headers for name, sheet in book.sheets.items()}
+        # This view/export test supplies native facts; calculation is covered by
+        # test_date_aligned_calculation through the real service and database.
+        for index, item in enumerate(DATASETS, 1):
+            prefix = "point:" if item.kind != "usage" else "rule:"
+            key = prefix + f"view_{index}"
+            common = dict(
+                code=f"view_{index}",
+                name="原始或结果",
+                category="electricity" if item.name == "电量" else "drinking_water",
+                unit="测试单位",
+                active_from=date(2026, 7, 1),
+                enabled=True,
+                source_sheet=item.name,
+                source_column=2,
+            )
+            definition = (
+                MeterDefinition(
+                    **common,
+                    area="测试",
+                    reading_type="direct" if item.name == "电量" else "counter",
+                )
+                if prefix == "point:"
+                else RuleDefinition(
+                    **common, terms=[RuleTerm(metric_key="point:input")]
+                )
+            )
+            workbook.definitions[key] = definition
+            for number, value in [(1, index), (2, index + 1)]:
+                day = date(year, month, number)
+                if prefix == "point:":
+                    workbook.readings[key, day] = SimpleNamespace(
+                        id=uuid4(), value=Decimal(value), source="platform", version=1
+                    )
+                else:
+                    workbook.facts[key, day] = UsageRow(
+                        id=uuid4(),
+                        metric_key=key,
+                        usage_date=day,
+                        name=definition.name,
+                        category=definition.category,
+                        unit=definition.unit,
+                        workshop="",
+                        department="",
+                        report_scope="detail",
+                        quantity_kind="volume",
+                        temperature="",
+                        calculated_value=Decimal(value),
+                        effective_value=Decimal(value),
+                        status="complete",
+                        provenance={
+                            "formula": "1 × 原始字段",
+                            "calculation_date": day.isoformat(),
+                        },
+                    )
         workbook.loaded = year, month
 
     monkeypatch.setattr(EnergyWorkbookService, "load", load)
@@ -217,8 +284,11 @@ async def test_all_21_source_tables_through_real_http_routes_and_export(
             assert Decimal(report["rows"][0]["cells"]["2"]["value"]) == index
             cell = report["rows"][1]["cells"]["2"]
             assert Decimal(cell["value"]) == index + 1
-            assert cell["provenance"]["formula"] == "=B2+1"
-            assert cell["provenance"]["source_cell"] == "B3"
+            if item.kind == "usage":
+                assert cell["provenance"]["formula"] == "1 × 原始字段"
+                assert cell["provenance"]["calculation_date"] == "2026-07-02"
+            else:
+                assert cell["provenance"]["source_kind"] == "reading"
         unknown = await client.get(
             "/api/v1/energy/reporting/workbook",
             params={"year": 2026, "month": 7, "dataset": "不存在"},
@@ -244,7 +314,7 @@ async def test_all_21_source_tables_through_real_http_routes_and_export(
 
 
 @pytest.mark.asyncio
-async def test_database_source_precedence_recalculation(
+async def test_native_readings_and_rule_override_reference_precision(
     db_session: AsyncSession,
 ) -> None:
     from datetime import UTC, datetime, timedelta
@@ -331,9 +401,49 @@ async def test_database_source_precedence_recalculation(
     db_session.add(reading)
     await db_session.flush()
     service = EnergyLedgerService(db_session, actor)
+    from app.modules.energy.ledger_schemas import RuleDefinition, RuleTerm, RuleWrite
+    from tests.modules.energy.workbook_fixtures import seed_rule
+
+    db_session.add(
+        EnergyReading(
+            point_id=meter.id,
+            task_id=uuid4(),
+            reading_date=date(2026, 7, 1),
+            value=Decimal("2421.170"),
+            version=1,
+        )
+    )
+    await seed_rule(
+        service,
+        RuleWrite(
+            definition=RuleDefinition(
+                code="conversion_" + uuid4().hex,
+                name="蒸汽量·测试字段",
+                category="steam",
+                unit="原表单位",
+                quantity_kind="heat",
+                source_sheet="蒸汽量",
+                source_column=2,
+                active_from=date(2026, 7, 1),
+                enabled=True,
+                terms=[
+                    RuleTerm(
+                        metric_key="point:" + definition.code,
+                        coefficient=(Decimal(3600) / Decimal("2756.4")).quantize(
+                            Decimal(".00000001")
+                        ),
+                    )
+                ],
+            )
+        ),
+    )
+    await db_session.flush()
     report = await EnergyWorkbookService(service).report(2026, 7, "蒸汽量")
-    assert report.rows[0].cells["2"].value == Decimal("0.00522421")
-    assert report.rows[0].cells["2"].provenance["source_batch_id"] == str(batch.id)
+    # Submitted 2421.170 is authoritative; the reference is not a new reading.
+    assert report.rows[0].cells["2"].value == 0
+    assert report.rows[0].cells["2"].provenance["reference"]["source_batch_id"] == str(
+        batch.id
+    )
     reading.value = Decimal("2421.180")
     reading.submitted_at = imported_at + timedelta(seconds=1)
     reading.version = 2

@@ -34,6 +34,12 @@ describe('energy import server action', () => {
 })
 
 describe('energy mutation contracts', () => {
+  it('retains the original entry permission context when saving from a report cell', async () => {
+    vi.mocked(ledgerRequest).mockResolvedValue({ items: [] })
+    const payload = { dataset: '饮用水码', reading_date: '2026-07-01', draft: false, reason: '', values: [{ point_id: 'p1', version: 0, value: '0' }] }
+    await actions.saveDirectReadings(payload)
+    expect(ledgerRequest).toHaveBeenCalledWith('/input-readings', { method: 'PUT', body: JSON.stringify(payload) }, { 'Content-Type': 'application/json', 'X-Dazah-Page-Path': '/energy/entry' })
+  })
   const cases: { name: string; invoke: () => Promise<unknown>; path: string; method: string; payload: unknown }[] = [
     { name: 'bot configuration', invoke: () => actions.saveLedgerBot({ definition: { enabled: false, app_id: '', base_url: '' }, version: 2 }), path: '/bot-config', method: 'PUT', payload: { definition: { enabled: false, app_id: '', base_url: '' }, version: 2 } },
     { name: 'notification retry', invoke: () => actions.retryLedgerNotification('notice/1'), path: '/notification-runs/notice%2F1/retry', method: 'POST', payload: {} },

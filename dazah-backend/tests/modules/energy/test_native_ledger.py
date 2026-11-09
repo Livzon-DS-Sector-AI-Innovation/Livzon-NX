@@ -47,7 +47,7 @@ async def test_reporting_basis_through_http_uses_all_roots_before_pagination(
     definition = point(
         code="basis_" + uuid4().hex, source_sheet="饮用水码", source_column=14
     )
-    await seed_meter(service, MeterWrite(definition=definition))
+    seeded = await seed_meter(service, MeterWrite(definition=definition))
     total = RuleDefinition(
         code="basis_total_" + uuid4().hex,
         name="饮用水汇总",
@@ -60,23 +60,21 @@ async def test_reporting_basis_through_http_uses_all_roots_before_pagination(
         terms=[RuleTerm(metric_key="point:" + definition.code)],
     )
     await seed_rule(service, RuleWrite(definition=total))
-    for prefix, config in [("point:", definition), ("rule:", total)]:
+    from app.modules.energy.ledger_models import EnergyReading
+
+    # Basis is derived from stored readings, never fabricated materialized values.
+    for offset, value in [(0, 100), (1, 112)]:
         service.db.add(
-            EnergyUsageFact(
-                metric_key=prefix + config.code,
-                usage_date=DAY,
-                definition=config.model_dump(mode="json"),
-                calculated_value=Decimal(12),
-                effective_value=Decimal(12),
-                status="complete",
-                provenance={
-                    "reading_dates": ["2026-07-01", "2026-07-02"],
-                    "reading_values": ["100", "112"],
-                }
-                if prefix == "point:"
-                else {},
+            EnergyReading(
+                point_id=seeded.id,
+                task_id=uuid4(),
+                reading_date=DAY + timedelta(days=offset),
+                value=Decimal(value),
+                version=1,
             )
         )
+    await service.db.flush()
+    await service.rebuild({DAY})
     await service.db.flush()
 
     async def user() -> User:
@@ -109,7 +107,9 @@ async def test_reporting_basis_through_http_uses_all_roots_before_pagination(
             assert basis["usage_date"] == str(DAY)
             assert basis["nodes"][1]["source_column"] == "N"
             assert Decimal(basis["nodes"][1]["value"]) == Decimal(12)
-            assert basis["nodes"][1]["reading_values"] == ["100", "112"]
+            assert [
+                Decimal(value) for value in basis["nodes"][1]["reading_values"]
+            ] == [Decimal(100), Decimal(112)]
             invalid = await client.get(
                 "/api/v1/energy/reporting",
                 params={
@@ -268,7 +268,7 @@ def test_rule_missing_zero_denominator_and_decimal_sum() -> None:
         calculate_rule(
             ratio, {"point:water": Calculation(Decimal(0), "complete", {})}
         ).status
-        == "zero_denominator"
+        == "not_applicable"
     )
 
 
@@ -397,12 +397,22 @@ async def test_report_missing_dates_remain_visible_without_department_scope(
 @pytest.mark.asyncio
 async def test_import_conflict_does_not_overwrite_and_repeat_is_idempotent(
     native_service: EnergyLedgerService,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    from unittest.mock import AsyncMock
+
+    from app.modules.energy import ledger_notifications
     from app.modules.energy.ledger_imports import confirm_import, preview_import
     from app.modules.energy.ledger_models import EnergyReading
     from app.modules.energy.ledger_schemas import ImportConfirm, ImportMapping
 
     service = native_service
+    notification = AsyncMock()
+    monkeypatch.setattr(
+        ledger_notifications, "enqueue_reading_notification", notification
+    )
+    rebuild = AsyncMock(wraps=service.rebuild)
+    monkeypatch.setattr(service, "rebuild", rebuild)
     meter = await seed_meter(
         service,
         MeterWrite(
@@ -411,13 +421,44 @@ async def test_import_conflict_does_not_overwrite_and_repeat_is_idempotent(
             )
         ),
     )
-    batch = await preview_import(service, workbook_bytes(), 2026)
+    rule = await seed_rule(
+        service,
+        RuleWrite(
+            definition=RuleDefinition(
+                code="formula_only_" + uuid4().hex,
+                name="无读数日期的原表公式",
+                category="drinking_water",
+                unit="m3",
+                active_from=DAY,
+                enabled=True,
+                source_sheet="饮用水量",
+                source_column=2,
+                terms=[RuleTerm(metric_key="point:" + meter.definition.code)],
+            )
+        ),
+    )
+    book = openpyxl.load_workbook(BytesIO(workbook_bytes()))
+    book["饮用水量"].append(["7/3", "=99"])
+    source = BytesIO()
+    book.save(source)
+    batch = await preview_import(service, source.getvalue(), 2026)
     request = ImportConfirm(
         mappings=[ImportMapping(sheet="饮用水码", column=2, point_id=meter.id)],
         reason="核对历史抄表",
     )
     imported = await confirm_import(service, batch.id, request)
     assert imported.status == "imported" and imported.payload["imported_count"] == 2
+    rebuild.assert_awaited_once()
+    notification.assert_not_awaited()
+    formula_only = await service.db.scalar(
+        select(EnergyUsageFact).where(
+            EnergyUsageFact.metric_key == "rule:" + rule.definition.code,
+            EnergyUsageFact.usage_date == date(2026, 7, 3),
+        )
+    )
+    assert formula_only.calculated_value is None
+    assert formula_only.status == "missing_dependency"
+    assert formula_only.provenance["reference"]["formula"] == "=99"
     original_usage = next(
         value
         for key, _, value in await service.evaluate(DAY)

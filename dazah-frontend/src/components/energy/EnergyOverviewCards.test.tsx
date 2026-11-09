@@ -131,3 +131,13 @@ it('keeps missing calculation evidence explicit and disables the entry', async (
   expect(card.textContent).toContain('统计范围：来源未取得，请核对配置')
   expect(card.querySelector('button')?.disabled).toBe(true)
 })
+
+it.each([false, true])('uses the original month formula in calculation evidence (dark=%s)', async dark => {
+  const original = { ...water, basis: { usage_date: '2026-07-19', nodes: [{ ...water.basis!.nodes[0], operation: 'source', note: '原表：日用量!B20；原表公式：=电量!B19*3；引用：电量!B19 = 10' }] } }
+  const node = await render(report({ totals: [original] }), dark)
+  await act(async () => (node.querySelector('[aria-label="冰水 7℃用量摘要"] button') as HTMLButtonElement).click())
+  const drawer = document.querySelector('[role="dialog"]')!
+  expect(drawer.textContent).toContain('原表公式：=电量!B19*3')
+  expect(drawer.textContent).toContain('引用：电量!B19 = 10')
+  expect(drawer.textContent).not.toContain('来源未取得')
+})

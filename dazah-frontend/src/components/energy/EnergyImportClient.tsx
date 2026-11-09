@@ -9,6 +9,7 @@ import PlatformNotice from '@/components/shared/PlatformNotice'
 import { importRows, type ImportColumn as Column } from './energy-import'
 import styles from './EnergyWorkspace.module.css'
 import { EnergyDatePicker } from './EnergyDatePicker'
+import { EnergyFieldMappings } from './EnergyFieldMappings'
 
 export function EnergyImportClient({ meters, onChanged, initialYear }: { meters: Meter[]; onChanged: () => Promise<unknown>; initialYear?: number }) {
   const { message, modal } = App.useApp()
@@ -72,7 +73,10 @@ export function EnergyImportClient({ meters, onChanged, initialYear }: { meters:
     {error && <PlatformNotice type="error" title={error} />}
     {preview && <>
       <Typography.Text>状态：{preview.status === 'imported' ? '已导入' : '待核对'}；原始数值列 {columns.length} 项；有效范围 {String(preview.payload.start_date || '不限')} 至 {String(preview.payload.end_date || '不限')}</Typography.Text>
+      {typeof preview.payload.report_period === 'string' && <Typography.Text>识别月报：{preview.payload.report_period}；相邻月份日期保留为原公式计算依据，各月台账使用对应月报。</Typography.Text>}
+      <EnergyFieldMappings preview={preview} />
       {Array.isArray(preview.payload.notes) && <PlatformNotice title={preview.payload.notes.filter(item => typeof item === 'string').join(' ')} />}
+      {Array.isArray(preview.payload.warnings) && preview.payload.warnings.length > 0 && <PlatformNotice type="warning" title="原表存在需核对的数据" description={preview.payload.warnings.filter(item => typeof item === 'string').join('；')} />}
       <Button loading={busy} onClick={() => modal.confirm({ title: '识别原表字段与公式', content: '从原表识别六类原始字段及自动计算公式，已有字段和数据不会覆盖。', onOk: createDraft })}>识别原表字段与公式</Button>
       {draft && <><PlatformNotice type="success" title={`识别 ${draft.meters.length} 个原始字段、${draft.rules.length} 个固定公式；${draft.issues.length} 项需核对`} /><ul>{draft.issues.map((issue, index) => <li key={`${index}:${issue}`}>{issue}</li>)}</ul></>}
       <Table<Column> rowKey="key" dataSource={columns} pagination={{ pageSize: 20 }} scroll={{ x: 750 }} columns={[{ title: '来源表', dataIndex: 'sheet' }, { title: '原始字段', dataIndex: 'label' }, { title: '记录数', dataIndex: 'count' }, { title: '对应计量点', render: (_, row) => <Select aria-label={`${row.sheet}${row.label}对应计量点`} allowClear showSearch optionFilterProp="label" value={pointFor(row)} style={{ width: 310 }} onChange={value => setMapping(current => ({ ...current, [row.key]: value || '' }))} options={meters.filter(meter => meter.definition.source_sheet === row.sheet || !meter.definition.source_sheet).map(meter => ({ value: meter.id, label: `${meter.definition.name}（${meter.definition.unit}）` }))} /> }]} />

@@ -18,6 +18,26 @@ import { EnergyWorkbookClient } from './EnergyWorkbookClient'
 afterEach(() => { query.data = undefined; query.error = undefined; query.refetch.mockReset(); access.canImport = false; document.body.innerHTML = '' })
 
 describe('monthly original workbook views', () => {
+  it.each([false, true])('keeps formula failure states and displays formula results without hover tips (dark=%s)', async dark => {
+    query.data = { year: 2026, month: 10, dataset: '101车间', columns: [{ key: '4', label: '蒸汽', unit: '待确认', value_kind: 'usage', quantity_kind: 'mass' }], rows: [
+      { date: '2026-10-01', cells: { '4': { value: '10', status: 'complete', provenance: { source_sheet: '101车间', source_cell: 'D2', formula: "='蒸汽量'!D2", calculation_policy: 'system', reference: { reported_value: '11' } } } } },
+      { date: '2026-10-31', cells: { '4': { value: null, status: 'source_formula_error', provenance: { formula: "='蒸汽量'!D37:D36" } } } },
+    ], available_count: 1, expected_count: 2 }
+    const node = document.createElement('div'); document.body.append(node)
+    const root = createRoot(node)
+    await act(async () => root.render(<ConfigProvider theme={{ algorithm: dark ? theme.darkAlgorithm : theme.defaultAlgorithm }}><App><EnergyWorkbookClient year={2026} month={10} dataset="101车间" /></App></ConfigProvider>))
+    expect(node.textContent).toContain('原表公式需核对')
+    const value = node.querySelector('tr[data-row-key] td:nth-child(2)')!
+    expect(value.textContent).toBe('10')
+    expect(node.querySelector('u')).toBeNull()
+    await act(async () => {
+      value.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
+      await new Promise(resolve => setTimeout(resolve, 150))
+    })
+    expect(document.querySelector('[role="tooltip"]')).toBeNull()
+    expect(document.body.textContent).not.toContain('系统公式')
+    await act(async () => root.unmount())
+  })
   it.each([false, true])('retains pending originals and the reason in both appearances (dark=%s)', async dark => {
     query.data = { year: 2026, month: 7, dataset: '冰水量', available_count: 0, expected_count: 1,
       columns: [{ key: '14', label: '新北江发酵7°', unit: 'm³', quantity_kind: 'volume', value_kind: 'usage' }],
@@ -31,6 +51,19 @@ describe('monthly original workbook views', () => {
     expect(node.textContent).toContain('系统计算值：2049315')
     expect(node.textContent).toContain('底码跳变与手填冲突；飞书N31')
     await act(async () => root.unmount())
+  })
+  it.each([false, true])('shows missing data and not applicable separately from numeric zero (dark=%s)', async dark => {
+    query.data = { year: 2028, month: 1, dataset: '日总量', columns: [{ key: '5', label: '外供蒸汽占比', unit: '比例', value_kind: 'usage', quantity_kind: 'ratio' }], rows: [
+      { date: '2028-01-01', cells: { '5': { value: null, status: 'missing_dependency' } } },
+      { date: '2028-01-02', cells: { '5': { value: null, status: 'not_applicable' } } },
+      { date: '2028-01-03', cells: { '5': { value: '0', status: 'complete' } } },
+    ], available_count: 1, expected_count: 2 }
+    const node = document.createElement('div'); document.body.append(node)
+    const root = createRoot(node)
+    try {
+      await act(async () => root.render(<ConfigProvider theme={{ algorithm: dark ? theme.darkAlgorithm : theme.defaultAlgorithm }}><App><EnergyWorkbookClient year={2028} month={1} dataset="日总量" /></App></ConfigProvider>))
+      expect(Array.from(node.querySelectorAll('tr[data-row-key] td:nth-child(2)')).map(cell => cell.textContent)).toEqual(['待补数', '不适用', '0'])
+    } finally { await act(async () => root.unmount()) }
   })
   it('hydrates exports before displaying the authorized import button', async () => {
     access.canImport = true
@@ -66,9 +99,12 @@ describe('monthly original workbook views', () => {
     const root = createRoot(node)
     await act(async () => root.render(<App><EnergyWorkbookClient year={2026} month={7} dataset="饮用水码" /></App>))
     expect(node.textContent).toContain('已取得 1/3 项')
-    expect(Array.from(node.querySelectorAll('td')).filter(cell => cell.textContent === '—')).toHaveLength(2)
+    expect(node.textContent).toContain('待补数')
+    expect(node.textContent).toContain('待确认配置')
     expect(Array.from(node.querySelectorAll('td')).some(cell => cell.textContent === '0')).toBe(true)
-    const exports = Array.from(node.querySelectorAll('a')).map(link => link.getAttribute('href'))
+    const exportButton = Array.from(node.querySelectorAll('button')).find(button => button.textContent === '导出报表')!
+    await act(async () => exportButton.click())
+    const exports = Array.from(document.querySelectorAll('a')).map(link => link.getAttribute('href'))
     expect(exports).toContain('/api/v1/energy/reporting/workbook/export?year=2026&month=7')
     expect(exports.some(url => url?.includes('dataset=%E9%A5%AE%E7%94%A8%E6%B0%B4%E7%A0%81'))).toBe(true)
     await act(async () => root.unmount())
@@ -85,7 +121,7 @@ describe('monthly original workbook views', () => {
     const root = createRoot(node)
     await act(async () => root.render(<ConfigProvider theme={{ algorithm: dark ? theme.darkAlgorithm : theme.defaultAlgorithm }}><App><EnergyWorkbookClient year={2026} month={7} dataset="日总量" /></App></ConfigProvider>))
     expect(Array.from(node.querySelectorAll('th')).map(cell => cell.textContent)).toEqual(['日期', '锅炉产气量', '外供蒸汽占比'])
-    expect(Array.from(node.querySelectorAll('tr[data-row-key] td')).map(cell => cell.textContent)).toEqual(['2026-07-01', '1106', '0'])
+    expect(Array.from(node.querySelectorAll('tr[data-row-key] td')).map(cell => cell.textContent)).toEqual(['2026-07-01', '1,106', '0'])
     expect(node.querySelectorAll('td button, td a, td .ant-tag')).toHaveLength(0)
     await act(async () => node.querySelector('tr[data-row-key] td:nth-child(2)')?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
     expect(document.body.textContent).not.toContain('原表数据依据')

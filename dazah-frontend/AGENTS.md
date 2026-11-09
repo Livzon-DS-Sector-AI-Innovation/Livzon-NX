@@ -6,12 +6,19 @@
 
 ## 技术与事实来源
 
-- 实际依赖和脚本：`package.json`
+- 运行时、包管理器和依赖声明：`package.json`；解析版本：`pnpm-lock.yaml`
+- 检查入口和门禁：`package.json` 的 scripts、`vitest.config.ts`、
+  `eslint-warning-baseline.json`、根目录 `.github/workflows/ci.yml` 及其门禁脚本
 - Ant Design 主题：`src/lib/antd-theme.ts`
 - API 契约：`src/types/generated/`
 - 环境变量示例：工作区根目录 `.env.example`（生产）和 `.env.local.example`（开发）
 
 规范不得重复维护这些文件中的版本号、完整 token 或生成类型。
+
+Next.js 优先核对安装包内 `node_modules/next/dist/docs/` 的对应章节；在线补充参考
+[客户端边界](https://nextjs.org/docs/app/api-reference/directives/use-client) 和
+[写入口安全](https://nextjs.org/docs/app/guides/data-security)，不直接套用在线最新
+版本与当前锁定版本不同的行为。
 
 ## 目录和模块边界
 
@@ -29,9 +36,17 @@
 ## Server 与 Client Component
 
 - `page.tsx` 默认保持 Server Component，负责读取服务端数据和组装页面。
-- 只有使用 React 客户端 hooks、事件处理器、浏览器 API、Zustand 或 Ant Design 客户端 hook 时才添加 `'use client'`。
+- 使用 React 客户端 hooks、事件处理器、浏览器 API、Zustand 或 Ant Design
+  客户端 hook 的组件必须处于客户端边界内；仅在从服务端进入客户端的模块入口
+  添加 `'use client'`，不要求所有后代文件重复声明。第三方组件未声明必要边界时
+  使用最小包装组件；Server Component 可以直接组装已声明边界的客户端组件。
 - 交互复杂的部分拆到模块组件中，不要让整页无必要地变成 Client Component。
+- 页面 `params`、`searchParams` 及 `cookies()`、`headers()` 按当前 Next.js 的
+  异步 API 使用；服务端先 `await`，客户端需要时按对应 API 使用 React `use()`
+  或路由 hooks，不照搬旧版同步属性访问。
 - 页面缓存和动态渲染必须按数据时效、认证和现有缓存策略决定；不得为了规避构建问题机械添加 `force-dynamic`。
+  不假定旧版 `fetch` 缓存默认值；含身份和权限范围的数据不得跨用户共享缓存。
+  修改缓存行为前核对当前配置与随包文档，不为单页擅自启用全局缓存机制。
 
 示例见 `examples/server-component-pattern.md`。
 
@@ -41,6 +56,10 @@
 - 服务端调用使用 `API_BASE_URL`，不得硬编码主机、端口或使用 `NEXT_PUBLIC_API_BASE_URL` 暴露后端地址。
 - 客户端查询优先使用现有 React Query Provider 和 query key 约定。
 - POST、PUT、PATCH、DELETE、上传和其他有副作用操作必须经过 Server Action 或项目既有服务端入口，禁止在普通 Client Component 中直接写后端。
+- Server Action 和服务端写入口必须校验输入、取得当前认证上下文并向后端传递；
+  后端仍执行资源权限和业务状态校验。`'use server'`、页面鉴权、按钮隐藏或前端
+  传入的用户 ID 都不能代替写入口认证授权。既有入口的复用仅限当前模块和操作，
+  不得以通用代理可转发为由新增无校验的写通道。
 - 写操作后按影响范围失效缓存或刷新查询，不得依赖整页刷新掩盖状态问题。
 
 Server Action 示例见 `examples/server-actions.md`。
@@ -48,6 +67,9 @@ Server Action 示例见 `examples/server-actions.md`。
 ## API 类型与契约
 
 - API 请求、响应和参数类型必须从 `@/types/generated/schema` 或其公开导出导入，禁止重新手写同名契约。
+- 生成契约中的 `unknown`/宽泛 `data` 不代表已有业务类型保证；在模块边界按
+  已有 Schema 或明确业务校验收窄。视图模型可从契约派生，不用类型断言伪造
+  结构确定性，也不为局部需求重写整个生成器或无关接口。
 - `src/lib/api/` 只做请求、认证、错误标准化和类型封装。
 - 后端端点、参数或请求/响应契约变化时，从项目根目录执行 `scripts/generate-api.ps1`，禁止手动编辑 OpenAPI 快照或生成类型。
 - 如果生成结果出现大量与需求无关的变化，停止并检查后端 OpenAPI 来源。
@@ -64,9 +86,15 @@ Server Action 示例见 `examples/server-actions.md`。
   多表页面先确定各自状态范围，不机械套用单列表 URL 参数。
 - 表单必须有必填提示、校验反馈、提交中状态和失败后的数据保留。
 - 页面和局部区域必须覆盖加载、空数据、失败、无权限和部分成功状态。
-- 所有新建或修改的页面说明、规则、风险和错误提示，统一使用
+- 用户未主动明确提出编写或新增“提示框”时，禁止自主添加提示框、提示条或说明
+  横幅（如页面规则、操作说明、自动计算说明等）；不得以补充说明或优化体验为由
+  自行增加。
+- 以下提示框规范仅约束样式、组件和交互，不构成新增提示框的要求或授权；页面
+  结构、状态覆盖、权限告知和风险说明要求也不得作为自主新增提示框的依据。
+  用户主动明确要求新增的提示框，以及本次任务涉及修改的既有提示框，统一使用
   `src/components/shared/PlatformNotice.tsx`，呈现左侧语义图标、简明正文及右侧
-  “了解访问规则”入口；完整说明传入 `description`，已有恢复操作传入 `action`。
+  按 `DESIGN.md` 条件显示的“了解访问规则”入口；完整说明传入 `description`，
+  已有恢复操作传入 `action`。
   禁止在业务页面直接导入 Ant Design `Alert` 或手写另一套提示条。
   文案、操作入口、语义色与窄屏布局遵守
   `DESIGN.md` 的“统一提示框与提示条”。提示弹窗复用 `Modal`，不得另造主题。
@@ -80,7 +108,10 @@ Server Action 示例见 `examples/server-actions.md`。
 - 优先使用 Ant Design 的 `theme.useToken()` 和 `src/app/globals.css` 中已有的语义 CSS 变量；背景、文字、边框、阴影和交互状态不得硬编码为仅适用于单一模式的颜色。业务状态色在两种模式下均须清晰可辨，不能只靠颜色传达状态。
 - 复用 `src/lib/antd-theme.ts`、`src/lib/appearance.ts` 和 `src/lib/useAppearance.ts` 的统一主题与外观机制；需要按外观分支时使用解析后的 `resolved`，兼容“跟随系统”，不得另建局部主题状态或自行读写外观存储。
 - 适配范围包括表格、表单、弹窗、抽屉、提示条、下拉浮层、图表及自定义样式。ECharts 优先复用 `src/components/shared/ThemedEChart.tsx`；图表文字、坐标轴、图例、网格线和 tooltip 必须随外观切换保持可读。
-- 界面改动交付前，在深色与浅色模式下分别验证受影响界面、主要交互及相关加载、空数据、失败、禁用、悬停、选中和键盘焦点状态，并检查切换后即时更新。新增或修改外观判断、主题映射或图表适配逻辑时，补充覆盖两种模式及切换行为的定向测试；交付记录注明双模式验证结果与未验证范围。
+- 界面改动交付前，在深色与浅色模式下分别验证受影响界面、主要交互和本次涉及
+  的状态；不要求为删除说明、纯文案等局部改动遍历所有未受影响状态。修改外观
+  判断、主题映射或图表适配逻辑时，补充两种模式及切换行为的定向测试，并验证
+  切换后即时更新。交付记录区分组件测试与浏览器视觉检查，注明实际验证范围。
 
 ## 编码约束
 
@@ -88,10 +119,34 @@ Server Action 示例见 `examples/server-actions.md`。
 - Server Action 和业务操作函数以动词开头；查询函数使用明确的 `fetch/list/get` 语义。
 - 优先复用项目现有组件、query key、错误处理和权限入口。
 - 不新增与现有技术栈重复的状态、表单或请求库。
-- TypeScript 必须保持可推导且边界类型明确；禁止用无理由的 `any`、类型断言、`@ts-ignore` 或关闭 strict 检查掩盖契约问题。
+- TypeScript 必须保持可推导且边界类型明确，遵守下述类型安全要求；禁止使用
+  `@ts-ignore` 或关闭 strict 检查掩盖契约问题。
 - React hooks 的依赖、组件 key、受控状态和异步副作用必须正确；不得通过禁用 ESLint 规则绕过真实问题。
 - 确需局部禁用规则时，只允许最小行级范围，并用注释说明框架限制或业务原因；禁止文件级关闭规则。
 - 不提交本地运行日志、临时截图、调试输出或硬编码测试数据。
+
+### TypeScript 类型安全
+
+- 优先通过准确的类型设计和控制流收窄解决类型问题，避免滥用 `any`、`as T`、
+  非空断言 `!` 或双重断言 `as unknown as T`；禁止仅为消除编译错误而绕过类型检查。
+- 能可靠推导时保留类型推导；函数、组件和数据边界使用明确类型。复用生成契约与
+  类型别名，通过 `Pick`、`Omit`、索引访问类型等派生所需结构，不重复手写契约，
+  不把 `Record<string, any>` 当作业务模型。
+- 输入与输出或字段之间存在类型关联时，使用有实际约束的泛型，例如
+  `K extends keyof T`；不要为单个具体场景制造无必要的泛型，也不能用调用方任意
+  指定的泛型参数把未校验的接口结果直接认定为业务类型。
+- 对外部输入、JSON、存储数据和捕获的异常使用 `unknown`，通过运行时 Schema、
+  `typeof`、`instanceof`、`in` 或自定义类型守卫校验后访问。类型守卫须检查其
+  声明类型所需的结构与字段，不能用恒真判断或内部断言伪装校验。
+- 有限的业务状态、可选结果和不同数据分支使用联合类型，优先通过可辨识字段
+  区分分支并收窄；按需要做穷尽检查，不用宽泛对象、相互矛盾的可选字段或断言
+  掩盖状态差异。类型别名和泛型本身不提供运行时数据校验。
+- 对配置和字面量可使用 `satisfies` 校验结构，或用 `as const` 保留字面量与只读
+  信息；这些用法不能替代外部数据校验，也不得用于强行改变对象的实际结构。
+- 仅在第三方声明缺陷等确实无法通过类型设计或校验表达的边界，允许最小范围的
+  类型断言或 `any`，须注释说明具体原因、可靠依据及适用范围；优先封装在适配层，
+  不向业务调用链传播，不放宽 lint 或类型检查规则。只治理本次触达的相关代码，
+  不以本节要求为由批量改写无关历史模块。
 
 ## 测试策略
 
@@ -117,6 +172,7 @@ Server Action 示例见 `examples/server-actions.md`。
 pnpm install --frozen-lockfile
 pnpm lint
 pnpm typecheck
+pnpm test:build
 pnpm test:coverage
 pnpm build
 pnpm test:e2e:critical
@@ -129,15 +185,29 @@ docker build --file ../Dockerfile --target frontend --tag dazah-frontend:ci ..
 - 禁止 `console.log` 和 `debugger`；确有运行故障需要记录时只使用受规则允许的 `console.warn`/`console.error`，不得输出敏感信息。
 - warning 按 `react-hooks/exhaustive-deps`、`@typescript-eslint/no-explicit-any` 和其他规则分批清理；修复 hooks 必须验证依赖稳定性，清理 `any` 必须替换为真实契约类型或经过收窄的 `unknown`。
 - `pnpm typecheck` 对应 `Frontend Quality` 中的类型检查，不得依赖 Next.js Build 间接发现类型错误。
-- `pnpm test:unit` 用于定向单测；CI 通过 `pnpm test:coverage` 执行同一套测试，不重复运行；新增业务逻辑或缺陷修复必须有相关测试。
-- `pnpm test:coverage` 对整个 `src` 建立不可回退基线，PR 变更可执行行覆盖率
-  不得低于 80%。
+- 定向单测使用 `pnpm exec vitest run <测试文件或目录>`；`pnpm test:unit` 自带
+  `src` 过滤条件，会运行整个 `src` 测试集，不用追加文件参数冒充定向验证。
+  CI 通过 `pnpm test:coverage` 执行同一套测试；新增业务逻辑或缺陷修复必须有相关测试。
+- `pnpm test:coverage` 按 `vitest.config.ts` 的 include/exclude 和全应用基线检查，
+  变更行覆盖率由根目录脚本与 CI 单独检查；两种指标不得混用，禁止降低现有门禁。
+- `pnpm test:build` 验证构建脚本的失败边界与类型覆盖保护；构建脚本或相关守卫
+  变化时运行，对应当前 `Frontend Quality` 的独立检查步骤。
 - `pnpm test:e2e:critical` 对应 `Stable Frontend E2E`，覆盖不依赖真实外部系统的关键
   用户流程。
 - `pnpm build` 对应 `Frontend Quality` 中的构建步骤，用于验证 Next.js 生产构建、Server/Client 边界和静态生成。
-- Docker 命令对应 `Frontend Quality` 中的交付镜像构建步骤。变化影响镜像构建或容器运行时，执行相应开发镜像构建或容器验证，本地使用 `docker build --file ../Dockerfile.dev --target frontend --tag dazah-frontend:dev ..`；standalone 等交付镜像特有变化由 CI 或明确授权的隔离交付验证覆盖。
+- Docker 交付镜像构建对应 `Frontend Image Verify`，与 `Frontend Quality` 的
+  `pnpm build` 分开。变化影响镜像构建或容器运行时，执行相应开发镜像构建或容器验证，
+  本地使用 `docker build --file ../Dockerfile.dev --target frontend --tag dazah-frontend:dev ..`；
+  standalone 等交付镜像特有变化由 CI 或明确授权的隔离交付验证覆盖。
 - `Stable Frontend E2E` 和隔离测试复用同次 CI 的 standalone 构建产物；生产 Docker 镜像独立构建并缓存构建层。
-- 统一 `CI Gate` 要求本次范围内的 `Frontend Quality` 和 `Stable Frontend E2E` 成功；未触发的项目允许跳过，隔离测试不阻断合并。
+- 统一 `CI Gate` 按根目录 `.github/scripts/ci_gate.py` 的变更范围要求相应任务
+  成功；前端范围包括 `Frontend Quality`、`Frontend Image Verify` 和
+  `Stable Frontend E2E`。只有门禁确认不适用的任务可跳过，隔离测试不阻断合并。
+
+命令在 `dazah-frontend/` 执行，包管理器遵守 `packageManager` 声明。遇到工具
+自动要求重装、清空 `node_modules` 或修改锁文件时，先核对工具版本和环境；
+不得为局部验证自动升级依赖或重建用户环境。依赖已齐备时可直接通过 `node`
+调用本地 Vitest/ESLint CLI，注明实际命令；缺少依赖则报告受阻范围。
 
 交付时记录实际运行的命令、结果及其覆盖的变更表面；未运行完整门禁不等于未验证，但必须说明为何现有证据已经充分。页面和交互只需验证本次变化可能影响的主要操作及相关加载、空数据、失败、无权限、危险确认或窄屏状态。无法取得所需证据时必须说明原因、未验证范围和风险。
 

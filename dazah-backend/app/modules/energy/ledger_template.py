@@ -281,6 +281,25 @@ def extract_template(payload: dict[str, JsonValue]) -> TemplateDraftResponse:
                 source_sheet=name,
                 source_column=column,
                 temperature=temperature(label) if name == "冰水码" else "",
+                precision=max(
+                    [3]
+                    + [
+                        min(
+                            8,
+                            max(
+                                0,
+                                -int(
+                                    Decimal(str(cell["value"]))
+                                    .normalize()
+                                    .as_tuple()
+                                    .exponent
+                                ),
+                            ),
+                        )
+                        for cell in cells
+                        if isinstance(cell, dict) and cell.get("column") == column
+                    ]
+                ),
                 notes="从原表提取的未启用草案；请确认部门、单位、倍率和统计范围。"
                 + ("名称含倍率提示，请核对原公式是否已换算。" if "倍" in label else ""),
             )
@@ -473,7 +492,7 @@ def extract_template(payload: dict[str, JsonValue]) -> TemplateDraftResponse:
             raise ValueError("没有有效指标名称")
         report_scope = (
             "plant"
-            if sheet_name == "日总量"
+            if sheet_name in {"日总量", "日用量"}
             or (sheet_name == "冰水量" and "冰水总量" in label and temperature(label))
             else "detail"
             if "车间" in sheet_name

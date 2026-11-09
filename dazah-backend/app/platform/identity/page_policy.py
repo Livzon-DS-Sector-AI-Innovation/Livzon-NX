@@ -13,6 +13,7 @@ from dataclasses import dataclass, replace
 
 from starlette.routing import BaseRoute, Mount, Route
 
+from app.platform.identity.integration_gaps import IntegrationGaps
 from app.platform.identity.menu_seed_data import SEED_MENUS
 from app.platform.identity.page_lifecycle import page_lifecycle_errors
 from app.platform.identity.quality_api_contract import QUALITY_REVIEWED_API_ROUTES
@@ -296,15 +297,29 @@ def collect_http_route_catalog(
     return catalog
 
 
-def api_route_catalog(module_code: str) -> list[tuple[str, str]] | None:
-    if _api_catalog_provider is None:
-        return None
-    prefix = f"/api/v1/{module_code}"
-    return sorted(
-        (method, path)
-        for method, path in _api_catalog_provider()
-        if path == prefix or path.startswith(prefix + "/")
+@dataclass(frozen=True)
+class ApiRouteCatalog:
+    routes: tuple[tuple[str, str], ...] | None
+
+    def for_module(self, module_code: str) -> list[tuple[str, str]] | None:
+        if self.routes is None:
+            return None
+        prefix = f"/api/v1/{module_code}"
+        return sorted(
+            (method, path)
+            for method, path in self.routes
+            if path == prefix or path.startswith(prefix + "/")
+        )
+
+
+def load_api_route_catalog() -> ApiRouteCatalog:
+    return ApiRouteCatalog(
+        tuple(_api_catalog_provider()) if _api_catalog_provider else None
     )
+
+
+def api_route_catalog(module_code: str) -> list[tuple[str, str]] | None:
+    return load_api_route_catalog().for_module(module_code)
 
 
 def api_bindings_for_module(module_code: str) -> tuple[PageApiBinding, ...]:
@@ -379,45 +394,49 @@ def api_binding_for_route(method: str, route_path: str) -> PageApiBinding | None
     )
 
 
-def page_api_catalog_gaps(module_code: str) -> list[str]:
-    gaps: list[str] = []
+def page_api_catalog_issues(
+    module_code: str, *, catalog: ApiRouteCatalog | None = None
+) -> IntegrationGaps:
+    gaps = IntegrationGaps()
     for page in PAGES_BY_MODULE.get(module_code, ()):
-        gaps.extend(
-            f"{page.page_name}：{error}" for error in page_lifecycle_errors(page)
-        )
+        label = f"{page.page_name}（{page.page_key}；{page.route_path}）"
+        for error in page_lifecycle_errors(page):
+            gaps.add("页面", page.page_key, label, error)
         bindings = [
             item
             for item in PAGE_API_BINDINGS
             if page.page_key in item.page_keys and item.permission != "access"
         ]
         if not bindings:
-            gaps.append(f"页面尚未完成接口权限登记：{page.page_name}")
+            gaps.add("页面", page.page_key, label, "页面尚未完成接口权限登记")
         elif any(not item.scope_adapter for item in bindings):
-            gaps.append(f"页面尚未完成数据范围适配：{page.page_name}")
-    actual_routes = api_route_catalog(module_code)
+            gaps.add("页面", page.page_key, label, "页面尚未完成数据范围适配")
+    actual_routes = (catalog or load_api_route_catalog()).for_module(module_code)
     if actual_routes is None:
-        gaps.append("实际业务接口目录尚未加载，无法完成发布检查")
+        gaps.add("检查目录", "api", "实际业务接口目录", "目录尚未加载，无法完成检查")
     else:
-        missing = [
-            path
-            for method, path in actual_routes
-            if api_binding_for_route(method, path) is None
-        ]
-        if missing:
-            gaps.append(f"仍有 {len(missing)} 个业务接口未完成页面权限登记")
-        duplicates = sum(count > 1 for count in Counter(actual_routes).values())
-        if duplicates:
-            gaps.append(f"存在 {duplicates} 组重复业务接口，无法确定唯一处理入口")
+        for (method, path), count in sorted(Counter(actual_routes).items()):
+            target = f"{method} {path}"
+            if api_binding_for_route(method, path) is None:
+                gaps.add("接口", target, target, "业务接口未完成有效的页面权限登记")
+            if count > 1:
+                gaps.add(
+                    "接口", target, target, "存在重复业务接口，无法确定唯一处理入口"
+                )
         actual_route_set = set(actual_routes)
-        orphaned = sum(
-            (item.method, item.route_path) not in actual_route_set
-            for item in api_bindings_for_module(module_code)
-        )
-        if orphaned:
-            gaps.append(f"仍有 {orphaned} 条接口策略对应的业务接口已不存在")
+        for binding in api_bindings_for_module(module_code):
+            if (binding.method, binding.route_path) not in actual_route_set:
+                target = f"{binding.method} {binding.route_path}"
+                gaps.add("接口", target, target, "接口策略对应的业务接口已不存在")
     for binding in api_bindings_for_module(module_code):
-        gaps.extend(f"接口策略无效：{error}" for error in _api_binding_errors(binding))
-    return list(dict.fromkeys(gaps))
+        target = f"{binding.method} {binding.route_path}"
+        for error in _api_binding_errors(binding):
+            gaps.add("接口", target, target, f"接口策略无效：{error}")
+    return gaps
+
+
+def page_api_catalog_gaps(module_code: str) -> list[str]:
+    return page_api_catalog_issues(module_code).messages()
 
 
 _ACTION_DEFINITIONS = {
@@ -885,6 +904,69 @@ PAGE_ROUTE_PREFIX_ALIASES = {
         "registration:project:declaration-progress:international-planned-in-progress"
     ),
 }
+
+
+# Discovery metadata for existing concrete-page renderers. This does not grant
+# access. A new dynamic template must be reviewed even if its pattern happens
+# to match an existing menu URL; broad catch-all pages must not pass by inference.
+FRONTEND_CONCRETE_PAGE_TEMPLATES = frozenset({
+    "/purchasing/approval/[category]/[step]",
+    "/purchasing/contract-generation/[category]",
+    "/purchasing/request/[category]",
+    "/quality/capas/[id]",
+    "/quality/change/[id]",
+    "/quality/deviations/[id]",
+    "/quality/product-quality/[productCode]",
+    "/registration/certificate-management/[sheetKey]",
+    "/registration/declaration-progress/[sheetKey]",
+    "/registration/project-ledger/[sheetKey]",
+    "/warehouse/hardware/[slug]",
+})
+
+
+def frontend_page_catalog_issues(
+    module_code: str, routes: Sequence[str]
+) -> IntegrationGaps:
+    """Audit exact pages, never certify a new child via parent URL inheritance."""
+    gaps = IntegrationGaps()
+    root = BUSINESS_MODULE_TO_MENU_MODULE.get(module_code, module_code)
+    prefixes = {f"/{root}", f"/{module_code}"}
+    pages = PAGES_BY_MODULE.get(module_code, ())
+    page_keys = {page.page_key for page in pages}
+    exact_routes = {page.route_path for page in pages}
+    # Module home pages may only assemble navigation. Leaf permission pages and
+    # reviewed compatibility routes still retain their independent identities.
+    navigation_roots = {
+        str(node.get("path")) for node in SEED_MENUS if node.get("children")
+    }
+    for route in sorted(set(routes)):
+        if not any(
+            route == prefix or route.startswith(prefix + "/") for prefix in prefixes
+        ):
+            continue
+        alias_key = PAGE_ROUTE_ALIASES.get(route)
+        if route in exact_routes or route in navigation_roots:
+            continue
+        if alias_key in page_keys:
+            continue
+        # A dynamic Next.js route can implement multiple explicitly registered
+        # concrete pages (for example purchasing request categories).
+        parts: list[str] = []
+        for segment in route.strip("/").split("/"):
+            if segment.startswith("[[...") and segment.endswith("]]"):
+                parts.append("(?:/.*)?")
+            elif segment.startswith("[...") and segment.endswith("]"):
+                parts.append("/.+")
+            elif segment.startswith("[") and segment.endswith("]"):
+                parts.append("/[^/]+")
+            else:
+                parts.append("/" + re.escape(segment))
+        if route in FRONTEND_CONCRETE_PAGE_TEMPLATES and any(
+            re.fullmatch("".join(parts), path) for path in exact_routes
+        ):
+            continue
+        gaps.add("页面", f"route:{route}", route, "前端页面尚未完成精确权限路由登记")
+    return gaps
 
 
 def _purchase_request_bindings() -> tuple[PageApiBinding, ...]:

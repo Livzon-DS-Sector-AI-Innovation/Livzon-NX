@@ -1,4 +1,5 @@
 import { EquipmentPage } from '@/components/equipment'
+import { EquipmentQueryFailure, isEquipmentQueryAccessError } from '@/components/equipment/EquipmentQueryFailure'
 import {
   fetchCategoryTree,
   fetchLocationTree,
@@ -43,11 +44,13 @@ export default async function AssetsView({
   try {
     categories = await fetchCategoryTree()
   } catch (error) {
+    if (isEquipmentQueryAccessError(error)) return <EquipmentQueryFailure status={error.status} />
     console.warn('加载分类树失败:', error)
   }
   try {
     locations = await fetchLocationTree()
   } catch (error) {
+    if (isEquipmentQueryAccessError(error)) return <EquipmentQueryFailure status={error.status} />
     console.warn('加载位置树失败:', error)
   }
   try {
@@ -55,16 +58,19 @@ export default async function AssetsView({
     equipments = result.items
     total = result.total
   } catch (error) {
+    if (isEquipmentQueryAccessError(error)) return <EquipmentQueryFailure status={error.status} />
     console.warn('加载设备列表失败:', error)
   }
   try {
     statistics = await fetchEquipmentStatistics(workshopCode)
   } catch (error) {
+    if (isEquipmentQueryAccessError(error)) return <EquipmentQueryFailure status={error.status} />
     console.warn('加载设备统计失败:', error)
   }
   try {
     departments = await fetchDepartments()
   } catch (error) {
+    if (isEquipmentQueryAccessError(error)) return <EquipmentQueryFailure status={error.status} />
     console.warn('加载部门列表失败:', error)
   }
 

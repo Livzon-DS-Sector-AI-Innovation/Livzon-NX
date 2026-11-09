@@ -4,21 +4,42 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { App, ConfigProvider, theme } from 'antd'
 import { afterEach, expect, it, vi } from 'vitest'
-import type { Report } from '@/lib/api/energy-ledger'
+import type { Report, WorkbookDataset } from '@/lib/api/energy-ledger'
 
-const state = vi.hoisted((): { report?: Report; error?: Error; search?: string; queries: string[][] } => ({ queries: [] }))
+const state = vi.hoisted((): { report?: Report; error?: Error; search?: string; datasets?: WorkbookDataset[]; queries: string[][] } => ({ queries: [] }))
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/energy/reports',
   useSearchParams: () => new URLSearchParams(state.search ?? 'year=2026&month=7&dataset=饮用水码'),
 }))
-vi.mock('@tanstack/react-query', () => ({ useQuery: ({ queryKey }: { queryKey: string[] }) => { state.queries.push(queryKey); return { data: ['overview', 'reports', 'analysis', 'data-quality'].includes(queryKey[1]) ? state.report : undefined, error: queryKey[1] === 'overview' ? state.error : undefined, isFetching: false } } }))
+vi.mock('@tanstack/react-query', () => ({ useQuery: ({ queryKey }: { queryKey: string[] }) => { state.queries.push(queryKey); return { data: queryKey[1] === 'datasets' ? state.datasets : ['overview', 'reports', 'analysis', 'data-quality'].includes(queryKey[1]) ? state.report : undefined, error: queryKey[1] === 'overview' ? state.error : undefined, isFetching: false } } }))
 vi.mock('./EnergyWorkbookClient', () => ({ EnergyWorkbookClient: ({ dataset }: { dataset: string }) => <div>原表结果 · {dataset}</div> }))
 vi.mock('@/components/shared/ThemedEChart', () => ({ default: () => null }))
 
 import { EnergyReportsClient } from './EnergyReportsClient'
 
-afterEach(() => { state.report = undefined; state.error = undefined; state.search = undefined; state.queries = []; document.body.innerHTML = ''; window.history.replaceState(null, '', '/') })
+afterEach(() => { state.report = undefined; state.error = undefined; state.search = undefined; state.datasets = undefined; state.queries = []; document.body.innerHTML = ''; window.history.replaceState(null, '', '/') })
+
+it.each([false, true])('exposes all 21 worksheet links and switches with the queried month (dark=%s)', async dark => {
+  const names = ['饮用水码', '冰水码', '蒸汽码', '循环水码', '空气码', '电量', '饮用水量', '蒸汽量', '冰水量', '空气量', '循环水量', '日总量', '101车间', '102-1车间', '103-1车间', '103-2车间', '201-1车间', '201-2车间', '203-1车间', '203-2车间', '203-3车间']
+  state.datasets = names.map(name => ({ name, kind: name.endsWith('码') ? 'reading' : name === '电量' ? 'mixed' : 'usage' }))
+  const node = document.createElement('div'); document.body.append(node)
+  const root = createRoot(node)
+  await act(async () => root.render(<ConfigProvider theme={{ algorithm: dark ? theme.darkAlgorithm : theme.defaultAlgorithm }}><App><EnergyReportsClient mode="reports" /></App></ConfigProvider>))
+  const sheets = node.querySelector('nav[aria-label="报表工作表"]')!
+  const links = Array.from(sheets.querySelectorAll('a'))
+  expect(links.map(link => link.textContent)).toEqual(['日总量', ...names.filter(name => name !== '日总量')])
+  expect(Array.from(sheets.querySelectorAll('h4')).map(heading => heading.firstChild?.textContent)).toEqual(['汇总报表', '计量读数', '用量明细', '车间报表'])
+  expect(sheets.querySelector('[aria-current="page"]')?.textContent).toBe('饮用水码')
+  for (const link of links) {
+    await act(async () => link.click())
+    const params = new URLSearchParams(window.location.search)
+    expect(params.get('dataset')).toBe(link.textContent)
+    expect(params.get('year')).toBe('2026')
+    expect(params.get('month')).toBe('7')
+  }
+  await act(async () => root.unmount())
+})
 
 it.each([false, true])('explains empty reports without directing users to retired historical pages (dark=%s)', async dark => {
   state.report = { start_date: '2026-07-01', end_date: '2026-07-31', status: 'complete', rows: [], total_count: 0, entry_completed: 0, entry_total: 0, totals: [] }
@@ -39,11 +60,9 @@ it.each([false, true])('applies and resets client report filters without server 
   const root = createRoot(node)
   await act(async () => root.render(<ConfigProvider theme={{ algorithm: dark ? theme.darkAlgorithm : theme.defaultAlgorithm }}><App><EnergyReportsClient mode="reports" /></App></ConfigProvider>))
   const labels = Array.from(node.querySelectorAll('label'))
-  expect(labels.map(label => label.firstChild?.textContent?.trim())).toEqual(['年份', '月份', '数据表'])
+  expect(labels.map(label => label.firstChild?.textContent?.trim())).toEqual(['年份', '月份'])
   expect(labels[0].querySelector('[aria-label="年份"]')).not.toBeNull()
   expect(labels[1].querySelector('[aria-label="月份"]')).not.toBeNull()
-  expect(labels[2].htmlFor).toBe('energy-report-dataset')
-  expect(labels[2].querySelector('[aria-label="数据表"]')?.id).toBe('energy-report-dataset')
   const button = (label: string) => Array.from(node.querySelectorAll('button')).find(item => item.textContent?.replaceAll(' ', '') === label)
   await act(async () => button('查询')?.click())
   const params = new URLSearchParams(window.location.search)

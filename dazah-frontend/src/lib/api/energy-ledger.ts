@@ -65,13 +65,17 @@ export const CATEGORY_LABELS = {
 } as const
 
 export const QUALITY_LABELS: Record<string, string> = {
+  source_field_missing: '本月缺少对应业务字段',
   pending_review: '待确认',
   complete: '完整', partial: '部分数据', pending: '待计算', adjusted: '已调整',
-  missing_reading: '缺少读数', missing_dependency: '计算缺项', reading_rollback: '读数回退',
-  invalid_meter_event: '换表记录无效', zero_denominator: '分母为零',
+  missing_reading: '待补数', missing_dependency: '待补数', reading_rollback: '读数回退',
+  invalid_meter_event: '换表记录无效', zero_denominator: '不适用',
   abnormal_usage: '用量超出阈值', abnormal_dependency: '来源存在异常',
   out_of_range: '计算值超出计量范围', late_submission: '逾期补填',
   unconfigured: '待确认配置', not_applicable: '不适用', configuration_conflict: '配置冲突',
+  source_blank: '原表空白', source_non_numeric: '原表非数值',
+  source_formula_error: '原表公式需核对', source_formula_cycle: '原表循环引用',
+  source_missing_sheet: '原表缺少引用表',
 }
 
 

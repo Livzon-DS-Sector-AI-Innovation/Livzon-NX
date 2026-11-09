@@ -42,9 +42,9 @@ def input_column_allowed(
         return False
     if column in calculated_columns(name, headers):
         return False
-    # Detached columns in the reviewed circulation template are copied steam
-    # fields, not confirmed circulation meters. Preserve them for review only.
-    if name == "循环水码" and any(
+    # Detached columns after an empty block in water templates can be copied
+    # fields from another energy type. Preserve them for review only.
+    if name in {"循环水码", "冰水码"} and any(
         not str(headers[index] or "").strip()
         and not str(headers[index + 1] or "").strip()
         for index in range(1, column - 2)

@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { expect, test } from '@playwright/test'
 
-const task = 'a1000000-0000-0000-0000-000000000001'
 test.beforeEach(async ({ page }) => {
   await page.route('**/__dazah_maintenance_status', route => route.fulfill({ json: { phase: 'normal' } }))
   page.on('dialog', dialog => dialog.accept())
@@ -22,15 +21,15 @@ test('native energy settings and mobile forms render in both appearance modes', 
     await expect(page.getByRole('button', { name: '保存机器人配置', exact: true })).toBeVisible()
   }
   await page.setViewportSize({ width: 390, height: 844 })
-  await page.goto(`/energy/entry?task=${task}&source=feishu`, { waitUntil: 'domcontentloaded' })
-  const mobileInput = page.getByRole('spinbutton', { name: '101车间水表本次填写' })
+  await page.goto('/energy/reports?year=2026&month=7&dataset=饮用水码', { waitUntil: 'domcontentloaded' })
+  const cell = page.locator('[data-grid-row="0"][data-grid-column="1"]')
+  await expect(cell).toHaveAttribute('aria-readonly', 'false')
+  await cell.dblclick()
+  const mobileInput = page.getByRole('spinbutton', { name: '单元格数值' })
   await expect(mobileInput).toBeVisible()
-  const bounds = await mobileInput.boundingBox()
-  expect(bounds?.width).toBeGreaterThanOrEqual(150)
-  expect((bounds?.x ?? 0) + (bounds?.width ?? 0)).toBeLessThanOrEqual(390)
-  await expect(page.getByRole('complementary', { name: '能源管理侧边栏' })).toBeHidden()
-  await expect(page.getByRole('button', { name: '保存草稿', exact: true })).toBeVisible()
+  await expect(mobileInput).toBeEnabled()
   await mobileInput.fill('112.5')
-  await page.getByRole('button', { name: '保存草稿', exact: true }).click()
-  await expect(page.getByText('草稿已保存').first()).toBeVisible()
+  await mobileInput.press('Enter')
+  await page.getByRole('button', { name: '撤销', exact: true }).click()
+  await expect(mobileInput).toHaveCount(0)
 })

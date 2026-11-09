@@ -1,6 +1,7 @@
 # Server Component 读取示例
 
-`page.tsx` 默认在服务端读取数据并组装页面。以下以当前生产批次接口说明路径、
+`page.tsx` 默认作为 Server Component 按需读取数据并组装页面；既有客户端
+React Query 已负责读取时，不要求为满足示例额外发起相同请求。以下以生产批次接口说明路径、
 认证和缓存边界；实际响应类型从 `src/types/generated/schema.ts` 的对应 operation
 导入，并检查后端统一响应中的业务状态。复杂交互放到模块 Client Component。
 
@@ -24,6 +25,8 @@ if (payload.code !== 200) throw new Error(payload.message)
 ```
 
 `serverApiUrl()` 会加 `/api/v1` 前缀；不要手拼主机、端口，也不要漏掉 API
-前缀。只有用到 React 客户端 hooks、事件处理器、浏览器 API 或客户端状态时
-才为对应组件加 `'use client'`，不因为表格组件需要交互就把整页改为 Client
-Component。
+前缀。需要 React 客户端 hooks、事件处理器、浏览器 API 或客户端状态的部分
+放在客户端边界内，只在边界入口声明 `'use client'`，已在该边界内的后代不必
+重复添加。不要因为表格组件需要交互就把整页改为 Client Component。带动态
+参数的页面按当前 Next.js 异步 `params`/`searchParams` API 读取；该片段未演示
+这些入参，不应据此照搬旧版同步访问。
