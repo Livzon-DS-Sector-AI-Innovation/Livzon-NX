@@ -47,7 +47,7 @@ def test_merged_ledger_keeps_entry_and_query_permissions_separate() -> None:
     report = get_page_definition("energy:reports")
     assert entry is not None and report is not None
     assert entry.page_name == "原始数据填写"
-    assert report.page_name == "能源台账"
+    assert report.page_name == "能源报表"
     assert entry.route_path == "/energy/entry"
     assert report.route_path == "/energy/reports"
     write = api_binding_for_route("PUT", "/api/v1/energy/input-readings")

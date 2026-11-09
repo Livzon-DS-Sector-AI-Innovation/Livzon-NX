@@ -10,7 +10,7 @@ test('workbook distinguishes missing, not applicable and zero in both appearance
     rows: [
       { date: '2028-01-01', cells: { '5': { value: null, status: 'missing_dependency' } } },
       { date: '2028-01-02', cells: { '5': { value: null, status: 'not_applicable' } } },
-      { date: '2028-01-03', cells: { '5': { value: '0', status: 'complete', provenance: { calculation_policy: 'same-day-formulas-v1', formula: '分子 / 分母', reference: { reported_value: '999' } } } } },
+      { date: '2028-01-03', cells: { '5': { value: '0', status: 'complete', provenance: { calculation_policy: 'same-day-formulas-v2-source-review', formula: '分子 / 分母', reference: { reported_value: '999' } } } } },
     ],
   } } }))
   const errors: string[] = []
@@ -21,10 +21,11 @@ test('workbook distinguishes missing, not applicable and zero in both appearance
     await expect(page.locator('html')).toHaveAttribute('data-theme', appearance)
     await expect(page.getByRole('row').filter({ hasText: '2028-01-01' }).locator('td').nth(1)).toHaveText('待补数')
     await expect(page.getByRole('row').filter({ hasText: '2028-01-02' }).locator('td').nth(1)).toHaveText('不适用')
-    await expect(page.getByRole('row').filter({ hasText: '2028-01-03' }).locator('td').nth(1)).toHaveText('0')
-    await page.getByRole('row').filter({ hasText: '2028-01-03' }).locator('u').hover()
-    await expect(page.getByRole('tooltip')).toContainText('系统公式：分子 / 分母')
-    await expect(page.getByRole('tooltip')).toContainText('参考表手填值：999（仅留痕，不参与计算）')
+    const calculatedZero = page.getByRole('row').filter({ hasText: '2028-01-03' }).locator('td').nth(1)
+    await expect(calculatedZero).toHaveText('0')
+    await calculatedZero.hover()
+    await expect(calculatedZero.locator('u')).toHaveCount(0)
+    await expect(page.getByRole('tooltip')).toHaveCount(0)
     await page.mouse.move(0, 0)
     await page.waitForTimeout(1200)
     await page.screenshot({ path: test.info().outputPath(`workbook-${appearance}.png`), fullPage: true, animations: 'disabled' })

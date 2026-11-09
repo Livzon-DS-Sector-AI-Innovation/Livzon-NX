@@ -552,11 +552,19 @@ async def test_module_integration_result_uses_current_catalog(db_session, monkey
         await db.flush()
         service = page_permissions.PagePermissionService()
         gaps = ["接口绑定缺失"]
+        seen_catalogs: list[page_permissions.IntegrationCatalog] = []
+
+        def inspect_gaps(
+            _db: AsyncSession,
+            *,
+            module_code: str,
+            catalog: page_permissions.IntegrationCatalog,
+        ) -> list[str]:
+            seen_catalogs.append(catalog)
+            return gaps if module_code == "hr" else []
+
         monkeypatch.setattr(
-            service, "integration_gaps",
-            AsyncMock(
-                side_effect=lambda db, module_code: gaps if module_code == "hr" else []
-            ),
+            service, "integration_gaps", AsyncMock(side_effect=inspect_gaps)
         )
         monkeypatch.setattr(rbac_api, "PagePermissionService", lambda: service)
         app = application(lambda: db, lambda: actor, monkeypatch)
@@ -570,6 +578,9 @@ async def test_module_integration_result_uses_current_catalog(db_session, monkey
                 item for item in response.json()["data"] if item["module_code"] == "hr"
             )
             assert hr == {"module_code": "hr", "passed": False, "catalog_gaps": gaps}
+            first_catalog = seen_catalogs[0]
+            assert all(catalog is first_catalog for catalog in seen_catalogs)
+            seen_catalogs.clear()
             gaps.clear()
             response = await client.get(url)
             assert response.status_code == 200, response.text
@@ -578,4 +589,7 @@ async def test_module_integration_result_uses_current_catalog(db_session, monkey
             )
             assert hr["passed"] is True
             assert hr["catalog_gaps"] == []
+            assert seen_catalogs and all(
+                catalog is not first_catalog for catalog in seen_catalogs
+            )
             assert (await client.post(url + "/hr/publish", json={})).status_code == 404
