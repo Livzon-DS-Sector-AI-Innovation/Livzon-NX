@@ -207,6 +207,18 @@
         "title": "AIWorkflowConfigUpdate",
         "type": "object"
       },
+      "AcceptPermitInput": {
+        "description": "完工验收（临时用电拆线确认字段随 type_data 提交）。",
+        "properties": {
+          "type_data": {
+            "additionalProperties": true,
+            "title": "Type Data",
+            "type": "object"
+          }
+        },
+        "title": "AcceptPermitInput",
+        "type": "object"
+      },
       "AccidentCreate": {
         "description": "创建事故",
         "properties": {
@@ -1034,6 +1046,49 @@
           "sub_tank_id"
         ],
         "title": "AcidStepCreate",
+        "type": "object"
+      },
+      "ActionResponse": {
+        "description": "通用操作响应（提交/审批/驳回/验票/验收/关联等）。",
+        "properties": {
+          "current_node_seq": {
+            "default": 0,
+            "title": "Current Node Seq",
+            "type": "integer"
+          },
+          "message": {
+            "default": "",
+            "title": "Message",
+            "type": "string"
+          },
+          "permit_id": {
+            "format": "uuid",
+            "title": "Permit Id",
+            "type": "string"
+          },
+          "permit_no": {
+            "title": "Permit No",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "warnings": {
+            "description": "提交时的人员证件软校验提示（仅提交动作返回）",
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "permit_id",
+          "permit_no",
+          "status"
+        ],
+        "title": "ActionResponse",
         "type": "object"
       },
       "AgencySummary": {
@@ -3769,6 +3824,40 @@
         "title": "ApiResponseEnvelope",
         "type": "object"
       },
+      "ApiResponseEnvelope_ActionResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ActionResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[ActionResponse]",
+        "type": "object"
+      },
       "ApiResponseEnvelope_AgentToolCatalogEntry_": {
         "properties": {
           "code": {
@@ -3801,6 +3890,40 @@
           "data"
         ],
         "title": "ApiResponseEnvelope[AgentToolCatalogEntry]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_ApproverConfigListResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ApproverConfigListResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[ApproverConfigListResponse]",
         "type": "object"
       },
       "ApiResponseEnvelope_AttachmentReviewOut_": {
@@ -4279,6 +4402,108 @@
         "title": "ApiResponseEnvelope[CertificateEntryResponse]",
         "type": "object"
       },
+      "ApiResponseEnvelope_CertificateExpirySummaryResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/CertificateExpirySummaryResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[CertificateExpirySummaryResponse]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_CertificateImportPreview_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/CertificateImportPreview"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[CertificateImportPreview]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_CertificateImportResult_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/CertificateImportResult"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[CertificateImportResult]",
+        "type": "object"
+      },
       "ApiResponseEnvelope_CertificateReminderSettingResponse_": {
         "properties": {
           "code": {
@@ -4379,6 +4604,74 @@
           "data"
         ],
         "title": "ApiResponseEnvelope[CertificateSheetDetail]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_CertificateStatusOptionsResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/CertificateStatusOptionsResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[CertificateStatusOptionsResponse]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_CertificateUploadResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/CertificateUploadResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[CertificateUploadResponse]",
         "type": "object"
       },
       "ApiResponseEnvelope_CertificateWorkbookDetail_": {
@@ -6283,6 +6576,40 @@
           "data"
         ],
         "title": "ApiResponseEnvelope[FireInspectionWritebackInitResponse]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_GasAnalysisItem_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/GasAnalysisItem"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[GasAnalysisItem]",
         "type": "object"
       },
       "ApiResponseEnvelope_HazardousChemicalListResponse_": {
@@ -8564,6 +8891,74 @@
         "title": "ApiResponseEnvelope[SafetyTargetStatsResponse]",
         "type": "object"
       },
+      "ApiResponseEnvelope_SpecialWorkCertificateListResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/SpecialWorkCertificateListResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[SpecialWorkCertificateListResponse]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_SpecialWorkCertificateResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/SpecialWorkCertificateResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[SpecialWorkCertificateResponse]",
+        "type": "object"
+      },
       "ApiResponseEnvelope_SupplierOut_": {
         "properties": {
           "code": {
@@ -8868,6 +9263,210 @@
           "data"
         ],
         "title": "ApiResponseEnvelope[ValidationStatistics]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_WorkPermitAttachmentItem_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/WorkPermitAttachmentItem"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[WorkPermitAttachmentItem]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_WorkPermitDetailResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/WorkPermitDetailResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[WorkPermitDetailResponse]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_WorkPermitListResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/WorkPermitListResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[WorkPermitListResponse]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_WorkPermitMetaResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/WorkPermitMetaResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[WorkPermitMetaResponse]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_WorkPermitSettingsResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/WorkPermitSettingsResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[WorkPermitSettingsResponse]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_WorkPermitStatsResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/WorkPermitStatsResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[WorkPermitStatsResponse]",
         "type": "object"
       },
       "ApiResponseEnvelope_dict_str__Any__": {
@@ -10881,6 +11480,127 @@
           }
         },
         "title": "ApproveBody",
+        "type": "object"
+      },
+      "ApproverConfigItem": {
+        "properties": {
+          "approver_user_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approver User Id"
+          },
+          "approver_user_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approver User Name"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "node_key": {
+            "title": "Node Key",
+            "type": "string"
+          },
+          "node_name": {
+            "title": "Node Name",
+            "type": "string"
+          },
+          "permit_type": {
+            "title": "Permit Type",
+            "type": "string"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark"
+          }
+        },
+        "required": [
+          "id",
+          "permit_type",
+          "node_key",
+          "node_name"
+        ],
+        "title": "ApproverConfigItem",
+        "type": "object"
+      },
+      "ApproverConfigListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ApproverConfigItem"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ApproverConfigListResponse",
+        "type": "object"
+      },
+      "ApproverConfigUpsertInput": {
+        "properties": {
+          "approver_user_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approver User Id"
+          },
+          "node_key": {
+            "maxLength": 64,
+            "title": "Node Key",
+            "type": "string"
+          },
+          "permit_type": {
+            "$ref": "#/components/schemas/app__modules__safety__schemas__enums__OperationType"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark"
+          }
+        },
+        "required": [
+          "permit_type",
+          "node_key"
+        ],
+        "title": "ApproverConfigUpsertInput",
         "type": "object"
       },
       "AssignUserRoleRequest": {
@@ -14788,6 +15508,26 @@
         "title": "Body_import_training_ledger_by_dept_api_v1_hr_training_ledgers_import_by_dept_post",
         "type": "object"
       },
+      "Body_import_work_certificates_api_v1_safety_work_certificates_import_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          },
+          "sheets": {
+            "default": "",
+            "description": "要导入的子表名 JSON 数组，空则导入全部可识别子表",
+            "title": "Sheets",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_import_work_certificates_api_v1_safety_work_certificates_import_post",
+        "type": "object"
+      },
       "Body_manual_revision_complete_api_v1_safety_revisions__revision_id__manual_complete_post": {
         "properties": {
           "file": {
@@ -14800,6 +15540,20 @@
           "file"
         ],
         "title": "Body_manual_revision_complete_api_v1_safety_revisions__revision_id__manual_complete_post",
+        "type": "object"
+      },
+      "Body_parse_certificate_import_api_v1_safety_work_certificates_import_parse_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_parse_certificate_import_api_v1_safety_work_certificates_import_parse_post",
         "type": "object"
       },
       "Body_parse_coa_file_api_v1_registration_reference_standards_parse_coa_post": {
@@ -15011,6 +15765,20 @@
           "file"
         ],
         "title": "Body_upload_attachment_api_v1_registration_knowledge_articles__article_id__attachments_post",
+        "type": "object"
+      },
+      "Body_upload_certificate_file_api_v1_safety_work_certificates__certificate_id__files_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_certificate_file_api_v1_safety_work_certificates__certificate_id__files_post",
         "type": "object"
       },
       "Body_upload_deviation_ai_session_attachment_api_v1_quality_ai_deviations__deviation_id__session_attachments_post": {
@@ -15381,6 +16149,20 @@
           "files"
         ],
         "title": "Body_upload_work_order_images_api_v1_equipment_maintenance_work_orders__work_order_id__images_post",
+        "type": "object"
+      },
+      "Body_upload_work_permit_attachment_api_v1_safety_work_permits__permit_id__attachments_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_work_permit_attachment_api_v1_safety_work_permits__permit_id__attachments_post",
         "type": "object"
       },
       "Body_upload_workflow_attachment_api_v1_safety_ai_workflow_configs_attachments_upload_post": {
@@ -19285,6 +20067,33 @@
         "title": "CertificateEntryUpdate",
         "type": "object"
       },
+      "CertificateExpirySummaryResponse": {
+        "description": "证件到期统计卡（列表页顶部）。",
+        "properties": {
+          "expired": {
+            "default": 0,
+            "title": "Expired",
+            "type": "integer"
+          },
+          "expiring_in_30d": {
+            "default": 0,
+            "title": "Expiring In 30D",
+            "type": "integer"
+          },
+          "total": {
+            "default": 0,
+            "title": "Total",
+            "type": "integer"
+          },
+          "valid": {
+            "default": 0,
+            "title": "Valid",
+            "type": "integer"
+          }
+        },
+        "title": "CertificateExpirySummaryResponse",
+        "type": "object"
+      },
       "CertificateExtractedFields": {
         "description": "AI 从证书中提取的原始字段（值可能为空，供人工核对）。",
         "properties": {
@@ -19386,6 +20195,261 @@
           }
         },
         "title": "CertificateExtractedFields",
+        "type": "object"
+      },
+      "CertificateExtractionSuggestion": {
+        "description": "证件附件 AI 识别建议值（人工确认后才写入，不直接落库）。",
+        "properties": {
+          "certificate_category": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Certificate Category"
+          },
+          "certificate_category_label": {
+            "default": "",
+            "maxLength": 64,
+            "title": "Certificate Category Label",
+            "type": "string"
+          },
+          "certificate_no": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Certificate No"
+          },
+          "expiry_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expiry Date"
+          },
+          "issue_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issue Date"
+          },
+          "issuing_authority": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issuing Authority"
+          },
+          "person_name": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Person Name"
+          },
+          "qualification_scope": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qualification Scope"
+          }
+        },
+        "title": "CertificateExtractionSuggestion",
+        "type": "object"
+      },
+      "CertificateFileItem": {
+        "properties": {
+          "content_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Type"
+          },
+          "file_name": {
+            "title": "File Name",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "file_name",
+          "size_bytes"
+        ],
+        "title": "CertificateFileItem",
+        "type": "object"
+      },
+      "CertificateImportPreview": {
+        "properties": {
+          "sheets": {
+            "items": {
+              "$ref": "#/components/schemas/CertificateImportSheetInfo"
+            },
+            "title": "Sheets",
+            "type": "array"
+          },
+          "skipped_sheets": {
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "title": "Skipped Sheets",
+            "type": "array"
+          }
+        },
+        "title": "CertificateImportPreview",
+        "type": "object"
+      },
+      "CertificateImportResult": {
+        "properties": {
+          "archive_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archive Path"
+          },
+          "created": {
+            "default": 0,
+            "title": "Created",
+            "type": "integer"
+          },
+          "row_errors": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Row Errors",
+            "type": "array"
+          },
+          "skipped_sheets": {
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "title": "Skipped Sheets",
+            "type": "array"
+          },
+          "total_parsed": {
+            "default": 0,
+            "title": "Total Parsed",
+            "type": "integer"
+          },
+          "unchanged": {
+            "default": 0,
+            "title": "Unchanged",
+            "type": "integer"
+          },
+          "updated": {
+            "default": 0,
+            "title": "Updated",
+            "type": "integer"
+          }
+        },
+        "title": "CertificateImportResult",
+        "type": "object"
+      },
+      "CertificateImportSheetInfo": {
+        "description": "导入预览：单个子表的解析结果。",
+        "properties": {
+          "certificate_category": {
+            "title": "Certificate Category",
+            "type": "string"
+          },
+          "certificate_category_label": {
+            "default": "",
+            "title": "Certificate Category Label",
+            "type": "string"
+          },
+          "errors": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "row_count": {
+            "default": 0,
+            "title": "Row Count",
+            "type": "integer"
+          },
+          "sample": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Sample",
+            "type": "array"
+          },
+          "sheet": {
+            "title": "Sheet",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sheet",
+          "certificate_category"
+        ],
+        "title": "CertificateImportSheetInfo",
         "type": "object"
       },
       "CertificateRecordSummary": {
@@ -20103,6 +21167,67 @@
           "total_pages"
         ],
         "title": "CertificateSheetSummary",
+        "type": "object"
+      },
+      "CertificateStatusOptionsResponse": {
+        "properties": {
+          "categories": {
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "title": "Categories",
+            "type": "array"
+          }
+        },
+        "required": [
+          "categories"
+        ],
+        "title": "CertificateStatusOptionsResponse",
+        "type": "object"
+      },
+      "CertificateUploadResponse": {
+        "description": "上传证件附件成功后的响应：附件 + AI 识别建议。",
+        "properties": {
+          "ai_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "AI 识别未执行/失败的原因（附件已保存成功）",
+            "title": "Ai Error"
+          },
+          "ai_suggestion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CertificateExtractionSuggestion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "file": {
+            "$ref": "#/components/schemas/CertificateFileItem"
+          },
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/CertificateFileItem"
+            },
+            "title": "Files",
+            "type": "array"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "CertificateUploadResponse",
         "type": "object"
       },
       "CertificateWorkbookDetail": {
@@ -45822,6 +46947,212 @@
         "title": "FireWorkshopCoverage",
         "type": "object"
       },
+      "GasAnalysisCreate": {
+        "properties": {
+          "analysis_point": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Analysis Point"
+          },
+          "analyst_name": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Analyst Name"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/GasAnalysisItemInput"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "oxygen_value": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oxygen Value"
+          },
+          "phase": {
+            "default": "pre_work",
+            "pattern": "^(pre_work|on_duty)$",
+            "title": "Phase",
+            "type": "string"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark"
+          },
+          "sampled_at": {
+            "format": "date-time",
+            "title": "Sampled At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sampled_at"
+        ],
+        "title": "GasAnalysisCreate",
+        "type": "object"
+      },
+      "GasAnalysisItem": {
+        "properties": {
+          "analysis_point": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Analysis Point"
+          },
+          "analyst_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Analyst Name"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "oxygen_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oxygen Value"
+          },
+          "phase": {
+            "title": "Phase",
+            "type": "string"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark"
+          },
+          "sampled_at": {
+            "format": "date-time",
+            "title": "Sampled At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "phase",
+          "sampled_at"
+        ],
+        "title": "GasAnalysisItem",
+        "type": "object"
+      },
+      "GasAnalysisItemInput": {
+        "properties": {
+          "name": {
+            "description": "项目名称",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "standard": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "合格标准",
+            "title": "Standard"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "分析结果",
+            "title": "Value"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "GasAnalysisItemInput",
+        "type": "object"
+      },
       "GeneralAuditLogDetail": {
         "properties": {
           "action": {
@@ -56891,6 +58222,33 @@
         "title": "NewEmployeeTrainingStartRequest",
         "type": "object"
       },
+      "NodeAssignmentInput": {
+        "description": "提交时为节点改派审批人（缺省用默认配置）。",
+        "properties": {
+          "approver_user_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approver User Id"
+          },
+          "node_key": {
+            "maxLength": 64,
+            "title": "Node Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "node_key"
+        ],
+        "title": "NodeAssignmentInput",
+        "type": "object"
+      },
       "NotificationResponse": {
         "additionalProperties": false,
         "properties": {
@@ -63520,6 +64878,280 @@
           "path"
         ],
         "title": "PermissionSimulateRequest",
+        "type": "object"
+      },
+      "PermitMeasureInput": {
+        "description": "安全措施勾选（key 对应票面措施模板）。",
+        "properties": {
+          "fills": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Fills",
+            "type": "object"
+          },
+          "key": {
+            "maxLength": 64,
+            "title": "Key",
+            "type": "string"
+          },
+          "status": {
+            "pattern": "^(yes|not_applicable)$",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "status"
+        ],
+        "title": "PermitMeasureInput",
+        "type": "object"
+      },
+      "PermitMeasureItem": {
+        "properties": {
+          "fills": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Fills",
+            "type": "object"
+          },
+          "key": {
+            "maxLength": 64,
+            "title": "Key",
+            "type": "string"
+          },
+          "status": {
+            "pattern": "^(yes|not_applicable)$",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "status"
+        ],
+        "title": "PermitMeasureItem",
+        "type": "object"
+      },
+      "PermitNodeActionInput": {
+        "properties": {
+          "opinion": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opinion"
+          }
+        },
+        "title": "PermitNodeActionInput",
+        "type": "object"
+      },
+      "PermitPersonInput": {
+        "description": "作业相关人员（可携带证件引用，保存证件快照）。",
+        "properties": {
+          "certificate_category": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Certificate Category"
+          },
+          "certificate_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "关联证件（special_work_certificates）",
+            "title": "Certificate Id"
+          },
+          "certificate_no": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Certificate No"
+          },
+          "name": {
+            "description": "姓名",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "role": {
+            "description": "角色（模板 person_roles）",
+            "maxLength": 32,
+            "title": "Role",
+            "type": "string"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "平台账号",
+            "title": "User Id"
+          }
+        },
+        "required": [
+          "role",
+          "name"
+        ],
+        "title": "PermitPersonInput",
+        "type": "object"
+      },
+      "PermitPersonItem": {
+        "description": "含证件有效性提示（service 计算后附上）。",
+        "properties": {
+          "certificate_category": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Certificate Category"
+          },
+          "certificate_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "关联证件（special_work_certificates）",
+            "title": "Certificate Id"
+          },
+          "certificate_no": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Certificate No"
+          },
+          "certificate_status": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Certificate Status"
+          },
+          "certificate_valid": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "证件有效性（None=未关联证件）",
+            "title": "Certificate Valid"
+          },
+          "name": {
+            "description": "姓名",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "role": {
+            "description": "角色（模板 person_roles）",
+            "maxLength": 32,
+            "title": "Role",
+            "type": "string"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "平台账号",
+            "title": "User Id"
+          }
+        },
+        "required": [
+          "role",
+          "name"
+        ],
+        "title": "PermitPersonItem",
+        "type": "object"
+      },
+      "PermitRelationItem": {
+        "properties": {
+          "related_permit_id": {
+            "format": "uuid",
+            "title": "Related Permit Id",
+            "type": "string"
+          },
+          "related_permit_no": {
+            "title": "Related Permit No",
+            "type": "string"
+          },
+          "related_permit_status": {
+            "title": "Related Permit Status",
+            "type": "string"
+          },
+          "related_permit_type": {
+            "title": "Related Permit Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "related_permit_id",
+          "related_permit_no",
+          "related_permit_type",
+          "related_permit_status"
+        ],
+        "title": "PermitRelationItem",
         "type": "object"
       },
       "PermitStatus": {
@@ -75703,6 +77335,32 @@
             ],
             "title": "Bitable Hazard Table Id"
           },
+          "cert_expiry_notify_chat_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Cert Expiry Notify Chat Ids",
+            "type": "array"
+          },
+          "cert_expiry_notify_enabled": {
+            "default": false,
+            "title": "Cert Expiry Notify Enabled",
+            "type": "boolean"
+          },
+          "cert_expiry_notify_milestones": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Cert Expiry Notify Milestones",
+            "type": "array"
+          },
+          "cert_expiry_notify_user_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Cert Expiry Notify User Ids",
+            "type": "array"
+          },
           "fire_expiry_notify_chat_ids": {
             "items": {
               "type": "string"
@@ -75849,6 +77507,25 @@
               }
             ],
             "title": "Last Tested At"
+          },
+          "permit_notify_chat_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Permit Notify Chat Ids",
+            "type": "array"
+          },
+          "permit_notify_enabled": {
+            "default": false,
+            "title": "Permit Notify Enabled",
+            "type": "boolean"
+          },
+          "permit_notify_user_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Permit Notify User Ids",
+            "type": "array"
           },
           "radar_notify_chat_ids": {
             "items": {
@@ -81649,6 +83326,442 @@
           }
         },
         "title": "SpecialOperationReportUpdate",
+        "type": "object"
+      },
+      "SpecialWorkCertificateCreate": {
+        "properties": {
+          "certificate_category": {
+            "description": "证件类别（字典值）",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Certificate Category",
+            "type": "string"
+          },
+          "certificate_no": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Certificate No"
+          },
+          "department": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Department"
+          },
+          "expiry_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expiry Date"
+          },
+          "identity_user_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "平台账号",
+            "title": "Identity User Id"
+          },
+          "issue_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issue Date"
+          },
+          "issuing_authority": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issuing Authority"
+          },
+          "person_name": {
+            "description": "持证人姓名",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Person Name",
+            "type": "string"
+          },
+          "qualification_scope": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qualification Scope"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark"
+          }
+        },
+        "required": [
+          "person_name",
+          "certificate_category"
+        ],
+        "title": "SpecialWorkCertificateCreate",
+        "type": "object"
+      },
+      "SpecialWorkCertificateListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SpecialWorkCertificateResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "SpecialWorkCertificateListResponse",
+        "type": "object"
+      },
+      "SpecialWorkCertificateResponse": {
+        "properties": {
+          "certificate_category": {
+            "title": "Certificate Category",
+            "type": "string"
+          },
+          "certificate_category_label": {
+            "default": "",
+            "description": "证件类别中文名（service 填充）",
+            "title": "Certificate Category Label",
+            "type": "string"
+          },
+          "certificate_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Certificate No"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "days_to_expiry": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "距到期天数（负数=已过期）",
+            "title": "Days To Expiry"
+          },
+          "department": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Department"
+          },
+          "expiry_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expiry Date"
+          },
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/CertificateFileItem"
+            },
+            "title": "Files",
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "identity_user_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Identity User Id"
+          },
+          "issue_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issue Date"
+          },
+          "issuing_authority": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issuing Authority"
+          },
+          "person_name": {
+            "title": "Person Name",
+            "type": "string"
+          },
+          "qualification_scope": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qualification Scope"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "person_name",
+          "certificate_category",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "SpecialWorkCertificateResponse",
+        "type": "object"
+      },
+      "SpecialWorkCertificateUpdate": {
+        "properties": {
+          "certificate_category": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Certificate Category"
+          },
+          "certificate_no": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Certificate No"
+          },
+          "department": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Department"
+          },
+          "expiry_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expiry Date"
+          },
+          "identity_user_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Identity User Id"
+          },
+          "issue_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issue Date"
+          },
+          "issuing_authority": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issuing Authority"
+          },
+          "person_name": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Person Name"
+          },
+          "qualification_scope": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qualification Scope"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark"
+          }
+        },
+        "title": "SpecialWorkCertificateUpdate",
         "type": "object"
       },
       "StartReturnRecallProcessingRequest": {
@@ -91140,6 +93253,32 @@
             ],
             "title": "Bitable Hazard Table Id"
           },
+          "cert_expiry_notify_chat_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Cert Expiry Notify Chat Ids",
+            "type": "array"
+          },
+          "cert_expiry_notify_enabled": {
+            "default": false,
+            "title": "Cert Expiry Notify Enabled",
+            "type": "boolean"
+          },
+          "cert_expiry_notify_milestones": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Cert Expiry Notify Milestones",
+            "type": "array"
+          },
+          "cert_expiry_notify_user_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Cert Expiry Notify User Ids",
+            "type": "array"
+          },
           "fire_expiry_notify_chat_ids": {
             "items": {
               "type": "string"
@@ -91220,6 +93359,25 @@
               }
             ],
             "title": "Knowledge Table Id"
+          },
+          "permit_notify_chat_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Permit Notify Chat Ids",
+            "type": "array"
+          },
+          "permit_notify_enabled": {
+            "default": false,
+            "title": "Permit Notify Enabled",
+            "type": "boolean"
+          },
+          "permit_notify_user_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Permit Notify User Ids",
+            "type": "array"
           },
           "radar_notify_chat_ids": {
             "items": {
@@ -97994,6 +100152,1177 @@
           "result"
         ],
         "title": "WorkOrderVerify",
+        "type": "object"
+      },
+      "WorkPermitAttachmentItem": {
+        "properties": {
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "content_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Type"
+          },
+          "file_name": {
+            "title": "File Name",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "category",
+          "file_name",
+          "size_bytes"
+        ],
+        "title": "WorkPermitAttachmentItem",
+        "type": "object"
+      },
+      "WorkPermitCreate": {
+        "properties": {
+          "apply_department": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Apply Department"
+          },
+          "apply_time": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Apply Time"
+          },
+          "permit_level": {
+            "default": "none",
+            "maxLength": 16,
+            "title": "Permit Level",
+            "type": "string"
+          },
+          "permit_type": {
+            "$ref": "#/components/schemas/app__modules__safety__schemas__enums__OperationType"
+          },
+          "persons": {
+            "items": {
+              "$ref": "#/components/schemas/PermitPersonInput"
+            },
+            "title": "Persons",
+            "type": "array"
+          },
+          "planned_end_time": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planned End Time"
+          },
+          "planned_start_time": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planned Start Time"
+          },
+          "related_legacy_no_text": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Related Legacy No Text"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark"
+          },
+          "risk_identifications": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Risk Identifications",
+            "type": "array"
+          },
+          "safety_measures": {
+            "items": {
+              "$ref": "#/components/schemas/PermitMeasureInput"
+            },
+            "title": "Safety Measures",
+            "type": "array"
+          },
+          "type_data": {
+            "additionalProperties": true,
+            "title": "Type Data",
+            "type": "object"
+          },
+          "work_description": {
+            "anyOf": [
+              {
+                "maxLength": 8000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Work Description"
+          },
+          "work_location": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Work Location"
+          },
+          "work_unit": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Work Unit"
+          }
+        },
+        "required": [
+          "permit_type"
+        ],
+        "title": "WorkPermitCreate",
+        "type": "object"
+      },
+      "WorkPermitDetailResponse": {
+        "description": "详情：附审批节点时间线、气体分析、关联票与附件。",
+        "properties": {
+          "actual_end_time": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual End Time"
+          },
+          "actual_start_time": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actual Start Time"
+          },
+          "apply_department": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Apply Department"
+          },
+          "apply_time": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Apply Time"
+          },
+          "approval_round": {
+            "title": "Approval Round",
+            "type": "integer"
+          },
+          "attachments": {
+            "items": {
+              "$ref": "#/components/schemas/WorkPermitAttachmentItem"
+            },
+            "title": "Attachments",
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "current_node_seq": {
+            "title": "Current Node Seq",
+            "type": "integer"
+          },
+          "gas_analyses": {
+            "items": {
+              "$ref": "#/components/schemas/GasAnalysisItem"
+            },
+            "title": "Gas Analyses",
+            "type": "array"
+          },
+          "gas_overdue": {
+            "default": false,
+            "description": "复检是否已超期",
+            "title": "Gas Overdue",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "next_gas_due_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "下次气体复检到期时间（无周期复检要求为 None）",
+            "title": "Next Gas Due At"
+          },
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/WorkPermitNodeItem"
+            },
+            "title": "Nodes",
+            "type": "array"
+          },
+          "permit_level": {
+            "title": "Permit Level",
+            "type": "string"
+          },
+          "permit_no": {
+            "title": "Permit No",
+            "type": "string"
+          },
+          "permit_type": {
+            "title": "Permit Type",
+            "type": "string"
+          },
+          "persons": {
+            "items": {
+              "$ref": "#/components/schemas/PermitPersonItem"
+            },
+            "title": "Persons",
+            "type": "array"
+          },
+          "planned_end_time": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planned End Time"
+          },
+          "planned_start_time": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planned Start Time"
+          },
+          "reject_opinion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reject Opinion"
+          },
+          "related_legacy_no_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Related Legacy No Text"
+          },
+          "relations": {
+            "items": {
+              "$ref": "#/components/schemas/PermitRelationItem"
+            },
+            "title": "Relations",
+            "type": "array"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark"
+          },
+          "risk_identifications": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Risk Identifications",
+            "type": "array"
+          },
+          "safety_measures": {
+            "items": {
+              "$ref": "#/components/schemas/PermitMeasureItem"
+            },
+            "title": "Safety Measures",
+            "type": "array"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "type_data": {
+            "additionalProperties": true,
+            "title": "Type Data",
+            "type": "object"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "work_description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Work Description"
+          },
+          "work_location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Work Location"
+          },
+          "work_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Work Unit"
+          }
+        },
+        "required": [
+          "id",
+          "permit_no",
+          "permit_type",
+          "permit_level",
+          "status",
+          "current_node_seq",
+          "approval_round",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "WorkPermitDetailResponse",
+        "type": "object"
+      },
+      "WorkPermitListItem": {
+        "properties": {
+          "apply_department": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Apply Department"
+          },
+          "apply_time": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Apply Time"
+          },
+          "approval_round": {
+            "title": "Approval Round",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "current_node_seq": {
+            "title": "Current Node Seq",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "permit_level": {
+            "title": "Permit Level",
+            "type": "string"
+          },
+          "permit_no": {
+            "title": "Permit No",
+            "type": "string"
+          },
+          "permit_type": {
+            "title": "Permit Type",
+            "type": "string"
+          },
+          "planned_end_time": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planned End Time"
+          },
+          "planned_start_time": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planned Start Time"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "work_description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Work Description"
+          },
+          "work_location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Work Location"
+          },
+          "work_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Work Unit"
+          }
+        },
+        "required": [
+          "id",
+          "permit_no",
+          "permit_type",
+          "permit_level",
+          "status",
+          "approval_round",
+          "current_node_seq",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "WorkPermitListItem",
+        "type": "object"
+      },
+      "WorkPermitListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/WorkPermitListItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "WorkPermitListResponse",
+        "type": "object"
+      },
+      "WorkPermitMetaResponse": {
+        "description": "前端渲染表单/详情所需的模板元数据。",
+        "properties": {
+          "certificate_categories": {
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "title": "Certificate Categories",
+            "type": "array"
+          },
+          "gas_cycle_minutes": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "作业期间复检间隔（分钟）",
+            "title": "Gas Cycle Minutes",
+            "type": "object"
+          },
+          "gas_types": {
+            "description": "需要气体分析的票种",
+            "items": {
+              "type": "string"
+            },
+            "title": "Gas Types",
+            "type": "array"
+          },
+          "level_options": {
+            "additionalProperties": {
+              "items": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "title": "Level Options",
+            "type": "object"
+          },
+          "measures": {
+            "additionalProperties": {
+              "items": {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "title": "Measures",
+            "type": "object"
+          },
+          "nodes": {
+            "additionalProperties": {
+              "items": {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "description": "票种节点目录（key/name/kind/levels），提交审批指派用",
+            "title": "Nodes",
+            "type": "object"
+          },
+          "permit_types": {
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "title": "Permit Types",
+            "type": "array"
+          },
+          "person_roles": {
+            "additionalProperties": {
+              "items": {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "title": "Person Roles",
+            "type": "object"
+          },
+          "risk_identification_options": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Risk Identification Options",
+            "type": "array"
+          },
+          "type_fields": {
+            "additionalProperties": {
+              "items": {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "title": "Type Fields",
+            "type": "object"
+          }
+        },
+        "required": [
+          "permit_types",
+          "level_options",
+          "person_roles",
+          "measures",
+          "type_fields",
+          "risk_identification_options",
+          "certificate_categories"
+        ],
+        "title": "WorkPermitMetaResponse",
+        "type": "object"
+      },
+      "WorkPermitNodeItem": {
+        "properties": {
+          "acted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acted At"
+          },
+          "acted_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acted By"
+          },
+          "acted_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acted By Name"
+          },
+          "assigned_approver_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assigned Approver Id"
+          },
+          "assigned_approver_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assigned Approver Name"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "node_key": {
+            "title": "Node Key",
+            "type": "string"
+          },
+          "node_kind": {
+            "title": "Node Kind",
+            "type": "string"
+          },
+          "node_name": {
+            "title": "Node Name",
+            "type": "string"
+          },
+          "opinion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opinion"
+          },
+          "round": {
+            "title": "Round",
+            "type": "integer"
+          },
+          "seq": {
+            "title": "Seq",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "round",
+          "seq",
+          "node_key",
+          "node_name",
+          "node_kind",
+          "status"
+        ],
+        "title": "WorkPermitNodeItem",
+        "type": "object"
+      },
+      "WorkPermitRejectInput": {
+        "properties": {
+          "opinion": {
+            "description": "驳回意见",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Opinion",
+            "type": "string"
+          }
+        },
+        "required": [
+          "opinion"
+        ],
+        "title": "WorkPermitRejectInput",
+        "type": "object"
+      },
+      "WorkPermitRelationInput": {
+        "properties": {
+          "related_permit_id": {
+            "format": "uuid",
+            "title": "Related Permit Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "related_permit_id"
+        ],
+        "title": "WorkPermitRelationInput",
+        "type": "object"
+      },
+      "WorkPermitSettingsResponse": {
+        "description": "作业票运行参数（work_permit_settings 键值子集）。",
+        "properties": {
+          "cert_check_strict": {
+            "default": false,
+            "description": "提交时人员证件校验：False=软提示，True=未通过拦截",
+            "title": "Cert Check Strict",
+            "type": "boolean"
+          }
+        },
+        "title": "WorkPermitSettingsResponse",
+        "type": "object"
+      },
+      "WorkPermitSettingsUpdate": {
+        "properties": {
+          "cert_check_strict": {
+            "title": "Cert Check Strict",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "cert_check_strict"
+        ],
+        "title": "WorkPermitSettingsUpdate",
+        "type": "object"
+      },
+      "WorkPermitStatsResponse": {
+        "description": "列表页统计：按状态计数 + 待我审批数。",
+        "properties": {
+          "active": {
+            "default": 0,
+            "title": "Active",
+            "type": "integer"
+          },
+          "approved": {
+            "default": 0,
+            "title": "Approved",
+            "type": "integer"
+          },
+          "cancelled": {
+            "default": 0,
+            "title": "Cancelled",
+            "type": "integer"
+          },
+          "completed": {
+            "default": 0,
+            "title": "Completed",
+            "type": "integer"
+          },
+          "draft": {
+            "default": 0,
+            "title": "Draft",
+            "type": "integer"
+          },
+          "my_pending_approvals": {
+            "default": 0,
+            "description": "待当前用户审批的节点数",
+            "title": "My Pending Approvals",
+            "type": "integer"
+          },
+          "pending_approval": {
+            "default": 0,
+            "title": "Pending Approval",
+            "type": "integer"
+          },
+          "rejected": {
+            "default": 0,
+            "title": "Rejected",
+            "type": "integer"
+          },
+          "total": {
+            "default": 0,
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "title": "WorkPermitStatsResponse",
+        "type": "object"
+      },
+      "WorkPermitSubmitInput": {
+        "properties": {
+          "assignments": {
+            "items": {
+              "$ref": "#/components/schemas/NodeAssignmentInput"
+            },
+            "title": "Assignments",
+            "type": "array"
+          }
+        },
+        "title": "WorkPermitSubmitInput",
+        "type": "object"
+      },
+      "WorkPermitUpdate": {
+        "description": "草稿/驳回态编辑（字段全部可空，仅提交的非空项生效）。",
+        "properties": {
+          "apply_department": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Apply Department"
+          },
+          "apply_time": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Apply Time"
+          },
+          "permit_level": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Permit Level"
+          },
+          "persons": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/PermitPersonInput"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Persons"
+          },
+          "planned_end_time": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planned End Time"
+          },
+          "planned_start_time": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Planned Start Time"
+          },
+          "related_legacy_no_text": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Related Legacy No Text"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark"
+          },
+          "risk_identifications": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk Identifications"
+          },
+          "safety_measures": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/PermitMeasureInput"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Safety Measures"
+          },
+          "type_data": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type Data"
+          },
+          "work_description": {
+            "anyOf": [
+              {
+                "maxLength": 8000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Work Description"
+          },
+          "work_location": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Work Location"
+          },
+          "work_unit": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Work Unit"
+          }
+        },
+        "title": "WorkPermitUpdate",
         "type": "object"
       },
       "WorkRecordStatusEnum": {
@@ -240811,6 +244140,2680 @@
           }
         },
         "summary": "开始培训",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/work-certificates": {
+      "get": {
+        "operationId": "list_work_certificates_api_v1_safety_work_certificates_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "certificate_category",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Certificate Category"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "keyword",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Keyword"
+            }
+          },
+          {
+            "in": "query",
+            "name": "expiring_days",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 365,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Expiring Days"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_SpecialWorkCertificateListResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "证件分页列表（类别/状态/关键字/到期窗口）",
+        "tags": [
+          "安全管理"
+        ]
+      },
+      "post": {
+        "operationId": "create_work_certificate_api_v1_safety_work_certificates_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpecialWorkCertificateCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_SpecialWorkCertificateResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "创建证件",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/work-certificates/categories": {
+      "get": {
+        "operationId": "list_certificate_categories_api_v1_safety_work_certificates_categories_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_CertificateStatusOptionsResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "证件类别字典",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/work-certificates/expiry-summary": {
+      "get": {
+        "operationId": "get_certificate_expiry_summary_api_v1_safety_work_certificates_expiry_summary_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_CertificateExpirySummaryResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "证件到期统计（总数/有效/30天内到期/已过期）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/work-certificates/import": {
+      "post": {
+        "description": "按子表导入证件：同类别同证件号合并，与库内记录匹配后更新或新建。",
+        "operationId": "import_work_certificates_api_v1_safety_work_certificates_import_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_work_certificates_api_v1_safety_work_certificates_import_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_CertificateImportResult_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "导入持证人员汇总表 Excel 到证件台账",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/work-certificates/import/parse": {
+      "post": {
+        "operationId": "parse_certificate_import_api_v1_safety_work_certificates_import_parse_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_parse_certificate_import_api_v1_safety_work_certificates_import_parse_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_CertificateImportPreview_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "解析持证人员汇总表 Excel（预览子表与行数，不落库）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/work-certificates/{certificate_id}": {
+      "delete": {
+        "operationId": "delete_work_certificate_api_v1_safety_work_certificates__certificate_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "certificate_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Certificate Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_NoneType_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "删除证件（软删除）",
+        "tags": [
+          "安全管理"
+        ]
+      },
+      "put": {
+        "operationId": "update_work_certificate_api_v1_safety_work_certificates__certificate_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "certificate_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Certificate Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SpecialWorkCertificateUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_SpecialWorkCertificateResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "更新证件（按有效期重算状态）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/work-certificates/{certificate_id}/files": {
+      "post": {
+        "operationId": "upload_certificate_file_api_v1_safety_work_certificates__certificate_id__files_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "certificate_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Certificate Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_certificate_file_api_v1_safety_work_certificates__certificate_id__files_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_CertificateUploadResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "上传证件附件（附带 AI 识别字段建议）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/work-certificates/{certificate_id}/files/{file_id}": {
+      "delete": {
+        "operationId": "delete_certificate_file_api_v1_safety_work_certificates__certificate_id__files__file_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "certificate_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Certificate Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "file_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "File Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_NoneType_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "删除证件附件（软删除）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/work-certificates/{certificate_id}/files/{file_id}/content": {
+      "get": {
+        "operationId": "download_certificate_file_api_v1_safety_work_certificates__certificate_id__files__file_id__content_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "certificate_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Certificate Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "file_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "File Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "下载证件附件",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/work-certificates/{certificate_id}/files/{file_id}/extract": {
+      "post": {
+        "operationId": "extract_certificate_file_api_v1_safety_work_certificates__certificate_id__files__file_id__extract_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "certificate_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Certificate Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "file_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "File Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_CertificateUploadResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "重新 AI 识别证件附件（返回字段建议）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/work-certificates/{certificate_id}/files/{file_id}/preview": {
+      "get": {
+        "operationId": "preview_certificate_file_api_v1_safety_work_certificates__certificate_id__files__file_id__preview_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "certificate_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Certificate Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "file_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "File Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "证件附件在线预览",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/work-permit-configs": {
+      "get": {
+        "operationId": "list_approver_configs_api_v1_safety_work_permit_configs_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_ApproverConfigListResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "节点默认审批人配置列表",
+        "tags": [
+          "安全管理"
+        ]
+      },
+      "put": {
+        "operationId": "upsert_approver_config_api_v1_safety_work_permit_configs_put",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApproverConfigUpsertInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_ApproverConfigListResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "保存节点默认审批人（按票种+节点 upsert）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/work-permit-settings": {
+      "get": {
+        "operationId": "get_work_permit_settings_api_v1_safety_work_permit_settings_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_WorkPermitSettingsResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "作业票运行参数（人员证件校验开关）",
+        "tags": [
+          "安全管理"
+        ]
+      },
+      "put": {
+        "operationId": "update_work_permit_settings_api_v1_safety_work_permit_settings_put",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkPermitSettingsUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_WorkPermitSettingsResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "保存作业票运行参数（人员证件校验开关）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/work-permits": {
+      "get": {
+        "operationId": "list_work_permits_api_v1_safety_work_permits_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "permit_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Permit Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "permit_level",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Permit Level"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "keyword",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Keyword"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "date_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date To"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_WorkPermitListResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "作业票分页列表（票种/级别/状态/日期/关键字）",
+        "tags": [
+          "安全管理"
+        ]
+      },
+      "post": {
+        "operationId": "create_work_permit_api_v1_safety_work_permits_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkPermitCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_WorkPermitDetailResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "创建作业票草稿",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/work-permits/meta": {
+      "get": {
+        "operationId": "get_work_permit_meta_api_v1_safety_work_permits_meta_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_WorkPermitMetaResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "作业票模板元数据（票种/级别/节点/措施/字段）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/work-permits/stats": {
+      "get": {
+        "operationId": "get_work_permit_stats_api_v1_safety_work_permits_stats_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_WorkPermitStatsResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "作业票状态统计（含待我审批数）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/work-permits/{permit_id}": {
+      "delete": {
+        "operationId": "delete_work_permit_api_v1_safety_work_permits__permit_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "permit_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Permit Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_NoneType_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "删除作业票草稿（软删除）",
+        "tags": [
+          "安全管理"
+        ]
+      },
+      "get": {
+        "operationId": "get_work_permit_api_v1_safety_work_permits__permit_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "permit_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Permit Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_WorkPermitDetailResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "作业票详情（节点时间线/气体分析/关联票/附件）",
+        "tags": [
+          "安全管理"
+        ]
+      },
+      "put": {
+        "operationId": "update_work_permit_api_v1_safety_work_permits__permit_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "permit_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Permit Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkPermitUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_WorkPermitDetailResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "编辑作业票（仅草稿/已驳回）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/work-permits/{permit_id}/accept": {
+      "post": {
+        "operationId": "accept_work_permit_api_v1_safety_work_permits__permit_id__accept_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "permit_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Permit Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/AcceptPermitInput"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_ActionResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "完工验收（临时用电可带拆线确认字段）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/work-permits/{permit_id}/attachments": {
+      "post": {
+        "operationId": "upload_work_permit_attachment_api_v1_safety_work_permits__permit_id__attachments_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "permit_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Permit Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "category",
+            "required": false,
+            "schema": {
+              "default": "other",
+              "title": "Category",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_work_permit_attachment_api_v1_safety_work_permits__permit_id__attachments_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_WorkPermitAttachmentItem_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "上传作业票附件（盲板位置图/简图/示意图/照片）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/work-permits/{permit_id}/attachments/{attachment_id}": {
+      "delete": {
+        "operationId": "delete_work_permit_attachment_api_v1_safety_work_permits__permit_id__attachments__attachment_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "permit_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Permit Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "attachment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Attachment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_NoneType_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "删除作业票附件（软删除）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/work-permits/{permit_id}/attachments/{attachment_id}/content": {
+      "get": {
+        "operationId": "download_work_permit_attachment_api_v1_safety_work_permits__permit_id__attachments__attachment_id__content_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "permit_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Permit Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "attachment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Attachment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "下载作业票附件",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/work-permits/{permit_id}/attachments/{attachment_id}/preview": {
+      "get": {
+        "operationId": "preview_work_permit_attachment_api_v1_safety_work_permits__permit_id__attachments__attachment_id__preview_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "permit_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Permit Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "attachment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Attachment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "作业票附件在线预览",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/work-permits/{permit_id}/cancel": {
+      "post": {
+        "operationId": "cancel_work_permit_api_v1_safety_work_permits__permit_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "permit_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Permit Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_ActionResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "作废作业票",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/work-permits/{permit_id}/gas-analyses": {
+      "post": {
+        "operationId": "add_gas_analysis_api_v1_safety_work_permits__permit_id__gas_analyses_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "permit_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Permit Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GasAnalysisCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_GasAnalysisItem_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "录入气体分析（作业前/作业期间复检）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/work-permits/{permit_id}/gas-analyses/{analysis_id}": {
+      "delete": {
+        "operationId": "delete_gas_analysis_api_v1_safety_work_permits__permit_id__gas_analyses__analysis_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "permit_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Permit Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "analysis_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Analysis Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_NoneType_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "删除气体分析记录（软删除）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/work-permits/{permit_id}/nodes/{node_id}/approve": {
+      "post": {
+        "operationId": "approve_work_permit_node_api_v1_safety_work_permits__permit_id__nodes__node_id__approve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "permit_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Permit Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "node_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Node Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/PermitNodeActionInput"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_ActionResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "审批同意（当前节点签批并推进）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/work-permits/{permit_id}/nodes/{node_id}/reassign": {
+      "post": {
+        "operationId": "reassign_work_permit_node_api_v1_safety_work_permits__permit_id__nodes__node_id__reassign_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "permit_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Permit Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "node_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Node Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_ActionResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "改派未签字节点审批人（管理员）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/work-permits/{permit_id}/nodes/{node_id}/reject": {
+      "post": {
+        "operationId": "reject_work_permit_node_api_v1_safety_work_permits__permit_id__nodes__node_id__reject_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "permit_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Permit Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "node_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Node Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkPermitRejectInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_ActionResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "审批驳回（整票驳回，修改后重新提交）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/work-permits/{permit_id}/relations": {
+      "post": {
+        "operationId": "add_work_permit_relation_api_v1_safety_work_permits__permit_id__relations_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "permit_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Permit Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkPermitRelationInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_WorkPermitDetailResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "添加关联作业票",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/work-permits/{permit_id}/relations/{related_permit_id}": {
+      "delete": {
+        "operationId": "remove_work_permit_relation_api_v1_safety_work_permits__permit_id__relations__related_permit_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "permit_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Permit Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "related_permit_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Related Permit Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_WorkPermitDetailResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "移除关联作业票",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/work-permits/{permit_id}/submit": {
+      "post": {
+        "operationId": "submit_work_permit_api_v1_safety_work_permits__permit_id__submit_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "permit_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Permit Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkPermitSubmitInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_ActionResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "提交审批（生成逐级审批节点链）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/work-permits/{permit_id}/verify": {
+      "post": {
+        "operationId": "verify_work_permit_api_v1_safety_work_permits__permit_id__verify_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "permit_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Permit Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_ActionResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "作业前验票（开工）",
         "tags": [
           "安全管理"
         ]

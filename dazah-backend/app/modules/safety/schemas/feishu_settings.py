@@ -30,6 +30,15 @@ class SafetyFeishuAppSettingsDetail(BaseModel):
     )
     fire_expiry_notify_chat_ids: list[str] = Field(default_factory=list)
     fire_expiry_notify_user_ids: list[str] = Field(default_factory=list)
+    permit_notify_enabled: bool = False
+    permit_notify_chat_ids: list[str] = Field(default_factory=list)
+    permit_notify_user_ids: list[str] = Field(default_factory=list)
+    cert_expiry_notify_enabled: bool = False
+    cert_expiry_notify_milestones: list[int] = Field(
+        default_factory=lambda: [30, 15, 7]
+    )
+    cert_expiry_notify_chat_ids: list[str] = Field(default_factory=list)
+    cert_expiry_notify_user_ids: list[str] = Field(default_factory=list)
     is_enabled: bool = True
     knowledge_last_sync_status: str | None = None
     knowledge_last_sync_error: str | None = None
@@ -68,6 +77,15 @@ class UpdateSafetyFeishuAppSettingsRequest(BaseModel):
     )
     fire_expiry_notify_chat_ids: list[str] = Field(default_factory=list)
     fire_expiry_notify_user_ids: list[str] = Field(default_factory=list)
+    permit_notify_enabled: bool = False
+    permit_notify_chat_ids: list[str] = Field(default_factory=list)
+    permit_notify_user_ids: list[str] = Field(default_factory=list)
+    cert_expiry_notify_enabled: bool = False
+    cert_expiry_notify_milestones: list[int] = Field(
+        default_factory=lambda: [30, 15, 7]
+    )
+    cert_expiry_notify_chat_ids: list[str] = Field(default_factory=list)
+    cert_expiry_notify_user_ids: list[str] = Field(default_factory=list)
     is_enabled: bool = True
 
 

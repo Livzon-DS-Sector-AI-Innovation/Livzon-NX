@@ -27161,6 +27161,560 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/safety/work-certificates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 证件分页列表（类别/状态/关键字/到期窗口） */
+        get: operations["list_work_certificates_api_v1_safety_work_certificates_get"];
+        put?: never;
+        /** 创建证件 */
+        post: operations["create_work_certificate_api_v1_safety_work_certificates_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/work-certificates/categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 证件类别字典 */
+        get: operations["list_certificate_categories_api_v1_safety_work_certificates_categories_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/work-certificates/expiry-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 证件到期统计（总数/有效/30天内到期/已过期） */
+        get: operations["get_certificate_expiry_summary_api_v1_safety_work_certificates_expiry_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/work-certificates/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 导入持证人员汇总表 Excel 到证件台账
+         * @description 按子表导入证件：同类别同证件号合并，与库内记录匹配后更新或新建。
+         */
+        post: operations["import_work_certificates_api_v1_safety_work_certificates_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/work-certificates/import/parse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 解析持证人员汇总表 Excel（预览子表与行数，不落库） */
+        post: operations["parse_certificate_import_api_v1_safety_work_certificates_import_parse_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/work-certificates/{certificate_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 更新证件（按有效期重算状态） */
+        put: operations["update_work_certificate_api_v1_safety_work_certificates__certificate_id__put"];
+        post?: never;
+        /** 删除证件（软删除） */
+        delete: operations["delete_work_certificate_api_v1_safety_work_certificates__certificate_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/work-certificates/{certificate_id}/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 上传证件附件（附带 AI 识别字段建议） */
+        post: operations["upload_certificate_file_api_v1_safety_work_certificates__certificate_id__files_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/work-certificates/{certificate_id}/files/{file_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** 删除证件附件（软删除） */
+        delete: operations["delete_certificate_file_api_v1_safety_work_certificates__certificate_id__files__file_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/work-certificates/{certificate_id}/files/{file_id}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 下载证件附件 */
+        get: operations["download_certificate_file_api_v1_safety_work_certificates__certificate_id__files__file_id__content_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/work-certificates/{certificate_id}/files/{file_id}/extract": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 重新 AI 识别证件附件（返回字段建议） */
+        post: operations["extract_certificate_file_api_v1_safety_work_certificates__certificate_id__files__file_id__extract_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/work-certificates/{certificate_id}/files/{file_id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 证件附件在线预览 */
+        get: operations["preview_certificate_file_api_v1_safety_work_certificates__certificate_id__files__file_id__preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/work-permit-configs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 节点默认审批人配置列表 */
+        get: operations["list_approver_configs_api_v1_safety_work_permit_configs_get"];
+        /** 保存节点默认审批人（按票种+节点 upsert） */
+        put: operations["upsert_approver_config_api_v1_safety_work_permit_configs_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/work-permit-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 作业票运行参数（人员证件校验开关） */
+        get: operations["get_work_permit_settings_api_v1_safety_work_permit_settings_get"];
+        /** 保存作业票运行参数（人员证件校验开关） */
+        put: operations["update_work_permit_settings_api_v1_safety_work_permit_settings_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/work-permits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 作业票分页列表（票种/级别/状态/日期/关键字） */
+        get: operations["list_work_permits_api_v1_safety_work_permits_get"];
+        put?: never;
+        /** 创建作业票草稿 */
+        post: operations["create_work_permit_api_v1_safety_work_permits_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/work-permits/meta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 作业票模板元数据（票种/级别/节点/措施/字段） */
+        get: operations["get_work_permit_meta_api_v1_safety_work_permits_meta_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/work-permits/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 作业票状态统计（含待我审批数） */
+        get: operations["get_work_permit_stats_api_v1_safety_work_permits_stats_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/work-permits/{permit_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 作业票详情（节点时间线/气体分析/关联票/附件） */
+        get: operations["get_work_permit_api_v1_safety_work_permits__permit_id__get"];
+        /** 编辑作业票（仅草稿/已驳回） */
+        put: operations["update_work_permit_api_v1_safety_work_permits__permit_id__put"];
+        post?: never;
+        /** 删除作业票草稿（软删除） */
+        delete: operations["delete_work_permit_api_v1_safety_work_permits__permit_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/work-permits/{permit_id}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 完工验收（临时用电可带拆线确认字段） */
+        post: operations["accept_work_permit_api_v1_safety_work_permits__permit_id__accept_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/work-permits/{permit_id}/attachments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 上传作业票附件（盲板位置图/简图/示意图/照片） */
+        post: operations["upload_work_permit_attachment_api_v1_safety_work_permits__permit_id__attachments_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/work-permits/{permit_id}/attachments/{attachment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** 删除作业票附件（软删除） */
+        delete: operations["delete_work_permit_attachment_api_v1_safety_work_permits__permit_id__attachments__attachment_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/work-permits/{permit_id}/attachments/{attachment_id}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 下载作业票附件 */
+        get: operations["download_work_permit_attachment_api_v1_safety_work_permits__permit_id__attachments__attachment_id__content_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/work-permits/{permit_id}/attachments/{attachment_id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 作业票附件在线预览 */
+        get: operations["preview_work_permit_attachment_api_v1_safety_work_permits__permit_id__attachments__attachment_id__preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/work-permits/{permit_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 作废作业票 */
+        post: operations["cancel_work_permit_api_v1_safety_work_permits__permit_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/work-permits/{permit_id}/gas-analyses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 录入气体分析（作业前/作业期间复检） */
+        post: operations["add_gas_analysis_api_v1_safety_work_permits__permit_id__gas_analyses_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/work-permits/{permit_id}/gas-analyses/{analysis_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** 删除气体分析记录（软删除） */
+        delete: operations["delete_gas_analysis_api_v1_safety_work_permits__permit_id__gas_analyses__analysis_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/work-permits/{permit_id}/nodes/{node_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 审批同意（当前节点签批并推进） */
+        post: operations["approve_work_permit_node_api_v1_safety_work_permits__permit_id__nodes__node_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/work-permits/{permit_id}/nodes/{node_id}/reassign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 改派未签字节点审批人（管理员） */
+        post: operations["reassign_work_permit_node_api_v1_safety_work_permits__permit_id__nodes__node_id__reassign_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/work-permits/{permit_id}/nodes/{node_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 审批驳回（整票驳回，修改后重新提交） */
+        post: operations["reject_work_permit_node_api_v1_safety_work_permits__permit_id__nodes__node_id__reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/work-permits/{permit_id}/relations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 添加关联作业票 */
+        post: operations["add_work_permit_relation_api_v1_safety_work_permits__permit_id__relations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/work-permits/{permit_id}/relations/{related_permit_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** 移除关联作业票 */
+        delete: operations["remove_work_permit_relation_api_v1_safety_work_permits__permit_id__relations__related_permit_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/work-permits/{permit_id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 提交审批（生成逐级审批节点链） */
+        post: operations["submit_work_permit_api_v1_safety_work_permits__permit_id__submit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/work-permits/{permit_id}/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 作业前验票（开工） */
+        post: operations["verify_work_permit_api_v1_safety_work_permits__permit_id__verify_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sync-jobs": {
         parameters: {
             query?: never;
@@ -28228,6 +28782,16 @@ export interface components {
             workflow_name?: string | null;
         };
         /**
+         * AcceptPermitInput
+         * @description 完工验收（临时用电拆线确认字段随 type_data 提交）。
+         */
+        AcceptPermitInput: {
+            /** Type Data */
+            type_data?: {
+                [key: string]: unknown;
+            };
+        };
+        /**
          * AccidentCreate
          * @description 创建事故
          */
@@ -28548,6 +29112,36 @@ export interface components {
             seq_no: number;
             /** Sub Tank Id */
             sub_tank_id: string;
+        };
+        /**
+         * ActionResponse
+         * @description 通用操作响应（提交/审批/驳回/验票/验收/关联等）。
+         */
+        ActionResponse: {
+            /**
+             * Current Node Seq
+             * @default 0
+             */
+            current_node_seq: number;
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+            /**
+             * Permit Id
+             * Format: uuid
+             */
+            permit_id: string;
+            /** Permit No */
+            permit_no: string;
+            /** Status */
+            status: string;
+            /**
+             * Warnings
+             * @description 提交时的人员证件软校验提示（仅提交动作返回）
+             */
+            warnings?: string[];
         };
         /**
          * AgencySummary
@@ -29655,6 +30249,24 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** ApiResponseEnvelope[ActionResponse] */
+        ApiResponseEnvelope_ActionResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["ActionResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** ApiResponseEnvelope[AgentToolCatalogEntry] */
         ApiResponseEnvelope_AgentToolCatalogEntry_: {
             /**
@@ -29663,6 +30275,24 @@ export interface components {
              */
             code: number;
             data: components["schemas"]["AgentToolCatalogEntry"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[ApproverConfigListResponse] */
+        ApiResponseEnvelope_ApproverConfigListResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["ApproverConfigListResponse"];
             /**
              * Message
              * @default success
@@ -29925,6 +30555,60 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** ApiResponseEnvelope[CertificateExpirySummaryResponse] */
+        ApiResponseEnvelope_CertificateExpirySummaryResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["CertificateExpirySummaryResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[CertificateImportPreview] */
+        ApiResponseEnvelope_CertificateImportPreview_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["CertificateImportPreview"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[CertificateImportResult] */
+        ApiResponseEnvelope_CertificateImportResult_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["CertificateImportResult"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** ApiResponseEnvelope[CertificateReminderSettingResponse] */
         ApiResponseEnvelope_CertificateReminderSettingResponse_: {
             /**
@@ -29969,6 +30653,42 @@ export interface components {
              */
             code: number;
             data: components["schemas"]["CertificateSheetDetail"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[CertificateStatusOptionsResponse] */
+        ApiResponseEnvelope_CertificateStatusOptionsResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["CertificateStatusOptionsResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[CertificateUploadResponse] */
+        ApiResponseEnvelope_CertificateUploadResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["CertificateUploadResponse"];
             /**
              * Message
              * @default success
@@ -30977,6 +31697,24 @@ export interface components {
              */
             code: number;
             data: components["schemas"]["FireInspectionWritebackInitResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[GasAnalysisItem] */
+        ApiResponseEnvelope_GasAnalysisItem_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["GasAnalysisItem"];
             /**
              * Message
              * @default success
@@ -32194,6 +32932,42 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** ApiResponseEnvelope[SpecialWorkCertificateListResponse] */
+        ApiResponseEnvelope_SpecialWorkCertificateListResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["SpecialWorkCertificateListResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[SpecialWorkCertificateResponse] */
+        ApiResponseEnvelope_SpecialWorkCertificateResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["SpecialWorkCertificateResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** ApiResponseEnvelope[SupplierOut] */
         ApiResponseEnvelope_SupplierOut_: {
             /**
@@ -32346,6 +33120,114 @@ export interface components {
              */
             code: number;
             data: components["schemas"]["ValidationStatistics"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[WorkPermitAttachmentItem] */
+        ApiResponseEnvelope_WorkPermitAttachmentItem_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["WorkPermitAttachmentItem"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[WorkPermitDetailResponse] */
+        ApiResponseEnvelope_WorkPermitDetailResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["WorkPermitDetailResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[WorkPermitListResponse] */
+        ApiResponseEnvelope_WorkPermitListResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["WorkPermitListResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[WorkPermitMetaResponse] */
+        ApiResponseEnvelope_WorkPermitMetaResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["WorkPermitMetaResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[WorkPermitSettingsResponse] */
+        ApiResponseEnvelope_WorkPermitSettingsResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["WorkPermitSettingsResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[WorkPermitStatsResponse] */
+        ApiResponseEnvelope_WorkPermitStatsResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["WorkPermitStatsResponse"];
             /**
              * Message
              * @default success
@@ -33368,6 +34250,41 @@ export interface components {
             approve: boolean;
             /** Operator */
             operator?: string | null;
+        };
+        /** ApproverConfigItem */
+        ApproverConfigItem: {
+            /** Approver User Id */
+            approver_user_id?: string | null;
+            /** Approver User Name */
+            approver_user_name?: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Node Key */
+            node_key: string;
+            /** Node Name */
+            node_name: string;
+            /** Permit Type */
+            permit_type: string;
+            /** Remark */
+            remark?: string | null;
+        };
+        /** ApproverConfigListResponse */
+        ApproverConfigListResponse: {
+            /** Items */
+            items: components["schemas"]["ApproverConfigItem"][];
+        };
+        /** ApproverConfigUpsertInput */
+        ApproverConfigUpsertInput: {
+            /** Approver User Id */
+            approver_user_id?: string | null;
+            /** Node Key */
+            node_key: string;
+            permit_type: components["schemas"]["app__modules__safety__schemas__enums__OperationType"];
+            /** Remark */
+            remark?: string | null;
         };
         /** AssignUserRoleRequest */
         AssignUserRoleRequest: {
@@ -35166,8 +36083,24 @@ export interface components {
              */
             file: string;
         };
+        /** Body_import_work_certificates_api_v1_safety_work_certificates_import_post */
+        Body_import_work_certificates_api_v1_safety_work_certificates_import_post: {
+            /** File */
+            file: string;
+            /**
+             * Sheets
+             * @description 要导入的子表名 JSON 数组，空则导入全部可识别子表
+             * @default
+             */
+            sheets: string;
+        };
         /** Body_manual_revision_complete_api_v1_safety_revisions__revision_id__manual_complete_post */
         Body_manual_revision_complete_api_v1_safety_revisions__revision_id__manual_complete_post: {
+            /** File */
+            file: string;
+        };
+        /** Body_parse_certificate_import_api_v1_safety_work_certificates_import_parse_post */
+        Body_parse_certificate_import_api_v1_safety_work_certificates_import_parse_post: {
             /** File */
             file: string;
         };
@@ -35260,6 +36193,11 @@ export interface components {
         };
         /** Body_upload_attachment_api_v1_registration_knowledge_articles__article_id__attachments_post */
         Body_upload_attachment_api_v1_registration_knowledge_articles__article_id__attachments_post: {
+            /** File */
+            file: string;
+        };
+        /** Body_upload_certificate_file_api_v1_safety_work_certificates__certificate_id__files_post */
+        Body_upload_certificate_file_api_v1_safety_work_certificates__certificate_id__files_post: {
             /** File */
             file: string;
         };
@@ -35405,6 +36343,11 @@ export interface components {
              * @description 图片文件
              */
             files: string[];
+        };
+        /** Body_upload_work_permit_attachment_api_v1_safety_work_permits__permit_id__attachments_post */
+        Body_upload_work_permit_attachment_api_v1_safety_work_permits__permit_id__attachments_post: {
+            /** File */
+            file: string;
         };
         /** Body_upload_workflow_attachment_api_v1_safety_ai_workflow_configs_attachments_upload_post */
         Body_upload_workflow_attachment_api_v1_safety_ai_workflow_configs_attachments_upload_post: {
@@ -36690,6 +37633,32 @@ export interface components {
             validity_period?: string | null;
         };
         /**
+         * CertificateExpirySummaryResponse
+         * @description 证件到期统计卡（列表页顶部）。
+         */
+        CertificateExpirySummaryResponse: {
+            /**
+             * Expired
+             * @default 0
+             */
+            expired: number;
+            /**
+             * Expiring In 30D
+             * @default 0
+             */
+            expiring_in_30d: number;
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
+            /**
+             * Valid
+             * @default 0
+             */
+            valid: number;
+        };
+        /**
          * CertificateExtractedFields
          * @description AI 从证书中提取的原始字段（值可能为空，供人工核对）。
          */
@@ -36734,6 +37703,115 @@ export interface components {
              * @description 出厂编号/器具编号
              */
             serial_no?: string | null;
+        };
+        /**
+         * CertificateExtractionSuggestion
+         * @description 证件附件 AI 识别建议值（人工确认后才写入，不直接落库）。
+         */
+        CertificateExtractionSuggestion: {
+            /** Certificate Category */
+            certificate_category?: string | null;
+            /**
+             * Certificate Category Label
+             * @default
+             */
+            certificate_category_label: string;
+            /** Certificate No */
+            certificate_no?: string | null;
+            /** Expiry Date */
+            expiry_date?: string | null;
+            /** Issue Date */
+            issue_date?: string | null;
+            /** Issuing Authority */
+            issuing_authority?: string | null;
+            /** Person Name */
+            person_name?: string | null;
+            /** Qualification Scope */
+            qualification_scope?: string | null;
+        };
+        /** CertificateFileItem */
+        CertificateFileItem: {
+            /** Content Type */
+            content_type?: string | null;
+            /** File Name */
+            file_name: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Size Bytes */
+            size_bytes: number;
+        };
+        /** CertificateImportPreview */
+        CertificateImportPreview: {
+            /** Sheets */
+            sheets?: components["schemas"]["CertificateImportSheetInfo"][];
+            /** Skipped Sheets */
+            skipped_sheets?: {
+                [key: string]: string;
+            }[];
+        };
+        /** CertificateImportResult */
+        CertificateImportResult: {
+            /** Archive Path */
+            archive_path?: string | null;
+            /**
+             * Created
+             * @default 0
+             */
+            created: number;
+            /** Row Errors */
+            row_errors?: {
+                [key: string]: unknown;
+            }[];
+            /** Skipped Sheets */
+            skipped_sheets?: {
+                [key: string]: string;
+            }[];
+            /**
+             * Total Parsed
+             * @default 0
+             */
+            total_parsed: number;
+            /**
+             * Unchanged
+             * @default 0
+             */
+            unchanged: number;
+            /**
+             * Updated
+             * @default 0
+             */
+            updated: number;
+        };
+        /**
+         * CertificateImportSheetInfo
+         * @description 导入预览：单个子表的解析结果。
+         */
+        CertificateImportSheetInfo: {
+            /** Certificate Category */
+            certificate_category: string;
+            /**
+             * Certificate Category Label
+             * @default
+             */
+            certificate_category_label: string;
+            /** Errors */
+            errors?: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Row Count
+             * @default 0
+             */
+            row_count: number;
+            /** Sample */
+            sample?: {
+                [key: string]: unknown;
+            }[];
+            /** Sheet */
+            sheet: string;
         };
         /**
          * CertificateRecordSummary
@@ -37114,6 +38192,28 @@ export interface components {
              * @description 记录总数
              */
             total_records: number;
+        };
+        /** CertificateStatusOptionsResponse */
+        CertificateStatusOptionsResponse: {
+            /** Categories */
+            categories: {
+                [key: string]: string;
+            }[];
+        };
+        /**
+         * CertificateUploadResponse
+         * @description 上传证件附件成功后的响应：附件 + AI 识别建议。
+         */
+        CertificateUploadResponse: {
+            /**
+             * Ai Error
+             * @description AI 识别未执行/失败的原因（附件已保存成功）
+             */
+            ai_error?: string | null;
+            ai_suggestion?: components["schemas"]["CertificateExtractionSuggestion"] | null;
+            file: components["schemas"]["CertificateFileItem"];
+            /** Files */
+            files?: components["schemas"]["CertificateFileItem"][];
         };
         /**
          * CertificateWorkbookDetail
@@ -46952,6 +48052,76 @@ export interface components {
             /** Total */
             total: number;
         };
+        /** GasAnalysisCreate */
+        GasAnalysisCreate: {
+            /** Analysis Point */
+            analysis_point?: string | null;
+            /** Analyst Name */
+            analyst_name?: string | null;
+            /** Items */
+            items?: components["schemas"]["GasAnalysisItemInput"][];
+            /** Oxygen Value */
+            oxygen_value?: string | null;
+            /**
+             * Phase
+             * @default pre_work
+             */
+            phase: string;
+            /** Remark */
+            remark?: string | null;
+            /**
+             * Sampled At
+             * Format: date-time
+             */
+            sampled_at: string;
+        };
+        /** GasAnalysisItem */
+        GasAnalysisItem: {
+            /** Analysis Point */
+            analysis_point?: string | null;
+            /** Analyst Name */
+            analyst_name?: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Items */
+            items?: {
+                [key: string]: unknown;
+            }[];
+            /** Oxygen Value */
+            oxygen_value?: string | null;
+            /** Phase */
+            phase: string;
+            /** Remark */
+            remark?: string | null;
+            /**
+             * Sampled At
+             * Format: date-time
+             */
+            sampled_at: string;
+        };
+        /** GasAnalysisItemInput */
+        GasAnalysisItemInput: {
+            /**
+             * Name
+             * @description 项目名称
+             */
+            name: string;
+            /**
+             * Standard
+             * @description 合格标准
+             */
+            standard?: string | null;
+            /** Unit */
+            unit?: string | null;
+            /**
+             * Value
+             * @description 分析结果
+             */
+            value?: string | null;
+        };
         /** GeneralAuditLogDetail */
         GeneralAuditLogDetail: {
             /** Action */
@@ -51749,6 +52919,16 @@ export interface components {
              */
             item_ids: string[];
         };
+        /**
+         * NodeAssignmentInput
+         * @description 提交时为节点改派审批人（缺省用默认配置）。
+         */
+        NodeAssignmentInput: {
+            /** Approver User Id */
+            approver_user_id?: string | null;
+            /** Node Key */
+            node_key: string;
+        };
         /** NotificationResponse */
         NotificationResponse: {
             /** Attempts */
@@ -54437,6 +55617,117 @@ export interface components {
              * Format: uuid
              */
             user_id: string;
+        };
+        /**
+         * PermitMeasureInput
+         * @description 安全措施勾选（key 对应票面措施模板）。
+         */
+        PermitMeasureInput: {
+            /** Fills */
+            fills?: {
+                [key: string]: string;
+            };
+            /** Key */
+            key: string;
+            /** Status */
+            status: string;
+        };
+        /** PermitMeasureItem */
+        PermitMeasureItem: {
+            /** Fills */
+            fills?: {
+                [key: string]: string;
+            };
+            /** Key */
+            key: string;
+            /** Status */
+            status: string;
+        };
+        /** PermitNodeActionInput */
+        PermitNodeActionInput: {
+            /** Opinion */
+            opinion?: string | null;
+        };
+        /**
+         * PermitPersonInput
+         * @description 作业相关人员（可携带证件引用，保存证件快照）。
+         */
+        PermitPersonInput: {
+            /** Certificate Category */
+            certificate_category?: string | null;
+            /**
+             * Certificate Id
+             * @description 关联证件（special_work_certificates）
+             */
+            certificate_id?: string | null;
+            /** Certificate No */
+            certificate_no?: string | null;
+            /**
+             * Name
+             * @description 姓名
+             */
+            name: string;
+            /**
+             * Role
+             * @description 角色（模板 person_roles）
+             */
+            role: string;
+            /**
+             * User Id
+             * @description 平台账号
+             */
+            user_id?: string | null;
+        };
+        /**
+         * PermitPersonItem
+         * @description 含证件有效性提示（service 计算后附上）。
+         */
+        PermitPersonItem: {
+            /** Certificate Category */
+            certificate_category?: string | null;
+            /**
+             * Certificate Id
+             * @description 关联证件（special_work_certificates）
+             */
+            certificate_id?: string | null;
+            /** Certificate No */
+            certificate_no?: string | null;
+            /** Certificate Status */
+            certificate_status?: string | null;
+            /**
+             * Certificate Valid
+             * @description 证件有效性（None=未关联证件）
+             */
+            certificate_valid?: boolean | null;
+            /**
+             * Name
+             * @description 姓名
+             */
+            name: string;
+            /**
+             * Role
+             * @description 角色（模板 person_roles）
+             */
+            role: string;
+            /**
+             * User Id
+             * @description 平台账号
+             */
+            user_id?: string | null;
+        };
+        /** PermitRelationItem */
+        PermitRelationItem: {
+            /**
+             * Related Permit Id
+             * Format: uuid
+             */
+            related_permit_id: string;
+            /** Related Permit No */
+            related_permit_no: string;
+            /** Related Permit Status */
+            related_permit_status: string;
+            /** Related Permit Type */
+            related_permit_type: string;
         };
         /**
          * PermitStatus
@@ -59871,6 +61162,17 @@ export interface components {
             bitable_app_token?: string | null;
             /** Bitable Hazard Table Id */
             bitable_hazard_table_id?: string | null;
+            /** Cert Expiry Notify Chat Ids */
+            cert_expiry_notify_chat_ids?: string[];
+            /**
+             * Cert Expiry Notify Enabled
+             * @default false
+             */
+            cert_expiry_notify_enabled: boolean;
+            /** Cert Expiry Notify Milestones */
+            cert_expiry_notify_milestones?: number[];
+            /** Cert Expiry Notify User Ids */
+            cert_expiry_notify_user_ids?: string[];
             /** Fire Expiry Notify Chat Ids */
             fire_expiry_notify_chat_ids?: string[];
             /**
@@ -59914,6 +61216,15 @@ export interface components {
             last_test_status?: string | null;
             /** Last Tested At */
             last_tested_at?: string | null;
+            /** Permit Notify Chat Ids */
+            permit_notify_chat_ids?: string[];
+            /**
+             * Permit Notify Enabled
+             * @default false
+             */
+            permit_notify_enabled: boolean;
+            /** Permit Notify User Ids */
+            permit_notify_user_ids?: string[];
             /** Radar Notify Chat Ids */
             radar_notify_chat_ids?: string[];
             /**
@@ -62344,6 +63655,125 @@ export interface components {
              * @description 作业负责人姓名
              */
             work_leader_name?: string | null;
+        };
+        /** SpecialWorkCertificateCreate */
+        SpecialWorkCertificateCreate: {
+            /**
+             * Certificate Category
+             * @description 证件类别（字典值）
+             */
+            certificate_category: string;
+            /** Certificate No */
+            certificate_no?: string | null;
+            /** Department */
+            department?: string | null;
+            /** Expiry Date */
+            expiry_date?: string | null;
+            /**
+             * Identity User Id
+             * @description 平台账号
+             */
+            identity_user_id?: string | null;
+            /** Issue Date */
+            issue_date?: string | null;
+            /** Issuing Authority */
+            issuing_authority?: string | null;
+            /**
+             * Person Name
+             * @description 持证人姓名
+             */
+            person_name: string;
+            /** Qualification Scope */
+            qualification_scope?: string | null;
+            /** Remark */
+            remark?: string | null;
+        };
+        /** SpecialWorkCertificateListResponse */
+        SpecialWorkCertificateListResponse: {
+            /** Items */
+            items: components["schemas"]["SpecialWorkCertificateResponse"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
+        };
+        /** SpecialWorkCertificateResponse */
+        SpecialWorkCertificateResponse: {
+            /** Certificate Category */
+            certificate_category: string;
+            /**
+             * Certificate Category Label
+             * @description 证件类别中文名（service 填充）
+             * @default
+             */
+            certificate_category_label: string;
+            /** Certificate No */
+            certificate_no?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Days To Expiry
+             * @description 距到期天数（负数=已过期）
+             */
+            days_to_expiry?: number | null;
+            /** Department */
+            department?: string | null;
+            /** Expiry Date */
+            expiry_date?: string | null;
+            /** Files */
+            files?: components["schemas"]["CertificateFileItem"][];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Identity User Id */
+            identity_user_id?: string | null;
+            /** Issue Date */
+            issue_date?: string | null;
+            /** Issuing Authority */
+            issuing_authority?: string | null;
+            /** Person Name */
+            person_name: string;
+            /** Qualification Scope */
+            qualification_scope?: string | null;
+            /** Remark */
+            remark?: string | null;
+            /** Status */
+            status: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** SpecialWorkCertificateUpdate */
+        SpecialWorkCertificateUpdate: {
+            /** Certificate Category */
+            certificate_category?: string | null;
+            /** Certificate No */
+            certificate_no?: string | null;
+            /** Department */
+            department?: string | null;
+            /** Expiry Date */
+            expiry_date?: string | null;
+            /** Identity User Id */
+            identity_user_id?: string | null;
+            /** Issue Date */
+            issue_date?: string | null;
+            /** Issuing Authority */
+            issuing_authority?: string | null;
+            /** Person Name */
+            person_name?: string | null;
+            /** Qualification Scope */
+            qualification_scope?: string | null;
+            /** Remark */
+            remark?: string | null;
         };
         /** StartReturnRecallProcessingRequest */
         StartReturnRecallProcessingRequest: {
@@ -65501,6 +66931,17 @@ export interface components {
             bitable_app_token?: string | null;
             /** Bitable Hazard Table Id */
             bitable_hazard_table_id?: string | null;
+            /** Cert Expiry Notify Chat Ids */
+            cert_expiry_notify_chat_ids?: string[];
+            /**
+             * Cert Expiry Notify Enabled
+             * @default false
+             */
+            cert_expiry_notify_enabled: boolean;
+            /** Cert Expiry Notify Milestones */
+            cert_expiry_notify_milestones?: number[];
+            /** Cert Expiry Notify User Ids */
+            cert_expiry_notify_user_ids?: string[];
             /** Fire Expiry Notify Chat Ids */
             fire_expiry_notify_chat_ids?: string[];
             /**
@@ -65532,6 +66973,15 @@ export interface components {
             knowledge_app_token?: string | null;
             /** Knowledge Table Id */
             knowledge_table_id?: string | null;
+            /** Permit Notify Chat Ids */
+            permit_notify_chat_ids?: string[];
+            /**
+             * Permit Notify Enabled
+             * @default false
+             */
+            permit_notify_enabled: boolean;
+            /** Permit Notify User Ids */
+            permit_notify_user_ids?: string[];
             /** Radar Notify Chat Ids */
             radar_notify_chat_ids?: string[];
             /**
@@ -68019,6 +69469,421 @@ export interface components {
              * @enum {string}
              */
             result: "合格" | "不合格";
+        };
+        /** WorkPermitAttachmentItem */
+        WorkPermitAttachmentItem: {
+            /** Category */
+            category: string;
+            /** Content Type */
+            content_type?: string | null;
+            /** File Name */
+            file_name: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Size Bytes */
+            size_bytes: number;
+        };
+        /** WorkPermitCreate */
+        WorkPermitCreate: {
+            /** Apply Department */
+            apply_department?: string | null;
+            /** Apply Time */
+            apply_time?: string | null;
+            /**
+             * Permit Level
+             * @default none
+             */
+            permit_level: string;
+            permit_type: components["schemas"]["app__modules__safety__schemas__enums__OperationType"];
+            /** Persons */
+            persons?: components["schemas"]["PermitPersonInput"][];
+            /** Planned End Time */
+            planned_end_time?: string | null;
+            /** Planned Start Time */
+            planned_start_time?: string | null;
+            /** Related Legacy No Text */
+            related_legacy_no_text?: string | null;
+            /** Remark */
+            remark?: string | null;
+            /** Risk Identifications */
+            risk_identifications?: string[];
+            /** Safety Measures */
+            safety_measures?: components["schemas"]["PermitMeasureInput"][];
+            /** Type Data */
+            type_data?: {
+                [key: string]: unknown;
+            };
+            /** Work Description */
+            work_description?: string | null;
+            /** Work Location */
+            work_location?: string | null;
+            /** Work Unit */
+            work_unit?: string | null;
+        };
+        /**
+         * WorkPermitDetailResponse
+         * @description 详情：附审批节点时间线、气体分析、关联票与附件。
+         */
+        WorkPermitDetailResponse: {
+            /** Actual End Time */
+            actual_end_time?: string | null;
+            /** Actual Start Time */
+            actual_start_time?: string | null;
+            /** Apply Department */
+            apply_department?: string | null;
+            /** Apply Time */
+            apply_time?: string | null;
+            /** Approval Round */
+            approval_round: number;
+            /** Attachments */
+            attachments?: components["schemas"]["WorkPermitAttachmentItem"][];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by?: string | null;
+            /** Current Node Seq */
+            current_node_seq: number;
+            /** Gas Analyses */
+            gas_analyses?: components["schemas"]["GasAnalysisItem"][];
+            /**
+             * Gas Overdue
+             * @description 复检是否已超期
+             * @default false
+             */
+            gas_overdue: boolean;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Next Gas Due At
+             * @description 下次气体复检到期时间（无周期复检要求为 None）
+             */
+            next_gas_due_at?: string | null;
+            /** Nodes */
+            nodes?: components["schemas"]["WorkPermitNodeItem"][];
+            /** Permit Level */
+            permit_level: string;
+            /** Permit No */
+            permit_no: string;
+            /** Permit Type */
+            permit_type: string;
+            /** Persons */
+            persons?: components["schemas"]["PermitPersonItem"][];
+            /** Planned End Time */
+            planned_end_time?: string | null;
+            /** Planned Start Time */
+            planned_start_time?: string | null;
+            /** Reject Opinion */
+            reject_opinion?: string | null;
+            /** Related Legacy No Text */
+            related_legacy_no_text?: string | null;
+            /** Relations */
+            relations?: components["schemas"]["PermitRelationItem"][];
+            /** Remark */
+            remark?: string | null;
+            /** Risk Identifications */
+            risk_identifications?: string[];
+            /** Safety Measures */
+            safety_measures?: components["schemas"]["PermitMeasureItem"][];
+            /** Status */
+            status: string;
+            /** Type Data */
+            type_data?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Work Description */
+            work_description?: string | null;
+            /** Work Location */
+            work_location?: string | null;
+            /** Work Unit */
+            work_unit?: string | null;
+        };
+        /** WorkPermitListItem */
+        WorkPermitListItem: {
+            /** Apply Department */
+            apply_department?: string | null;
+            /** Apply Time */
+            apply_time?: string | null;
+            /** Approval Round */
+            approval_round: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Current Node Seq */
+            current_node_seq: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Permit Level */
+            permit_level: string;
+            /** Permit No */
+            permit_no: string;
+            /** Permit Type */
+            permit_type: string;
+            /** Planned End Time */
+            planned_end_time?: string | null;
+            /** Planned Start Time */
+            planned_start_time?: string | null;
+            /** Status */
+            status: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Work Description */
+            work_description?: string | null;
+            /** Work Location */
+            work_location?: string | null;
+            /** Work Unit */
+            work_unit?: string | null;
+        };
+        /** WorkPermitListResponse */
+        WorkPermitListResponse: {
+            /** Items */
+            items: components["schemas"]["WorkPermitListItem"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
+        };
+        /**
+         * WorkPermitMetaResponse
+         * @description 前端渲染表单/详情所需的模板元数据。
+         */
+        WorkPermitMetaResponse: {
+            /** Certificate Categories */
+            certificate_categories: {
+                [key: string]: string;
+            }[];
+            /**
+             * Gas Cycle Minutes
+             * @description 作业期间复检间隔（分钟）
+             */
+            gas_cycle_minutes?: {
+                [key: string]: number;
+            };
+            /**
+             * Gas Types
+             * @description 需要气体分析的票种
+             */
+            gas_types?: string[];
+            /** Level Options */
+            level_options: {
+                [key: string]: {
+                    [key: string]: string;
+                }[];
+            };
+            /** Measures */
+            measures: {
+                [key: string]: {
+                    [key: string]: unknown;
+                }[];
+            };
+            /**
+             * Nodes
+             * @description 票种节点目录（key/name/kind/levels），提交审批指派用
+             */
+            nodes?: {
+                [key: string]: {
+                    [key: string]: unknown;
+                }[];
+            };
+            /** Permit Types */
+            permit_types: {
+                [key: string]: string;
+            }[];
+            /** Person Roles */
+            person_roles: {
+                [key: string]: {
+                    [key: string]: unknown;
+                }[];
+            };
+            /** Risk Identification Options */
+            risk_identification_options: string[];
+            /** Type Fields */
+            type_fields: {
+                [key: string]: {
+                    [key: string]: unknown;
+                }[];
+            };
+        };
+        /** WorkPermitNodeItem */
+        WorkPermitNodeItem: {
+            /** Acted At */
+            acted_at?: string | null;
+            /** Acted By */
+            acted_by?: string | null;
+            /** Acted By Name */
+            acted_by_name?: string | null;
+            /** Assigned Approver Id */
+            assigned_approver_id?: string | null;
+            /** Assigned Approver Name */
+            assigned_approver_name?: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Node Key */
+            node_key: string;
+            /** Node Kind */
+            node_kind: string;
+            /** Node Name */
+            node_name: string;
+            /** Opinion */
+            opinion?: string | null;
+            /** Round */
+            round: number;
+            /** Seq */
+            seq: number;
+            /** Status */
+            status: string;
+        };
+        /** WorkPermitRejectInput */
+        WorkPermitRejectInput: {
+            /**
+             * Opinion
+             * @description 驳回意见
+             */
+            opinion: string;
+        };
+        /** WorkPermitRelationInput */
+        WorkPermitRelationInput: {
+            /**
+             * Related Permit Id
+             * Format: uuid
+             */
+            related_permit_id: string;
+        };
+        /**
+         * WorkPermitSettingsResponse
+         * @description 作业票运行参数（work_permit_settings 键值子集）。
+         */
+        WorkPermitSettingsResponse: {
+            /**
+             * Cert Check Strict
+             * @description 提交时人员证件校验：False=软提示，True=未通过拦截
+             * @default false
+             */
+            cert_check_strict: boolean;
+        };
+        /** WorkPermitSettingsUpdate */
+        WorkPermitSettingsUpdate: {
+            /** Cert Check Strict */
+            cert_check_strict: boolean;
+        };
+        /**
+         * WorkPermitStatsResponse
+         * @description 列表页统计：按状态计数 + 待我审批数。
+         */
+        WorkPermitStatsResponse: {
+            /**
+             * Active
+             * @default 0
+             */
+            active: number;
+            /**
+             * Approved
+             * @default 0
+             */
+            approved: number;
+            /**
+             * Cancelled
+             * @default 0
+             */
+            cancelled: number;
+            /**
+             * Completed
+             * @default 0
+             */
+            completed: number;
+            /**
+             * Draft
+             * @default 0
+             */
+            draft: number;
+            /**
+             * My Pending Approvals
+             * @description 待当前用户审批的节点数
+             * @default 0
+             */
+            my_pending_approvals: number;
+            /**
+             * Pending Approval
+             * @default 0
+             */
+            pending_approval: number;
+            /**
+             * Rejected
+             * @default 0
+             */
+            rejected: number;
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
+        };
+        /** WorkPermitSubmitInput */
+        WorkPermitSubmitInput: {
+            /** Assignments */
+            assignments?: components["schemas"]["NodeAssignmentInput"][];
+        };
+        /**
+         * WorkPermitUpdate
+         * @description 草稿/驳回态编辑（字段全部可空，仅提交的非空项生效）。
+         */
+        WorkPermitUpdate: {
+            /** Apply Department */
+            apply_department?: string | null;
+            /** Apply Time */
+            apply_time?: string | null;
+            /** Permit Level */
+            permit_level?: string | null;
+            /** Persons */
+            persons?: components["schemas"]["PermitPersonInput"][] | null;
+            /** Planned End Time */
+            planned_end_time?: string | null;
+            /** Planned Start Time */
+            planned_start_time?: string | null;
+            /** Related Legacy No Text */
+            related_legacy_no_text?: string | null;
+            /** Remark */
+            remark?: string | null;
+            /** Risk Identifications */
+            risk_identifications?: string[] | null;
+            /** Safety Measures */
+            safety_measures?: components["schemas"]["PermitMeasureInput"][] | null;
+            /** Type Data */
+            type_data?: {
+                [key: string]: unknown;
+            } | null;
+            /** Work Description */
+            work_description?: string | null;
+            /** Work Location */
+            work_location?: string | null;
+            /** Work Unit */
+            work_unit?: string | null;
         };
         /**
          * WorkRecordStatusEnum
@@ -138727,6 +140592,1365 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_work_certificates_api_v1_safety_work_certificates_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                certificate_category?: string | null;
+                status?: string | null;
+                keyword?: string | null;
+                expiring_days?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_SpecialWorkCertificateListResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_work_certificate_api_v1_safety_work_certificates_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpecialWorkCertificateCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_SpecialWorkCertificateResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_certificate_categories_api_v1_safety_work_certificates_categories_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_CertificateStatusOptionsResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_certificate_expiry_summary_api_v1_safety_work_certificates_expiry_summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_CertificateExpirySummaryResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_work_certificates_api_v1_safety_work_certificates_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_work_certificates_api_v1_safety_work_certificates_import_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_CertificateImportResult_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    parse_certificate_import_api_v1_safety_work_certificates_import_parse_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_parse_certificate_import_api_v1_safety_work_certificates_import_parse_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_CertificateImportPreview_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_work_certificate_api_v1_safety_work_certificates__certificate_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                certificate_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SpecialWorkCertificateUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_SpecialWorkCertificateResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_work_certificate_api_v1_safety_work_certificates__certificate_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                certificate_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_NoneType_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_certificate_file_api_v1_safety_work_certificates__certificate_id__files_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                certificate_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_certificate_file_api_v1_safety_work_certificates__certificate_id__files_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_CertificateUploadResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_certificate_file_api_v1_safety_work_certificates__certificate_id__files__file_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                certificate_id: string;
+                file_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_NoneType_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_certificate_file_api_v1_safety_work_certificates__certificate_id__files__file_id__content_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                certificate_id: string;
+                file_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    extract_certificate_file_api_v1_safety_work_certificates__certificate_id__files__file_id__extract_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                certificate_id: string;
+                file_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_CertificateUploadResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_certificate_file_api_v1_safety_work_certificates__certificate_id__files__file_id__preview_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                certificate_id: string;
+                file_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_approver_configs_api_v1_safety_work_permit_configs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_ApproverConfigListResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upsert_approver_config_api_v1_safety_work_permit_configs_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApproverConfigUpsertInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_ApproverConfigListResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_work_permit_settings_api_v1_safety_work_permit_settings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_WorkPermitSettingsResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_work_permit_settings_api_v1_safety_work_permit_settings_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkPermitSettingsUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_WorkPermitSettingsResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_work_permits_api_v1_safety_work_permits_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                permit_type?: string | null;
+                permit_level?: string | null;
+                status?: string | null;
+                keyword?: string | null;
+                date_from?: string | null;
+                date_to?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_WorkPermitListResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_work_permit_api_v1_safety_work_permits_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkPermitCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_WorkPermitDetailResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_work_permit_meta_api_v1_safety_work_permits_meta_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_WorkPermitMetaResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_work_permit_stats_api_v1_safety_work_permits_stats_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_WorkPermitStatsResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_work_permit_api_v1_safety_work_permits__permit_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                permit_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_WorkPermitDetailResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_work_permit_api_v1_safety_work_permits__permit_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                permit_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkPermitUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_WorkPermitDetailResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_work_permit_api_v1_safety_work_permits__permit_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                permit_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_NoneType_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    accept_work_permit_api_v1_safety_work_permits__permit_id__accept_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                permit_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AcceptPermitInput"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_ActionResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_work_permit_attachment_api_v1_safety_work_permits__permit_id__attachments_post: {
+        parameters: {
+            query?: {
+                category?: string;
+            };
+            header?: never;
+            path: {
+                permit_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_work_permit_attachment_api_v1_safety_work_permits__permit_id__attachments_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_WorkPermitAttachmentItem_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_work_permit_attachment_api_v1_safety_work_permits__permit_id__attachments__attachment_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                permit_id: string;
+                attachment_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_NoneType_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_work_permit_attachment_api_v1_safety_work_permits__permit_id__attachments__attachment_id__content_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                permit_id: string;
+                attachment_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_work_permit_attachment_api_v1_safety_work_permits__permit_id__attachments__attachment_id__preview_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                permit_id: string;
+                attachment_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_work_permit_api_v1_safety_work_permits__permit_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                permit_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_ActionResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_gas_analysis_api_v1_safety_work_permits__permit_id__gas_analyses_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                permit_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GasAnalysisCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_GasAnalysisItem_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_gas_analysis_api_v1_safety_work_permits__permit_id__gas_analyses__analysis_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                permit_id: string;
+                analysis_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_NoneType_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_work_permit_node_api_v1_safety_work_permits__permit_id__nodes__node_id__approve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                permit_id: string;
+                node_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PermitNodeActionInput"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_ActionResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reassign_work_permit_node_api_v1_safety_work_permits__permit_id__nodes__node_id__reassign_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                permit_id: string;
+                node_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    [key: string]: string;
+                } | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_ActionResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reject_work_permit_node_api_v1_safety_work_permits__permit_id__nodes__node_id__reject_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                permit_id: string;
+                node_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkPermitRejectInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_ActionResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_work_permit_relation_api_v1_safety_work_permits__permit_id__relations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                permit_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkPermitRelationInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_WorkPermitDetailResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_work_permit_relation_api_v1_safety_work_permits__permit_id__relations__related_permit_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                permit_id: string;
+                related_permit_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_WorkPermitDetailResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_work_permit_api_v1_safety_work_permits__permit_id__submit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                permit_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkPermitSubmitInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_ActionResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    verify_work_permit_api_v1_safety_work_permits__permit_id__verify_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                permit_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_ActionResponse_"];
                 };
             };
             /** @description Validation Error */

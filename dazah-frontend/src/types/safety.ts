@@ -1154,6 +1154,39 @@ export interface HazardImportResult {
   archive_path?: string | null
 }
 
+export interface CertificateImportSampleRow {
+  person_name: string
+  certificate_no?: string | null
+  department?: string | null
+  issue_date?: string | null
+  expiry_date?: string | null
+  qualification_scope?: string | null
+}
+
+export interface CertificateImportSheetInfo {
+  sheet: string
+  certificate_category: string
+  certificate_category_label: string
+  row_count: number
+  sample: CertificateImportSampleRow[]
+  errors: Array<{ row: number; reason: string }>
+}
+
+export interface CertificateImportPreview {
+  sheets: CertificateImportSheetInfo[]
+  skipped_sheets: Array<{ sheet: string; reason: string }>
+}
+
+export interface CertificateImportResult {
+  created: number
+  updated: number
+  unchanged: number
+  total_parsed: number
+  skipped_sheets: Array<{ sheet: string; reason: string }>
+  row_errors: Array<{ sheet: string; row: number; reason: string }>
+  archive_path?: string | null
+}
+
 export interface HazardPositionOption {
   department: string
   position: string

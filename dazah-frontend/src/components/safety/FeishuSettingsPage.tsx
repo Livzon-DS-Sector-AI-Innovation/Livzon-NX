@@ -94,6 +94,17 @@ export default function FeishuSettingsPage({
       initialSettings?.fire_expiry_notify_chat_ids ?? [],
     fire_expiry_notify_user_ids:
       initialSettings?.fire_expiry_notify_user_ids ?? [],
+    permit_notify_enabled: initialSettings?.permit_notify_enabled ?? false,
+    permit_notify_chat_ids: initialSettings?.permit_notify_chat_ids ?? [],
+    permit_notify_user_ids: initialSettings?.permit_notify_user_ids ?? [],
+    cert_expiry_notify_enabled:
+      initialSettings?.cert_expiry_notify_enabled ?? false,
+    cert_expiry_notify_milestones:
+      initialSettings?.cert_expiry_notify_milestones ?? [30, 15, 7],
+    cert_expiry_notify_chat_ids:
+      initialSettings?.cert_expiry_notify_chat_ids ?? [],
+    cert_expiry_notify_user_ids:
+      initialSettings?.cert_expiry_notify_user_ids ?? [],
     is_enabled: initialSettings?.is_enabled ?? true,
   })
   const [notifyChatIdsText, setNotifyChatIdsText] = useState(
@@ -126,6 +137,23 @@ export default function FeishuSettingsPage({
     (initialSettings?.fire_expiry_notify_milestones ?? [30, 15, 7]).join(',')
   )
   const [fireTesting, setFireTesting] = useState(false)
+  // 8 大作业票卡片通知的目标输入
+  const [permitChatIdsText, setPermitChatIdsText] = useState(
+    (initialSettings?.permit_notify_chat_ids ?? []).join('\n')
+  )
+  const [permitUserIdsText, setPermitUserIdsText] = useState(
+    (initialSettings?.permit_notify_user_ids ?? []).join('\n')
+  )
+  // 特种作业证件到期提醒的目标/节点输入
+  const [certChatIdsText, setCertChatIdsText] = useState(
+    (initialSettings?.cert_expiry_notify_chat_ids ?? []).join('\n')
+  )
+  const [certUserIdsText, setCertUserIdsText] = useState(
+    (initialSettings?.cert_expiry_notify_user_ids ?? []).join('\n')
+  )
+  const [certMilestonesText, setCertMilestonesText] = useState(
+    (initialSettings?.cert_expiry_notify_milestones ?? [30, 15, 7]).join(',')
+  )
   const [wsStatus, setWsStatus] = useState<WsStatus | null>(
     (initialWsStatus as WsStatus | null) ?? null
   )
@@ -154,6 +182,16 @@ export default function FeishuSettingsPage({
         .filter((n) => Number.isInteger(n) && n >= 0 && n <= 365),
       fire_expiry_notify_chat_ids: parseIds(fireChatIdsText),
       fire_expiry_notify_user_ids: parseIds(fireUserIdsText),
+      permit_notify_enabled: form.permit_notify_enabled,
+      permit_notify_chat_ids: parseIds(permitChatIdsText),
+      permit_notify_user_ids: parseIds(permitUserIdsText),
+      cert_expiry_notify_enabled: form.cert_expiry_notify_enabled,
+      cert_expiry_notify_milestones: certMilestonesText
+        .split(/[,，\s]+/)
+        .map((s) => parseInt(s, 10))
+        .filter((n) => Number.isInteger(n) && n >= 0 && n <= 365),
+      cert_expiry_notify_chat_ids: parseIds(certChatIdsText),
+      cert_expiry_notify_user_ids: parseIds(certUserIdsText),
     }),
     [form, notifyChatIdsText, notifyUserIdsText, dueChatIdsText, dueUserIdsText, milestonesText, fireChatIdsText, fireUserIdsText, fireMilestonesText]
   )
@@ -631,6 +669,91 @@ export default function FeishuSettingsPage({
               发送测试提醒
             </Button>
           </div>
+        </Space>
+      </Card>
+      <Card title="8 大作业票通知（提交/审批/验票/完工/复检催办卡片）">
+        <Space orientation="vertical" size={12} style={{ display: 'flex' }}>
+          <Switch
+            checked={form.permit_notify_enabled}
+            aria-label="启用作业票飞书通知"
+            onChange={(checked) =>
+              setForm((current) => ({
+                ...current,
+                permit_notify_enabled: checked,
+              }))
+            }
+          />
+          <Typography.Text type="secondary">
+            启用后作业票待办节点会向指派审批人发送互动卡片（可直接同意/驳回），
+            状态变化与动火/受限空间复检到期会通知相关人员；非生产环境自动推送被护栏拦截。
+          </Typography.Text>
+          <Space.Compact block>
+            <Button disabled style={{ cursor: 'default', width: 140 }}>
+              群 chat_id
+            </Button>
+            <Input
+              value={permitChatIdsText}
+              placeholder="抄送群 chat_id，多个用英文逗号分隔（oc_ 开头）"
+              onChange={(event) => setPermitChatIdsText(event.target.value)}
+            />
+          </Space.Compact>
+          <Space.Compact block>
+            <Button disabled style={{ cursor: 'default', width: 140 }}>
+              个人 open_id
+            </Button>
+            <Input
+              value={permitUserIdsText}
+              placeholder="抄送个人 open_id，多个用英文逗号分隔（ou_ 开头）"
+              onChange={(event) => setPermitUserIdsText(event.target.value)}
+            />
+          </Space.Compact>
+        </Space>
+      </Card>
+      <Card title="特种作业证件到期提醒">
+        <Space orientation="vertical" size={12} style={{ display: 'flex' }}>
+          <Switch
+            checked={form.cert_expiry_notify_enabled}
+            aria-label="启用证件到期提醒"
+            onChange={(checked) =>
+              setForm((current) => ({
+                ...current,
+                cert_expiry_notify_enabled: checked,
+              }))
+            }
+          />
+          <Space.Compact block>
+            <Button disabled style={{ cursor: 'default', width: 140 }}>
+              提醒节点
+            </Button>
+            <Input
+              value={certMilestonesText}
+              placeholder="提醒节点天数，如 30,15,7；0 表示已过期也提醒"
+              onChange={(event) => setCertMilestonesText(event.target.value)}
+            />
+          </Space.Compact>
+          <Space.Compact block>
+            <Button disabled style={{ cursor: 'default', width: 140 }}>
+              群 chat_id
+            </Button>
+            <Input
+              value={certChatIdsText}
+              placeholder="提醒群 chat_id，多个用英文逗号分隔（oc_ 开头）"
+              onChange={(event) => setCertChatIdsText(event.target.value)}
+            />
+          </Space.Compact>
+          <Space.Compact block>
+            <Button disabled style={{ cursor: 'default', width: 140 }}>
+              个人 open_id
+            </Button>
+            <Input
+              value={certUserIdsText}
+              placeholder="提醒个人 open_id，多个用英文逗号分隔（ou_ 开头）"
+              onChange={(event) => setCertUserIdsText(event.target.value)}
+            />
+          </Space.Compact>
+          <Typography.Text type="secondary">
+            每天自动检查证件有效期，进入提醒节点才推送，同一证件同一节点只提醒一次。
+          </Typography.Text>
         </Space>
       </Card>
       </Space>
