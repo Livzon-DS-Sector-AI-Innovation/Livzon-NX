@@ -48,14 +48,18 @@ def test_mirror_sync_loop_runs_until_stop_then_finishes(monkeypatch) -> None:
     """循环在 stop 置位后自然退出，不留悬挂任务。"""
 
     async def _run() -> None:
-        from contextlib import asynccontextmanager
+        from contextlib import asynccontextmanager, nullcontext
         from types import SimpleNamespace
         from unittest.mock import AsyncMock
 
         from app.modules.safety import scheduled as scheduled_module
         from app.modules.safety.service import page_table
 
-        # 循环第一轮就会开真实会话连库；单测注入假会话，专注退出语义
+        # 本测试只验证退出语义，隔离 Redis 准入及数据库会话。
+        monkeypatch.setattr(
+            scheduled_module, "business_activity", lambda _kind: nullcontext()
+        )
+
         @asynccontextmanager
         async def _fake_factory():
             yield SimpleNamespace(commit=AsyncMock(return_value=None))
