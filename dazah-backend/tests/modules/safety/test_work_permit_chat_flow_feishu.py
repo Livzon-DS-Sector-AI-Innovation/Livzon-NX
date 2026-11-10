@@ -1095,7 +1095,7 @@ async def test_chat_flow_service_real_steps(
     db_session: AsyncSession, stub_flow: type[_StubFlow]
 ) -> None:
     """真实 ChatFlowService 分步驱动（不经 handler stub）：发起→保存→汇总。"""
-    from app.core.redis import cache_delete, cache_get
+    from app.core.redis import cache_get
     from app.modules.safety.service.work_permit_chat_flow import ChatFlowService
 
     user = User(
