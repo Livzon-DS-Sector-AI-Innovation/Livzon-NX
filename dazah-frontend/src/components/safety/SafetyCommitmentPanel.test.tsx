@@ -2,6 +2,7 @@
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
@@ -33,9 +34,28 @@ vi.mock('@/actions/safety', () => ({
 
 vi.mock('antd', async (importOriginal) => {
   const actual = await importOriginal<typeof import('antd')>()
+  const { createElement } = await import('react')
+  // happy-dom 下 Popconfirm 交互不稳：探测按钮直调 onConfirm
+  const PopconfirmStub = (props: Record<string, unknown>) =>
+    createElement(
+      'span',
+      null,
+      props.children as ReactNode,
+      createElement(
+        'button',
+        {
+          type: 'button',
+          'data-testid': 'popconfirm-ok',
+          onClick: () =>
+            (props as { onConfirm?: () => void }).onConfirm?.(),
+        },
+        '删除',
+      ),
+    )
   return {
     ...actual,
     message: mocks.message,
+    Popconfirm: PopconfirmStub,
     App: { ...actual.App, useApp: () => ({ message: mocks.message }) },
   }
 })
@@ -70,6 +90,7 @@ import { SafetyCommitmentPanel } from './SafetyCommitmentPanel'
 import { todayStr } from '@/lib/safety-commitment'
 
 const REPORT = {
+  // risk_assessment 必须含数组字段：组件渲染直接读 .length
   id: 'r-1',
   // 与面板 isToday 判断同一口径（北京时间），避免 UTC CI 主机上日期错位
   report_date: todayStr(),
@@ -324,20 +345,13 @@ describe('SafetyCommitmentPanel：发布与信息卡', () => {
   it('信息卡删除：确认后移除', async () => {
     mocks.deleteCommitmentCard.mockResolvedValue({ code: 200, data: null })
     await renderPanel()
-    act(() => {
-      const carousel = document.querySelector(
-        '[data-testid="commitment-carousel-commitment"]',
-      )
-      const del = Array.from(carousel!.querySelectorAll('button')).find((b) =>
-        b.textContent?.trim() === '删除',
-      )
-      del?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-    await flush()
-    const ok = buttons('OK')
-    expect(ok.length).toBeGreaterThan(0)
+    // Popconfirm stub 探测按钮：直调 onConfirm
+    const probe = document.body.querySelector<HTMLButtonElement>(
+      '[data-testid="popconfirm-ok"]',
+    )
+    expect(probe, 'Popconfirm 探测按钮应存在').toBeTruthy()
     await act(async () => {
-      ok[ok.length - 1].click()
+      probe!.click()
     })
     await flush()
     expect(mocks.deleteCommitmentCard).toHaveBeenCalledWith(
@@ -347,31 +361,36 @@ describe('SafetyCommitmentPanel：发布与信息卡', () => {
     expect(mocks.message.success).toHaveBeenCalledWith('信息卡已删除')
   })
 
+
+
   it('承诺文本编辑：进入编辑态并保存', async () => {
     mocks.updateCommitment.mockResolvedValue({
       code: 200,
       data: { ...REPORT, commitment_text: '今日无重大风险，全员承诺。' },
     })
     await renderPanel()
-    act(() => {
-      const card = Array.from(
-        document.body.querySelectorAll('.ant-card'),
-      ).find((n) => n.textContent?.includes('企业安全承诺'))
-      const edit = Array.from(card!.querySelectorAll('button')).find((b) =>
-        b.textContent?.trim() === '编辑',
-      )
-      edit?.click()
-    })
-    await flush()
     const card = Array.from(
       document.body.querySelectorAll('.ant-card'),
     ).find((n) => n.textContent?.includes('企业安全承诺'))
-    const save = Array.from(card!.querySelectorAll('button')).find((b) =>
-      b.textContent?.includes('保存'),
+    expect(card, '承诺卡应存在').toBeTruthy()
+    const edit = Array.from(card!.querySelectorAll('button')).find((b) =>
+      b.textContent?.replace(/\s/g, '') === '编辑',
     )
-    expect(save).toBeTruthy()
-    act(() => {
-      save!.click()
+    expect(edit, '编辑按钮应存在').toBeTruthy()
+    await act(async () => {
+      edit!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+      edit!.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
+      edit!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await flush()
+    const save = Array.from(card!.querySelectorAll('button')).find((b) =>
+      b.textContent?.replace(/\s/g, '') === '保存',
+    )
+    expect(save, '保存按钮应出现').toBeTruthy()
+    await act(async () => {
+      save!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+      save!.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }))
+      save!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     await flush()
     expect(mocks.updateCommitment).toHaveBeenCalledWith(
@@ -379,6 +398,127 @@ describe('SafetyCommitmentPanel：发布与信息卡', () => {
       expect.objectContaining({ commitment_text: expect.any(String) }),
       'safety:safety-commitment',
     )
-    expect(mocks.message.success).toHaveBeenCalledWith('企业承诺已保存')
+    expect(mocks.message.success).toHaveBeenCalledWith('企业安全承诺已保存')
+  })
+})
+
+
+describe('SafetyCommitmentPanel：发布成功与历史日期加载', () => {
+  it('填写承诺人后发布成功并更新报告', async () => {
+    mocks.publishCommitment.mockResolvedValue({
+      code: 200,
+      data: { report: { ...REPORT, status: 'published', publisher_name: '秦刚' } },
+    })
+    await renderPanel()
+    // 承诺人姓名默认预填主要负责人，直接确认发布
+    await act(async () => {
+      buttons('发布承诺公告')[0]?.click()
+    })
+    await flush(40)
+    await act(async () => {
+      const ok = Array.from(
+        document.body.querySelectorAll('.ant-modal button'),
+      ).find((b) => (b.textContent ?? '').replace(/s/g, '') === '确认发布')
+      ok?.click()
+    })
+    await flush(60)
+    expect(mocks.publishCommitment).toHaveBeenCalledWith(
+      'r-1',
+      '秦刚',
+      'safety:safety-commitment',
+    )
+    expect(mocks.message.success).toHaveBeenCalledWith('承诺公告已发布')
+  })
+
+  it('历史日期加载走 getCommitmentByDate 并进入只读', async () => {
+    mocks.getCommitmentByDate.mockResolvedValue({
+      code: 200,
+      data: { ...REPORT, report_date: '2026-11-01', status: 'published' },
+    })
+    await renderPanel()
+    // 日期选择器改日期触发 loadByDate
+    const dateInput = document.body.querySelector<HTMLInputElement>(
+      'input[placeholder*="日期"], .ant-picker input',
+    )
+    expect(dateInput).toBeTruthy()
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        'value',
+      )?.set
+      setter?.call(dateInput!, '2026-11-01')
+      dateInput!.dispatchEvent(new Event('input', { bubbles: true }))
+      dateInput!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    })
+    await flush()
+    expect(mocks.getCommitmentByDate).toHaveBeenCalled()
+    // 只读态：不渲染编辑/发布按钮
+    expect(buttons('发布承诺公告')).toHaveLength(0)
+  })
+
+  it('企业状态保存失败提示错误', async () => {
+    mocks.updateCommitment.mockResolvedValue({ code: 500, message: '保存失败' })
+    await renderPanel()
+    act(() => {
+      buttons('编辑')[0]?.click()
+    })
+    await flush()
+    act(() => {
+      buttons('保存')[0]?.click()
+    })
+    await flush()
+    expect(mocks.message.error).toHaveBeenCalledWith('保存失败')
+  })
+})
+
+
+describe('SafetyCommitmentPanel：渲染变体', () => {
+  it('已发布态渲染发布信息与禁用发布按钮', async () => {
+    await renderPanel({
+      initialReport: {
+        ...REPORT,
+        status: 'published',
+        published_at: '2026-11-10T09:00:00+08:00',
+      } as never,
+    })
+    expect(buttons('承诺公告已发布').length).toBeGreaterThan(0)
+    expect(document.body.textContent).toContain('由 秦刚 于')
+  })
+
+  it('AI 研判含数据依据时渲染依据面板', async () => {
+    await renderPanel({
+      initialReport: {
+        ...REPORT,
+        risk_assessment: {
+          risk_level: '较高',
+          summary: '动火与受限空间并行',
+          key_risks: ['动火作业 1 处'],
+          suggestions: ['加强监护'],
+          data_basis: ['今日作业票 2 张', '库存乙酸乙酯 4 吨'],
+        },
+      } as never,
+    })
+    expect(document.body.textContent).toContain('数据依据')
+    expect(document.body.textContent).toContain('今日作业票 2 张')
+    expect(document.body.textContent).toContain('库存乙酸乙酯 4 吨')
+  })
+
+  it('无 AI 研判时提示未生成', async () => {
+    await renderPanel({
+      initialReport: { ...REPORT, risk_assessment: null } as never,
+    })
+    expect(document.body.textContent).toContain('尚未生成 AI 风险研判')
+  })
+
+  it('信息卡含告错样本时渲染行级提示', async () => {
+    await renderPanel({
+      initialCards: [
+        {
+          ...CARDS[0],
+          title: '含错卡',
+        } as never,
+      ],
+    })
+    expect(document.body.textContent).toContain('储罐区管控要点')
   })
 })

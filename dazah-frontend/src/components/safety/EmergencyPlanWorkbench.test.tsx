@@ -446,3 +446,61 @@ describe('EmergencyPlanWorkbench', () => {
     expect(review?.disabled).toBe(true)
   })
 })
+
+describe('EmergencyPlanWorkbench：导出与编辑守卫', () => {
+  it('导出 Word 成功提示已导出', async () => {
+    await renderWorkbench()
+    const exportBtn = Array.from(
+      container!.querySelectorAll('button'),
+    ).find((b) => b.textContent?.includes('导出 Word'))
+    expect(exportBtn).toBeTruthy()
+    await act(async () => {
+      exportBtn!.click()
+      await new Promise((resolve) => setTimeout(resolve, 60))
+    })
+    expect(mocks.message.success).toHaveBeenCalledWith('已导出 Word')
+  })
+
+  it('导出失败透传错误消息', async () => {
+    mocks.fetchEmergencyPlanDocxBytes.mockRejectedValue(
+      new Error('LibreOffice 渲染失败'),
+    )
+    await renderWorkbench()
+    const exportBtn = Array.from(
+      container!.querySelectorAll('button'),
+    ).find((b) => b.textContent?.includes('导出 Word'))
+    await act(async () => {
+      exportBtn!.click()
+      await new Promise((resolve) => setTimeout(resolve, 60))
+    })
+    expect(mocks.message.error).toHaveBeenCalledWith('LibreOffice 渲染失败')
+  })
+
+  it('脏内容下 Ctrl+S 触发保存', async () => {
+    await renderWorkbench()
+    const textarea = container!.querySelector<HTMLTextAreaElement>(
+      'textarea',
+    )
+    expect(textarea).toBeTruthy()
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(
+        HTMLTextAreaElement.prototype,
+        'value',
+      )?.set
+      setter?.call(textarea!, '修改后的引言')
+      textarea!.dispatchEvent(new Event('input', { bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    })
+    await act(async () => {
+      window.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: 's',
+          ctrlKey: true,
+          bubbles: true,
+        }),
+      )
+      await new Promise((resolve) => setTimeout(resolve, 60))
+    })
+    expect(mocks.saveEmergencyPlanContent).toHaveBeenCalled()
+  })
+})
