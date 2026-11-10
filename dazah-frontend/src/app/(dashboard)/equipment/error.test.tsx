@@ -23,12 +23,13 @@ describe('equipment error pages', () => {
   ])('shows a Chinese recovery message on %s', (title, ErrorPage) => {
     const markup = renderToStaticMarkup(React.createElement(ErrorPage, {
       error: new Error('Failed to fetch'),
-      unstable_retry: () => undefined,
+      retry: () => undefined,
     }))
 
     expect(markup).toContain(title)
     expect(markup).toContain('网络连接失败，请检查网络后重试')
     expect(markup).toContain('重试')
+    expect(markup).not.toContain('>刷新页面<')
     expect(markup).not.toContain('Failed to fetch')
   })
 })

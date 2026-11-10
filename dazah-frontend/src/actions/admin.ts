@@ -3,8 +3,9 @@
 import { cookies } from "next/headers"
 import { revalidatePath } from "next/cache"
 import type { components } from "@/types/generated/schema"
-import { permissionActionResult } from "@/lib/permission-action-result"
+import { permissionActionResult, type PermissionActionResult } from "@/lib/permission-action-result"
 import { getAuthHeaders } from "@/lib/auth"
+import { roleCodeError, roleNameError, trimRoleWhitespace } from "@/lib/role-creation"
 
 const API_BASE =
   process.env.API_BASE_URL ||
@@ -80,14 +81,29 @@ async function handleResponse(res: Response): Promise<unknown> {
 
 // ── 角色 ────────────────────────────────────────────────────────────
 
-export async function createRole(data: RoleCreateRequest) {
+function revalidateRoleManagement() {
+  revalidatePath("/system/roles")
+  revalidatePath("/settings")
+}
+
+export async function createRole(data: RoleCreateRequest): Promise<PermissionActionResult<unknown>> {
+  const error = roleNameError(data?.name) ?? roleCodeError(data?.code)
+  if (error) return { ok: false, status: 422, message: error }
+  const body: RoleCreateRequest = {
+    name: trimRoleWhitespace(data.name),
+    code: trimRoleWhitespace(data.code),
+    description: data.description,
+  }
   const res = await authedFetch("/identity/admin/roles", {
     method: "POST",
-    body: JSON.stringify(data),
+    body: JSON.stringify(body),
   })
+  if (res.status === 409) {
+    return { ok: false, status: 409, message: "角色标识已存在，请更换" }
+  }
   const result = await handleResponse(res)
-  revalidatePath("/system/roles")
-  return result
+  revalidateRoleManagement()
+  return { ok: true, data: result }
 }
 
 export async function updateRole(
@@ -99,7 +115,7 @@ export async function updateRole(
     body: JSON.stringify(data),
   })
   const result = await handleResponse(res)
-  revalidatePath("/system/roles")
+  revalidateRoleManagement()
   return result
 }
 
@@ -108,7 +124,7 @@ export async function deleteRole(roleId: string) {
     method: "DELETE",
   })
   const result = await handleResponse(res)
-  revalidatePath("/system/roles")
+  revalidateRoleManagement()
   return result
 }
 

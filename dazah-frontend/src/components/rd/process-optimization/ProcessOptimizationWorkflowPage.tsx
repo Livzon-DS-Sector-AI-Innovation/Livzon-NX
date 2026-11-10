@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { Steps, Card, Button, Space, Tag, App, Tabs } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
 import { SaveOutlined, CheckCircleFilled, ClockCircleFilled } from '@ant-design/icons'
@@ -12,6 +12,7 @@ import { ModuleScaleUp } from './ModuleScaleUp'
 import { ModuleLabConfirmation } from './ModuleLabConfirmation'
 import { ModuleReport } from './ModuleReport'
 import { updateOptimization } from '@/lib/api/rd'
+import { useWorkflowAutosave } from '../useWorkflowAutosave'
 import type {
   OptimizationModule,
   DOEExperiment,
@@ -96,7 +97,7 @@ export function ProcessOptimizationWorkflowPage({
 
   const allParallelComplete = parallelComplete.doe && parallelComplete.impurity && parallelComplete.crystal
 
-  const saveState = async () => {
+  const saveState = useCallback(async () => {
     const moduleKeyMap: Record<number, OptimizationModule> = {
       0: allParallelComplete ? 'quality' : (activeParallelTab as OptimizationModule),
       1: 'quality',
@@ -138,19 +139,19 @@ export function ProcessOptimizationWorkflowPage({
       updatedAt: new Date().toISOString(),
     }
     localStorage.setItem(`optimization-workflow-${optimizationId}`, JSON.stringify(state))
-  }
+  }, [currentStep, allParallelComplete, activeParallelTab, doeExperiment, impurityStudy, crystalFormStudy,
+    qualityStandardSet, labConfirmationStudy, scaleUpStudy, optimizationId, optimizationName, sourceRouteId, sourceRouteName])
+  const { runBeforeExit, saving } = useWorkflowAutosave(saveState)
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      saveState()
-    }, 2000)
-    return () => clearTimeout(timer)
-  }, [currentStep, activeParallelTab, doeExperiment, impurityStudy, crystalFormStudy, qualityStandardSet, labConfirmationStudy, scaleUpStudy])
-
-  const handleSaveAndExit = () => {
-    saveState()
-    message.success('✓ 已保存！您可以随时回来继续')
-    onBack()
+  const handleSaveAndExit = async () => {
+    try {
+      await runBeforeExit(saveState, () => {
+        message.success('已保存当前进度')
+        onBack()
+      })
+    } catch {
+      message.error('进度保存失败，请重试')
+    }
   }
 
   // 并行模块完成回调 — 不自动跳转，仅标记完成
@@ -200,9 +201,12 @@ export function ProcessOptimizationWorkflowPage({
     message.success('公斤级放大完成！进入报告生成')
   }
   // 报告完成
-  const handleReportComplete = () => {
-    localStorage.removeItem(`optimization-workflow-${optimizationId}`)
-    onComplete()
+  const handleReportComplete = async () => {
+    try {
+      await runBeforeExit(async () => { localStorage.removeItem(`optimization-workflow-${optimizationId}`) }, onComplete)
+    } catch {
+      message.error('无法清除浏览器中的工作流进度，请重试')
+    }
   }
 
   // 并行模块 Tab 项
@@ -268,7 +272,7 @@ export function ProcessOptimizationWorkflowPage({
       <Card style={{ marginTop: 16 }}>
         <Space style={{ width: '100%', justifyContent: 'space-between' }}>
           <Space>
-            <Button onClick={onBack}>← 返回列表</Button>
+            <Button onClick={() => void runBeforeExit(null, onBack)} disabled={saving}>← 返回列表</Button>
             {canGoBack && (
               <Button onClick={() => setCurrentStep(currentStep - 1)}>← 上一步</Button>
             )}
@@ -296,7 +300,7 @@ export function ProcessOptimizationWorkflowPage({
                 进入质量标准 →
               </Button>
             )}
-            <Button icon={<SaveOutlined />} onClick={handleSaveAndExit} type="dashed">
+            <Button icon={<SaveOutlined />} onClick={handleSaveAndExit} loading={saving} type="dashed">
               💾 保存并退出
             </Button>
           </Space>

@@ -7,8 +7,14 @@ import type { PermissionItem, RoleItem } from "@/lib/api/client/admin"
 import type { DepartmentItem } from "@/lib/api/server/admin"
 import type { MenuFlatItem } from "@/lib/menu-tree"
 import { createRole, deleteRole, updateRole } from "@/actions/admin"
+import {
+  ROLE_CODE_MAX_LENGTH, ROLE_NAME_MAX_LENGTH, roleCodeError, roleNameError, trimRoleWhitespace,
+} from "@/lib/role-creation"
+import type { components } from "@/types/generated/schema"
 import { RolePagePermissionsDrawer } from "./RolePagePermissionsDrawer"
 import { roleTagColor } from "@/lib/role-tag"
+
+type RoleFormValues = components["schemas"]["RoleCreateRequest"]
 
 interface RoleManagerProps {
   initialRoles: RoleItem[]
@@ -17,14 +23,14 @@ interface RoleManagerProps {
   initialDepartments: DepartmentItem[]
 }
 
-export function RoleManager({ initialRoles, initialDepartments }: RoleManagerProps) {
+export function RoleManager({ initialRoles: roles, initialDepartments }: RoleManagerProps) {
   const { message } = App.useApp()
-  const [roles, setRoles] = useState(initialRoles)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [editing, setEditing] = useState<RoleItem | "new" | null>(null)
   const [pageRole, setPageRole] = useState<RoleItem | null>(null)
   const [saving, setSaving] = useState(false)
-  const [form] = Form.useForm()
+  const [form] = Form.useForm<RoleFormValues>()
+  const creating = editing === "new"
 
   const openCreate = () => {
     setEditing("new")
@@ -36,19 +42,30 @@ export function RoleManager({ initialRoles, initialDepartments }: RoleManagerPro
     form.setFieldsValue(role)
     setDrawerOpen(true)
   }
-  const save = async () => {
-    const values = await form.validateFields()
+  const save = async (values: RoleFormValues) => {
+    if (saving) return
     setSaving(true)
     try {
-      if (editing === "new") {
-        await createRole(values)
+      if (creating) {
+        const result = await createRole({
+          ...values,
+          name: trimRoleWhitespace(values.name),
+          code: trimRoleWhitespace(values.code),
+        })
+        if (!result.ok) {
+          if (result.status === 409) {
+            form.setFields([{ name: "code", errors: [result.message] }])
+          } else {
+            message.error(result.message)
+          }
+          return
+        }
         message.success("角色已创建；请在页面权限中设置最小授权基线")
       } else if (editing) {
         await updateRole(editing.id, { name: values.name, description: values.description })
         message.success("角色信息已更新")
       }
       setDrawerOpen(false)
-      window.location.reload()
     } catch (error) {
       message.error(error instanceof Error ? error.message : "保存失败")
     } finally {
@@ -58,7 +75,6 @@ export function RoleManager({ initialRoles, initialDepartments }: RoleManagerPro
   const remove = async (role: RoleItem) => {
     try {
       await deleteRole(role.id)
-      setRoles((current) => current.filter((item) => item.id !== role.id))
       message.success("角色已删除")
     } catch (error) {
       message.error(error instanceof Error ? error.message : "删除失败")
@@ -69,7 +85,8 @@ export function RoleManager({ initialRoles, initialDepartments }: RoleManagerPro
     <div className="mb-3"><Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
       新建角色
     </Button></div>
-    <Table rowKey="id" dataSource={roles} pagination={false} tableLayout="fixed" scroll={{ x: 900 }} columns={[
+    <Table rowKey="id" dataSource={roles} tableLayout="fixed" scroll={{ x: 900 }}
+      pagination={{ pageSize: 20, showSizeChanger: false }} columns={[
       { title: "角色名称", dataIndex: "name", key: "name", width: 120, ellipsis: true },
       { title: "角色标识", dataIndex: "code", key: "code", width: 180, ellipsis: true },
       { title: "类型", dataIndex: "is_system", key: "is_system", width: 110, render: (value: boolean, role: RoleItem) => {
@@ -94,15 +111,25 @@ export function RoleManager({ initialRoles, initialDepartments }: RoleManagerPro
       </div> },
     ]} />
 
-    <Drawer title={editing === "new" ? "新建角色" : "编辑角色信息"} size={520}
-      open={drawerOpen} onClose={() => setDrawerOpen(false)}
-      extra={<Button type="primary" loading={saving} onClick={save}>保存</Button>}>
-      <Form form={form} layout="vertical">
-        <Form.Item name="name" label="角色名称" rules={[{ required: true, message: "请输入角色名称" }]}>
+    <Drawer title={creating ? "新建角色" : "编辑角色信息"} size={520}
+      open={drawerOpen} onClose={() => { if (!saving) setDrawerOpen(false) }}
+      extra={<Button type="primary" loading={saving} onClick={() => form.submit()}>保存</Button>}>
+      <Form form={form} layout="vertical" disabled={saving} onFinish={save}>
+        <Form.Item name="name" label="角色名称" required
+          extra={creating && `1–${ROLE_NAME_MAX_LENGTH} 个字符，支持中文和数字。自动去除首尾空白，中间不能有空白。`}
+          rules={creating ? [{ validator: async (_, value: unknown) => {
+            const error = roleNameError(value)
+            if (error) throw new Error(error)
+          } }] : [{ required: true, message: "请输入角色名称" }]}>
           <Input placeholder="如：质量审核员" />
         </Form.Item>
-        <Form.Item name="code" label="角色标识" rules={[{ required: true, message: "请输入角色标识" }]}>
-          <Input placeholder="如：qa_auditor" disabled={editing !== "new"} />
+        <Form.Item name="code" label="角色标识" required
+          extra={creating && `1–${ROLE_CODE_MAX_LENGTH} 个字符，限英文字母、数字和 _ . : -，不能与未删除的角色重复。自动去除首尾空白，中间不能有空白。`}
+          rules={creating ? [{ validator: async (_, value: unknown) => {
+            const error = roleCodeError(value)
+            if (error) throw new Error(error)
+          } }] : [{ required: true, message: "请输入角色标识" }]}>
+          <Input placeholder="如：qa_auditor" disabled={!creating || saving} />
         </Form.Item>
         <Form.Item name="description" label="职责说明"><Input.TextArea rows={3} /></Form.Item>
       </Form>

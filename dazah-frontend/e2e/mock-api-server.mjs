@@ -5,6 +5,7 @@ import { businessTodoUser, handleBusinessTodos } from './business-todos-api.mjs'
 import { handleEnergyRequest } from './energy-api.mjs'
 import { handleProductionOverlays } from './production-api.mjs'
 import { handleModuleOverlays } from './module-overlays-api.mjs'
+import { handleCriticalBusiness } from './critical-business-api.mjs'
 
 const port = Number(process.env.E2E_MOCK_API_PORT || 4100)
 
@@ -191,6 +192,7 @@ const server = createServer(async (request, response) => {
   if (await handleFeedbackRequest(request, response)) return
   const authorization = request.headers.authorization || ''
   const pageTestToken = authorization.replace('Bearer ', '')
+  if (await handleCriticalBusiness(request, response, pageTestToken, currentUser)) return
   if (handleModuleOverlays(request, response, pageTestToken)) return
   if (handleProductionOverlays(request, response, pageTestToken)) return
   if (await handleEnergyRequest(request, response, pageTestToken)) return

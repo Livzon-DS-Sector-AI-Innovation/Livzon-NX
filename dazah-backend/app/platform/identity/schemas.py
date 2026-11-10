@@ -1,9 +1,15 @@
 import json
 from datetime import datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    Field,
+    StringConstraints,
+    field_validator,
+    model_validator,
+)
 
 UserRole = Literal["admin", "user"]
 UserStatus = Literal["active", "disabled"]
@@ -786,8 +792,21 @@ class RoleResponse(BaseModel):
 
 
 class RoleCreateRequest(BaseModel):
-    name: str = Field(min_length=1, max_length=100)
-    code: str = Field(min_length=1, max_length=64, pattern=r"^[A-Za-z0-9_.:-]+$")
+    name: Annotated[
+        str,
+        StringConstraints(
+            strip_whitespace=True, min_length=1, max_length=100, pattern=r"^\S+$"
+        ),
+    ]
+    code: Annotated[
+        str,
+        StringConstraints(
+            strip_whitespace=True,
+            min_length=1,
+            max_length=64,
+            pattern=r"^[A-Za-z0-9_.:-]+$",
+        ),
+    ]
     description: str | None = Field(default=None, max_length=255)
 
 

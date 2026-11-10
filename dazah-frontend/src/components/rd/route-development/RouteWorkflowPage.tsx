@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Steps, Card, Button, Space, Tag, App } from 'antd'
 import { SaveOutlined } from '@ant-design/icons'
 import { ModuleResearch } from './ModuleResearch'
@@ -9,6 +9,7 @@ import { ModuleAssessment } from './ModuleAssessment'
 import { ModuleConfirmation } from './ModuleConfirmation'
 import type { WorkflowModule, CandidateRoute, ExperimentRecord, DimensionAssessment, ExperimentPlan, RouteStatus } from '@/types/rd'
 import { fetchRouteById, updateRoute } from '@/lib/api/rd'
+import { useWorkflowAutosave } from '../useWorkflowAutosave'
 
 interface RouteWorkflowPageProps {
   routeId: string
@@ -29,6 +30,8 @@ interface WorkflowState {
   literatureSource: string
   updatedAt: string
 }
+
+type ResearchProgress = Pick<WorkflowState, 'selectedRoutes' | 'selectedRouteIds' | 'experimentPlans'>
 
 const stepConfig: { key: WorkflowModule; title: string; description: string }[] = [
   { key: 'research', title: '文献解析+实验方案', description: 'LLM解析文献，生成方案' },
@@ -68,13 +71,14 @@ export function RouteWorkflowPage({ routeId, routeName, literatureSource = '', l
   const [assessment, setAssessment] = useState<DimensionAssessment | null>(initialState.assessment)
 
   // 保存状态到后端 + localStorage 备份
-  const saveState = async () => {
+  const saveState = useCallback(async (research?: ResearchProgress) => {
+    const progress = research ?? { selectedRouteIds, selectedRoutes, experimentPlans }
     const updateData = {
       current_module: stepConfig[currentStep]?.key || 'research',
       status: (currentStep >= 3 ? 'completed' : 'in_progress') as RouteStatus,
-      selected_route_ids: selectedRouteIds,
-      candidate_routes: selectedRoutes,
-      experiment_plans: experimentPlans,
+      selected_route_ids: progress.selectedRouteIds,
+      candidate_routes: progress.selectedRoutes,
+      experiment_plans: progress.experimentPlans,
       assessment: assessment ?? undefined,
     }
     
@@ -88,24 +92,15 @@ export function RouteWorkflowPage({ routeId, routeName, literatureSource = '', l
     // localStorage 作为离线备份
     const state: WorkflowState = {
       currentStep,
-      selectedRouteIds,
-      selectedRoutes,
-      experimentPlans,
+      ...progress,
       allExperiments,
       assessment,
       literatureSource,
       updatedAt: new Date().toISOString(),
     }
     localStorage.setItem(`workflow-${routeId}`, JSON.stringify(state))
-  }
-
-  // 自动保存（防抖）
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      saveState()
-    }, 2000) // 2秒防抖
-    return () => clearTimeout(timer)
-  }, [currentStep, selectedRouteIds, selectedRoutes, experimentPlans, allExperiments, assessment])
+  }, [currentStep, selectedRouteIds, selectedRoutes, experimentPlans, allExperiments, assessment, literatureSource, routeId])
+  const { runBeforeExit, saving } = useWorkflowAutosave(saveState)
 
   // 从后端加载最新数据
   useEffect(() => {
@@ -142,10 +137,15 @@ export function RouteWorkflowPage({ routeId, routeName, literatureSource = '', l
   }, [routeId])
 
   // 保存并退出
-  const handleSaveAndExit = () => {
-    saveState()
-    message.success('✓ 已保存！您可以随时回来继续')
-    onBack()
+  const handleSaveAndExit = async (research?: ResearchProgress) => {
+    try {
+      await runBeforeExit(() => saveState(research), () => {
+        message.success('已保存当前进度')
+        onBack()
+      })
+    } catch {
+      message.error('进度保存失败，请重试')
+    }
   }
 
   // Module 1 完成
@@ -174,14 +174,11 @@ export function RouteWorkflowPage({ routeId, routeName, literatureSource = '', l
     selectedRouteIds: string[]
     experimentPlans: ExperimentPlan[]
   }) => {
-    const selected = data.candidateRoutes.filter(r => data.selectedRouteIds.includes(r.id))
-    setSelectedRoutes(selected)
-    setSelectedRouteIds(data.selectedRouteIds)
-    setExperimentPlans(data.experimentPlans)
-    
-    setTimeout(() => {
-      onBack()
-    }, 500)
+    return handleSaveAndExit({
+      selectedRoutes: data.candidateRoutes.filter(route => data.selectedRouteIds.includes(route.id)),
+      selectedRouteIds: data.selectedRouteIds,
+      experimentPlans: data.experimentPlans,
+    })
   }
 
   // Module 2 完成
@@ -206,10 +203,12 @@ export function RouteWorkflowPage({ routeId, routeName, literatureSource = '', l
   }
 
   // Module 4 完成
-  const handleConfirmationComplete = () => {
-    // 清除保存的状态
-    localStorage.removeItem(`workflow-${routeId}`)
-    onComplete()
+  const handleConfirmationComplete = async () => {
+    try {
+      await runBeforeExit(async () => { localStorage.removeItem(`workflow-${routeId}`) }, onComplete)
+    } catch {
+      message.error('无法清除浏览器中的工作流进度，请重试')
+    }
   }
 
   const currentRouteName = currentTrialRoute
@@ -243,6 +242,7 @@ export function RouteWorkflowPage({ routeId, routeName, literatureSource = '', l
           } : undefined}
           onComplete={handleResearchComplete} 
           onSaveAndExit={handleResearchSaveAndExit}
+          saving={saving}
         />
       )}
       {currentStep === 1 && currentTrialRoute && (
@@ -278,7 +278,7 @@ export function RouteWorkflowPage({ routeId, routeName, literatureSource = '', l
       <Card style={{ marginTop: 16 }}>
         <Space style={{ width: '100%', justifyContent: 'space-between' }}>
           <Space>
-            <Button onClick={onBack}>← 返回列表</Button>
+            <Button onClick={() => void runBeforeExit(null, onBack)} disabled={saving}>← 返回列表</Button>
             {currentStep > 0 && currentStep < 3 && (
               <Button onClick={() => setCurrentStep(currentStep - 1)}>← 上一步</Button>
             )}
@@ -291,13 +291,11 @@ export function RouteWorkflowPage({ routeId, routeName, literatureSource = '', l
             {currentStep >= 2 && (
               <Tag color="green">实验记录：{allExperiments.length}条</Tag>
             )}
-            <Button 
-              icon={<SaveOutlined />} 
-              onClick={handleSaveAndExit}
-              type="dashed"
-            >
-              💾 保存并退出
-            </Button>
+            {currentStep > 0 && (
+              <Button icon={<SaveOutlined />} onClick={() => void handleSaveAndExit()} loading={saving} type="dashed">
+                💾 保存并退出
+              </Button>
+            )}
           </Space>
         </Space>
       </Card>

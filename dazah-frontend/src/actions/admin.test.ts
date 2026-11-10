@@ -23,6 +23,7 @@ describe('system permission server actions', () => {
     expect(request).toHaveBeenCalledWith(expect.stringContaining('/roles/role-1'), expect.objectContaining({
       headers: expect.objectContaining({ 'X-Forwarded-For': '198.51.100.23', Authorization: 'Bearer system-admin-token' }),
     }))
+    expect(mocks.revalidatePath.mock.calls).toEqual([['/system/roles'], ['/settings']])
   })
   it.each([undefined, { value: '' }])('blocks unauthenticated writes and exports before contacting the backend (%j)', async (token) => {
     mocks.cookies.mockResolvedValueOnce({ get: vi.fn().mockReturnValue(token) })
@@ -210,18 +211,46 @@ describe('system permission server actions', () => {
     )
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(createRole({ name: '质量管理员', code: 'quality-admin' } as never)).resolves.toEqual({
-      id: 'role-1',
+    await expect(createRole({ name: ' 质量管理员\u3000', code: ' quality-admin ' })).resolves.toEqual({
+      ok: true, data: { id: 'role-1' },
     })
 
     expect(String(fetchMock.mock.calls[0][0])).toContain('/api/v1/identity/admin/roles')
     expect(fetchMock.mock.calls[0][1]).toEqual(
       expect.objectContaining({
         method: 'POST',
+        body: JSON.stringify({ name: '质量管理员', code: 'quality-admin' }),
         headers: expect.objectContaining({ Authorization: 'Bearer system-admin-token' }),
       }),
     )
-    expect(mocks.revalidatePath).toHaveBeenCalledWith('/system/roles')
+    expect(mocks.revalidatePath.mock.calls).toEqual([['/system/roles'], ['/settings']])
+  })
+
+  it('refreshes both role management views after updating a role', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: { id: 'role-1' } }))))
+    await adminActions.updateRole('role-1', { name: '质量负责人' })
+    expect(mocks.revalidatePath.mock.calls).toEqual([['/system/roles'], ['/settings']])
+  })
+
+  it('rejects invalid role fields locally and preserves the backend conflict status', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ message: '角色编码已存在' }), { status: 409 }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(createRole({ name: ' \u3000 ', code: 'quality-admin' })).resolves.toMatchObject({
+      ok: false, status: 422, message: '请输入角色名称',
+    })
+    await expect(createRole({ name: '质量管理员', code: 'quality admin' })).resolves.toMatchObject({
+      ok: false, status: 422, message: '角色标识中间不能有空白',
+    })
+    expect(fetchMock).not.toHaveBeenCalled()
+
+    await expect(createRole({ name: '质量管理员', code: ' quality-admin ' })).resolves.toEqual({
+      ok: false, status: 409, message: '角色标识已存在，请更换',
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(mocks.revalidatePath).not.toHaveBeenCalled()
   })
 
   it('covers all system permission server-action contracts', async () => {
@@ -291,12 +320,12 @@ describe('system permission server actions', () => {
       .mockResolvedValueOnce(new Response('upstream unavailable', { status: 502, statusText: 'Bad Gateway' }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ message: '导出被拒绝' }), { status: 403 }))
     vi.stubGlobal('fetch', fetchMock)
-    await expect(adminActions.createRole({ name: '质量管理员', code: 'quality-admin' } as never)).rejects.toThrow('请求失败 (502)')
+    await expect(createRole({ name: '质量管理员', code: 'quality-admin' })).rejects.toThrow('请求失败 (502)')
     await expect(adminActions.exportPermissions()).rejects.toThrow('导出被拒绝')
   })
 
   it('accepts successful empty responses from role writes', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('', { status: 200 })))
-    await expect(adminActions.createRole({ name: '质量管理员', code: 'quality-admin' } as never)).resolves.toBeNull()
+    await expect(createRole({ name: '质量管理员', code: 'quality-admin' })).resolves.toEqual({ ok: true, data: null })
   })
 })
