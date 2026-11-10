@@ -399,6 +399,7 @@ describe('SafetyCommitmentPanel：发布与信息卡', () => {
       'safety:safety-commitment',
     )
     expect(mocks.message.success).toHaveBeenCalledWith('企业安全承诺已保存')
+
   })
 })
 
