@@ -136,6 +136,11 @@ class Settings(BaseSettings):
     LOCAL_LOGIN_MODE: Literal["disabled", "admin_only", "enabled"] | None = None
     ALLOW_PRODUCTION_LOCAL_LOGIN: bool = False
 
+    # Additional browser origins (comma-separated, e.g. "http://192.168.40.125:3000")
+    # allowed to send authenticated write requests when the frontend is accessed
+    # via a LAN address instead of FRONTEND_URL. Empty by default.
+    BROWSER_EXTRA_ORIGINS: str = ""
+
     # Module access is grant-based in production. ``all`` is retained only as
     # a development compatibility override for older local environments.
     MODULE_ACCESS_MODE: Literal["roles", "all"] | None = None
@@ -303,6 +308,19 @@ class Settings(BaseSettings):
             other = "127.0.0.1" if parsed.hostname == "localhost" else "localhost"
             port = f":{parsed.port}" if parsed.port else ""
             origins.append(f"{parsed.scheme}://{other}{port}")
+        for extra in self.BROWSER_EXTRA_ORIGINS.split(","):
+            extra = extra.strip()
+            if not extra:
+                continue
+            parsed_extra = urlsplit(extra)
+            if (
+                parsed_extra.scheme in {"http", "https"}
+                and parsed_extra.netloc
+                and not parsed_extra.path
+            ):
+                normalized = f"{parsed_extra.scheme}://{parsed_extra.netloc}"
+                if normalized not in origins:
+                    origins.append(normalized)
         return origins
 
     @property

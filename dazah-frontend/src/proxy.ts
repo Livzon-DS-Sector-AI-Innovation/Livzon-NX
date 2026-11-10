@@ -4,7 +4,7 @@ import type { NextRequest } from 'next/server'
 import { getServerApiBaseUrl } from '@/lib/server-api'
 import { getModuleByKey, getPageKeyByPath, getAuthorizedPageMenus, getAuthorizedDirectoryEntryPath, expandEquipmentPagePermissions } from '@/lib/menu-config'
 import type { SubMenuItem } from '@/lib/menu-config'
-import { isEquipmentModule } from '@/lib/equipment-page-permissions'
+import { EQUIPMENT_CONSOLE_MODULE_HEADER, isEquipmentModule } from '@/lib/equipment-page-permissions'
 import type { User } from '@/types/user'
 import { isSystemAdministrator, isSystemSettingsPath } from '@/lib/administrator-role'
 
@@ -70,6 +70,12 @@ export async function proxy(request: NextRequest) {
 
   const requestHeaders = new Headers(request.headers)
   requestHeaders.set('X-Dazah-Page-Path', request.nextUrl.pathname)
+  requestHeaders.delete(EQUIPMENT_CONSOLE_MODULE_HEADER)
+  const consoleModule = request.nextUrl.pathname === '/equipment'
+    ? request.nextUrl.searchParams.get('module')
+    : null
+  const hasConsoleModule = isEquipmentModule(consoleModule)
+  if (hasConsoleModule) requestHeaders.set(EQUIPMENT_CONSOLE_MODULE_HEADER, consoleModule)
   const currentModule = getModuleByKey(request.nextUrl.pathname.split('/')[1])
   if (currentModule || isSystemSettingsPath(request.nextUrl.pathname)) {
     // This gate runs before the App Router evaluates any child Server Component.
@@ -103,12 +109,7 @@ export async function proxy(request: NextRequest) {
     if (user.role !== 'admin') {
       // 设备统一工作台（/equipment）由 ?module= 决定具体功能页 key：
       // 带有效模块参数时逐模块校验授权，不带参数时按模块根入口逻辑放行
-      const consoleModuleParam = currentModule.moduleCode === 'equipment'
-        && request.nextUrl.pathname === '/equipment'
-        ? request.nextUrl.searchParams.get('module')
-        : null
-      const hasConsoleModuleParam = isEquipmentModule(consoleModuleParam)
-      if (!hasConsoleModuleParam && request.nextUrl.pathname.replace(/\/$/, '') === currentModule.path) {
+      if (!hasConsoleModule && request.nextUrl.pathname.replace(/\/$/, '') === currentModule.path) {
         const visible = getAuthorizedPageMenus(user.module_codes, user.page_permissions)
           .find((item) => item.moduleCode === currentModule.moduleCode)
         if (visible && hasModuleLandingEntry(visible.children, currentModule.path)) {
@@ -125,7 +126,7 @@ export async function proxy(request: NextRequest) {
         }
       }
       const key = getPageKeyByPath(
-        hasConsoleModuleParam ? `/equipment/${consoleModuleParam}` : request.nextUrl.pathname,
+        hasConsoleModule ? `/equipment/${consoleModule}` : request.nextUrl.pathname,
       )
       // 展开旧「车间×功能」叶授权后再查找，避免投影授权被误拒
       const grant = expandEquipmentPagePermissions(user.page_permissions)

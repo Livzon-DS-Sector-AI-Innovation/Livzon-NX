@@ -94,7 +94,7 @@ def test_new_endpoint_without_a_page_contract_blocks_publication(monkeypatch):
         lambda: [("POST", "/api/v1/procurement/unregistered")],
     )
     assert any(
-        "1 个业务接口" in gap
+        "POST /api/v1/procurement/unregistered" in gap
         for gap in page_policy.page_api_catalog_gaps("procurement")
     )
 

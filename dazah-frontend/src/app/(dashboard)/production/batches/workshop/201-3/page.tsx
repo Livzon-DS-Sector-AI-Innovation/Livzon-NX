@@ -1,5 +1,5 @@
 'use client'
-// 201三车间 DR（多拉菌素）— 首页（仪表盘 + 6宫格工段选择）— 按文档规格
+// 201二车间（DR）多拉菌素— 首页（仪表盘 + 6宫格工段选择）— 按文档规格
 
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
@@ -80,7 +80,7 @@ export default function Workshop2013Page() {
         <Title level={4} style={{ margin: 0 }}>
           多拉菌素提炼生产管理系统
         </Title>
-        <Text type="secondary">201三车间 — DR（多拉菌素）粗提 → 提取 → 二次精制 → 混粉计算 → QC检验 → 入库</Text>
+        <Text type="secondary">201二车间（DR）— 多拉菌素粗提 → 提取 → 二次精制 → 混粉计算 → QC检验 → 入库</Text>
       </div>
 
       <Space className="mb-4" align="center" style={{ width: '100%', justifyContent: 'space-between' }}>

@@ -2,7 +2,7 @@
 
 from collections.abc import Sequence
 from datetime import datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from io import BytesIO
 
 from openpyxl import Workbook
@@ -10,23 +10,55 @@ from openpyxl.cell import WriteOnlyCell
 from openpyxl.styles import Alignment, Font
 from openpyxl.utils.cell import get_column_letter
 
-from app.modules.energy.ledger_schemas import WorkbookReport
+from app.modules.energy.ledger_schemas import WorkbookCell, WorkbookReport
 
 STATUS_LABELS = {
     "complete": "完整",
     "adjusted": "已调整",
     "unconfigured": "待确认配置",
     "not_applicable": "不适用",
-    "missing_reading": "缺少读数",
-    "missing_dependency": "计算缺项",
+    "missing_reading": "待补数",
+    "missing_dependency": "待补数",
     "reading_rollback": "读数回退",
     "configuration_conflict": "配置冲突",
     "abnormal_usage": "用量超出阈值",
     "abnormal_dependency": "来源存在异常",
-    "zero_denominator": "分母为零",
+    "zero_denominator": "不适用",
     "out_of_range": "超出计量范围",
     "invalid_meter_event": "换表记录无效",
+    "pending_review": "待核对",
 }
+
+
+def export_value(cell: WorkbookCell) -> tuple[Decimal | None, str]:
+    """An unaccepted source result must retain its review state in Excel too."""
+    label = STATUS_LABELS.get(cell.status, cell.status)
+    comparison = cell.provenance.get("source_comparison")
+    if cell.status != "pending_review" or not isinstance(comparison, dict):
+        return cell.value, label
+    reported = comparison.get("reported_value")
+    if not isinstance(reported, str):
+        return cell.value, label
+    try:
+        number = Decimal(reported)
+    except InvalidOperation:
+        return cell.value, label
+    if not number.is_finite() or abs(number) >= Decimal("1e20"):
+        return cell.value, label
+    system = (
+        str(cell.calculated_value)
+        if cell.calculated_value is not None
+        else (
+            "无法重算（"
+            + STATUS_LABELS.get(str(comparison.get("calculation_status")), "来源待核对")
+            + "）"
+        )
+    )
+    difference = comparison.get("difference")
+    return number, (
+        f"{label}；系统计算值：{system}；差异（原表－系统）："
+        f"{difference if difference is not None else '无法计算'}"
+    )
 
 
 def build_workbook_export(reports: list[WorkbookReport]) -> bytes:
@@ -56,7 +88,7 @@ def build_workbook_export(reports: list[WorkbookReport]) -> bytes:
                     if index > 0
                     else "left",
                     vertical="center",
-                    wrap_text=header,
+                    wrap_text=header or (index > 0 and index % 2 == 0),
                 )
                 if header:
                     cell.font = Font(bold=True)
@@ -89,7 +121,7 @@ def build_workbook_export(reports: list[WorkbookReport]) -> bytes:
             ]
             for column in report.columns:
                 cell = row.cells[column.key]
-                number: Decimal | None = cell.value
+                number, status = export_value(cell)
                 values.extend(
                     [
                         None
@@ -97,7 +129,7 @@ def build_workbook_export(reports: list[WorkbookReport]) -> bytes:
                         else float(number)
                         if len(number.normalize().as_tuple().digits) <= 15
                         else str(number),
-                        STATUS_LABELS.get(cell.status, cell.status),
+                        status,
                     ]
                 )
             append(values)

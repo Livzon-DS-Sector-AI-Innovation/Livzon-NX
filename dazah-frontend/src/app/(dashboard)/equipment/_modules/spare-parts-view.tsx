@@ -1,8 +1,9 @@
 import { SparePartsPage } from '@/components/equipment'
+import { EquipmentQueryFailure, isEquipmentQueryAccessError } from '@/components/equipment/EquipmentQueryFailure'
 import { fetchSpareParts, fetchStockWarnings } from '@/actions/equipment'
 import { SparePart, StockWarning } from '@/types/equipment'
 
-// 备件模块：库存与预警并行取数，失败回落空数据
+// 备件模块：鉴权失败显示访问状态，其他失败保留原有容错。
 export default async function SparePartsView({
   workshopCode,
 }: {
@@ -21,6 +22,7 @@ export default async function SparePartsView({
     sparePartTotal = result[0].total
     stockWarnings = result[1]
   } catch (error) {
+    if (isEquipmentQueryAccessError(error)) return <EquipmentQueryFailure status={error.status} />
     console.warn('备件管理数据加载失败，使用空数据:', error)
   }
 

@@ -1,4 +1,5 @@
 import { MaintenancePage } from '@/components/equipment'
+import { EquipmentQueryFailure, isEquipmentQueryAccessError } from '@/components/equipment/EquipmentQueryFailure'
 import {
   fetchEquipments, fetchWorkOrders, fetchWorkOrderStatistics, fetchFailureCodes,
   fetchCalibrationPlans, fetchCalibrationRecords,
@@ -16,7 +17,7 @@ const defaultStatistics: WorkOrderStatistics = {
   by_priority: {} as any,
 }
 
-// 维保模块：各域独立容错，任一接口失败只影响对应 Tab 的初始数据
+// 维保模块：鉴权失败显示访问状态，其他失败保留各域独立容错。
 export default async function MaintenanceView({
   workshopCode,
 }: {
@@ -36,6 +37,15 @@ export default async function MaintenanceView({
     fetchCalibrationRecords({ workshop: workshopCode, page: 1, page_size: 20 }),
     fetchMaintenancePlans({ workshop: workshopCode, page: 1, page_size: 20 }),
   ])
+
+  for (const result of [
+    equipmentsRes, workOrdersRes, statsRes, symptomsRes, causesRes, actionsRes,
+    calibrationPlansRes, calibrationRecordsRes, maintenancePlansRes,
+  ]) {
+    if (result.status === 'rejected' && isEquipmentQueryAccessError(result.reason)) {
+      return <EquipmentQueryFailure status={result.reason.status} />
+    }
+  }
 
   const equipments = equipmentsRes.status === 'fulfilled' ? equipmentsRes.value.items : []
   const workOrders = workOrdersRes.status === 'fulfilled' ? workOrdersRes.value.items : []

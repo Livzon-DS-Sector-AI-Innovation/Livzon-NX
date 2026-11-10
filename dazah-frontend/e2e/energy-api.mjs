@@ -46,7 +46,8 @@ export async function handleEnergyRequest(request, response, token) {
     const selected = url.pathname.endsWith('/data-quality') ? rows.filter(row => row.effective_value === null) : rows
     return send({ start_date: '2026-07-01', end_date: '2026-07-01', status: state.task.completed_count === 2 ? 'complete' : 'partial', rows: selected, totals, trend: totals.map(row => ({ ...row, usage_date: '2026-07-01' })), distribution: totals.map(row => ({ ...row, workshop: '101车间' })), period_metrics: [], total_count: selected.length, latest_complete_date: state.task.completed_count === 2 ? '2026-07-01' : null, entry_total: 2, entry_completed: state.task.completed_count })
   }
-  if (/\/(input-fields|notification-runs)$/.test(url.pathname)) return send([])
+  if (url.pathname.endsWith('/input-fields')) return send([{ id: state.task.items[0].point_id, version: 1, definition: { enabled: true, source_sheet: '饮用水码', source_column: 2 } }])
+  if (url.pathname.endsWith('/notification-runs')) return send([])
   if (url.pathname.endsWith('/bot-config')) return send({ definition: { app_id: '', base_url: '', enabled: false }, secret_configured: false, version: 0 })
   return false
 }

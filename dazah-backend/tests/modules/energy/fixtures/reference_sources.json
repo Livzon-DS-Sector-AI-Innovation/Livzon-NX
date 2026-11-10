@@ -1,0 +1,34 @@
+{
+  "2026-07": {
+    "file": "7月份能源日报表(2).xlsx",
+    "sha256": "93a72f78ebdadd10d1c60e063e8311f5f4345b1dc1c74cf8e74c39e4f203de20",
+    "import_hashes": [
+      "9eed5f9f41a05789867ebad357e12e11a89b574e5b1694af06218d4877d682d1",
+      "479992e2140f8115be804474a79f953f0fd5dcdf9ce963f5134805bbdadd9d56"
+    ]
+  },
+  "2026-08": {
+    "file": "8月份能源日报表.xlsx",
+    "sha256": "26313511a977946d52831fddd260bbf7e10c1d8e18e816f734d4202937a8d9d0",
+    "import_hashes": [
+      "33fbfec478bef255c191885ad45f9376e906bf621627325810432451c1641c7a",
+      "7d143888362a93eaa88634230a640d96893393defaaa7a2cccc8e1c77443ed4f"
+    ]
+  },
+  "2026-09": {
+    "file": "9月份能源日报表.xlsx",
+    "sha256": "3547356efce36bb28c4f93e7ba2e7241c275b356ece25c2ab5ec48be2f5a9571",
+    "import_hashes": [
+      "e02821e4b089e56bd8d7692a76d1346d09cd8a7d1ce2653da84b1179eed1166a",
+      "450dc6f9c28542e190422ba00c3418059444c7152c7bbbf914901c5fa719500f"
+    ]
+  },
+  "2026-10": {
+    "file": "10月份能源日报表.xlsx",
+    "sha256": "66a39885200602426803f389404a7337538d0b245624e0eabd38552fd265eb45",
+    "import_hashes": [
+      "d18c185762906aeb3407e80cc0bea561510d7b5d070d8b9ba08e7bdeda8c298f",
+      "5b4ecddc70918b6114e93ec1ee6faf0c510a2ad4952da723c4ef90f62885c0f8"
+    ]
+  }
+}

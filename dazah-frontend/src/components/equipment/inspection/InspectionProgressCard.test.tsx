@@ -48,7 +48,7 @@ describe('InspectionProgressCard', () => {
     renderCard()
     const text = normalizedText()
     expect(text).toContain('今日巡检进度（2026-10-13）')
-    expect(text).toContain('已接入1/9车间')
+    expect(text).toContain('已接入1/10车间')
     expect(text).toContain('总进度47/49台')
     expect(text).toContain('上午47/49·下午46/49')
     expect(text).toContain('异常2台')
@@ -79,7 +79,7 @@ describe('InspectionProgressCard', () => {
   it('shows zero aggregates when no workshop is enabled', () => {
     renderCard([])
     const text = normalizedText()
-    expect(text).toContain('已接入0/9车间')
+    expect(text).toContain('已接入0/10车间')
     expect(text).toContain('总进度0/0台')
     expect(text).toContain('上午0/0·下午0/0')
     expect(document.body.querySelector('a[href^="/equipment/inspection?"]')).toBeNull()

@@ -24,6 +24,16 @@ from app.platform.identity.models import (
 )
 
 
+def _user_directory_keyword_filter(
+    keyword: str, *, include_department: bool = False
+) -> ColumnElement[bool]:
+    fields = [User.name, User.username, User.email, User.mobile, User.employee_no]
+    if include_department:
+        fields.append(User.department)
+    pattern = f"%{keyword}%"
+    return or_(*(field.ilike(pattern) for field in fields))
+
+
 class ExternalIdentityConflictError(ValueError):
     """Raised when supplied Feishu identifiers do not resolve to one binding."""
 
@@ -410,14 +420,7 @@ class UserRepository:
         )
 
         if keyword:
-            pattern = f"%{keyword}%"
-            filter_expr = or_(
-                User.name.ilike(pattern),
-                User.username.ilike(pattern),
-                User.email.ilike(pattern),
-                User.mobile.ilike(pattern),
-                User.employee_no.ilike(pattern),
-            )
+            filter_expr = _user_directory_keyword_filter(keyword)
             base = base.where(filter_expr)
             count_stmt = count_stmt.where(filter_expr)
         if role:
@@ -477,12 +480,12 @@ class UserRepository:
         *,
         department_id: str | None,
         department_name: str | None,
-        user_scope: str,
+        user_scope: str | None,
         keyword: str | None,
         offset: int,
         limit: int,
     ) -> tuple[list[User], int]:
-        """按部门或补选范围查询角色分配候选人，不修改用户部门信息。"""
+        """分页查询角色分配用户，也支持按部门或补选范围筛选。"""
         conditions: list[ColumnElement[bool]] = [User.is_deleted.is_(False)]
         if user_scope == "department":
             selectors = []
@@ -504,7 +507,11 @@ class UserRepository:
         elif user_scope == "missing":
             conditions.append(func.trim(func.coalesce(User.department, "")) == "")
         if keyword:
-            conditions.append(User.name.icontains(keyword, autoescape=True))
+            conditions.append(
+                _user_directory_keyword_filter(keyword, include_department=True)
+                if user_scope is None
+                else User.name.icontains(keyword, autoescape=True)
+            )
         total = await session.scalar(
             select(func.count()).select_from(User).where(*conditions)
         )

@@ -13,12 +13,17 @@ app/modules/{module}/
 
 ## 职责规则
 
+以上是职责示意，不要求为每个需求补齐全部文件或重排现有目录；以所属模块的
+既有拆分方式为准，只新增本次需要的层次。
+
 - `api.py` 只做 HTTP 层：接收入参、注入依赖、调用 service、返回统一响应。不要写 ORM 查询、复杂业务规则、外部 API 调用或审计落库逻辑。
 - `schemas.py` 只描述 API 契约。不要 import ORM model，不承载数据库行为。
 - `models.py` 只描述表结构、字段、约束、索引和简单只读属性。不要写业务流程。
 - `repository.py` 只负责数据读写。不要决定“是否允许审批”“是否可以删除”等业务语义。
 - `service.py` 负责编排业务流程、事务、状态流转、跨表校验、审计和外部集成调用。
-- 跨模块调用只能通过对方模块的 `public_api.py`，不要直接 import 其他模块的 `service.py`、`repository.py`、`models.py` 或内部拆分文件。
+- 跨模块调用通过对方 `public_api.py`、模块注册表或既有明确公开的扩展点；
+  注册表只用于发现已声明能力，不授权直接调用内部实现。不要直接 import 其他
+  模块的 `service.py`、`repository.py`、`models.py` 或内部拆分文件。
 
 ## 文件拆分规则
 

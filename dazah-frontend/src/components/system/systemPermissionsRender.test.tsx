@@ -156,7 +156,7 @@ describe('system permissions settings pages', () => {
       initialRoles: roles,
       initialDepartments: departments,
     }))
-    expect(userRoleHtml).toContain('按姓名 / 部门搜索')
+    expect(userRoleHtml).toContain('按姓名、部门、账号、邮箱、手机号或工号搜索')
 
     const deptRoleHtml = renderInApp(React.createElement(DeptRoleMapper, {
       initialRules: [{

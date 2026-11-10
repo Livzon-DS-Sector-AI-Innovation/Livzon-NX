@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
-from dataclasses import asdict
+from collections.abc import Sequence
+from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any
@@ -11,22 +13,33 @@ from uuid import UUID
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.platform.identity.integration_gaps import IntegrationGaps
 from app.platform.identity.models import Role, User
-from app.platform.identity.page_permission_repository import PagePermissionRepository
+from app.platform.identity.page_permission_repository import (
+    ActiveMenuPage,
+    PagePermissionRepository,
+)
 from app.platform.identity.page_policy import (
     PAGE_DEFINITIONS,
     PAGE_PERMISSION_SET,
     PAGE_VISIBLE_SECTIONS,
     PAGES_BY_KEY,
     PAGES_BY_MODULE,
+    ApiRouteCatalog,
     PageDefinition,
+    ToolPageBinding,
     api_bindings_for_module,
-    api_route_catalog,
     canonical_page_key,
+    frontend_page_catalog_issues,
     get_page_definition,
+    load_api_route_catalog,
     normalize_permissions,
-    page_api_catalog_gaps,
+    page_api_catalog_issues,
     tool_page_bindings,
+)
+from app.platform.identity.page_route_catalog import (
+    PageRouteCatalogError,
+    load_frontend_page_routes,
 )
 from app.platform.identity.schemas import (
     EffectivePageGrantOut,
@@ -53,6 +66,16 @@ from app.shared.module_registry import MODULES_BY_CODE
 REVIEW_PENDING_ROLLOUT_MODULES = frozenset(
     {"hr", "warehouse", "registration", "production"}
 )
+
+
+@dataclass(frozen=True)
+class IntegrationCatalog:
+    """Fresh inputs shared within one check, never cached across requests."""
+
+    menus: tuple[ActiveMenuPage, ...]
+    frontend_routes: tuple[str, ...] | None
+    apis: ApiRouteCatalog
+    tools: tuple[ToolPageBinding, ...] | None
 
 
 def module_codes_from_page_grants(grants: list[EffectivePageGrantOut]) -> list[str]:
@@ -1136,9 +1159,10 @@ class PagePermissionService:
                 for item in grants
             ):
                 without_access += 1
-        gaps = await self.integration_gaps(db, module_code=module_code)
-        tools = tool_page_bindings() or []
-        menu_catalog = await self.repo.active_menu_page_catalog(db)
+        catalog = await self.integration_catalog(db)
+        gaps = await self.integration_gaps(db, module_code=module_code, catalog=catalog)
+        tools = catalog.tools or ()
+        menu_catalog = catalog.menus
         module_roots = {page.page_key.split(":", 1)[0] for page in pages}
         module = MODULES_BY_CODE.get(module_code)
         if not module_roots and module:
@@ -1158,7 +1182,7 @@ class PagePermissionService:
             "api_policies": [
                 asdict(item) for item in api_bindings_for_module(module_code)
             ],
-            "actual_api_routes": api_route_catalog(module_code),
+            "actual_api_routes": catalog.apis.for_module(module_code),
             "tool_policies": [
                 asdict(item) for item in tools if item.module_code == module_code
             ],
@@ -1180,13 +1204,40 @@ class PagePermissionService:
             catalog_gaps=gaps,
         )
 
+    async def integration_catalog(self, db: AsyncSession) -> IntegrationCatalog:
+        menus = await self.repo.active_menu_page_catalog(db)
+        try:
+            routes = tuple(await asyncio.to_thread(load_frontend_page_routes))
+        except PageRouteCatalogError:
+            routes = None
+        tools = tool_page_bindings()
+        return IntegrationCatalog(
+            menus=tuple(menus),
+            frontend_routes=routes,
+            apis=load_api_route_catalog(),
+            tools=tuple(tools) if tools is not None else None,
+        )
+
+    async def integration_gaps_for_modules(
+        self, db: AsyncSession, *, module_codes: Sequence[str]
+    ) -> dict[str, list[str]]:
+        catalog = await self.integration_catalog(db)
+        return {
+            code: await self.integration_gaps(db, module_code=code, catalog=catalog)
+            for code in module_codes
+        }
+
     async def integration_gaps(
-        self, db: AsyncSession, *, module_code: str
+        self, db: AsyncSession, *, module_code: str,
+        catalog: IntegrationCatalog | None = None,
     ) -> list[str]:
         """Check current menu, API and tool contracts without rollout state."""
+        catalog = catalog or await self.integration_catalog(db)
         pages = PAGES_BY_MODULE.get(module_code, ())
-        gaps = [] if pages else ["未登记有效菜单页面"]
-        menu_catalog = await self.repo.active_menu_page_catalog(db)
+        gaps = IntegrationGaps()
+        if not pages:
+            gaps.add("检查目录", "pages", module_code, "未登记有效菜单页面")
+        menu_catalog = catalog.menus
         menu_by_key = {
             canonical_page_key(item.key): item for item in menu_catalog if item.key
         }
@@ -1199,47 +1250,66 @@ class PagePermissionService:
             item for item in menu_catalog if item.root_key in module_roots
         ]
         for page in pages:
+            label = f"{page.page_name}（{page.page_key}；{page.route_path}）"
             menu = menu_by_key.get(page.page_key)
             if menu is None:
-                gaps.append(
-                    f"权限登记缺少有效菜单绑定：{page.page_name}（{page.page_key}）"
-                )
+                gaps.add("页面", page.page_key, label, "权限登记缺少有效菜单绑定")
             elif menu.route_path != page.route_path:
-                gaps.append(
-                    "菜单页面路由与权限登记不一致："
-                    f"{page.page_name}（菜单 {menu.route_path}；"
-                    f"登记 {page.route_path}）"
+                gaps.add(
+                    "页面", page.page_key, label,
+                    f"菜单页面路由与权限登记不一致（菜单 {menu.route_path}）",
                 )
             elif menu.root_key not in module_roots:
-                gaps.append(
-                    "菜单页面所属目录与权限登记不一致："
-                    f"{page.page_name}（当前目录 {menu.root_key or '未知'}）"
+                gaps.add(
+                    "页面", page.page_key, label,
+                    "菜单页面所属目录与权限登记不一致"
+                    f"（当前目录 {menu.root_key or '未知'}）",
                 )
         for menu in module_menu_catalog:
             menu_label = f"{menu.name}（{menu.route_path}）"
             if not menu.key:
-                gaps.append(f"菜单页面缺少稳定权限标识：{menu_label}")
+                gaps.add(
+                    "页面", f"route:{menu.route_path}", menu_label,
+                    "菜单页面缺少稳定权限标识",
+                )
             elif canonical_page_key(menu.key) not in page_by_key:
-                gaps.append(f"新增菜单页面尚未接入权限登记：{menu.name}（{menu.key}）")
-        gaps.extend(page_api_catalog_gaps(module_code))
-        tools = tool_page_bindings()
+                gaps.add(
+                    "页面", f"route:{menu.route_path}", menu_label,
+                    f"新增菜单页面尚未接入权限登记（{menu.key}）",
+                )
+        gaps.extend(page_api_catalog_issues(module_code, catalog=catalog.apis))
+        if catalog.frontend_routes is None:
+            gaps.add("检查目录", "frontend", "前端页面目录", "目录不可用，无法完成检查")
+        else:
+            gaps.extend(
+                frontend_page_catalog_issues(module_code, catalog.frontend_routes)
+            )
+        tools = catalog.tools
         if tools is None:
-            gaps.append("Livzon 工具目录尚未加载，无法核对发布契约")
+            gaps.add(
+                "检查目录", "tools", "Livzon 工具目录", "目录尚未加载，无法核对契约"
+            )
         for spec in tools or []:
             if spec.module_code != module_code:
                 continue
+            label = f"{spec.summary}（{spec.name}）"
             if not spec.page_keys:
-                gaps.append(f"Livzon 工具未绑定菜单页面：{spec.summary}")
+                gaps.add("Livzon 工具", spec.name, label, "未绑定菜单页面")
             for page_key in spec.page_keys:
                 definition = PAGES_BY_KEY.get(canonical_page_key(page_key))
                 if definition is None or definition.module_code != module_code:
-                    gaps.append(f"Livzon 工具页面绑定无效：{spec.summary}")
+                    gaps.add(
+                        "Livzon 工具", spec.name, label, f"页面绑定无效：{page_key}"
+                    )
                     continue
                 if spec.sensitive_action and spec.sensitive_action not in {
                     action.key for action in definition.sensitive_actions
                 }:
-                    gaps.append(f"Livzon 工具高风险动作绑定无效：{spec.summary}")
-        return gaps
+                    gaps.add(
+                        "Livzon 工具", spec.name, label,
+                        f"高风险动作绑定无效：{page_key}",
+                    )
+        return gaps.messages()
 
     @staticmethod
     def _merge_role_scopes(

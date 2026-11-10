@@ -413,6 +413,7 @@ async def test_confirm_rechecks_stored_date_window_before_writing_readings() -> 
     service = SimpleNamespace(
         actor_id=None,
         require_manager=AsyncMock(),
+        rebuild=AsyncMock(),
         revision=Mock(),
         repo=SimpleNamespace(
             serialize_write=AsyncMock(),
@@ -445,6 +446,7 @@ async def test_confirm_rechecks_stored_date_window_before_writing_readings() -> 
         "reading_date_1"
     ] == date(2026, 7, 1)
     service.db.add.assert_not_called()
+    service.rebuild.assert_awaited_once_with({date(2026, 6, 30), date(2026, 7, 1)})
 
 
 @pytest.mark.asyncio

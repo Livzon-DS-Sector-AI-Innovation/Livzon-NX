@@ -25,8 +25,10 @@ from app.modules.equipment.schemas import (
     WorkOrderAssign,
     WorkOrderComplete,
     WorkOrderCreate,
+    WorkOrderEventResponse,
     WorkOrderResponse,
     WorkOrderStatistics,
+    WorkOrderTransfer,
     WorkOrderUpdate,
     WorkOrderVerify,
 )
@@ -230,6 +232,36 @@ async def assign_work_order(
 ) -> JSONResponse:
     wo = await service.assign_work_order(db, work_order_id, data.assignee_id)
     return success_response(data=_to_response(wo))
+
+
+@router.put("/{work_order_id}/transfer", summary="转派维修人（方案E）")
+async def transfer_work_order(
+    work_order_id: uuid.UUID,
+    data: WorkOrderTransfer,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> JSONResponse:
+    if current_user is None:
+        raise AppException(message="需要登录后操作")
+    wo = await service.transfer_work_order(
+        db, work_order_id, data.assignee_id,
+        operator_id=current_user.id, reason=data.reason,
+    )
+    return success_response(data=_to_response(wo))
+
+
+@router.get("/{work_order_id}/events", summary="工单事件时间线（方案E）")
+async def get_work_order_events(
+    work_order_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+) -> JSONResponse:
+    events = await service.get_work_order_events(db, work_order_id)
+    return success_response(
+        data=[
+            WorkOrderEventResponse.model_validate(e).model_dump(mode="json")
+            for e in events
+        ]
+    )
 
 
 @router.put("/{work_order_id}/start", summary="开始维修")

@@ -1117,7 +1117,7 @@ describe('migrated component coverage', () => {
     getMock('lib/api/client/admin', 'fetchRoleMenus').mockResolvedValue(['menu-2'])
     getMock('lib/api/client/admin', 'fetchDataScopes').mockResolvedValue([{ id: 'scope-1', role_id: 'role-1', user_id: 'user-1', scope_type: 'departments', department_names: ['质量部'] }])
     getMock('lib/api/client/admin', 'fetchAdminUsers').mockResolvedValue({ items: [user], total: 1 })
-    getMock('actions/admin', 'createRole').mockResolvedValue({ ...role, id: 'role-new' })
+    getMock('actions/admin', 'createRole').mockResolvedValue({ ok: true, data: { ...role, id: 'role-new' } })
     for (const name of ['setRolePermissions', 'setRoleMenus', 'saveRoleDataScope', 'saveRoleDataScopeForTarget', 'updateRole', 'deleteRole', 'assignUserRoles', 'saveUserDataScope', 'deleteDataScope', 'removeUserRole', 'createDeptRule', 'deleteDeptRule', 'createMenu', 'updateMenu', 'deleteMenu']) {
       getMock('actions/admin', name).mockResolvedValue({})
     }
@@ -3663,6 +3663,13 @@ describe('migrated component coverage', () => {
         let rendered: ReturnType<typeof renderClient> | null = null
         try {
           const componentProps = interactivePropsFor(path)
+          if (path.endsWith('/EmployeeProfileClient.tsx')) {
+            getMock('lib/api/hr', 'fetchEmployeeFilterOptions').mockResolvedValue({
+              departments: [{ department: '质量部', sub_department: '分析组' }],
+              levels: ['中级'],
+              educations: ['本科'],
+            })
+          }
           if (path.endsWith('/FeeDashboardPage.tsx')) {
             getMock('lib/api/client/registration', 'fetchFeeDashboard').mockResolvedValue(componentProps.dashboard)
           }

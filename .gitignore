@@ -58,6 +58,7 @@ desktop.ini
 !/scripts/check-test-impact.py
 !/scripts/export-livzon-tool-inventory.py
 !/scripts/check-page-permission-lifecycle.py
+!/scripts/generate-page-routes.py
 !/scripts/prepare-integration.sh
 !/scripts/tests/
 /scripts/tests/*

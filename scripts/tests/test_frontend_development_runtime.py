@@ -10,6 +10,25 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def test_backend_development_fetches_apt_indexes_over_https() -> None:
+    dockerfile = (ROOT / "Dockerfile.dev").read_text(encoding="utf-8")
+    backend = dockerfile.split(" AS backend", 1)[1].split("\nFROM ", 1)[0]
+    before_update = backend.split("apt-get update", 1)[0]
+    assert "s|http://deb.debian.org|https://mirrors.tuna.tsinghua.edu.cn|g" in before_update
+    assert "/etc/apt/sources.list.d/debian.sources" in before_update
+    assert 'ENV HTTP_PROXY' not in backend
+    assert 'ENV HTTPS_PROXY' not in backend
+
+
+def test_backend_browser_cache_is_copied_into_the_runtime_image() -> None:
+    dockerfile = (ROOT / "Dockerfile.dev").read_text(encoding="utf-8")
+    backend = dockerfile.split(" AS backend", 1)[1].split("\nFROM ", 1)[0]
+    assert "id=dazah-ms-playwright" in backend
+    assert "PLAYWRIGHT_BROWSERS_PATH=/tmp/dazah-ms-playwright" in backend
+    assert "cp -a /tmp/dazah-ms-playwright/. /home/app/.cache/ms-playwright/" in backend
+    assert "ENV PLAYWRIGHT_BROWSERS_PATH" not in backend
+
+
 def test_docker_frontend_uses_turbopack_development_command() -> None:
     dockerfile = (ROOT / "Dockerfile.dev").read_text(encoding="utf-8")
 

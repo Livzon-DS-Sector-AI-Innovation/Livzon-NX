@@ -2,7 +2,9 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { ConfigProvider } from 'antd'
 import type { AdminUserItem, RoleItem } from '@/lib/api/client/admin'
+import { getAntdTheme } from '@/lib/antd-theme'
 
 const mocks = vi.hoisted(() => ({
   fetchUsers: vi.fn(), fetchScopes: vi.fn(), assign: vi.fn(), deleteScope: vi.fn(),
@@ -59,9 +61,10 @@ afterEach(async () => {
   vi.unstubAllGlobals()
 })
 
-async function renderManager() {
+async function renderManager(appearance: 'light' | 'dark' = 'light') {
   await act(async () => {
-    root.render(createElement(UserRoleManager, { initialRoles: roles, initialDepartments: [] }))
+    root.render(createElement(ConfigProvider, { theme: getAntdTheme(appearance) },
+      createElement(UserRoleManager, { initialRoles: roles, initialDepartments: [] })))
     await Promise.resolve()
   })
 }
@@ -85,6 +88,53 @@ async function setInputValue(element: HTMLInputElement | HTMLTextAreaElement, va
     element.dispatchEvent(new Event('input', { bubbles: true }))
   })
 }
+
+async function searchUsers(keyword: string) {
+  const input = host.querySelector<HTMLInputElement>('input[placeholder^="按姓名"]')!
+  await setInputValue(input, keyword)
+  await act(async () => host.querySelector<HTMLButtonElement>('.ant-input-search-btn')!.click())
+}
+
+it.each(['light', 'dark'] as const)('searches the full directory and resets pagination in %s mode', async (appearance) => {
+  const match = { ...user, id: 'user-501', name: '后页用户', email: 'account@example.test' }
+  mocks.fetchUsers.mockResolvedValueOnce({ items: [user], total: 501 })
+    .mockResolvedValueOnce({ items: [{ ...user, name: '第二页用户' }], total: 501 })
+    .mockResolvedValueOnce({ items: [match], total: 1 })
+  await renderManager(appearance)
+  expect(mocks.fetchUsers).toHaveBeenLastCalledWith({ keyword: '', offset: 0, limit: 20 })
+  await act(async () => host.querySelector<HTMLElement>('.ant-pagination-next button')!.click())
+  expect(mocks.fetchUsers).toHaveBeenLastCalledWith({ keyword: '', offset: 20, limit: 20 })
+  expect(host.textContent).toContain('第二页用户')
+
+  await searchUsers('  ACCOUNT@example.test  ')
+  expect(mocks.fetchUsers).toHaveBeenLastCalledWith({ keyword: 'ACCOUNT@example.test', offset: 0, limit: 20 })
+  expect(host.textContent).toContain(match.name)
+  expect(host.textContent).not.toContain('第二页用户')
+
+  await act(async () => host.querySelector<HTMLElement>('.ant-input-clear-icon')!.click())
+  expect(mocks.fetchUsers).toHaveBeenLastCalledWith({ keyword: '', offset: 0, limit: 20 })
+  expect(host.textContent).toContain(user.name)
+})
+
+it('ignores stale requests and lets the latest failed search be retried', async () => {
+  let finishOldSearch: (result: { items: AdminUserItem[]; total: number }) => void = () => {}
+  await renderManager()
+  mocks.fetchUsers.mockImplementationOnce(() => new Promise((resolve) => { finishOldSearch = resolve }))
+    .mockRejectedValueOnce(new Error('需要用户管理权限'))
+    .mockResolvedValueOnce({ items: [], total: 0 })
+
+  await searchUsers('旧关键词')
+  await searchUsers('新关键词')
+  expect(mocks.message.error).toHaveBeenCalledWith('需要用户管理权限')
+  expect(host.textContent).toContain('需要用户管理权限')
+  expect(host.textContent).not.toContain(user.name)
+  await act(async () => finishOldSearch({ items: [user], total: 1 }))
+  expect(host.textContent).not.toContain(user.name)
+
+  await act(async () => button('重试').click())
+  expect(mocks.fetchUsers).toHaveBeenLastCalledWith({ keyword: '新关键词', offset: 0, limit: 20 })
+  expect(host.textContent).toContain('没有符合条件的用户')
+})
 
 it('distinguishes assigned role levels from gray unassigned tags', async () => {
   mocks.fetchUsers.mockResolvedValue({ items: [
@@ -299,6 +349,8 @@ it('uses the returned grant version when roles change again after a scope failur
 
 it('previews added roles and submits a versioned full replacement with a reason', async () => {
   await renderManager()
+  await searchUsers('QA部')
+  mocks.fetchUsers.mockClear()
   await act(async () => button('分配角色').click())
   expect(document.body.textContent).toContain('模块入口随有效页面访问权限自动生效')
   expect(document.querySelector('[role="dialog"]')?.textContent).toContain('分配角色 · QA部公用账号')
@@ -316,6 +368,7 @@ it('previews added roles and submits a versioned full replacement with a reason'
     expectedGrantVersion: 7,
     reason: '增加体系文件维护职责',
   })
+  expect(mocks.fetchUsers).toHaveBeenCalledExactlyOnceWith({ keyword: 'QA部', offset: 0, limit: 20 })
   expect(mocks.saveScope).not.toHaveBeenCalled()
   expect(mocks.deleteScope).not.toHaveBeenCalled()
 })

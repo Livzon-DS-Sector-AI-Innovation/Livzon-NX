@@ -8,3 +8,15 @@ export function reviewDetails(provenance: unknown) {
     }]
   })
 }
+
+export function sourceComparisonDetails(provenance: unknown) {
+  if (!provenance || typeof provenance !== 'object' || !('source_comparison' in provenance)) return null
+  const entry = provenance.source_comparison
+  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return null
+  const decimal = (value: unknown): value is string => typeof value === 'string' && /^[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(value) && Number.isFinite(Number(value))
+  if (!('reported_value' in entry) || !decimal(entry.reported_value)
+    || !('difference' in entry) || (entry.difference !== null && !decimal(entry.difference))
+    || !('calculation_status' in entry) || typeof entry.calculation_status !== 'string'
+    || !('source' in entry) || typeof entry.source !== 'string') return null
+  return { reportedValue: entry.reported_value, difference: entry.difference, calculationStatus: entry.calculation_status, source: entry.source }
+}

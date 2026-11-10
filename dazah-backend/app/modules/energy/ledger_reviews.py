@@ -170,3 +170,4 @@ async def save_usage_reviews(
         )
     await service.db.flush()
     service._usage_reviews = None
+    service._monthly_sources.clear()

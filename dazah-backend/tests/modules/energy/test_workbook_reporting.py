@@ -19,7 +19,7 @@ from app.modules.energy.ledger_schemas import (
     RuleTerm,
     RuleWrite,
 )
-from app.modules.energy.ledger_service import EnergyLedgerService
+from app.modules.energy.ledger_service import CALCULATION_POLICY, EnergyLedgerService
 from app.modules.energy.ledger_template import extract_template
 from app.platform.identity.deps import get_current_user
 from app.platform.identity.models import User
@@ -197,8 +197,14 @@ async def test_original_datasets_readings_usage_quality_filters_and_exports(
             assert Decimal(usage.json()["data"]["rows"][0]["cells"]["2"]["value"]) == 10
             assert (
                 usage.json()["data"]["rows"][1]["cells"]["2"]["status"]
-                == "missing_dependency"
+                == "abnormal_dependency"
             )
+            # July 2 has both readings (110 -> 0): a rollback is not missing data.
+            evidence = usage.json()["data"]["rows"][1]["cells"]["2"]["provenance"]
+            assert [
+                Decimal(value)
+                for value in evidence["source_details"][0]["evidence"]["reading_values"]
+            ] == [Decimal(110), Decimal(0)]
             unknown = await client.get(
                 "/api/v1/energy/reporting/workbook",
                 params={**params, "dataset": "其他表"},
@@ -288,7 +294,7 @@ async def test_abnormal_nonmissing_result_is_not_a_complete_period(
             calculated_value=Decimal(100),
             effective_value=Decimal(100),
             status="abnormal_usage",
-            provenance={},
+            provenance={"calculation_policy": CALCULATION_POLICY},
         )
     )
     await db_session.flush()

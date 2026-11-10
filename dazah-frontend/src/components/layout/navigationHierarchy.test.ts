@@ -15,7 +15,7 @@ const moduleMenu: ModuleMenu = {
 describe("getNavigationHierarchy", () => {
   it('keeps the legacy energy entry route inside the ledger breadcrumb', () => {
     const energy = moduleMenus.find(item => item.key === 'energy')!
-    expect(getNavigationHierarchy(energy, '/energy/entry').levels.map(level => level.label)).toEqual(['能源管理', '能源台账'])
+    expect(getNavigationHierarchy(energy, '/energy/entry').levels.map(level => level.label)).toEqual(['能源管理', '能源报表'])
   })
   it("builds clickable ancestors and menu choices for a detail route", () => {
     const result = getNavigationHierarchy(moduleMenu, "/quality/deviations/123")

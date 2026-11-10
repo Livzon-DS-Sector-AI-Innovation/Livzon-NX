@@ -31,10 +31,10 @@ describe('page permission menu boundary', () => {
     const grant = (key: string) => ({ page_key: `energy:${key}`, module_code: 'energy', permissions: ['access' as const, 'query' as const] })
     const both = getAuthorizedPageMenus(['energy'], [grant('entry'), grant('reports')])[0].children
     expect(both).toHaveLength(1)
-    expect(both[0]).toMatchObject({ label: '能源台账', path: '/energy/reports', activePaths: ['/energy/entry'] })
+    expect(both[0]).toMatchObject({ label: '能源报表', path: '/energy/reports', activePaths: ['/energy/entry'] })
     const entryOnly = getAuthorizedPageMenus(['energy'], [grant('entry')])[0].children
     expect(entryOnly).toHaveLength(1)
-    expect(entryOnly[0]).toMatchObject({ key: 'entry', label: '能源台账', path: '/energy/entry', activePaths: [] })
+    expect(entryOnly[0]).toMatchObject({ key: 'entry', label: '能源报表', path: '/energy/entry', activePaths: [] })
     expect(getPageKeyByPath('/energy/entry')).toBe('energy:entry')
     expect(getPageKeyByPath('/energy/reports')).toBe('energy:reports')
     expect(getAuthorizedPageMenus(['energy'], [grant('reports')])[0].children).toHaveLength(1)

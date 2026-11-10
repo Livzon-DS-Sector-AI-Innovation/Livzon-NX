@@ -36,7 +36,7 @@ SHEETS_MAP = {
 
 # 模块名 → 数据范围（跳过表头后）
 SHEET_RANGES = {
-    "crude": "A4:AI5000",
+    "crude": "A4:AJ5000",
     "extraction": "A5:Y5000",
     "refinement": "A3:AA5000",
     "blending": "A5:S5000",
@@ -216,13 +216,56 @@ def _safe_int(val: Any) -> int | None:
         return None
 
 
-def _safe_yield(val: Any) -> float | None:
+def _safe_yield(val: Any, fraction_ceiling: float = 1.0) -> float | None:
     """安全转换收率值：飞书表格公式结果通常为小数（如0.91），
-    数据库期望百分数（如91），所以 <1 的小数自动×100"""
+    数据库期望百分数（如91），低于 fraction_ceiling 的小数自动×100。
+
+    fraction_ceiling 用于区分"小数比例"与"已填百分数"：粗提收率列
+    会出现 1.0016（=100.16%）这类略超 1 的比例，传 3.0 可一并放大。
+    """
     v = _safe_float(val)
-    if v is not None and v < 1:
+    if v is not None and v < fraction_ceiling:
         return round(v * 100, 2)
     return v
+
+
+def _apply_st_fields(
+    st: Any, row: list[str], tank_no: int, pending_st2_data: dict[str, Any]
+) -> None:
+    """把表格当前行写入子罐字段（0 基列号，2026-11 核对源表表头）。
+
+    粗品块从 AB 列开始：AA 是钠化滤液对发酵液总收率（2026-10 新增列），
+    此前按 AA 起读导致整块错列一列（产品量进了收率等），2026-11 修正。
+    """
+    # 发酵液数据
+    st.fl_volume = _safe_float(_get_col(row, 3))  # D 体积（KL）
+    st.fl_potency = _safe_float(_get_col(row, 4))  # E 效价（mg/L）
+    st.fl_product_qty = _safe_float(_get_col(row, 5))  # F 核对产品量(kg)
+    st.total_input = _safe_float(_get_col(row, 6))  # G 总产量(kg)
+    st.cumulative_qty = _safe_float(_get_col(row, 7))  # H 累计放罐产品量
+
+    if tank_no == 2 and pending_st2_data:
+        if pending_st2_data.get("volume") is not None:
+            st.fl_volume = pending_st2_data["volume"]
+        if pending_st2_data.get("potency") is not None:
+            st.fl_potency = pending_st2_data["potency"]
+        if pending_st2_data.get("pq") is not None:
+            st.fl_product_qty = pending_st2_data["pq"]
+
+    # 粗品数据（AB 起）
+    st.crude_weight = _safe_float(_get_col(row, 27))  # AB 粗品重量
+    st.bag_weight = _safe_float(_get_col(row, 28))  # AC 袋种KG
+    st.crude_content = _safe_float(_get_col(row, 29))  # AD 含量（%）
+    st.crude_moisture = _safe_float(_get_col(row, 30))  # AE 水分
+    st.crude_product_qty = _safe_float(_get_col(row, 31))  # AF 产品量(kg)
+    st.yield_rate = _safe_yield(
+        _get_col(row, 32), fraction_ceiling=3.0
+    )  # AG 收率≥92%（小数比例，1.0016=100.16%）
+    st.cumulative_crude_qty = _safe_float(_get_col(row, 33))  # AH 累积粗品产品量
+    st.cumulative_crude_yield = _safe_yield(
+        _get_col(row, 34), fraction_ceiling=3.0
+    )  # AI 粗品累计收率
+    st.remarks = _get_col(row, 35) or None  # AJ 备注
 
 
 def _get_col(row: list[str], idx: int) -> str:
@@ -362,57 +405,41 @@ async def _sync_crude(
         cur_sodium_seq = 0
         cur_acid_seq = 0
 
+        async def _write_st_fields(st: Any) -> None:
+            """写入发酵液+粗品字段（含 tank-2 收率继承），创建与重同步共用。"""
+            _apply_st_fields(st, row, tank_no, pending_st2_data)
+            if tank_no == 2 and pending_st2_data:
+                pending_st2_data.clear()  # 消费后清空，防止串批
+
+            # tank-2 继承 tank-1 的收率（同一提炼批共用收率，飞书表格仅填在 tank-1 行）
+            if tank_no == 2 and st.yield_rate is None:
+                t1 = (
+                    await session.execute(
+                        select(SubTankRecord).where(
+                            SubTankRecord.parent_batch == cur_rb_batch,
+                            SubTankRecord.tank_no == 1,
+                            SubTankRecord.is_deleted.is_(False),
+                        )
+                    )
+                ).scalar_one_or_none()
+                if t1 and t1.yield_rate is not None:
+                    st.yield_rate = t1.yield_rate
+
         stq = select(SubTankRecord).where(
             SubTankRecord.batch_no == cur_st_batch, SubTankRecord.is_deleted.is_(False)
         )
         existing = (await session.execute(stq)).scalar_one_or_none()
         if existing:
+            # 飞书为数据源：重同步按源表当前值刷新（空值清空），
+            # 历史错列/错值一次重同步即订正
             cur_st_id = str(existing.id)
+            await _write_st_fields(existing)
             return
 
         st = SubTankRecord(
             parent_batch=cur_rb_batch, tank_no=tank_no, batch_no=cur_st_batch
         )
-        # 填入发酵液数据
-        st.fl_volume = _safe_float(_get_col(row, 3))  # D
-        st.fl_potency = _safe_float(_get_col(row, 4))  # E
-        st.fl_product_qty = _safe_float(_get_col(row, 5))  # F
-        st.total_input = _safe_float(_get_col(row, 6))  # G
-        st.cumulative_qty = _safe_float(_get_col(row, 7))  # H
-
-        if tank_no == 2 and pending_st2_data:
-            if pending_st2_data.get("volume") is not None:
-                st.fl_volume = pending_st2_data["volume"]
-            if pending_st2_data.get("potency") is not None:
-                st.fl_potency = pending_st2_data["potency"]
-            if pending_st2_data.get("pq") is not None:
-                st.fl_product_qty = pending_st2_data["pq"]
-            pending_st2_data = {}
-
-        # 粗品数据
-        st.crude_weight = _safe_float(_get_col(row, 26))  # AA
-        st.bag_weight = _safe_float(_get_col(row, 27))  # AB
-        st.crude_content = _safe_float(_get_col(row, 28))  # AC
-        st.crude_moisture = _safe_float(_get_col(row, 29))  # AD
-        st.crude_product_qty = _safe_float(_get_col(row, 30))  # AE
-        st.yield_rate = _safe_yield(_get_col(row, 31))  # AF
-        st.cumulative_crude_qty = _safe_float(_get_col(row, 32))  # AG
-        st.cumulative_crude_yield = _safe_yield(_get_col(row, 33))  # AH
-        st.remarks = _get_col(row, 34) or None  # AI
-
-        # tank-2 继承 tank-1 的收率（同一提炼批共用收率，飞书表格仅填在 tank-1 行）
-        if tank_no == 2 and st.yield_rate is None:
-            t1 = (
-                await session.execute(
-                    select(SubTankRecord).where(
-                        SubTankRecord.parent_batch == cur_rb_batch,
-                        SubTankRecord.tank_no == 1,
-                        SubTankRecord.is_deleted.is_(False),
-                    )
-                )
-            ).scalar_one_or_none()
-            if t1 and t1.yield_rate is not None:
-                st.yield_rate = t1.yield_rate
+        await _write_st_fields(st)
 
         session.add(st)
         await session.flush()
@@ -631,15 +658,17 @@ async def _sync_extraction(
             wet_content = _safe_float(_get_col(row, 14))  # O: 湿粉含量
             dry_loss = _safe_float(_get_col(row, 15))  # P: 干燥失重
             dry_weight = _safe_float(_get_col(row, 16))  # Q: 湿粉折干产量（kg)
+            # 提取表 R 列（17）后新增"产品量/一次粉对粗品总收率"列，
+            # 收率与母液块自 2026-10 起整体右移一列（与粗提表同类错位）
             yield_rate = _safe_yield(
-                _get_col(row, 17)
-            )  # R: 单步收率（飞书公式=O4/I4，小数×100）
-            mother_vol = _safe_float(_get_col(row, 18))  # S: 母液体积kl
-            mother_content = _safe_float(_get_col(row, 19))  # T: 母液含量mg/L
-            mother_loss = _safe_float(_get_col(row, 20))  # U: 母液损失量kg
+                _get_col(row, 18), fraction_ceiling=3.0
+            )  # S: 单步收率=一次粉对粗品总收率（小数比例，1.0016=100.16%）
+            mother_vol = _safe_float(_get_col(row, 19))  # T: 母液体积kl
+            mother_content = _safe_float(_get_col(row, 20))  # U: 母液含量mg/L
+            mother_loss = _safe_float(_get_col(row, 21))  # V: 母液损失量kg
             yield_to_filter = _safe_yield(
-                _get_col(row, 21)
-            )  # V: 对滤液收率（小数×100）
+                _get_col(row, 22), fraction_ceiling=3.0
+            )  # W: 对滤液收率（单步，小数比例）
 
             # 判断是主表行还是投入行
             if batch_no != current_batch:

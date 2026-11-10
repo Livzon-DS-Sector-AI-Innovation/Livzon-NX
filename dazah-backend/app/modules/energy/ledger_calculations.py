@@ -136,8 +136,16 @@ def calculate_rule(rule: RuleDefinition, inputs: dict[str, Calculation]) -> Calc
         "terms": [term.model_dump(mode="json") for term in rule.terms],
         "operation": rule.operation,
     }
-    if any(item is None or item.value is None for item in values):
+    if any(
+        item is None or item.status in {"missing_reading", "missing_dependency"}
+        for item in values
+    ):
         return Calculation(None, "missing_dependency", provenance)
+    if any(
+        item and (item.value is None or item.status not in {"complete", "adjusted"})
+        for item in values
+    ):
+        return Calculation(None, "abnormal_dependency", provenance)
     numbers = [inputs[term.metric_key].value for term in rule.terms]
     with localcontext() as context:
         context.prec = 60
@@ -148,7 +156,7 @@ def calculate_rule(rule: RuleDefinition, inputs: dict[str, Calculation]) -> Calc
         ]
         if rule.operation == "ratio":
             if weighted[1] == 0:
-                return Calculation(None, "zero_denominator", provenance)
+                return Calculation(None, "not_applicable", provenance)
             value = weighted[0] / weighted[1]
             if rule.unit == "%":
                 value *= 100
@@ -156,13 +164,7 @@ def calculate_rule(rule: RuleDefinition, inputs: dict[str, Calculation]) -> Calc
             value = sum(weighted, Decimal(0))
     if value < 0 and rule.report_scope != "check":
         return Calculation(None, "negative_usage", provenance)
-    return bounded_result(
-        value,
-        "complete"
-        if all(item and item.status in {"complete", "adjusted"} for item in values)
-        else "abnormal_dependency",
-        provenance,
-    )
+    return bounded_result(value, "complete", provenance)
 
 
 def validate_graph(

@@ -2,12 +2,14 @@
 
 import asyncio
 import contextlib
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
 
+from app.core import database, maintenance
 from app.core.exceptions import AppException
 from app.modules.safety.models import (
     SafetyPageFeishuConfig,
@@ -16,6 +18,8 @@ from app.modules.safety.models import (
 from app.modules.safety.scheduled import SafetyPageMirrorSyncGenerator
 from app.modules.safety.schemas.page_table import PageTableRecordCondition
 from app.modules.safety.service import page_table
+
+pytest_plugins = ("tests.maintenance_fixtures",)
 
 PAGE_KEY = "safety:risk-hazard:hazard-inspection:hazard-duty"
 APP_TOKEN = "bascnTest"
@@ -415,10 +419,84 @@ async def test_mirror_sync_generator_finds_due_pages() -> None:
 # ── 独立同步循环（mirror_sync_loop）──
 
 
-async def test_mirror_sync_loop_runs_due_pages_and_survives_failures() -> None:
+@pytest.mark.parametrize("phase", ["starting", "draining"])
+@pytest.mark.usefixtures("isolated_redis")
+async def test_mirror_sync_loop_defers_until_release_reopens(
+    phase: str, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    from app.modules.safety import scheduled
+
+    first_wait = asyncio.Event()
+    release_opened = asyncio.Event()
+    sync_started = asyncio.Event()
+    finish_sync = asyncio.Event()
+    open_session = AsyncMock()
+    commit = AsyncMock()
+
+    class ObservedStop(asyncio.Event):
+        async def wait(self) -> bool:
+            first_wait.set()
+            return await super().wait()
+
+    @contextlib.asynccontextmanager
+    async def tracked_session() -> AsyncIterator[database.MaintenanceSession]:
+        await open_session()
+        async with database.async_session_factory() as session:
+            yield session
+
+    async def sync_page(
+        _generator: SafetyPageMirrorSyncGenerator, _session: object, _page_key: str
+    ) -> None:
+        sync_started.set()
+        if release_opened.is_set():
+            await finish_sync.wait()
+
+    stop = ObservedStop()
+    monkeypatch.setattr(scheduled, "_mirror_sync_stop", stop)
+    monkeypatch.setattr(scheduled, "_MIRROR_SYNC_RETRY_SECONDS", 0.01)
+    monkeypatch.setattr(page_table, "async_session_factory", tracked_session)
+    monkeypatch.setattr(database.MaintenanceSession, "commit", commit)
+    monkeypatch.setattr(
+        SafetyPageMirrorSyncGenerator, "find_due", AsyncMock(return_value=[PAGE_KEY])
+    )
+    monkeypatch.setattr(SafetyPageMirrorSyncGenerator, "execute_one", sync_page)
+
+    await maintenance.set_release_phase(phase)
+    task = asyncio.create_task(scheduled.mirror_sync_loop())
+    try:
+        await asyncio.wait_for(first_wait.wait(), timeout=2)
+        open_session.assert_not_awaited()
+        assert not sync_started.is_set()
+        assert await maintenance.active_work() == {}
+        assert "页面镜像独立同步本轮失败" not in caplog.text
+
+        release_opened.set()
+        await maintenance.set_release_phase("normal")
+        await asyncio.wait_for(sync_started.wait(), timeout=2)
+        await maintenance.set_release_phase("draining")
+        assert await maintenance.active_work() == {"scheduler": 1, "database-task": 1}
+
+        stop.set()
+        finish_sync.set()
+        await asyncio.wait_for(task, timeout=2)
+        open_session.assert_awaited_once()
+        commit.assert_awaited_once()
+        assert await maintenance.active_work() == {}
+    finally:
+        stop.set()
+        finish_sync.set()
+        await asyncio.wait_for(task, timeout=2)
+
+
+async def test_mirror_sync_loop_runs_due_pages_and_survives_failures(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """独立循环：本轮执行到期的页面；单页失败不中断本轮，整轮异常不退出循环。"""
     from app.modules.safety import scheduled as scheduled_module
 
+    monkeypatch.setattr(
+        scheduled_module, "business_activity", lambda _kind: contextlib.nullcontext()
+    )
     calls: list[str] = []
     failures: set[str] = set()
 

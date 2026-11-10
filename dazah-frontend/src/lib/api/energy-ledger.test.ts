@@ -4,6 +4,17 @@ import { QUALITY_LABELS, estimateUsage, formatAmount, ledgerRequest, reportQuery
 afterEach(() => vi.unstubAllGlobals())
 
 describe('energy entry precision and draft submissions', () => {
+  it('labels source formula failures distinctly from blank source values', () => {
+    expect(QUALITY_LABELS.source_formula_error).toBe('原表公式需核对')
+    expect(QUALITY_LABELS.source_blank).toBe('原表空白')
+    expect(QUALITY_LABELS.source_field_missing).toBe('本月缺少对应业务字段')
+    expect(QUALITY_LABELS.source_formula_cycle).toBe('原表循环引用')
+  })
+  it('labels missing data and a fully observed zero denominator distinctly', () => {
+    expect(QUALITY_LABELS.missing_reading).toBe('待补数')
+    expect(QUALITY_LABELS.missing_dependency).toBe('待补数')
+    expect(QUALITY_LABELS.not_applicable).toBe('不适用')
+  })
   it('labels reviewed exceptions as pending confirmation', () => { expect(QUALITY_LABELS.pending_review).toBe('待确认') })
   it('shows structured Server Action errors in production without relying on thrown server errors', async () => {
     await expect(resolveLedgerAction(Promise.resolve({ ok: false, message: '数据已被其他人修改，请刷新' }))).rejects.toThrow('数据已被其他人修改')

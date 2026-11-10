@@ -5,6 +5,50 @@ import { proxy } from './proxy'
 vi.mock('@/lib/server-api', () => ({ getServerApiBaseUrl: () => 'http://backend.test' }))
 afterEach(() => vi.unstubAllGlobals())
 
+it.each([undefined, 'expired-fixture'])('设备页未登录或会话失效时仅检查身份并进入登录页：%s', async token => {
+  const fetchMock = vi.fn().mockResolvedValue(new Response('{}', { status: 401 }))
+  vi.stubGlobal('fetch', fetchMock)
+  const response = await proxy(new NextRequest('https://frontend.test/equipment?workshop=201-1&module=assets', {
+    headers: token ? { cookie: `auth_token=${token}` } : {},
+  }))
+  const location = new URL(response.headers.get('location') || '')
+  expect(location.pathname).toBe('/login')
+  expect(location.searchParams.get('next')).toBe('/equipment?workshop=201-1&module=assets')
+  expect(fetchMock).toHaveBeenCalledOnce()
+  expect(fetchMock.mock.calls[0][0]).toBe('http://backend.test/api/v1/identity/me')
+  expect(response.headers.get('x-middleware-next')).toBeNull()
+})
+
+it('重新登录后使用新会话恢复设备页访问', async () => {
+  const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: { role: 'admin' } })))
+  vi.stubGlobal('fetch', fetchMock)
+  const response = await proxy(new NextRequest('https://frontend.test/equipment?module=assets', {
+    headers: { cookie: 'auth_token=renewed-fixture' },
+  }))
+  expect(response.headers.get('x-middleware-next')).toBe('1')
+  const options = fetchMock.mock.calls[0][1]
+  expect(new Headers(options.headers).get('Authorization')).toBe('Bearer renewed-fixture')
+  expect(fetchMock).toHaveBeenCalledOnce()
+})
+
+it('从设备工作台 URL 提取权限上下文，并忽略客户端伪造的模块头', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => new Response(JSON.stringify({ data: {
+    role: 'user', module_codes: ['equipment'], page_permissions: [
+      { page_key: 'equipment:assets', module_code: 'equipment', permissions: ['access', 'query'] },
+    ],
+  } }))))
+  const root = 'https://frontend.test/equipment'
+  const allowed = await proxy(new NextRequest(`${root}?module=assets`, {
+    headers: { 'X-Dazah-Equipment-Module': 'maintenance' },
+  }))
+  expect(allowed.headers.get('x-middleware-request-x-dazah-equipment-module')).toBe('assets')
+  expect(allowed.headers.get('x-middleware-request-x-dazah-page-path')).toBe('/equipment')
+  const denied = await proxy(new NextRequest(`${root}?module=maintenance`, {
+    headers: { 'X-Dazah-Equipment-Module': 'assets' },
+  }))
+  expect(denied.status).toBe(403)
+})
+
 it('retains the exact Feishu energy task destination through login', async () => {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { status: 401 })))
   const result = await proxy(new NextRequest('http://frontend.test/energy/entry?task=task-id&source=feishu'))

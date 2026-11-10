@@ -1,5 +1,6 @@
 .workspace { display: flex; flex-direction: column; gap: 18px; padding: 24px; color: var(--color-ink); }
 .workspace h3 { margin: 0; }
+.dashboardWorkspace { padding: 16px 20px; gap: 12px; }
 .ledgerNavigation { min-width: 0; }
 .ledgerNavigation > :global(.ant-menu) { background: transparent; }
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; }

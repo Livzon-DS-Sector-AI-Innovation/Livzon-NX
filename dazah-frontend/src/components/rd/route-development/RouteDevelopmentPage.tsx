@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { Button, Input, Table, Tag, Card, Upload, App, Progress, Tooltip, Space, Popconfirm } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
-import { PlayCircleOutlined, UploadOutlined, FilePdfOutlined, ReloadOutlined, DeleteOutlined } from '@ant-design/icons'
+import { PlayCircleOutlined, UploadOutlined, FilePdfOutlined, DeleteOutlined } from '@ant-design/icons'
 import { RouteWorkflowPage } from './RouteWorkflowPage'
 import { fetchRoutes, createRoute, deleteRoute } from '@/lib/api/rd'
 import { RouteDevelopment, RouteStatus, WorkflowModule } from '@/types/rd'
@@ -26,22 +26,23 @@ export function RouteDevelopmentPage({ initialRoutes, initialTotal }: RouteDevel
   const [literatureFile, setLiteratureFile] = useState<File | null>(null)
   const [literatureInput, setLiteratureInput] = useState('')
   const [creating, setCreating] = useState(false)
-  const [apiAvailable, setApiAvailable] = useState(true)
   const [savedWorkflows, setSavedWorkflows] = useState<Map<string, { updatedAt: string; step: number }>>(new Map())
+  const latestRequest = useRef(0)
 
   const loadRoutes = useCallback(async () => {
+    const request = ++latestRequest.current
     setLoading(true)
     try {
       const result = await fetchRoutes({ page, page_size: pageSize })
+      if (request !== latestRequest.current) return
       setRoutes(result.items)
       setTotal(result.total)
-      setApiAvailable(true)
     } catch {
-      setApiAvailable(false)
+      if (request === latestRequest.current) message.error('路线列表加载失败，请稍后重试')
     } finally {
-      setLoading(false)
+      if (request === latestRequest.current) setLoading(false)
     }
-  }, [page, pageSize])
+  }, [message, page, pageSize])
 
   useEffect(() => {
     queueMicrotask(loadRoutes)
@@ -49,6 +50,7 @@ export function RouteDevelopmentPage({ initialRoutes, initialTotal }: RouteDevel
 
   // 加载已保存的工作流状态
   useEffect(() => {
+    if (workflowRoute) return
     const saved = new Map<string, { updatedAt: string; step: number }>()
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i)
@@ -63,8 +65,8 @@ export function RouteDevelopmentPage({ initialRoutes, initialTotal }: RouteDevel
         } catch {}
       }
     }
-    setSavedWorkflows(saved)
-  }, [])
+    queueMicrotask(() => setSavedWorkflows(saved))
+  }, [workflowRoute])
 
   // 创建工作流
   const handleCreateWorkflow = async () => {
@@ -79,11 +81,6 @@ export function RouteDevelopmentPage({ initialRoutes, initialTotal }: RouteDevel
     }
     setCreating(true)
     
-    // 保存第一个文件用于 AI 解析
-    if (fileList.length > 0) {
-      setLiteratureFile(fileList[0].originFileObj as File)
-    }
-
     // 调用后端 API 创建路线
     try {
       const result = await createRoute({
@@ -117,6 +114,7 @@ export function RouteDevelopmentPage({ initialRoutes, initialTotal }: RouteDevel
         created_by: null,
       }
 
+      setLiteratureFile(fileList[0]?.originFileObj ?? null)
       setWorkflowRoute(newRoute)
       message.success('工作流已创建，开始文献解析')
     } catch (error) {
@@ -135,10 +133,9 @@ export function RouteDevelopmentPage({ initialRoutes, initialTotal }: RouteDevel
   const handleBackToList = () => {
     setWorkflowRoute(null)
     setFileList([])
+    setLiteratureFile(null)
     setLiteratureInput('')
-    loadRoutes()
-    // 刷新保存的工作流状态
-    window.location.reload()
+    void loadRoutes()
   }
 
   if (workflowRoute) {
@@ -294,16 +291,6 @@ export function RouteDevelopmentPage({ initialRoutes, initialTotal }: RouteDevel
 
   return (
     <div>
-      {false && (
-        <Alert
-          title="后端服务不可用"
-          description="API 服务器未启动，当前显示的是空数据。工作流功能仍可正常使用，数据保存在浏览器本地。"
-          type="warning"
-          showIcon
-          style={{ marginBottom: 16 }}
-        />
-      )}
-
       <Card title="📎 创建新工作流" style={{ marginBottom: 16 }}>
         <div style={{ marginBottom: 16 }}>
           <div style={{ fontWeight: 500, marginBottom: 8 }}>上传文献或输入文献信息</div>

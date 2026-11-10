@@ -12,6 +12,8 @@ interface EmployeeTableProps {
   total: number
   page: number
   pageSize: number
+  listLoading: boolean
+  filtered: boolean
   onPageChange: (page: number, pageSize: number) => void
   onRefresh: () => void
   onEdit: (employee: Employee) => void
@@ -25,6 +27,8 @@ export default function EmployeeTable({
   total,
   page,
   pageSize,
+  listLoading,
+  filtered,
   onPageChange,
   onRefresh,
   onEdit,
@@ -121,7 +125,7 @@ export default function EmployeeTable({
       key: 'action',
       width: 120,
       fixed: 'right' as const,
-      render: (_: any, record: Employee) => (
+      render: (_: unknown, record: Employee) => (
         <Space size="small">
           <Tooltip title="查看详情">
             <Button
@@ -167,7 +171,8 @@ export default function EmployeeTable({
       columns={columns}
       dataSource={employees}
       rowKey="id"
-      loading={loading}
+      loading={loading || listLoading}
+      locale={{ emptyText: filtered ? '没有符合筛选条件的员工' : '暂无员工档案' }}
       pagination={{
         current: page,
         pageSize,
