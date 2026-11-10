@@ -1088,3 +1088,47 @@ async def test_commitment_notify_test_endpoint(
     assert sent == ["ou-sc-target"]
 
     await _cleanup_chat_flow(db_session)
+
+
+
+async def test_chat_flow_service_real_steps(
+    db_session: AsyncSession, stub_flow: type[_StubFlow]
+) -> None:
+    """真实 ChatFlowService 分步驱动（不经 handler stub）：发起→保存→汇总。"""
+    from app.core.redis import cache_delete, cache_get
+    from app.modules.safety.service.work_permit_chat_flow import ChatFlowService
+
+    user = User(
+        id=uuid4(),
+        name=f"{_MARK}聊天用户{uuid4().hex[:6]}",
+        role="user",
+        status="active",
+        feishu_open_id=f"ou-flow-{uuid4().hex[:8]}",
+    )
+    db_session.add(user)
+    await db_session.flush()
+
+    service = ChatFlowService(db_session, open_id=user.feishu_open_id or "")
+    permit_type = "hot_work"
+
+    card = await service.start_form(permit_type)
+    assert card
+    state = await cache_get(f"wp_form:{service.open_id}:{permit_type}")
+    assert state
+
+    from app.modules.safety.service.work_permit_card_forms import steps_for
+
+    steps = steps_for(permit_type)
+    form_value: dict[str, Any] = {"work_description": "聊天流测试动火"}
+    for step in steps[:-1]:
+        await service.save_step(permit_type, step, dict(form_value))
+    summary = await service.build_summary(permit_type)
+    assert summary
+
+    await service.my_drafts()
+    await service.cancel(permit_type)
+    leftover = await cache_get(f"wp_form:{service.open_id}:{permit_type}")
+    assert not leftover
+
+    await db_session.delete(user)
+    await db_session.flush()

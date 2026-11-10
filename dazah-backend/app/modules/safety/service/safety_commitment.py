@@ -106,7 +106,9 @@ def _to_item(report: SafetyCommitmentReport) -> dict[str, Any]:
         "report_date": report.report_date,
         "enterprise_status": dict(report.enterprise_status or {}),
         "commitment_text": report.commitment_text,
-        "risk_assessment": dict(report.risk_assessment) if report.risk_assessment else None,
+            "risk_assessment": (
+            dict(report.risk_assessment) if report.risk_assessment else None
+        ),
         "status": report.status,
         "publisher_name": report.publisher_name,
         "published_at": report.published_at,
@@ -176,7 +178,9 @@ async def get_or_create_report(
 
     previous = await _latest_previous(db, report_date)
     inherited_status = (
-        dict(previous.enterprise_status) if previous else default_enterprise_status()
+        dict(previous.enterprise_status)
+        if previous and previous.enterprise_status
+        else default_enterprise_status()
     )
     commitment_text = (
         previous.commitment_text
@@ -332,7 +336,11 @@ async def create_card(
     data: SafetyCommitmentCardCreateRequest,
     user_id: UUID | None = None,
 ) -> dict[str, Any]:
-    if data.card_type not in (CommitmentCardType.COMMITMENT.value, CommitmentCardType.MAJOR_HAZARD.value):
+    valid_types = (
+        CommitmentCardType.COMMITMENT.value,
+        CommitmentCardType.MAJOR_HAZARD.value,
+    )
+    if data.card_type not in valid_types:
         raise AppException(message="卡片类型无效")
     card = SafetyCommitmentCard(
         card_type=data.card_type,

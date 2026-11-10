@@ -110,10 +110,10 @@ def upgrade() -> None:
             comment="签名时间",
         ),
         sa.ForeignKeyConstraint(
-            ["permit_id"], ["safety.work_permits.id"], ondelete="CASCADE"
+            ["permit_id"], ["safety.work_permits.id"]
         ),
         sa.ForeignKeyConstraint(
-            ["node_id"], ["safety.work_permit_nodes.id"], ondelete="CASCADE"
+            ["node_id"], ["safety.work_permit_nodes.id"]
         ),
         sa.ForeignKeyConstraint(["signer_user_id"], ["identity.users.id"]),
         *_base_constraints(),

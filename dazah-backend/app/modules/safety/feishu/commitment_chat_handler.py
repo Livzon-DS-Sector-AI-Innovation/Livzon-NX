@@ -111,7 +111,9 @@ async def _start_form(db: Any, open_id: str, report_date: str) -> dict[str, Any]
         json.dumps(state, ensure_ascii=False),
         ex=_FORM_TTL_SECONDS,
     )
-    return build_step_card(report_date, 1, state["values"])
+    values = state.get("values")
+    values = values if isinstance(values, dict) else {}
+    return build_step_card(report_date, 1, values)
 
 
 async def _load_state(open_id: str, report_date: str) -> dict[str, Any] | None:
@@ -129,6 +131,11 @@ def _to_enterprise_status(values: dict[str, Any]) -> dict[str, Any]:
     """表单值 → enterprise_status JSONB（yes/no → True/False，unknown → None）。"""
     tri = {"yes": True, "no": False}
     special = values.get("special_work") or {}
+
+    def _tri(key: str) -> bool | None:
+        choice = values.get(key)
+        return tri.get(choice) if isinstance(choice, str) else None
+
     return {
         "workshop_total": values.get("workshop_total", 0),
         "workshop_running": values.get("workshop_running", 0),
@@ -146,14 +153,12 @@ def _to_enterprise_status(values: dict[str, Any]) -> dict[str, Any]:
             "other": special.get("other", 0),
         },
         "hazard_count": values.get("hazard_count", 0),
-        "hazard_rectified": tri.get(values.get("hazard_rectified")),
-        "hazard_temp_measures": tri.get(values.get("hazard_temp_measures")),
-        "contractor_work": bool(tri.get(values.get("contractor_work"), False)),
-        "contractor_trained": tri.get(values.get("contractor_trained")),
-        "major_hazard_safe": tri.get(values.get("major_hazard_safe")),
-        "responsibility_implemented": tri.get(
-            values.get("responsibility_implemented")
-        ),
+        "hazard_rectified": _tri("hazard_rectified"),
+        "hazard_temp_measures": _tri("hazard_temp_measures"),
+        "contractor_work": bool(_tri("contractor_work") or False),
+        "contractor_trained": _tri("contractor_trained"),
+        "major_hazard_safe": _tri("major_hazard_safe"),
+        "responsibility_implemented": _tri("responsibility_implemented"),
         "person_main": values.get("person_main", ""),
         "person_tech": values.get("person_tech", ""),
         "person_ops": values.get("person_ops", ""),

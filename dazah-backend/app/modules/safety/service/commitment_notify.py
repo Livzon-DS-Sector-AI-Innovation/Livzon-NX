@@ -60,7 +60,9 @@ def public_base_url() -> str:
     return (settings.FRONTEND_URL or settings.BACKEND_PUBLIC_URL).rstrip("/")
 
 
-async def push_fill_cards(db: AsyncSession, report_date: str, report: Any) -> tuple[int, int]:
+async def push_fill_cards(
+    db: AsyncSession, report_date: str, report: Any
+) -> tuple[int, int]:
     """向配置的填报人员逐一推送填报提醒卡，返回（成功数, 失败数）。"""
     settings = await get_commitment_settings(db)
     if settings is None or not settings.commitment_notify_enabled:
@@ -89,7 +91,9 @@ async def push_fill_cards(db: AsyncSession, report_date: str, report: Any) -> tu
     return sent, failed
 
 
-async def push_announcement_cards(db: AsyncSession, item: dict[str, Any]) -> tuple[int, int]:
+async def push_announcement_cards(
+    db: AsyncSession, item: dict[str, Any]
+) -> tuple[int, int]:
     """发布后推送承诺公告卡到配置群，返回（成功数, 失败数）。"""
     settings = await get_commitment_settings(db)
     if settings is None:

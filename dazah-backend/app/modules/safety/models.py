@@ -4044,7 +4044,8 @@ class SafetyFacilityInspection(BaseModel):
 
     __tablename__ = "safety_facility_inspections"
     __table_args__ = (
-        Index("ix_safety_facility_inspections_facility", "facility_id", "inspected_at"),
+        Index("ix_safety_facility_inspections_facility", "facility_id",
+        "inspected_at"),
         Index("ix_safety_facility_inspections_inspected_at", "inspected_at"),
         {"schema": "safety"},
     )
@@ -5463,7 +5464,8 @@ class SafetyCommitmentReport(BaseModel):
     risk_assessment: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB,
         nullable=True,
-        comment="AI 风险研判结果（risk_level/summary/key_risks/suggestions/data_basis）",
+        comment=
+            "AI 风险研判结果（risk_level/summary/key_risks/suggestions/data_basis）",
     )
     status: Mapped[str] = mapped_column(
         String(20),

@@ -313,7 +313,7 @@ def build_step_card(
                         label,
                         [
                             {"value": str(opt), "label": str(opt)}
-                            for opt in (tf.get("options") or ())
+                            for opt in options_for(tf)
                         ],
                         default=default_text,
                         multi=tf_type == "multi_select",
@@ -456,7 +456,7 @@ def build_step_card(
                         default="yes" if m_key in measures_picked else "no",
                     )
                 )
-                for fill_key in m.get("fill_keys") or []:
+                for fill_key in fill_keys_for(m):
                     default_fill = str(
                         (measure_fills.get(m_key) or {}).get(str(fill_key)) or ""
                     )
@@ -612,7 +612,7 @@ def ticket_document_markdown(
         if tf_type in ("select", "multi_select"):
             options = [
                 {"value": str(opt), "label": str(opt)}
-                for opt in (tf.get("options") or ())
+                for opt in options_for(tf)
             ]
             lines.append(f"**{label}** " + _join_options(options, raw or []))
         elif isinstance(raw, (list, tuple)):
@@ -669,7 +669,7 @@ def ticket_document_markdown(
             if fills:
                 parts = _re.split(r"_{2,}", text)
                 rebuilt = parts[0]
-                fill_keys = list(m.get("fill_keys") or [])
+                fill_keys = fill_keys_for(m)
                 for i, part in enumerate(parts[1:]):
                     value = (
                         fills.get(str(fill_keys[i])) if i < len(fill_keys) else None
@@ -949,3 +949,19 @@ def build_gas_card(permit_id: str, permit_no: str) -> dict[str, Any]:
         _form(form_elements, submit_btn),
     ]
     return _card(f"气体复检 · {permit_no}", elements)
+
+
+def options_for(tf: object) -> list[str]:
+    """票面字段定义里的 options（object 类型运行时为 list）。"""
+    raw = tf.get("options") if isinstance(tf, dict) else None
+    if isinstance(raw, list):
+        return [str(opt) for opt in raw]
+    return []
+
+
+def fill_keys_for(m: object) -> list[str]:
+    """措施模板的 fill_keys（object 类型运行时为 list）。"""
+    raw = m.get("fill_keys") if isinstance(m, dict) else None
+    if isinstance(raw, list):
+        return [str(key) for key in raw]
+    return []

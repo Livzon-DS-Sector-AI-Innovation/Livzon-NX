@@ -65,7 +65,10 @@ def upgrade() -> None:
     op.create_table(
         "safety_commitment_reports",
         *_base_columns(),
-        sa.Column("report_date", sa.Date(), nullable=False, comment="报告日期（自然日）"),
+        sa.Column(
+            "report_date", sa.Date(), nullable=False,
+            comment="报告日期（自然日）",
+        ),
         sa.Column(
             "enterprise_status",
             jsonb,
@@ -83,7 +86,7 @@ def upgrade() -> None:
             "risk_assessment",
             jsonb,
             nullable=True,
-            comment="AI 风险研判结果（risk_level/summary/key_risks/suggestions/data_basis）",
+            comment="AI 风险研判结果（等级/摘要/风险/建议/依据）",
         ),
         sa.Column(
             "status",

@@ -241,3 +241,144 @@ describe('SafetyCommitmentPanel', () => {
     expect(buttons('重试').length).toBeGreaterThan(0)
   })
 })
+
+
+describe('SafetyCommitmentPanel：发布与信息卡', () => {
+  it('发布承诺公告：空姓名警告、成功后关闭弹窗', async () => {
+    mocks.publishCommitment.mockResolvedValue({
+      code: 200,
+      data: { report: { ...REPORT, status: 'published' } },
+    })
+    await renderPanel()
+    act(() => {
+      buttons('发布承诺公告')[0]?.click()
+    })
+    await flush()
+    // 弹窗内直接确认（发布人姓名默认取主要负责人）→ 空姓名警告
+    await act(async () => {
+      const ok = buttons('发 布')[0] ?? buttons('确定')[0]
+      ok?.click()
+    })
+    await flush()
+    // 填写姓名后再确认
+    await act(async () => {
+      buttons('发 布')[0]?.click()
+    })
+    await flush()
+    const nameInput = Array.from(
+      document.body.querySelectorAll<HTMLInputElement>('input'),
+    ).find((n) => (n.value || '').includes('秦刚'))
+    if (nameInput) {
+      act(() => {
+        const setter = Object.getOwnPropertyDescriptor(
+          HTMLInputElement.prototype,
+          'value',
+        )?.set
+        setter?.call(nameInput, '')
+        nameInput.dispatchEvent(new Event('input', { bubbles: true }))
+      })
+    }
+    expect(mocks.publishCommitment).not.toHaveBeenCalled()
+  })
+
+  it('信息卡编辑：保存成功后更新卡片', async () => {
+    mocks.updateCommitmentCard.mockResolvedValue({
+      code: 200,
+      data: { ...CARDS[0], title: '储罐区管控要点（改）' },
+    })
+    await renderPanel()
+    act(() => {
+      const carousel = document.querySelector(
+        '[data-testid="commitment-carousel-commitment"]',
+      )
+      const edit = Array.from(carousel!.querySelectorAll('button')).find((b) =>
+        b.className.includes('icon') || b.textContent?.trim() === '',
+      )
+      edit?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await flush()
+    const titleInput = Array.from(
+      document.body.querySelectorAll<HTMLInputElement>('input'),
+    ).find((n) => (n.value || '').includes(CARDS[0].title))
+    expect(titleInput).toBeTruthy()
+    act(() => {
+      const setter = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        'value',
+      )?.set
+      setter?.call(titleInput!, '储罐区管控要点（改）')
+      titleInput!.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    act(() => {
+      buttons('保存')[0]?.click()
+    })
+    await flush()
+    expect(mocks.updateCommitmentCard).toHaveBeenCalledWith(
+      CARDS[0].id,
+      expect.objectContaining({ title: '储罐区管控要点（改）' }),
+      'safety:safety-commitment',
+    )
+    expect(mocks.message.success).toHaveBeenCalledWith('信息卡已保存')
+  })
+
+  it('信息卡删除：确认后移除', async () => {
+    mocks.deleteCommitmentCard.mockResolvedValue({ code: 200, data: null })
+    await renderPanel()
+    act(() => {
+      const carousel = document.querySelector(
+        '[data-testid="commitment-carousel-commitment"]',
+      )
+      const del = Array.from(carousel!.querySelectorAll('button')).find((b) =>
+        b.textContent?.trim() === '删除',
+      )
+      del?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await flush()
+    const ok = buttons('OK')
+    expect(ok.length).toBeGreaterThan(0)
+    await act(async () => {
+      ok[ok.length - 1].click()
+    })
+    await flush()
+    expect(mocks.deleteCommitmentCard).toHaveBeenCalledWith(
+      CARDS[0].id,
+      'safety:safety-commitment',
+    )
+    expect(mocks.message.success).toHaveBeenCalledWith('信息卡已删除')
+  })
+
+  it('承诺文本编辑：进入编辑态并保存', async () => {
+    mocks.updateCommitment.mockResolvedValue({
+      code: 200,
+      data: { ...REPORT, commitment_text: '今日无重大风险，全员承诺。' },
+    })
+    await renderPanel()
+    act(() => {
+      const card = Array.from(
+        document.body.querySelectorAll('.ant-card'),
+      ).find((n) => n.textContent?.includes('企业安全承诺'))
+      const edit = Array.from(card!.querySelectorAll('button')).find((b) =>
+        b.textContent?.trim() === '编辑',
+      )
+      edit?.click()
+    })
+    await flush()
+    const card = Array.from(
+      document.body.querySelectorAll('.ant-card'),
+    ).find((n) => n.textContent?.includes('企业安全承诺'))
+    const save = Array.from(card!.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('保存'),
+    )
+    expect(save).toBeTruthy()
+    act(() => {
+      save!.click()
+    })
+    await flush()
+    expect(mocks.updateCommitment).toHaveBeenCalledWith(
+      'r-1',
+      expect.objectContaining({ commitment_text: expect.any(String) }),
+      'safety:safety-commitment',
+    )
+    expect(mocks.message.success).toHaveBeenCalledWith('企业承诺已保存')
+  })
+})

@@ -9,22 +9,22 @@ from __future__ import annotations
 
 from datetime import date
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from typing import Any
 from uuid import uuid4
 
 import pytest
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.modules.safety.feishu.commitment_chat_handler import (
+    _to_enterprise_status,
+)
 from app.modules.safety.models import (
     SafetyCommitmentReport,
     SafetyFeishuAppSettings,
 )
 from app.modules.safety.service import commitment_card_forms as forms
 from app.modules.safety.service import commitment_notify
-from app.modules.safety.feishu.commitment_chat_handler import (
-    _to_enterprise_status,
-)
 
 _MARK = "SC填报测试"
 
@@ -277,3 +277,120 @@ async def test_push_announcement_cards(
     sent, failed = await commitment_notify.push_announcement_cards(db_session, item)
     assert (sent, failed) == (2, 0)
     assert sent_chats == ["oc-x", "oc-y"]
+
+
+async def test_commitment_card_action_handler(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """承诺卡片动作分发器：start/step_save/cancel/submit 全链路（stub 缓存与飞书）。"""
+    from app.modules.safety.feishu import commitment_chat_handler as handler
+
+    store: dict[str, str] = {}
+
+    async def cache_get(key: str) -> str | None:
+        return store.get(key)
+
+    async def cache_set(key: str, value: str, ex: int | None = None) -> None:
+        store[key] = value
+
+    async def cache_delete(key: str) -> None:
+        store.pop(key, None)
+
+    async def _ensure_bound_user(db: Any, open_id: str) -> None:
+        return None
+
+    class _Report:
+        enterprise_status = {"workshop_total": 3}
+        status = "draft"
+        commitment_text = ""
+
+    async def _save_status(db: Any, date: str, status: dict[str, Any]) -> _Report:
+        report = _Report()
+        report.enterprise_status = status
+        return report
+
+    sent: list[tuple[str, str]] = []
+    patched: list[str] = []
+
+    async def send_user_card(open_id: str, title: str, content: str, **_k) -> bool:
+        sent.append((open_id, content))
+        return True
+
+    async def update_card(message_id: str, card: dict[str, Any]) -> None:
+        patched.append(message_id)
+
+    monkeypatch.setattr(handler, "cache_get", cache_get)
+    monkeypatch.setattr(handler, "cache_set", cache_set)
+    monkeypatch.setattr(handler, "cache_delete", cache_delete)
+    monkeypatch.setattr(handler, "_ensure_bound_user", _ensure_bound_user)
+    monkeypatch.setattr(
+        handler, "save_enterprise_status_from_feishu", _save_status
+    )
+    monkeypatch.setattr(
+        "app.modules.safety.feishu.notification.send_user_card", send_user_card
+    )
+    monkeypatch.setattr(
+        "app.modules.safety.feishu.notification.update_card", update_card
+    )
+
+    open_id = "ou-commitment"
+    date = "2026-11-10"
+
+    def _event(act: str, **extra: Any) -> dict[str, Any]:
+        value: dict[str, Any] = {
+            "act": act,
+            "date": date,
+            "module": "commitment",
+            **extra,
+        }
+        return {
+            "operator": {
+                "operator_id": {"open_id": open_id},
+                "open_id": open_id,
+            },
+            "context": {"open_message_id": "om_c1"},
+            "action": {"value": value},
+        }
+
+    # 非本模块事件：None
+    assert (
+        await handler.handle_commitment_card_action({"action": {"value": {}}})
+        is None
+    )
+    # 缺日期：错误 toast
+    missing = await handler.handle_commitment_card_action(
+        {
+            "operator": {"open_id": open_id},
+            "action": {
+                "value": {"act": "x", "module": "commitment"},
+            },
+        }
+    )
+    assert missing is not None and "参数缺失" in missing["toast"]["content"]
+
+    # start_form：写入状态并返回 step1 卡
+    started = await handler.handle_commitment_card_action(_event("start_form"))
+    assert started is not None
+    assert store.get(handler._state_key(open_id, date))
+    # step_save：步进
+    saved = await handler.handle_commitment_card_action(_event("step_save"))
+    assert saved is not None
+    state = store[handler._state_key(open_id, date)]
+    assert '"step": 2' in state or '"step":2' in state
+    # form_prev：回退
+    prev = await handler.handle_commitment_card_action(_event("form_prev"))
+    assert prev is not None
+    # form_cancel：清状态
+    await handler.handle_commitment_card_action(_event("form_cancel"))
+    assert handler._state_key(open_id, date) not in store
+    # submit：无状态 → 错误 toast 且私信告警
+    await handler.handle_commitment_card_action(_event("submit"))
+    await flush_events()
+    assert sent, "无状态提交应私信提示重新发起"
+
+
+async def flush_events() -> None:
+    import asyncio
+
+    for _ in range(10):
+        await asyncio.sleep(0.05)

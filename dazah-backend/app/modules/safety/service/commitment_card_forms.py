@@ -445,7 +445,10 @@ def build_announcement_markdown(item: dict[str, Any]) -> str:
         f"包保责任制：{_yes_no_label(status.get('responsibility_implemented'))}"
     )
     if risk:
-        lines.append(f"**AI 风险研判**：{risk.get('risk_level', '')} — {risk.get('summary', '')}")
+        lines.append(
+            f"**AI 风险研判**：{risk.get('risk_level', '')} "
+            f"— {risk.get('summary', '')}"
+        )
     lines.append(
         f"**承诺人（主要负责人）**：{item.get('publisher_name') or '待发布'}"
     )

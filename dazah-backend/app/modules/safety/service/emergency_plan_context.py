@@ -14,8 +14,8 @@ from uuid import UUID
 
 from pydantic import ValidationError
 from sqlalchemy import select
-from sqlalchemy.sql.elements import ColumnElement
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.modules.safety.models import (
     CampusBuilding,

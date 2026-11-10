@@ -193,6 +193,7 @@ class ChatFlowService:
             await self._resolve_assignment_names(values)
             await self._save_state(state)
             return await self.build_summary(permit_type)
+        assert next_s is not None  # at_summary 已提前返回
         return build_step_card(permit_type, next_s, values, self.open_id)
 
     async def _inject_approver_defaults(
@@ -498,8 +499,14 @@ class ChatFlowService:
         # 默认模板记忆
         await self._save_form_defaults(user.id, permit_type, values)
         # 提交审批（默认审批人）
+        from uuid import UUID as _UUID
+
+        assignments_uuid: dict[str, _UUID | None] = {
+            key: (_UUID(value) if value else None)
+            for key, value in assignments_input.items()
+        }
         submitted, warnings = await permit_service.submit_permit(
-            self.db, permit.id, assignments_input, user
+            self.db, permit.id, assignments_uuid, user
         )
         # 作业前气体分析落库（文档票面气体区数据来源）
         gas = dict(values.get("gas") or {})

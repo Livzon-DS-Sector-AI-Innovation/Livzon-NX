@@ -373,7 +373,6 @@ class SafetyCommitmentPushGenerator(TaskGenerator):
         return [report_date]
 
     async def execute_one(self, session: Any, item: Any) -> None:
-        from datetime import datetime, timedelta, timezone
 
         from app.core.redis import cache_set
         from app.modules.safety.service.commitment_notify import (
@@ -387,7 +386,6 @@ class SafetyCommitmentPushGenerator(TaskGenerator):
         report, _created = await get_or_create_report(session, report_date)
         sent, failed = await push_fill_cards(session, report_date, report)
         if sent > 0 or failed > 0:
-            cn_tz = timezone(timedelta(hours=8))
             await cache_set(
                 f"commitment_push_done:{report_date}",
                 "1",

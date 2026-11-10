@@ -361,7 +361,7 @@ async def start_ws() -> None:
 
                 # 3.1 注册 8 大作业票卡片回调（导入即完成 @on_event 注册）
                 # 3.3 注册安全承诺填报卡片回调（module=commitment）
-                import app.modules.safety.feishu.commitment_chat_handler as _commitment_handler  # noqa: F401
+                import app.modules.safety.feishu.commitment_chat_handler as _cm_handler  # noqa: F401
                 import app.modules.safety.feishu.work_permit_card_handler as _wp_handler  # noqa: F401
 
                 # 3.2 注册 8 大作业票聊天消息处理（发起意图 + 表单/操作回调）

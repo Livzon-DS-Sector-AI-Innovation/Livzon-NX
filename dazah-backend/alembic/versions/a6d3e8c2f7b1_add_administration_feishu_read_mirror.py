@@ -130,7 +130,8 @@ def upgrade() -> None:
             comment="入口类型：wiki 或 base",
         ),
         sa.Column("source_url", sa.Text(), nullable=False, comment="入口链接"),
-        sa.Column("root_token", sa.String(length=256), nullable=False, comment="入口 token"),
+        sa.Column("root_token", sa.String(length=256), nullable=False,
+        comment="入口 token"),
         sa.Column(
             "is_active",
             sa.Boolean(),
@@ -174,7 +175,9 @@ def upgrade() -> None:
             "source_root_id", sa.Uuid(), nullable=False, comment="所属入口 id"
         ),
         sa.Column(
-            "app_token", sa.String(length=256), nullable=False, comment="多维表格 app_token"
+            "app_token",
+            sa.String(length=256), nullable=False,
+            comment="多维表格 app_token",
         ),
         sa.Column(
             "table_id", sa.String(length=256), nullable=False, comment="数据表 table_id"

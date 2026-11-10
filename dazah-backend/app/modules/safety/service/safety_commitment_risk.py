@@ -47,7 +47,9 @@ _EXPECTED_KEYS = ["risk_level", "summary", "key_risks", "suggestions"]
 # 数据采集上限：避免极端数据量撑爆 prompt
 _MAX_ITEMS_IN_PROMPT = 20
 
-_PROMPT_TEMPLATE = """你是化工企业的安全管理助手。请根据以下当日安全数据，按照《危险化学品企业安全风险研判与承诺公告制度》（应急〔2018〕74号）的要求，输出当日安全风险研判结果。
+_PROMPT_TEMPLATE = """你是化工企业的安全管理助手。
+请根据以下当日安全数据，按照《危险化学品企业安全风险研判与承诺公告制度》
+（应急〔2018〕74号）的要求，输出当日安全风险研判结果。
 
 报告日期：{report_date}
 

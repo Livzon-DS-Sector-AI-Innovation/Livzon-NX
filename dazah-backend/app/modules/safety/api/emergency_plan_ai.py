@@ -185,7 +185,7 @@ async def get_emergency_plan_job_status(
         return ApiResponseEnvelope(
             data=EmergencyPlanJobStatus(
                 job_id=job_id,
-                kind=status.get("kind"),  # type: ignore[arg-type]
+                kind=status.get("kind"),
                 state="interrupted",
                 progress="任务已中断（服务重启或网络中断），请重新提交",
             )
