@@ -11,6 +11,7 @@ import dayjs from 'dayjs'
 import Dashboard from '@/components/production/Dashboard'
 import MCSheetsSyncButton from '@/components/production/MCSheetsSyncButton'
 import MCTraceButton from '@/components/production/MCTraceButton'
+import { applyCrudeYieldScope, crudeCumulativeYieldPercent, hasCrudeOutput } from '@/components/production/crude-yield'
 import { PRODUCTION_PAGE_KEYS, useProductionPermissions } from '@/components/production/useProductionPermissions'
 
 const { Title, Text } = Typography
@@ -264,10 +265,10 @@ export default function CrudeExtractionPage() {
   const onStCell = (r: CrudeRow) => { const rowSpan = r._isStFirst ? r._stRowCount ?? 0 : 0; return { rowSpan, style: rowSpan > 1 ? { verticalAlign: 'middle' } : undefined } }
 
   // ── 仪表盘数据 ──
-  const dashData = useMemo(() => data.map(item => {
+  const dashData = useMemo(() => applyCrudeYieldScope(data.map(item => {
     const rb = item.refining || {}; const st0 = item.sub_tanks?.[0]?.sub_tank || {}
     return { ...rb, ...st0, produce_date: rb.produce_date }
-  }), [data])
+  })), [data])
 
   const columns: TableColumnsType<CrudeRow> = useMemo(() => [
     { title: '日期', dataIndex: 'produce_date', width: 72, fixed: 'left', render: (_, r) => B(<DateCellInput value={r.rb?.produce_date} onSave={() => {}} />, r), onCell: onBatchCell },
@@ -344,7 +345,7 @@ export default function CrudeExtractionPage() {
         cards={[
           { title: '累计放罐产品量', value: () => { let total = 0; for (const item of data) for (const sw of (item.sub_tanks || [])) { const q = sw.sub_tank?.total_input; if (q != null) total += q } return total > 0 ? Math.round(total) : null; }, suffix: 'kg', precision: 0 },
           { title: '累计粗品产量', value: () => { let total = 0; for (const item of data) for (const sw of (item.sub_tanks || [])) { const q = sw.sub_tank?.crude_product_qty; if (q != null) total += q } return total > 0 ? Math.round(total) : null; }, suffix: 'kg', precision: 0 },
-          { title: '粗品累计收率', value: () => { let totalIn = 0, totalOut = 0; for (const item of data) for (const sw of (item.sub_tanks || [])) { const s = sw.sub_tank || {}; if (s.total_input != null) totalIn += s.total_input; if (s.crude_product_qty != null) totalOut += s.crude_product_qty } return totalIn > 0 ? Math.round(totalOut / totalIn * 1000) / 10 : null; }, suffix: '%', precision: 1, color: (v) => v >= 92 ? '#52c41a' : '#f5222d' },
+          { title: '粗品累计收率', value: () => crudeCumulativeYieldPercent(data.flatMap(item => (item.sub_tanks || []).map(sw => sw.sub_tank || {}))), suffix: '%', precision: 1, color: (v) => v >= 92 ? '#52c41a' : '#f5222d' },
           { title: '批数', value: (_, f) => f.length, suffix: '批', precision: 0 },
           { title: '平均收率', value: (_, f) => { let s = 0, n = 0; for (const d of f) { if (d.yield_rate != null) { s += d.yield_rate; n++ } } return n > 0 ? Math.round(s / n * 100) / 100 : null; }, suffix: '%', precision: 1, color: (v) => v >= 92 ? '#52c41a' : '#f5222d' },
         ]}
