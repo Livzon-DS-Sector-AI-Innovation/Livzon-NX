@@ -231,15 +231,16 @@ async def test_sync_crude_full_path_with_skip() -> None:
             "260",
             "0.95",
             "0.9",
-            "300",
-            "12",
-            "82",
-            "2",
-            "280",
-            "91",
-            "315",
-            "0.9",
-            "",
+            "",  # AA 钠化滤液对发酵液总收率（2026-10 新增列）
+            "300",  # AB 粗品重量
+            "12",  # AC 袋种KG
+            "82",  # AD 含量
+            "2",  # AE 水分
+            "280",  # AF 产品量
+            "91",  # AG 收率≥92%
+            "315",  # AH 累积粗品产品量
+            "0.9",  # AI 粗品累计收率
+            "",  # AJ 备注
         ),
         _row(
             "",
@@ -281,6 +282,22 @@ async def test_sync_crude_full_path_with_skip() -> None:
     assert stats["created_acid"] == 2
     assert stats["skipped"] == 3
     assert stats["errors"] == 0
+    # 2026-11 列位修正回归：粗品块自 AB 列起读
+    from app.modules.production.mc_crude_extract_models import SubTankRecord
+
+    st1 = next(
+        obj
+        for obj in session.added
+        if isinstance(obj, SubTankRecord) and obj.tank_no == 1
+    )
+    assert st1.crude_weight == 300.0
+    assert st1.bag_weight == 12.0
+    assert st1.crude_content == 82.0
+    assert st1.crude_moisture == 2.0
+    assert st1.crude_product_qty == 280.0
+    assert st1.yield_rate == 91.0  # ≥3 视为已填百分数，不再×100
+    assert st1.cumulative_crude_qty == 315.0
+    assert st1.cumulative_crude_yield == 90.0  # 0.9 <3 → 比例×100
 
 
 @pytest.mark.anyio
@@ -314,6 +331,7 @@ async def test_sync_crude_st2_pending_and_yield_inherit() -> None:
             "260",
             "0.95",
             "0.9",
+            "",
             "300",
             "11",
             "82",
@@ -353,12 +371,13 @@ async def test_sync_crude_st2_pending_and_yield_inherit() -> None:
             "245",
             "0.93",
             "0.87",
+            "",
             "290",
             "11",
             "80",
             "2",
             "88",
-            "",
+            "",  # AG 收率留空 → 触发 tank-1 继承
             "300",
             "0.88",
             "",
@@ -700,11 +719,12 @@ async def test_sync_extraction_update_and_skip() -> None:
             "85",
             "2",
             "50",
-            "0.9",
-            "1.0",
-            "460",
-            "2",
-            "0.8",
+            "",  # R 产品量（2026-10 新增列）
+            "0.9",  # S 单步收率=一次粉对粗品总收率
+            "1.0",  # T 母液体积
+            "460",  # U 母液含量
+            "2",  # V 母液损失量
+            "0.8",  # W 对滤液收率
         ],
         [
             "",
