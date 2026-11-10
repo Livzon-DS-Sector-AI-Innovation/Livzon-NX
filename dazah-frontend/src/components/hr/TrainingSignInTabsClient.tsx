@@ -631,6 +631,37 @@ export default function TrainingSignInTabsClient() {
     }
   }
 
+  // 打开"选择培训附件内容"弹窗：实时确保条目已加载，再按项目文本"附件X"引用过滤。
+  // 计划切换后立刻选项目、或条目拉取失败后再点按钮时，闭包里的 planSections 可能
+  // 还是空（此前 modalSections 被置空后不再重算，会弹出空列表）；这里兜底重新拉取，
+  // 并把无条目/拉取失败提示出来，不再静默吞掉。
+  const openContentModal = async (item?: AnnualTrainingPlanItem) => {
+    if (!selectedPlanId) {
+      message.warning('请先选择关联年度计划')
+      return
+    }
+    let sections = planSections
+    if (!sections.length) {
+      try {
+        const res = await fetchPlanAttachmentSections(selectedPlanId)
+        sections = res.data || []
+        setPlanSections(sections)
+      } catch {
+        message.warning('计划附件条目加载失败，请重新选择计划项目重试')
+        return
+      }
+    }
+    if (!sections.length) {
+      message.warning('该计划尚未上传附件，请先在年度培训计划页上传附件')
+      return
+    }
+    const refs = extractAnnexRefs(item?.content_textbook || item?.content_and_textbook || '')
+    const matched = refs.length ? sections.filter((s) => s.annex_no && refs.includes(s.annex_no)) : []
+    // 项目未引用附件或引用无对应条目时，回退展示全部条目
+    setModalSections(matched.length ? matched : sections)
+    setContentModalOpen(true)
+  }
+
   const handleItemChange = (itemId: string) => {
     setSelectedItemId(itemId)
     setCheckedEntries([])
@@ -642,18 +673,9 @@ export default function TrainingSignInTabsClient() {
         topic: text || prev.topic,
         training_method: item.training_method || prev.training_method,
       }))
-      // 计划有条目时弹出附件内容选择：按项目文本"附件X"引用在 section 级别过滤，仅展示对应条目
-      if (planSections.length) {
-        const refs = extractAnnexRefs(text)
-        const matched = refs.length
-          ? planSections.filter((s) => s.annex_no && refs.includes(s.annex_no))
-          : []
-        // 项目未引用附件或引用无对应条目时，回退展示全部条目
-        setModalSections(matched.length ? matched : planSections)
-        setContentModalOpen(true)
-      } else {
-        setModalSections([])
-      }
+      // 选定项目即弹出附件内容选择（openContentModal 兜底拉取条目，
+      // 避免计划切换后瞬间选中时 planSections 尚未就绪导致不弹出/弹空列表）
+      void openContentModal(item)
     } else {
       setModalSections([])
     }
@@ -1236,7 +1258,10 @@ export default function TrainingSignInTabsClient() {
         <div className="mt-2">
           <Space size={8} wrap align="center">
             {selectedItemId && planSections.length > 0 && (
-              <Button size="small" onClick={() => setContentModalOpen(true)}>
+              <Button
+                size="small"
+                onClick={() => void openContentModal(planItems.find((i) => i.id === selectedItemId))}
+              >
                 选择培训附件内容
               </Button>
             )}

@@ -137,6 +137,10 @@ def _build_detail(
         cert_expiry_notify_user_ids=list(
             model.cert_expiry_notify_user_ids or []
         ),
+        commitment_notify_enabled=model.commitment_notify_enabled,
+        commitment_push_time=model.commitment_push_time or "08:30",
+        commitment_chat_ids=list(model.commitment_chat_ids or []),
+        commitment_user_ids=list(model.commitment_user_ids or []),
         is_enabled=model.is_enabled,
         knowledge_last_sync_status=model.knowledge_last_sync_status,
         knowledge_last_sync_error=model.knowledge_last_sync_error,
@@ -209,6 +213,10 @@ async def update_safety_feishu_app_settings(
                 cert_expiry_notify_user_ids=list(
                     data.cert_expiry_notify_user_ids or []
                 ),
+                commitment_notify_enabled=data.commitment_notify_enabled,
+                commitment_push_time=_clean_optional(data.commitment_push_time),
+                commitment_chat_ids=list(data.commitment_chat_ids or []),
+                commitment_user_ids=list(data.commitment_user_ids or []),
                 is_enabled=data.is_enabled,
             )
             db.add(model)
@@ -292,6 +300,16 @@ async def update_safety_feishu_app_settings(
                 model.cert_expiry_notify_user_ids = list(
                     data.cert_expiry_notify_user_ids or []
                 )
+            if "commitment_notify_enabled" in data.model_fields_set:
+                model.commitment_notify_enabled = data.commitment_notify_enabled
+            if "commitment_push_time" in data.model_fields_set:
+                model.commitment_push_time = _clean_optional(
+                    data.commitment_push_time
+                )
+            if "commitment_chat_ids" in data.model_fields_set:
+                model.commitment_chat_ids = list(data.commitment_chat_ids or [])
+            if "commitment_user_ids" in data.model_fields_set:
+                model.commitment_user_ids = list(data.commitment_user_ids or [])
         await db.commit()
         return _build_detail(model)
     except (OperationalError, ProgrammingError) as exc:

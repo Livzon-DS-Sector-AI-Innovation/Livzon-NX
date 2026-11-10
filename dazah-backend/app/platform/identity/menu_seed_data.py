@@ -89,6 +89,7 @@ _LEGACY_SEED_MENUS: list[dict[str, Any]] = [
         icon="shield",
         children=[
             _n("overview", "安全总览", "/safety"),
+            _n("safety-commitment", "安全承诺", "/safety/safety-commitment"),
             _n(
                 "ops-safety",
                 "作业安全",
@@ -815,9 +816,20 @@ _LEGACY_SEED_MENUS: list[dict[str, Any]] = [
         "/admin",
         icon="building",
         children=[
+            _n(
+                "tobacco-gift",
+                "烟酒礼品管理",
+                "/admin/tobacco-gift",
+                children=[
+                    _n("dashboard", "仪表台", "/admin/tobacco-gift"),
+                    _n("items", "物品清单", "/admin/tobacco-gift/items"),
+                    _n("records", "领用记录", "/admin/tobacco-gift/records"),
+                ],
+            ),
             _n("notice", "公告通知（开发中）", "/admin/notice", disabled=True),
             _n("meeting", "会议管理（开发中）", "/admin/meeting", disabled=True),
             _n("approval", "文件审批（开发中）", "/admin/approval", disabled=True),
+            _n("feishu-settings", "飞书设置", "/admin/settings/feishu"),
         ],
     ),
     # ── 人事管理 ────────────────────────────────────────────────

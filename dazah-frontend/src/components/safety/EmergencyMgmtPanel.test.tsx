@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 const mocks = vi.hoisted(() => ({
+  routerPush: vi.fn(),
   message: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
   canOperate: true,
   canDelete: true,
@@ -18,7 +19,7 @@ const mocks = vi.hoisted(() => ({
   updateEmergencyPlan: vi.fn(),
   deleteEmergencyPlan: vi.fn(),
   uploadEmergencyPlanFile: vi.fn(),
-  downloadEmergencyPlanFile: vi.fn(),
+  fetchEmergencyPlanFileBytes: vi.fn().mockResolvedValue({ base64: 'ZGF0YQ==', fileName: 'p.pdf' }),
   createEmergencyDrill: vi.fn(),
   updateEmergencyDrill: vi.fn(),
   deleteEmergencyDrill: vi.fn(),
@@ -36,7 +37,7 @@ vi.mock('@/actions/safety', () => ({
   updateEmergencyPlan: mocks.updateEmergencyPlan,
   deleteEmergencyPlan: mocks.deleteEmergencyPlan,
   uploadEmergencyPlanFile: mocks.uploadEmergencyPlanFile,
-  downloadEmergencyPlanFile: mocks.downloadEmergencyPlanFile,
+  fetchEmergencyPlanFileBytes: mocks.fetchEmergencyPlanFileBytes,
   createEmergencyDrill: mocks.createEmergencyDrill,
   updateEmergencyDrill: mocks.updateEmergencyDrill,
   deleteEmergencyDrill: mocks.deleteEmergencyDrill,
@@ -54,10 +55,25 @@ vi.mock('@/hooks/usePagePermissions', () => ({
   }),
 }))
 
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: mocks.routerPush }),
+}))
+
+vi.mock('next/link', () => ({
+  default: ({ href, children }: { href: string; children: unknown }) =>
+    createElement('a', { href, 'data-link': href }, children as never),
+}))
+
+vi.mock('./EmergencyPlanGenerateModal', () => ({
+  default: ({ open, mode }: { open: boolean; mode: string }) =>
+    open ? createElement('div', { 'data-ai-modal': mode }) : null,
+}))
+
 vi.mock('@ant-design/icons', () => {
   const Icon = () => null
   return {
     DownloadOutlined: Icon,
+    ThunderboltOutlined: Icon,
     UploadOutlined: Icon,
   }
 })
@@ -199,6 +215,7 @@ const PLANS = [
     file_path: 'uploads/safety/emergency/plan.pdf',
     file_name: '液氨泄漏预案.pdf',
     remark: '',
+    content_status: 'empty',
     created_at: '2026-03-01T00:00:00Z',
     updated_at: '2026-03-01T00:00:00Z',
   },
@@ -436,7 +453,7 @@ describe('EmergencyMgmtPanel', () => {
         download!.click()
         await new Promise((r) => setTimeout(r, 30))
       })
-      expect(mocks.downloadEmergencyPlanFile).toHaveBeenCalled()
+      expect(mocks.fetchEmergencyPlanFileBytes).toHaveBeenCalled()
     }
   })
 
@@ -453,5 +470,39 @@ describe('EmergencyMgmtPanel', () => {
       await new Promise((r) => setTimeout(r, 30))
     })
     expect(mocks.createEmergencyPlan).toHaveBeenCalled()
+  })
+
+  it('AI 生成预案入口打开向导（generate 模式）', async () => {
+    await renderPanel()
+    const plansTab = container.querySelector('[data-tab="plans"]')
+    const btn = plansTab
+      ? [...plansTab.querySelectorAll<HTMLButtonElement>('button')].find((b) =>
+          b.textContent?.includes('AI 生成预案')
+        )
+      : undefined
+    expect(btn).toBeDefined()
+    await act(async () => {
+      btn!.click()
+      await new Promise((r) => setTimeout(r, 30))
+    })
+    const modal = container.querySelector('[data-ai-modal="generate"]')
+    expect(modal).not.toBeNull()
+  })
+
+  it('导入预案文档入口打开向导（import 模式）', async () => {
+    await renderPanel()
+    const plansTab = container.querySelector('[data-tab="plans"]')
+    const btn = plansTab
+      ? [...plansTab.querySelectorAll<HTMLButtonElement>('button')].find((b) =>
+          b.textContent?.includes('导入预案文档')
+        )
+      : undefined
+    expect(btn).toBeDefined()
+    await act(async () => {
+      btn!.click()
+      await new Promise((r) => setTimeout(r, 30))
+    })
+    const modal = container.querySelector('[data-ai-modal="import"]')
+    expect(modal).not.toBeNull()
   })
 })

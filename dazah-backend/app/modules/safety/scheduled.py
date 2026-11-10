@@ -310,6 +310,95 @@ class SafetyCertificateExpiryReminderGenerator(TaskGenerator):
             logger.warning("证件到期提醒存在失败: %s", errors)
 
 
+class SafetyCommitmentPushGenerator(TaskGenerator):
+    """每 15 分钟检查安全承诺填报推送：到达设置页配置的推送时间
+    （commitment_push_time，默认 08:30）后，向填报人员推送当日填报
+    提醒卡（同一自然日只推一次，Redis 当日去重）。
+
+    尊重设置页开关（commitment_notify_enabled）；首次触发会惰性初始化
+    当日日报（继承上一日 + 自动 AI 研判）。非生产环境直接跳过。
+    """
+
+    name = "safety.commitment_daily_push"
+    schedule = ScheduleConfig(
+        strategy=ScheduleStrategy.INTERVAL,
+        interval_seconds=15 * 60,
+        timezone="Asia/Shanghai",
+    )
+    timeout_seconds = 300
+
+    async def find_due(self, session: Any) -> list[Any]:
+        from datetime import datetime, timedelta, timezone
+
+        from app.core.config import get_settings
+        from app.core.redis import cache_get
+        from app.modules.safety.models import SafetyFeishuAppSettings
+
+        if get_settings().APP_ENV != "production":
+            logger.info(
+                "非生产环境（APP_ENV!=production），安全承诺填报推送跳过"
+            )
+            return []
+
+        cn_tz = timezone(timedelta(hours=8))
+        now_local = datetime.now(cn_tz)
+        report_date = now_local.date().isoformat()
+        if await cache_get(f"commitment_push_done:{report_date}"):
+            return []
+
+        row = (
+            await session.execute(
+                select(SafetyFeishuAppSettings)
+                .where(SafetyFeishuAppSettings.is_deleted.is_(False))
+                .order_by(SafetyFeishuAppSettings.updated_at.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if row is None or not row.commitment_notify_enabled:
+            return []
+        if not (row.commitment_user_ids or []):
+            return []
+
+        push_time = str(row.commitment_push_time or "08:30")
+        try:
+            hour, minute = (int(part) for part in push_time.split(":", 1))
+        except ValueError:
+            logger.warning("commitment_push_time 格式无效: %s", push_time)
+            return []
+        now_minutes = now_local.hour * 60 + now_local.minute
+        if now_minutes < hour * 60 + minute:
+            return []
+        return [report_date]
+
+    async def execute_one(self, session: Any, item: Any) -> None:
+        from datetime import datetime, timedelta, timezone
+
+        from app.core.redis import cache_set
+        from app.modules.safety.service.commitment_notify import (
+            push_fill_cards,
+        )
+        from app.modules.safety.service.safety_commitment import (
+            get_or_create_report,
+        )
+
+        report_date = str(item)
+        report, _created = await get_or_create_report(session, report_date)
+        sent, failed = await push_fill_cards(session, report_date, report)
+        if sent > 0 or failed > 0:
+            cn_tz = timezone(timedelta(hours=8))
+            await cache_set(
+                f"commitment_push_done:{report_date}",
+                "1",
+                ex=20 * 60 * 60,
+            )
+            logger.info(
+                "安全承诺填报提醒推送完成: date=%s 成功=%s 失败=%s",
+                report_date,
+                sent,
+                failed,
+            )
+
+
 # ── 独立同步循环（自建，不依赖平台调度引擎） ──
 # 平台 SchedulerEngine 的循环协程缺少外层异常保护，曾被其它模块的异常
 # 静默杀死（循环停止推进所有 generator）。镜像同步是安全模块的核心数据

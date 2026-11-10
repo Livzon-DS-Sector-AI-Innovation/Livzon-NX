@@ -52,16 +52,25 @@ def on_event(event_type: str) -> Callable[[EventHandler], EventHandler]:
 
 
 async def _dispatch(event_type: str, event_data: dict[str, Any]) -> Any:
-    """分发事件给注册的处理器，返回第一个处理器的返回值。"""
+    """分发事件给所有注册的处理器，返回第一个非 None 的返回值。
+
+    card.action.trigger 场景下各处理器按 value.module 认领事件、其余返回
+    None；若采用最后一个处理器的返回值，后注册处理器返回的 None 会覆盖
+    前面已认领处理器的卡片响应（表现为按钮点击后卡片不更新），故保留
+    首个非 None 结果。
+    """
     handlers = _handlers.get(event_type, [])
     if handlers:
         logger.info("分发安全飞书事件: type=%s", event_type)
-        result = None
+        result: Any = None
         for handler in handlers:
             try:
-                result = await handler(event_data)
+                handler_result = await handler(event_data)
             except Exception:
                 logger.exception("事件处理器异常: %s", handler.__name__)
+                continue
+            if result is None and handler_result is not None:
+                result = handler_result
         return result
     logger.warning(
         (
@@ -351,7 +360,12 @@ async def start_ws() -> None:
                 await ensure_bitable_subscribed()
 
                 # 3.1 注册 8 大作业票卡片回调（导入即完成 @on_event 注册）
+                # 3.3 注册安全承诺填报卡片回调（module=commitment）
+                import app.modules.safety.feishu.commitment_chat_handler as _commitment_handler  # noqa: F401
                 import app.modules.safety.feishu.work_permit_card_handler as _wp_handler  # noqa: F401
+
+                # 3.2 注册 8 大作业票聊天消息处理（发起意图 + 表单/操作回调）
+                import app.modules.safety.feishu.work_permit_chat_handler as _wp_chat  # noqa: F401
 
                 # 4. 启动 protobuf PING 心跳循环
                 ping_task = asyncio.create_task(_ping_loop(ws, service_id))

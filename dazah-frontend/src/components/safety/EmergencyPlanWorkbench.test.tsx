@@ -1,0 +1,448 @@
+/* @vitest-environment happy-dom */
+import { act, createElement, type ReactNode } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
+
+const mocks = vi.hoisted(() => ({
+  canOperate: true,
+  message: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
+  modal: { confirm: vi.fn() },
+  fetchEmergencyPlanContent: vi.fn(),
+  fetchEmergencyPlanChatMessages: vi.fn(async () => ({
+    code: 200,
+    data: { items: [] },
+  })),
+  saveEmergencyPlanContent: vi.fn(),
+  submitEmergencyPlanReview: vi.fn(),
+  finalizeEmergencyPlan: vi.fn(),
+  fetchEmergencyPlanRevisions: vi.fn(async () => ({
+    code: 200,
+    data: { items: [] },
+  })),
+  fetchEmergencyPlanRevision: vi.fn(),
+  restoreEmergencyPlanRevision: vi.fn(),
+  fetchEmergencyPlanDocxBytes: vi.fn(),
+  streamEmergencyPlanChat: vi.fn(),
+}))
+
+vi.mock('@/actions/safety', () => ({
+  fetchEmergencyPlanContent: mocks.fetchEmergencyPlanContent,
+  fetchEmergencyPlanChatMessages: mocks.fetchEmergencyPlanChatMessages,
+  saveEmergencyPlanContent: mocks.saveEmergencyPlanContent,
+  submitEmergencyPlanReview: mocks.submitEmergencyPlanReview,
+  finalizeEmergencyPlan: mocks.finalizeEmergencyPlan,
+  fetchEmergencyPlanRevisions: mocks.fetchEmergencyPlanRevisions,
+  fetchEmergencyPlanRevision: mocks.fetchEmergencyPlanRevision,
+  restoreEmergencyPlanRevision: mocks.restoreEmergencyPlanRevision,
+  fetchEmergencyPlanDocxBytes: mocks.fetchEmergencyPlanDocxBytes,
+}))
+
+vi.mock('@/hooks/usePagePermissions', () => ({
+  usePagePermissions: () => ({
+    canOperate: mocks.canOperate,
+    canDelete: true,
+  }),
+}))
+
+vi.mock('@/lib/api/safety-emergency-plan-chat', () => ({
+  streamEmergencyPlanChat: mocks.streamEmergencyPlanChat,
+}))
+
+vi.mock('next/link', () => ({
+  default: ({ href, children }: { href: string; children: unknown }) =>
+    createElement('a', { href, 'data-link': href }, children as ReactNode),
+}))
+
+vi.mock('@ant-design/icons', () => {
+  const Icon = () => null
+  return {
+    CheckCircleOutlined: Icon,
+    FileWordOutlined: Icon,
+    RollbackOutlined: Icon,
+    SendOutlined: Icon,
+    ThunderboltOutlined: Icon,
+  }
+})
+
+vi.mock('antd', async () => {
+  const { createElement } = await import('react')
+  type AnyProps = Record<string, unknown>
+  const Box = ({ children }: AnyProps) =>
+    createElement('div', null, children as ReactNode)
+  const Button = ({ children, onClick, disabled }: AnyProps) =>
+    createElement(
+      'button',
+      { type: 'button', disabled: Boolean(disabled), onClick: onClick as never },
+      children as ReactNode
+    )
+  const Input = Object.assign(
+    ({ value, onChange, disabled, placeholder }: AnyProps) =>
+      createElement('input', {
+        value: (value as string) ?? '',
+        disabled: Boolean(disabled),
+        placeholder: placeholder as string | undefined,
+        onChange: (event: { target: { value: string } }) =>
+          (onChange as ((event: { target: { value: string } }) => void) | undefined)?.({ target: { value: event.target.value } }),
+      }),
+    {
+      TextArea: ({ value, onChange, disabled }: AnyProps) =>
+        createElement('textarea', {
+          value: (value as string) ?? '',
+          disabled: Boolean(disabled),
+          'data-textarea': 'y',
+          onChange: (event: { target: { value: string } }) =>
+            (onChange as ((event: { target: { value: string } }) => void) | undefined)?.({ target: { value: event.target.value } }),
+        }),
+    }
+  )
+  const Tabs = ({ items }: { items?: Array<{ key: string; label: string; children: ReactNode }> }) =>
+    createElement(
+      'div',
+      null,
+      (items ?? []).map((item) =>
+        createElement(
+          'section',
+          { key: item.key, 'data-tab': item.key },
+          createElement('h3', null, item.label),
+          item.children
+        )
+      )
+    )
+  const Modal = ({
+    children,
+    open,
+    footer,
+    onOk,
+    title,
+  }: AnyProps) =>
+    createElement(
+      'div',
+      { 'data-modal-open': String(Boolean(open)) },
+      open
+        ? [
+            createElement('h3', { key: 't' }, title as ReactNode),
+            children as ReactNode,
+            footer
+              ? createElement('div', { key: 'f', 'data-modal-footer': 'y' }, footer as ReactNode)
+              : null,
+            onOk
+              ? createElement(
+                  'button',
+                  {
+                    key: 'ok',
+                    type: 'button',
+                    'data-modal-ok': 'y',
+                    onClick: onOk as never,
+                  },
+                  '确定'
+                )
+              : null,
+          ]
+        : null
+    )
+  const SpaceBase = ({ children }: AnyProps) =>
+    createElement('div', { 'data-space': 'y' }, children as ReactNode)
+  const Space = Object.assign(SpaceBase, { Compact: SpaceBase })
+  return {
+    App: Object.assign(Box, {
+      useApp: () => ({ message: mocks.message, modal: mocks.modal }),
+    }),
+    Button,
+    Input,
+    Modal,
+    Space,
+    Spin: ({ tip }: AnyProps) =>
+      createElement('div', { 'data-spin': String(tip ?? '') }),
+    Tabs,
+    Tag: ({ children }: AnyProps) => createElement('span', null, children as ReactNode),
+    Tooltip: ({ children, title }: AnyProps) =>
+      createElement('span', { title: title as string }, children as ReactNode),
+  }
+})
+
+import EmergencyPlanWorkbench from './EmergencyPlanWorkbench'
+
+let container: HTMLDivElement
+let root: Root | null = null
+
+beforeEach(() => {
+  container = document.createElement('div')
+  document.body.appendChild(container)
+  vi.clearAllMocks()
+  mocks.canOperate = true
+  mocks.fetchEmergencyPlanContent.mockResolvedValue({
+    code: 200,
+    data: {
+      plan_id: 'plan-1',
+      plan_name: '危险品库乙醇火灾事故综合应急演练方案',
+      content_status: 'reviewed',
+      revision_no: 3,
+      ai_generated: true,
+      job: null,
+      last_review: null,
+      content: {
+        schema_version: 1,
+        cover: {
+          company: '丽珠集团（宁夏）制药有限公司',
+          title: '危险品库乙醇火灾事故综合应急演练方案',
+          level: '公司级',
+          drill_date: '2026年11月17日',
+          archive_date: '2026年11月',
+          archive_department: '消保队',
+        },
+        preface: '为验证应急机制特组织演练。',
+        organization: {
+          commander: '史润',
+          commander_duties: '',
+          deputy_commanders: ['田成'],
+          deputy_duties: '',
+          groups: [
+            {
+              name: '应急处置组',
+              leader: '朱少军',
+              members: '仓储部人员',
+              duties: '',
+            },
+          ],
+        },
+        workshop_organization: null,
+        chapters: [
+          { key: 'guiding_thought', title: '指导思想', content: '安全第一。' },
+          { key: 'scenario', title: '情景设置', content: '（情景一）14时00分。' },
+        ],
+      },
+    },
+  })
+})
+
+afterEach(() => {
+  root?.unmount()
+  container.remove()
+  root = null
+  vi.unstubAllGlobals()
+  vi.restoreAllMocks()
+})
+
+function setNativeValue(
+  element: HTMLInputElement | HTMLTextAreaElement,
+  value: string
+) {
+  const prototype =
+    element instanceof HTMLTextAreaElement
+      ? HTMLTextAreaElement.prototype
+      : HTMLInputElement.prototype
+  Object.getOwnPropertyDescriptor(prototype, 'value')?.set?.call(element, value)
+  element.dispatchEvent(new Event('input', { bubbles: true }))
+}
+
+async function renderWorkbench() {
+  root = createRoot(container)
+  await act(async () => {
+    root!.render(
+      createElement(EmergencyPlanWorkbench, {
+        planId: 'plan-1',
+        planName: '危险品库乙醇火灾事故综合应急演练方案',
+        onBackHref: '/safety/emergency-mgmt',
+      })
+    )
+    await new Promise((resolve) => setTimeout(resolve, 30))
+  })
+}
+
+describe('EmergencyPlanWorkbench', () => {
+  it('加载正文并渲染封面、章节目录与纸张编辑区', async () => {
+    await renderWorkbench()
+    expect(mocks.fetchEmergencyPlanContent).toHaveBeenCalledWith('plan-1')
+    const markup = container.innerHTML
+    expect(markup).toContain('丽珠集团（宁夏）制药有限公司')
+    expect(markup).toContain('指导思想')
+    expect(markup).toContain('情景设置')
+    expect(container.querySelector('[data-section="guiding_thought"]')).toBeNull()
+    // 默认聚焦引言
+    expect(markup).toContain('为验证应急机制特组织演练。')
+    // 切换章节
+    const scenarioItem = container.querySelector('[data-section-item="scenario"]')
+    await act(async () => {
+      (scenarioItem as HTMLElement).click()
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+    expect(
+      container.querySelector('[data-section="scenario"]')
+    ).not.toBeNull()
+    const textarea = container.querySelector<HTMLTextAreaElement>(
+      '[data-section="scenario"] textarea'
+    )
+    expect(textarea?.value).toContain('（情景一）')
+  })
+
+  it('编辑正文后保存（带 base_revision_no 乐观锁）', async () => {
+    mocks.saveEmergencyPlanContent.mockResolvedValue({
+      code: 409,
+      message: '正文已被其他修改更新',
+    })
+    await renderWorkbench()
+    const textarea = container.querySelector<HTMLTextAreaElement>('textarea')
+    await act(async () => {
+      setNativeValue(textarea!, '修改后的引言。')
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+    const save = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent?.includes('保存')
+    )
+    await act(async () => {
+      save!.click()
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    expect(mocks.saveEmergencyPlanContent).toHaveBeenCalledWith(
+      'plan-1',
+      expect.objectContaining({ preface: '修改后的引言。' }),
+      3
+    )
+    // 409 冲突：提示加载最新版本
+    expect(mocks.modal.confirm).toHaveBeenCalledWith(
+      expect.objectContaining({ title: '正文已被其他修改更新' })
+    )
+  })
+
+  it('对话发送指令并应用 AI 修改（撤销条出现）', async () => {
+    const contentPayload = {
+      plan_id: 'plan-1',
+      plan_name: 'x',
+      content_status: 'draft',
+      revision_no: 4,
+      ai_generated: true,
+      job: null,
+      last_review: null,
+      content: null,
+    }
+    mocks.streamEmergencyPlanChat.mockImplementation(
+      async (_id, _message, _section, handlers) => {
+        handlers.onReply?.('已把情景改为夜班。')
+        handlers.onRevision?.(4, ['scenario'])
+        handlers.onContent?.(contentPayload)
+        handlers.onDone?.()
+        return '已把情景改为夜班。'
+      }
+    )
+    await renderWorkbench()
+    const input = [
+      ...container.querySelectorAll<HTMLInputElement>('input'),
+    ].find((item) => item.placeholder?.includes('修改指令'))
+    await act(async () => {
+      setNativeValue(input!, '把情景改成夜班')
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+    const send = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => !button.textContent
+    )
+    await act(async () => {
+      send!.click()
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    expect(mocks.streamEmergencyPlanChat).toHaveBeenCalled()
+    expect(container.innerHTML).toContain('已把情景改为夜班。')
+    const undo = container.querySelector('[data-chat-undo]')
+    expect(undo).not.toBeNull()
+    expect(undo?.textContent).toContain('修订 4')
+  })
+
+  it('AI 审核修正提交任务并显示进度条', async () => {
+    mocks.submitEmergencyPlanReview.mockResolvedValue({
+      code: 200,
+      data: { job_id: 'job-1', kind: 'review' },
+    })
+    await renderWorkbench()
+    const review = [
+      ...container.querySelectorAll<HTMLButtonElement>('button'),
+    ].find((button) => button.textContent?.includes('AI 审核修正'))
+    await act(async () => {
+      review!.click()
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    expect(mocks.submitEmergencyPlanReview).toHaveBeenCalledWith('plan-1')
+    expect(container.innerHTML).toContain('AI 任务运行中')
+  })
+
+  it('任务运行中编辑区只读', async () => {
+    mocks.fetchEmergencyPlanContent.mockResolvedValue({
+      code: 200,
+      data: {
+        plan_id: 'plan-1',
+        plan_name: 'x',
+        content_status: 'draft',
+        revision_no: 1,
+        ai_generated: true,
+        job: { state: 'running', progress: '正在编写情景脚本…' },
+        last_review: null,
+        content: {
+          schema_version: 1,
+          cover: {
+            company: 'c',
+            title: 't',
+            level: 'l',
+            drill_date: '',
+            archive_date: '',
+            archive_department: '',
+          },
+          preface: 'p',
+          organization: {
+            commander: '',
+            commander_duties: '',
+            deputy_commanders: [],
+            deputy_duties: '',
+            groups: [],
+          },
+          workshop_organization: null,
+          chapters: [
+            { key: 'scenario', title: '情景设置', content: 's' },
+          ],
+        },
+      },
+    })
+    await renderWorkbench()
+    expect(container.innerHTML).toContain('正在编写情景脚本')
+    const textarea = container.querySelector<HTMLTextAreaElement>('textarea')
+    expect(textarea?.disabled).toBe(true)
+  })
+
+  it('导出 Word 调用 base64 下载', async () => {
+    mocks.fetchEmergencyPlanDocxBytes.mockResolvedValue({
+      base64: 'ZGF0YQ==',
+      fileName: '预案(公司级).docx',
+    })
+    await renderWorkbench()
+    const createObjectURL = vi
+      .spyOn(URL, 'createObjectURL')
+      .mockReturnValue('blob:docx')
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
+    const anchorClick = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => undefined)
+    const exportBtn = [
+      ...container.querySelectorAll<HTMLButtonElement>('button'),
+    ].find((button) => button.textContent?.includes('导出 Word'))
+    await act(async () => {
+      exportBtn!.click()
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    expect(mocks.fetchEmergencyPlanDocxBytes).toHaveBeenCalledWith('plan-1')
+    expect(createObjectURL).toHaveBeenCalled()
+    expect(anchorClick).toHaveBeenCalled()
+    expect(mocks.message.success).toHaveBeenCalledWith('已导出 Word')
+  })
+
+  it('无操作权限时保存/审核按钮禁用', async () => {
+    mocks.canOperate = false
+    await renderWorkbench()
+    const save = [...container.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent?.includes('保存')
+    )
+    const review = [
+      ...container.querySelectorAll<HTMLButtonElement>('button'),
+    ].find((button) => button.textContent?.includes('AI 审核修正'))
+    expect(save?.disabled).toBe(true)
+    expect(review?.disabled).toBe(true)
+  })
+})

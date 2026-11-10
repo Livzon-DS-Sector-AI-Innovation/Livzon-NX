@@ -133,9 +133,7 @@ def _build_suggestion(raw: dict[str, Any]) -> MsdsExtractionSuggestion:
         category=category,
         category_label=category_label,
         hazard_statements=_clean_optional_str(raw.get("hazard_statements"), 8000),
-        storage_requirements=_clean_optional_str(
-            raw.get("storage_requirements"), 8000
-        ),
+        storage_requirements=_clean_optional_str(raw.get("storage_requirements"), 8000),
         remark=_clean_optional_str(raw.get("remark"), 8000),
     )
 
@@ -213,6 +211,17 @@ def _extract_text_content(file_name: str, content: bytes) -> str:
 def _build_prompt(content_text: str) -> str:
     labels = "、".join(CATEGORY_LABELS.values())
     return _PROMPT_TEMPLATE.format(category_labels=labels, content=content_text)
+
+
+def extract_msds_text(*, file_name: str, content: bytes) -> str:
+    """读取 MSDS 附件的纯文本（应急预案 AI 资料汇总等调用方使用）。
+
+    与识别流程解耦：解析失败按"无文本"处理，由调用方自行降级。
+    """
+    try:
+        return _extract_text_content(file_name, content)
+    except ValueError:
+        return ""
 
 
 async def extract_msds_suggestion(

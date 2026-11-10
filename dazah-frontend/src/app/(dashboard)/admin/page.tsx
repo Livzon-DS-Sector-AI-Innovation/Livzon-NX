@@ -1,10 +1,6 @@
+import { redirect } from 'next/navigation'
+
+/** 行政管理模块首页：目前唯一功能为烟酒礼品管理，直达其仪表台。 */
 export default function AdminPage() {
-  return (
-    <div>
-      <h1 className="text-[22px] font-semibold text-[var(--color-charcoal)] mb-2">行政管理（开发中）</h1>
-      <p className="text-[14px] text-[var(--color-steel)]">
-        行政管理模块内容待开发
-      </p>
-    </div>
-  )
+  redirect('/admin/tobacco-gift')
 }

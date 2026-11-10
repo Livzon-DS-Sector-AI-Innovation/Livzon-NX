@@ -54,6 +54,13 @@ class EmergencyPlanResponse(BaseModel):
     remark: str
     created_at: datetime
     updated_at: datetime
+    content_status: str = Field(
+        default="empty",
+        description="AI 工作台正文状态: empty/draft/reviewed/finalized",
+    )
+    last_reviewed_at: datetime | None = Field(
+        default=None, description="最近一次 AI 审核时间"
+    )
 
 
 class EmergencyPlanListResponse(BaseModel):

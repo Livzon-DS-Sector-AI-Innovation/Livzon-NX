@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import {
   App,
   Button,
@@ -19,7 +21,11 @@ import {
   Typography,
   Upload,
 } from 'antd'
-import { DownloadOutlined, UploadOutlined } from '@ant-design/icons'
+import {
+  DownloadOutlined,
+  ThunderboltOutlined,
+  UploadOutlined,
+} from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import {
   createEmergencyDrill,
@@ -28,7 +34,7 @@ import {
   deleteEmergencyDrill,
   deleteEmergencyPlan,
   deleteEmergencySupply,
-  downloadEmergencyPlanFile,
+  fetchEmergencyPlanFileBytes,
   getEmergencyDrills,
   getEmergencyPlans,
   getEmergencySupplies,
@@ -41,8 +47,33 @@ import {
   type EmergencySupplyItem,
 } from '@/actions/safety'
 import { usePagePermissions } from '@/hooks/usePagePermissions'
+import EmergencyPlanGenerateModal from './EmergencyPlanGenerateModal'
 
 const { Text, Title } = Typography
+
+const CONTENT_STATUS_LABELS: Record<string, { label: string; color: string }> = {
+  empty: { label: '无正文', color: 'default' },
+  draft: { label: '草稿', color: 'orange' },
+  reviewed: { label: 'AI 已审核', color: 'blue' },
+  finalized: { label: '已定稿', color: 'green' },
+}
+
+/** 浏览器端把 base64 组装为 Blob 触发下载（Server Action 不能操作 DOM）。 */
+function downloadBase64File(base64: string, fileName: string): void {
+  const binary = atob(base64)
+  const bytes = new Uint8Array(binary.length)
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index)
+  }
+  const url = URL.createObjectURL(new Blob([bytes]))
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = fileName
+  document.body.appendChild(anchor)
+  anchor.click()
+  document.body.removeChild(anchor)
+  URL.revokeObjectURL(url)
+}
 
 const T = {
   error: '#E03131',
@@ -161,6 +192,7 @@ export default function EmergencyMgmtPanel({
 }) {
   const { canOperate, canDelete } = usePagePermissions(pageKey)
   const { message } = App.useApp()
+  const router = useRouter()
 
   const [plans, setPlans] = useState<EmergencyPlanItem[]>(initialPlans)
   const [drills, setDrills] = useState<EmergencyDrillItem[]>(initialDrills)
@@ -171,6 +203,7 @@ export default function EmergencyMgmtPanel({
   const [planFormOpen, setPlanFormOpen] = useState(false)
   const [editingPlan, setEditingPlan] = useState<EmergencyPlanItem | null>(null)
   const [planForm] = Form.useForm<PlanFormValues>()
+  const [aiModal, setAiModal] = useState<'generate' | 'import' | null>(null)
 
   const [drillFormOpen, setDrillFormOpen] = useState(false)
   const [editingDrill, setEditingDrill] = useState<EmergencyDrillItem | null>(null)
@@ -332,11 +365,14 @@ export default function EmergencyMgmtPanel({
             size="small"
             icon={<DownloadOutlined />}
             style={{ padding: 0 }}
-            onClick={() =>
-              downloadEmergencyPlanFile(row.id, row.file_name || `${row.name}`).catch((err) =>
+            onClick={async () => {
+              try {
+                const file = await fetchEmergencyPlanFileBytes(row.id)
+                downloadBase64File(file.base64, file.fileName || row.file_name || row.name)
+              } catch (err) {
                 message.error(err instanceof Error ? err.message : '下载失败')
-              )
-            }
+              }
+            }}
           >
             {row.file_name || '下载'}
           </Button>
@@ -366,6 +402,28 @@ export default function EmergencyMgmtPanel({
             </Button>
           </Upload>
         ),
+    },
+    {
+      title: 'AI 工作台',
+      key: 'content_status',
+      width: 150,
+      render: (_, row) => {
+        const status = (row as EmergencyPlanItem & { content_status?: string })
+          .content_status ?? 'empty'
+        const meta = CONTENT_STATUS_LABELS[status] ?? CONTENT_STATUS_LABELS.empty
+        return (
+          <Space size={4}>
+            <Tag color={meta.color} style={{ marginRight: 0 }}>
+              {meta.label}
+            </Tag>
+            <Link href={`/safety/emergency-mgmt/workbench/${row.id}`}>
+              <Button type="link" size="small" style={{ padding: 0 }}>
+                打开
+              </Button>
+            </Link>
+          </Space>
+        )
+      },
     },
     {
       title: '操作',
@@ -694,6 +752,20 @@ export default function EmergencyMgmtPanel({
                     <Button type="primary" disabled={!canOperate} onClick={openPlanCreate}>
                       新增预案
                     </Button>
+                    <Button
+                      icon={<ThunderboltOutlined />}
+                      disabled={!canOperate}
+                      onClick={() => setAiModal('generate')}
+                    >
+                      AI 生成预案
+                    </Button>
+                    <Button
+                      icon={<UploadOutlined />}
+                      disabled={!canOperate}
+                      onClick={() => setAiModal('import')}
+                    >
+                      导入预案文档
+                    </Button>
                     <Text style={{ color: T.muted, fontSize: 12, marginLeft: 'auto' }}>共 {plans.length} 项</Text>
                   </div>
                   <Table<EmergencyPlanItem>
@@ -927,6 +999,17 @@ export default function EmergencyMgmtPanel({
           </Form.Item>
         </Form>
       </Modal>
+
+      <EmergencyPlanGenerateModal
+        key={aiModal ?? 'closed'}
+        open={aiModal !== null}
+        mode={aiModal ?? 'generate'}
+        onClose={() => setAiModal(null)}
+        onCreated={(planId) => {
+          setAiModal(null)
+          router.push(`/safety/emergency-mgmt/workbench/${planId}`)
+        }}
+      />
     </div>
   )
 }

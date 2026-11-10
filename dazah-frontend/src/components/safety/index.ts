@@ -68,3 +68,4 @@ export {
   WorkCertificatePanel,
 } from './WorkCertificatePanel'
 export { default as WorkCertificateImportModal } from './WorkCertificateImportModal'
+export { default as SafetyCommitmentPanel } from './SafetyCommitmentPanel'

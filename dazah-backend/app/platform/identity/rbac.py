@@ -205,6 +205,10 @@ PUBLIC_PATH_PREFIXES: tuple[str, ...] = (
     "/api/v1/system/modules",
     "/api/v1/identity/auth/",
     "/uploads",
+    # 8大作业票免登签名与PDF下载（HMAC token 保护，非无鉴权开放）
+    "/api/v1/safety/work-permit-sign/",
+    "/api/v1/safety/work-permit-sign",
+    "/api/v1/safety/work-permit-file/",
 )
 
 # identity 子路径策略：

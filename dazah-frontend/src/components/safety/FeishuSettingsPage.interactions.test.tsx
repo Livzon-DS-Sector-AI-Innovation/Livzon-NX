@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   testRadarNotify: vi.fn(),
   testFireExpiryNotify: vi.fn(),
   testHazardDueNotify: vi.fn(),
+  testCommitmentNotify: vi.fn(),
   getSafetyPageFeishuConfigs: vi.fn(),
   saveSafetyPageFeishuConfig: vi.fn(),
   testSafetyPageFeishuConfig: vi.fn(),
@@ -27,6 +28,7 @@ vi.mock('@/actions/safety', () => ({
   testRadarNotify: mocks.testRadarNotify,
   testFireExpiryNotify: mocks.testFireExpiryNotify,
   testHazardDueNotify: mocks.testHazardDueNotify,
+  testCommitmentNotify: mocks.testCommitmentNotify,
   getSafetyFeishuWsStatus: mocks.getSafetyFeishuWsStatus,
   restartSafetyFeishuWs: mocks.restartSafetyFeishuWs,
   getSafetyPageFeishuConfigs: mocks.getSafetyPageFeishuConfigs,
@@ -88,6 +90,22 @@ vi.mock('antd', async () => {
     Password: (props: AnyProps) => textInput(props, { type: 'password' }),
   })
   const InputNumber = (props: AnyProps) => textInput(props)
+  // Select(mode=tags) 简化为输入框：逗号分隔即多个值，onChange 收到数组
+  const Select = (props: AnyProps) => {
+    const { value, onChange, placeholder } = props
+    return createElement('input', {
+      value: Array.isArray(value) ? (value as string[]).join(',') : '',
+      placeholder: placeholder as string,
+      'data-select': 'tags',
+      ref: (node: HTMLInputElement | null) => {
+        if (!node) return
+        node.onchange = () =>
+          (onChange as ((values: string[]) => void) | undefined)?.(
+            node.value.split(',').map((s) => s.trim()).filter(Boolean)
+          )
+      },
+    })
+  }
   const Switch = ({
     checked,
     onChange,
@@ -119,6 +137,7 @@ vi.mock('antd', async () => {
       ),
     Input,
     InputNumber,
+    Select,
     Space: Object.assign(Box, { Compact: Box }),
     Switch,
     Tag: Text,
@@ -206,6 +225,10 @@ beforeEach(() => {
   mocks.testRadarNotify.mockResolvedValue({ code: 200, data: { sent: 2, errors: [] } })
   mocks.testFireExpiryNotify.mockResolvedValue({ code: 200, data: { sent: 3, errors: [] } })
   mocks.testHazardDueNotify.mockResolvedValue({ code: 200, data: { sent: 1, errors: [] } })
+  mocks.testCommitmentNotify.mockResolvedValue({
+    code: 200,
+    data: { success: true, message: '测试卡片已发送给第一个填报人员，请到飞书查收' },
+  })
   // 「页面数据表映射」标签页默认无已登记镜像页，卡片渲染为空态
   mocks.getSafetyPageFeishuConfigs.mockResolvedValue({ code: 200, data: { items: [] } })
 })
@@ -542,5 +565,54 @@ describe('FeishuSettingsPage interactions', () => {
     expect(mocks.saveSafetyFeishuSettings).toHaveBeenCalledWith(
       expect.objectContaining({ radar_scan_enabled: false })
     )
+  })
+  it('安全承诺：保存 payload 携带填报配置，测试发送先保存再发卡', async () => {
+    rendered = renderPage({
+      initialSettings: {
+        ...settingsDetail,
+        commitment_notify_enabled: false,
+        commitment_push_time: '08:30',
+        commitment_user_ids: ['ou-a'],
+        commitment_chat_ids: ['oc-x'],
+      },
+      initialWsStatus: null,
+    })
+    await settle()
+
+    const commitmentSwitch = Array.from(
+      rendered!.container.querySelectorAll('input[aria-label="启用安全承诺填报推送"]')
+    )[0] as HTMLInputElement | undefined
+    act(() => {
+      if (commitmentSwitch) {
+        commitmentSwitch.checked = true
+        commitmentSwitch.dispatchEvent(new Event('change', { bubbles: true }))
+      }
+    })
+    await settle()
+
+    act(() => clickLastButton(rendered!.container, '发送测试填报卡'))
+    await settle()
+
+    expect(mocks.saveSafetyFeishuSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        commitment_notify_enabled: true,
+        commitment_push_time: expect.any(String),
+        commitment_chat_ids: expect.any(Array),
+        commitment_user_ids: expect.any(Array),
+      })
+    )
+    expect(mocks.testCommitmentNotify).toHaveBeenCalled()
+    expect(mocks.message.success).toHaveBeenCalled()
+
+    // 未配置填报人员时阻止测试发送
+    mocks.testCommitmentNotify.mockClear()
+    act(() => rendered!.root.unmount())
+    rendered!.container.remove()
+    rendered = renderPage({ initialSettings: settingsDetail, initialWsStatus: null })
+    await settle()
+    act(() => clickLastButton(rendered!.container, '发送测试填报卡'))
+    await settle()
+    expect(mocks.message.warning).toHaveBeenCalledWith('请先选择至少一名填报人员')
+    expect(mocks.testCommitmentNotify).not.toHaveBeenCalled()
   })
 })
