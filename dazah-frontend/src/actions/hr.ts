@@ -5,6 +5,7 @@ import { cookies } from 'next/headers'
 import type { components } from '@/types/generated/schema'
 import { filenameFromDisposition } from '@/lib/download'
 import { getAuthHeaders } from '@/lib/auth'
+import type { EmployeeListQuery } from '@/lib/api/hr'
 import {
   EmployeeCreateInput,
   EmployeeUpdateInput,
@@ -57,26 +58,16 @@ async function authedFetch(input: string | URL | Request, init?: RequestInit): P
   return fetch(input, { ...init, headers })
 }
 
-export async function fetchEmployeesAction(
-  params?: {
-    department?: string
-    sub_department?: string
-    status?: string
-    keyword?: string
-    gender?: string
-    level?: string
-    position?: string
-    page?: number
-    page_size?: number
-  }
-): Promise<EmployeeListResponse> {
+export async function fetchEmployeesAction(params?: EmployeeListQuery): Promise<EmployeeListResponse> {
   const searchParams = new URLSearchParams()
   if (params?.department) searchParams.set('department', params.department)
+  if (params?.first_department) searchParams.set('first_department', params.first_department)
   if (params?.sub_department) searchParams.set('sub_department', params.sub_department)
   if (params?.status) searchParams.set('status', params.status)
   if (params?.keyword) searchParams.set('keyword', params.keyword)
   if (params?.gender) searchParams.set('gender', params.gender)
   if (params?.level) searchParams.set('level', params.level)
+  if (params?.education) searchParams.set('education', params.education)
   if (params?.position) searchParams.set('position', params.position)
   searchParams.set('page', String(params?.page || 1))
   searchParams.set('page_size', String(params?.page_size || 20))
@@ -524,15 +515,7 @@ export async function deleteCandidateAction(candidateId: string) {
 
 // ─── Server-side fetch functions (for Server Components) ───
 
-export async function fetchEmployees(
-  params?: {
-    department?: string
-    status?: string
-    keyword?: string
-    page?: number
-    page_size?: number
-  }
-): Promise<EmployeeListResponse> {
+export async function fetchEmployees(params?: EmployeeListQuery): Promise<EmployeeListResponse> {
   return fetchEmployeesAction(params)
 }
 

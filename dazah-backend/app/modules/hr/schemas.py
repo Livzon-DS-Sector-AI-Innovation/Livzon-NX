@@ -515,6 +515,17 @@ class EmployeeResponse(EmployeeBase):
     updated_at: datetime | None = None
 
 
+class EmployeeDepartmentFilterOption(BaseModel):
+    department: str
+    sub_department: str | None
+
+
+class EmployeeFilterOptions(BaseModel):
+    departments: list[EmployeeDepartmentFilterOption]
+    levels: list[str]
+    educations: list[str]
+
+
 class SyncStatusResponse(BaseModel):
     local_total: int
     feishu_total: int

@@ -1,4 +1,5 @@
 import { getUserErrorMessage } from '@/lib/user-error'
+import type { components, paths } from '@/types/generated/schema'
 import {
   EmployeeListResponse,
   EmployeeResponse,
@@ -218,31 +219,56 @@ export async function fetchEmailConfig(): Promise<{
   return res.json()
 }
 
-export async function fetchEmployees(
-  params?: {
-    department?: string
-    sub_department?: string
-    status?: string
-    keyword?: string
-    gender?: string
-    level?: string
-    position?: string
-    page?: number
-    page_size?: number
-  }
-): Promise<EmployeeListResponse> {
+export type EmployeeListQuery = NonNullable<paths['/api/v1/hr/employees']['get']['parameters']['query']>
+export type EmployeeFilterOptions = components['schemas']['EmployeeFilterOptions']
+
+export async function fetchEmployees(params?: EmployeeListQuery): Promise<EmployeeListResponse> {
   const searchParams = new URLSearchParams()
   if (params?.department) searchParams.set('department', params.department)
+  if (params?.first_department) searchParams.set('first_department', params.first_department)
   if (params?.sub_department) searchParams.set('sub_department', params.sub_department)
   if (params?.status) searchParams.set('status', params.status)
   if (params?.keyword) searchParams.set('keyword', params.keyword)
   if (params?.gender) searchParams.set('gender', params.gender)
   if (params?.level) searchParams.set('level', params.level)
+  if (params?.education) searchParams.set('education', params.education)
   if (params?.position) searchParams.set('position', params.position)
   searchParams.set('page', String(params?.page || 1))
   searchParams.set('page_size', String(params?.page_size || 20))
 
   return readHrList(`/api/v1/hr/employees?${searchParams.toString()}`, '员工档案加载失败，请稍后重试')
+}
+
+export async function fetchEmployeeFilterOptions(): Promise<EmployeeFilterOptions> {
+  const fallback = '员工筛选选项加载失败'
+  const response = await fetch('/api/v1/hr/employees/filter-options', hrSettingsRequestOptions())
+  if (!response.ok) throw new HrListReadError(fallback, response.status)
+
+  const payload: unknown = await response.json().catch(() => null)
+  if (!payload || typeof payload !== 'object' || !('data' in payload)) {
+    throw new HrListReadError(fallback, 502)
+  }
+  const data = payload.data
+  if (!data || typeof data !== 'object' ||
+      !('departments' in data) || !Array.isArray(data.departments) ||
+      !('levels' in data) || !Array.isArray(data.levels) ||
+      !('educations' in data) || !Array.isArray(data.educations)) {
+    throw new HrListReadError(fallback, 502)
+  }
+  const departments = data.departments.map((item: unknown) => {
+    if (!item || typeof item !== 'object' ||
+        !('department' in item) || typeof item.department !== 'string' ||
+        !('sub_department' in item) ||
+        (item.sub_department !== null && typeof item.sub_department !== 'string')) {
+      throw new HrListReadError(fallback, 502)
+    }
+    return { department: item.department, sub_department: item.sub_department }
+  })
+  const isText = (value: unknown): value is string => typeof value === 'string'
+  if (!data.levels.every(isText) || !data.educations.every(isText)) {
+    throw new HrListReadError(fallback, 502)
+  }
+  return { departments, levels: data.levels, educations: data.educations }
 }
 
 export async function fetchEmployeeById(id: string): Promise<EmployeeResponse> {

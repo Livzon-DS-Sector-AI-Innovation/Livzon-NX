@@ -44,9 +44,7 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   output: 'standalone',
   poweredByHeader: false,
-  // Large development bundles contain inline source maps. Avoid recompressing
-  // them on each local refresh; production keeps the normal gzip response.
-  compress: !isDev,
+  compress: true,
   reactCompiler: false,
   // 开发错误仍输出到终端和浏览器控制台，仅隐藏页面左下角的 Next.js 悬浮入口。
   devIndicators: false,

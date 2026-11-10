@@ -1,20 +1,24 @@
 import { fetchEmployees } from '@/actions/hr'
 import EmployeeProfileClient from '@/components/hr/EmployeeProfileClient'
+import { employeeProfileQuery, readEmployeeProfileFilters } from '@/components/hr/employeeProfileQuery'
+import { firstQueryValue, readListPagination, type ServerQueryRecord } from '@/lib/list-url-state'
 import type { Employee } from '@/types/hr'
 
 export const dynamic = 'force-dynamic'
 
 interface PageProps {
-  searchParams: Promise<{ department?: string }>
+  searchParams: Promise<ServerQueryRecord>
 }
 
 export default async function EmployeeProfilePage({ searchParams }: PageProps) {
-  const { department } = (await searchParams) || {}
+  const query = (await searchParams) || {}
+  const filters = readEmployeeProfileFilters(key => firstQueryValue(query[key]))
+  const { page, pageSize } = readListPagination(query)
   let initialEmployees: Employee[] = []
   let initialTotal = 0
 
   try {
-    const res = await fetchEmployees({ page: 1, page_size: 20 })
+    const res = await fetchEmployees(employeeProfileQuery(filters, page, pageSize))
     initialEmployees = res.data || []
     initialTotal = res.meta?.total || 0
   } catch {
@@ -25,7 +29,6 @@ export default async function EmployeeProfilePage({ searchParams }: PageProps) {
     <EmployeeProfileClient
       initialEmployees={initialEmployees}
       initialTotal={initialTotal}
-      initialDepartment={department || ''}
     />
   )
 }

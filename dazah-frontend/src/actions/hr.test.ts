@@ -48,6 +48,24 @@ describe('hr actions', () => {
     )
   })
 
+  it('preserves employee profile filters when the server loads the first view', async () => {
+    const fetchMock = vi.fn<(url: string) => Response>(() => jsonResponse({ code: 200, data: [], meta: { total: 0 } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await fetchEmployees({
+      first_department: '质量部', sub_department: '分析组', education: '本科',
+      level: '中级', position: '分析', gender: '女', keyword: '测试', status: '在职',
+      page: 2, page_size: 50,
+    })
+
+    const url = new URL(fetchMock.mock.calls[0][0])
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      first_department: '质量部', sub_department: '分析组', education: '本科',
+      level: '中级', position: '分析', gender: '女', keyword: '测试', status: '在职',
+      page: '2', page_size: '50',
+    })
+  })
+
   it('creates an employee via action', async () => {
     const fetchMock = vi.fn(() => jsonResponse({ code: 200, data: { id: 'e-1' } }))
     vi.stubGlobal('fetch', fetchMock)

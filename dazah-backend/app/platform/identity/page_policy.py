@@ -5877,6 +5877,7 @@ def _hr_api_bindings() -> tuple[PageApiBinding, ...]:
         (
             "/employees/contract-expiring",
             "/employees/contract-expiring/push-status",
+            "/employees/filter-options",
             "/employees/max-seq",
             "/employees/sync-status",
             "/new/employees",
