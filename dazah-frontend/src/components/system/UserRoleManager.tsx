@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { PAGE_DATA_SCOPE_VISIBLE } from "@/lib/page-permission-editor"
 import { App, Button, Checkbox, ConfigProvider, Drawer, Input, Table, Tag, Typography } from "antd"
 import Alert from "@/components/shared/PlatformNotice"
@@ -19,11 +19,21 @@ interface UserRoleManagerProps {
   initialDepartments: DepartmentItem[]
 }
 
+interface UserListQuery {
+  keyword: string
+  page: number
+}
+
+type UserListResult = { query: UserListQuery } & (
+  { items: AdminUserItem[]; total: number; error?: never } | { error: string }
+)
+
+const USER_PAGE_SIZE = 20
+
 export function UserRoleManager({ initialRoles, initialDepartments }: UserRoleManagerProps) {
   const { message, modal } = App.useApp()
-  const [users, setUsers] = useState<AdminUserItem[]>([])
-  const [loading, setLoading] = useState(false)
-  const [keyword, setKeyword] = useState("")
+  const [query, setQuery] = useState<UserListQuery>({ keyword: "", page: 1 })
+  const [listResult, setListResult] = useState<UserListResult | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<AdminUserItem | null>(null)
   const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>([])
@@ -60,26 +70,30 @@ export function UserRoleManager({ initialRoles, initialDepartments }: UserRoleMa
       .some((value) => value.toLocaleLowerCase().includes(normalized)))
   }, [initialRoles, roleSearch])
 
-  const loadUsers = useCallback(async (kw = "") => {
-    setLoading(true)
-    try {
-      const data = await fetchAdminUsers()
-      const filtered = kw
-        ? data.items.filter(
-            (u) => u.name.includes(kw) || (u.department ?? "").includes(kw)
-          )
-        : data.items
-      setUsers(filtered)
-    } catch (e) {
-      message.error(e instanceof Error ? e.message : "用户加载失败")
-    } finally {
-      setLoading(false)
-    }
-  }, [message])
-
   useEffect(() => {
-    queueMicrotask(loadUsers)
-  }, [loadUsers])
+    let cancelled = false
+    fetchAdminUsers({ keyword: query.keyword, offset: (query.page - 1) * USER_PAGE_SIZE, limit: USER_PAGE_SIZE })
+      .then((data) => {
+        if (cancelled) return
+        const lastPage = Math.max(1, Math.ceil(data.total / USER_PAGE_SIZE))
+        if (query.page > lastPage) {
+          setQuery((current) => current === query ? { ...current, page: lastPage } : current)
+          return
+        }
+        setListResult({ query, ...data })
+      })
+      .catch((cause: unknown) => {
+        if (cancelled) return
+        const error = cause instanceof Error ? cause.message : "用户加载失败"
+        message.error(error)
+        setListResult({ query, error })
+      })
+    return () => { cancelled = true }
+  }, [message, query])
+
+  const loading = listResult?.query !== query
+  const loadError = loading ? undefined : listResult.error
+  const refreshUsers = () => setQuery((current) => ({ ...current }))
 
   const openAssign = async (user: AdminUserItem) => {
     const roleIds = user.roles.map((r) => r.id)
@@ -127,7 +141,7 @@ export function UserRoleManager({ initialRoles, initialDepartments }: UserRoleMa
         rolesSaved = true
         setEditingUser({ ...editingUser, grant_version: result.data.grant_version })
         setOriginalRoleIds([...selectedRoleIds])
-        void loadUsers(keyword)
+        refreshUsers()
       }
       // 保存用户级可见部门配置（个例覆盖，如高管看全厂）
       if (PAGE_DATA_SCOPE_VISIBLE && scopeChanged) {
@@ -144,7 +158,7 @@ export function UserRoleManager({ initialRoles, initialDepartments }: UserRoleMa
         ? `角色分配已更新：新增 ${addedRoles.length} 个，移除 ${removedRoles.length} 个`
         : "部门数据范围已更新")
       setDrawerOpen(false)
-      loadUsers(keyword)
+      if (!rolesSaved) refreshUsers()
     } catch (e) {
       message.error(rolesSaved ? "角色已保存，请刷新确认部门数据范围是否已保存"
         : e instanceof Error ? e.message : "分配失败")
@@ -301,20 +315,29 @@ export function UserRoleManager({ initialRoles, initialDepartments }: UserRoleMa
         onLearnRules={showPermissionRules} />
       <div className="mb-3 max-w-sm">
         <Input.Search
-          placeholder="按姓名 / 部门搜索"
+          placeholder="按姓名、部门、账号、邮箱、手机号或工号搜索"
           allowClear
-          onSearch={(v) => {
-            setKeyword(v)
-            loadUsers(v)
-          }}
+          onSearch={(value) => setQuery({ keyword: value.trim(), page: 1 })}
         />
       </div>
       <Table
         rowKey="id"
         columns={columns}
-        dataSource={users}
+        dataSource={!loading && listResult.error === undefined ? listResult.items : []}
         loading={loading}
-        pagination={false}
+        locale={{ emptyText: loadError !== undefined ? (
+          <div>
+            <span>{loadError}</span>
+            <Button type="link" onClick={refreshUsers}>重试</Button>
+          </div>
+        ) : query.keyword ? "没有符合条件的用户" : "暂无用户" }}
+        pagination={{
+          current: query.page,
+          total: listResult?.query.keyword === query.keyword && listResult.error === undefined ? listResult.total : 0,
+          pageSize: USER_PAGE_SIZE,
+          showSizeChanger: false,
+          onChange: (page) => setQuery((current) => ({ ...current, page })),
+        }}
         size="middle"
         scroll={{ x: 900 }}
       />

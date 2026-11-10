@@ -75250,6 +75250,7 @@
           "name": {
             "maxLength": 100,
             "minLength": 1,
+            "pattern": "^\\S+$",
             "title": "Name",
             "type": "string"
           }

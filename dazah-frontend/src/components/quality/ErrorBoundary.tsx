@@ -9,23 +9,22 @@ interface Props {
 }
 
 interface State {
-  hasError: boolean
-  error?: Error
+  error: Error | null
 }
 
 export class ErrorBoundary extends Component<Props, State> {
-  state: State = { hasError: false }
+  state: State = { error: null }
 
   static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error }
+    return { error }
   }
 
   render() {
-    if (this.state.hasError) {
+    if (this.state.error) {
       return (
         <div className="p-8 text-center">
-          <PlatformNotice type="error" title="页面出错了" description={this.state.error?.message}
-            action={<Button onClick={() => window.location.reload()}>刷新页面</Button>} />
+          <PlatformNotice type="error" title="页面出错了" description={this.state.error.message}
+            action={<Button onClick={() => this.setState({ error: null })}>重试</Button>} />
         </div>
       )
     }

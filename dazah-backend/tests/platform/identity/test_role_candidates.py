@@ -85,7 +85,8 @@ async def test_candidates_validate_filters(
     UserRepository.list_role_candidates.assert_not_awaited()
 
 
-async def test_candidates_require_admin() -> None:
+@pytest.mark.parametrize("query", ["", "?user_scope=all"])
+async def test_candidates_require_admin(query: str) -> None:
     from fastapi import HTTPException
 
     application = FastAPI()
@@ -100,8 +101,63 @@ async def test_candidates_require_admin() -> None:
         transport=ASGITransport(app=application, raise_app_exceptions=False),
         base_url="http://test",
     ) as client:
-        response = await client.get("/api/v1/identity/admin/users?user_scope=all")
+        response = await client.get(f"/api/v1/identity/admin/users{query}")
     assert response.status_code == 403
+
+
+async def test_user_roles_search_directory_fields_before_paging(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    application = FastAPI()
+    application.include_router(rbac_api.rbac_router, prefix="/api/v1/identity")
+    db = AsyncMock(spec=AsyncSession)
+    user = User(
+        id=uuid4(),
+        name="后页用户",
+        username="qa_account",
+        role="user",
+        status="disabled",
+        auth_source="local",
+        grant_version=3,
+    )
+    rows = Mock()
+    rows.all.return_value = [user]
+    rows.scalars.return_value = rows
+    db.execute.return_value = rows
+    db.scalar.return_value = 501
+    db.scalars.return_value = rows
+    application.dependency_overrides[get_db] = lambda: db
+    application.dependency_overrides[rbac_api.require_identity_admin] = lambda: User(
+        id=uuid4()
+    )
+    monkeypatch.setattr(RbacRepository, "list_user_roles", AsyncMock(return_value=[]))
+
+    async with AsyncClient(
+        transport=ASGITransport(app=application), base_url="http://test"
+    ) as client:
+        response = await client.get(
+            "/api/v1/identity/admin/users",
+            params={"keyword": "  QA_ACCOUNT  ", "offset": 500, "limit": 20},
+        )
+
+    assert response.status_code == 200, response.text
+    data = response.json()["data"]
+    assert data["total"] == 501
+    assert data["items"][0]["id"] == str(user.id)
+    assert data["items"][0]["grant_version"] == 3
+    assert data["items"][0]["status"] == "disabled"
+    assert data["items"][0]["roles"] == []
+
+    count_sql = str(db.scalar.call_args.args[0].compile(dialect=postgresql.dialect()))
+    page = db.scalars.call_args.args[0].compile(dialect=postgresql.dialect())
+    conditions = str(page).split("WHERE ")[1].split(" ORDER BY")[0]
+    assert count_sql.split("WHERE ")[1] == conditions
+    assert "users.is_deleted IS false" in conditions
+    for field in ("name", "username", "email", "mobile", "employee_no", "department"):
+        assert f"users.{field} ILIKE" in conditions
+    assert "users.status" not in conditions
+    assert "ORDER BY identity.users.name, identity.users.id" in str(page)
+    assert list(page.params.values()) == ["%QA_ACCOUNT%"] * 6 + [20, 500]
 
 
 @pytest.mark.parametrize("scope", ["department", "missing", "all"])

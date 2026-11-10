@@ -20,6 +20,9 @@ export const EQUIPMENT_PAGE_KEYS = {
 
 export type EquipmentPageKey = (typeof EQUIPMENT_PAGE_KEYS)[keyof typeof EQUIPMENT_PAGE_KEYS]
 
+// Internal request context written by the proxy, independently of the actual page path.
+export const EQUIPMENT_CONSOLE_MODULE_HEADER = 'X-Dazah-Equipment-Module'
+
 /**
  * 统一工作台内的功能模块 Tab（展示顺序即数组顺序）：
  * module 对应 /equipment?module= 参数，key 即页面授权 key。

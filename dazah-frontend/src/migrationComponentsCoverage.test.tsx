@@ -1117,7 +1117,7 @@ describe('migrated component coverage', () => {
     getMock('lib/api/client/admin', 'fetchRoleMenus').mockResolvedValue(['menu-2'])
     getMock('lib/api/client/admin', 'fetchDataScopes').mockResolvedValue([{ id: 'scope-1', role_id: 'role-1', user_id: 'user-1', scope_type: 'departments', department_names: ['质量部'] }])
     getMock('lib/api/client/admin', 'fetchAdminUsers').mockResolvedValue({ items: [user], total: 1 })
-    getMock('actions/admin', 'createRole').mockResolvedValue({ ...role, id: 'role-new' })
+    getMock('actions/admin', 'createRole').mockResolvedValue({ ok: true, data: { ...role, id: 'role-new' } })
     for (const name of ['setRolePermissions', 'setRoleMenus', 'saveRoleDataScope', 'saveRoleDataScopeForTarget', 'updateRole', 'deleteRole', 'assignUserRoles', 'saveUserDataScope', 'deleteDataScope', 'removeUserRole', 'createDeptRule', 'deleteDeptRule', 'createMenu', 'updateMenu', 'deleteMenu']) {
       getMock('actions/admin', name).mockResolvedValue({})
     }

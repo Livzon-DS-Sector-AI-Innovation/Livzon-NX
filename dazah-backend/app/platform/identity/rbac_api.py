@@ -514,24 +514,19 @@ async def list_admin_users(
         Literal["department", "missing", "all"] | None, Query()
     ] = None,
 ) -> JSONResponse:
-    if user_scope is not None:
-        department_id = (department_id or "").strip() or None
-        department_name = (department_name or "").strip() or None
-        if user_scope == "department" and not (department_id or department_name):
-            raise HTTPException(422, "飞书部门 ID 与部门名称至少填写一个")
-        users, total = await UserRepository().list_role_candidates(
-            db,
-            department_id=department_id,
-            department_name=department_name,
-            user_scope=user_scope,
-            keyword=(keyword or "").strip() or None,
-            offset=offset,
-            limit=limit,
-        )
-    else:
-        users, total = await UserRepository().list_all(
-            db, keyword=keyword, offset=offset, limit=limit
-        )
+    department_id = (department_id or "").strip() or None
+    department_name = (department_name or "").strip() or None
+    if user_scope == "department" and not (department_id or department_name):
+        raise HTTPException(422, "飞书部门 ID 与部门名称至少填写一个")
+    users, total = await UserRepository().list_role_candidates(
+        db,
+        department_id=department_id,
+        department_name=department_name,
+        user_scope=user_scope,
+        keyword=(keyword or "").strip() or None,
+        offset=offset,
+        limit=limit,
+    )
     repo = RbacRepository()
     items = []
     for user in users:

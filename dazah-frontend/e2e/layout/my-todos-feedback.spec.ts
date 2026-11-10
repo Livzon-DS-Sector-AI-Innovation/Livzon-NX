@@ -87,11 +87,23 @@ test('feedback requires description time and screenshot, retains failed input an
   await drawer.getByPlaceholder('请选择问题发生时间').fill('2026-10-01 09:30')
   await drawer.getByPlaceholder('请选择问题发生时间').press('Enter')
   await drawer.locator('input[type=file]').setInputFiles({ name: 'problem.png', mimeType: 'image/png', buffer: png })
-  await drawer.getByRole('button', { name: '提交反馈', exact: true }).click()
+  // Keep the outgoing spinner attached so retry is tested before its animation ends.
+  const spinnerLeaving = '.ant-drawer button[type="submit"] .ant-btn-loading-icon-motion-leave'
+  const slowSpinner = await page.addStyleTag({ content: `${spinnerLeaving} {
+    transition: none !important;
+    width: 1em !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }` })
+  const submit = drawer.getByRole('button', { name: '提交反馈', exact: true })
+  await submit.click()
   await expect(drawer.getByText('模拟反馈服务暂不可用，请重试')).toBeVisible()
   await expect(description).toHaveValue(/失败测试/)
+  await expect(page.locator(spinnerLeaving)).toBeAttached()
+  await expect(submit).toBeEnabled()
   await description.fill(problemDescription)
-  await drawer.getByRole('button', { name: '提交反馈', exact: true }).click()
+  await submit.click()
+  await slowSpinner.evaluate((style) => style.remove())
   await expect(drawer.getByRole('tab', { name: '我的反馈' })).toHaveAttribute('aria-selected', 'true')
   await expect(drawer.getByRole('tab', { name: '收件箱', exact: true })).toHaveCount(0)
   const adminContext = await browser.newContext()

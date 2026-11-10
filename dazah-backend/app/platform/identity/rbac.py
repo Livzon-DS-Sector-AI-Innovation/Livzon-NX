@@ -624,7 +624,7 @@ async def seed_permissions(db: AsyncSession) -> None:
 
 
 async def _seed_quality_qa_roles(db: AsyncSession) -> None:
-    """质量 QA 系统角色种子（幂等）：按 code 查重，缺则建 is_system 角色并预绑权限。"""
+    """初始化未创建过的质量 QA 角色，仅为现存系统角色补齐默认权限。"""
     code_by_perm: dict[str, Permission] = {}
     perm_stmt = select(Permission).where(
         Permission.is_deleted == False  # noqa: E712
@@ -636,23 +636,28 @@ async def _seed_quality_qa_roles(db: AsyncSession) -> None:
     role_result = await db.execute(
         select(Role).where(
             Role.code.in_([seed["code"] for seed in QUALITY_QA_ROLE_SEEDS]),
-            Role.is_deleted == False,  # noqa: E712
         )
     )
-    existing_by_code = {role.code: role for role in role_result.scalars().all()}
+    roles = role_result.scalars().all()
+    known_codes = {role.code for role in roles}
+    system_roles_by_code = {
+        role.code: role for role in roles if role.is_system and not role.is_deleted
+    }
 
     for seed in QUALITY_QA_ROLE_SEEDS:
-        role = existing_by_code.get(seed["code"])
+        code = seed["code"]
+        role = system_roles_by_code.get(code)
         if role is None:
+            if code in known_codes:
+                continue
             role = Role(
                 name=seed["name"],
-                code=seed["code"],
+                code=code,
                 description=seed.get("description"),
                 is_system=True,
             )
             db.add(role)
             await db.flush()
-            existing_by_code[seed["code"]] = role
 
         rp_stmt = select(RolePermission.permission_id).where(
             RolePermission.role_id == role.id,

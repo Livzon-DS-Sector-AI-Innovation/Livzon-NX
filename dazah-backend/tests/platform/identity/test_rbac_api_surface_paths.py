@@ -112,7 +112,7 @@ async def test_rbac_role_user_department_and_menu_workflows(
         rbac_api,
         "UserRepository",
         lambda: SimpleNamespace(
-            list_all=AsyncMock(return_value=([user], 1)),
+            list_role_candidates=AsyncMock(return_value=([user], 1)),
             get_by_id=AsyncMock(return_value=user),
         ),
     )

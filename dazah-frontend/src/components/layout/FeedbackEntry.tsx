@@ -71,7 +71,7 @@ function FeedbackForm({ pagePath, onSuccess }: { pagePath: string; onSuccess: ()
         </Upload>
       </Form.Item>
       <p className="text-xs text-[var(--color-steel)] mb-4">发生页面：{pagePath}</p>
-      <Button type="primary" htmlType="submit" loading={submitting}>提交反馈</Button>
+      <Button type="primary" htmlType="submit" aria-label="提交反馈" aria-busy={submitting} loading={submitting}>提交反馈</Button>
     </Form>
   </div>
 }

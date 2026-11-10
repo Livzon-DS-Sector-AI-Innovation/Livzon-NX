@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Card, Button, Space, Tag, Collapse, App, Progress, Spin, Tabs, Table, Descriptions, Divider, Upload } from 'antd'
+import { Card, Button, Space, Tag, Collapse, App, Progress, Spin, Tabs, Descriptions, Divider, Upload } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
-import { CheckCircleOutlined, SaveOutlined, ExperimentOutlined, ShoppingCartOutlined, SafetyOutlined, FileTextOutlined, DownloadOutlined, EditOutlined, UploadOutlined } from '@ant-design/icons'
+import { CheckCircleOutlined, SaveOutlined, ExperimentOutlined, FileTextOutlined, DownloadOutlined, EditOutlined } from '@ant-design/icons'
 import type { CandidateRoute, ExperimentPlan } from '@/types/rd'
 import { updateRoute } from '@/lib/api/rd'
 
@@ -26,25 +26,26 @@ interface ModuleResearchProps {
     candidateRoutes: CandidateRoute[]
     selectedRouteIds: string[]
     experimentPlans: ExperimentPlan[]
-  }) => void
+  }) => Promise<void>
+  saving?: boolean
 }
 
-export function ModuleResearch({ routeId, literatureSource = '', literatureFile, initialData, onComplete, onSaveAndExit }: ModuleResearchProps) {
+export function ModuleResearch({ routeId, literatureSource = '', literatureFile, initialData, onComplete, onSaveAndExit, saving = false }: ModuleResearchProps) {
   const { message } = App.useApp()
+  const [replacementFile, setReplacementFile] = useState<File | null>(null)
+  const fileToParse = replacementFile ?? literatureFile
   // 只有在没有初始数据且有文件需要解析时，才显示解析界面
   const [isParsing, setIsParsing] = useState(!initialData && !!literatureFile)
   const [parseProgress, setParseProgress] = useState(0)
   const [candidateRoutes, setCandidateRoutes] = useState<CandidateRoute[]>(initialData?.candidateRoutes || [])
   const [selectedRouteIds, setSelectedRouteIds] = useState<string[]>(initialData?.selectedRouteIds || [])
   const [experimentPlans, setExperimentPlans] = useState<ExperimentPlan[]>(initialData?.experimentPlans || [])
-  const [parseComplete, setParseComplete] = useState(!!initialData)
   const [activeTab, setActiveTab] = useState('routes')
   const [parseError, setParseError] = useState<string | null>(null)
   const [parseStatus, setParseStatus] = useState<string>('')
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
   const startTimeRef = useRef<number>(0)
-  const [, forceUpdate] = useState(0)  // 强制更新
 
   // 独立的计时器 useEffect
   useEffect(() => {
@@ -71,7 +72,8 @@ export function ModuleResearch({ routeId, literatureSource = '', literatureFile,
 
   // 如果没有初始数据，调用后端 API 解析（SSE 流式响应）
   useEffect(() => {
-    if (initialData || !literatureFile) return
+    if (initialData || !fileToParse) return
+    const controller = new AbortController()
     
     const parseLiterature = async () => {
       setIsParsing(true)
@@ -82,11 +84,12 @@ export function ModuleResearch({ routeId, literatureSource = '', literatureFile,
       
       try {
         const formData = new FormData()
-        formData.append('file', literatureFile)
+        formData.append('file', fileToParse)
         
         const response = await fetch('/api/v1/research/literature/analyze', {
           method: 'POST',
           body: formData,
+          signal: controller.signal,
         })
         
         if (!response.ok) {
@@ -129,7 +132,6 @@ export function ModuleResearch({ routeId, literatureSource = '', literatureFile,
                 if (data.status === 'error') {
                   setParseError(data.error || '解析失败')
                   setIsParsing(false)
-                  setParseComplete(true)
                   message.error(data.error || '解析失败')
                   return
                 }
@@ -142,7 +144,6 @@ export function ModuleResearch({ routeId, literatureSource = '', literatureFile,
                   if (result.error) {
                     setParseError(result.error)
                     setIsParsing(false)
-                    setParseComplete(true)
                     message.warning(`解析完成，但存在问题: ${result.error}`)
                     return
                   }
@@ -153,19 +154,11 @@ export function ModuleResearch({ routeId, literatureSource = '', literatureFile,
                   if (routes.length === 0) {
                     setParseError('未能从文献中提取到合成路线，请检查文献内容是否包含合成路线描述')
                     setIsParsing(false)
-                    setParseComplete(true)
                     message.warning('未能提取到合成路线')
                     return
                   }
                   
-                  setCandidateRoutes(routes)
-                  setExperimentPlans(plans)
-                  setIsParsing(false)
-                  setParseComplete(true)
-                  setParseStatus('解析完成')
-                  
                   const recommendedIds = routes.filter((r: CandidateRoute) => r.is_recommended).map((r: CandidateRoute) => r.id)
-                  setSelectedRouteIds(recommendedIds)
                   
                   // 保存 AI 解析结果到后端
                   try {
@@ -178,6 +171,12 @@ export function ModuleResearch({ routeId, literatureSource = '', literatureFile,
                   } catch (e) {
                     console.error('保存解析结果失败', e)
                   }
+                  if (controller.signal.aborted) return
+                  setCandidateRoutes(routes)
+                  setExperimentPlans(plans)
+                  setSelectedRouteIds(recommendedIds)
+                  setIsParsing(false)
+                  setParseStatus('解析完成')
                   
                   const totalTime = Math.floor((Date.now() - startTimeRef.current) / 1000)
                   message.success(`解析完成！耗时 ${totalTime} 秒，提取到 ${routes.length} 条路线，已生成 ${plans.length} 个实验方案`)
@@ -189,18 +188,20 @@ export function ModuleResearch({ routeId, literatureSource = '', literatureFile,
             }
           }
         }
+        throw new Error('解析响应提前结束，请重新上传文献')
         
       } catch (error) {
+        if (controller.signal.aborted) return
         console.error('文献解析失败:', error)
         setParseError(error instanceof Error ? error.message : '解析失败')
         setIsParsing(false)
-        setParseComplete(true)
         message.error('文献解析失败，请检查 AI 配置或稍后重试')
       }
     }
     
-    parseLiterature()
-  }, [initialData, literatureFile, message])
+    void parseLiterature()
+    return () => controller.abort()
+  }, [initialData, fileToParse, message, routeId])
 
   const handleSelectRoute = (routeId: string) => {
     setSelectedRouteIds(prev =>
@@ -225,15 +226,19 @@ export function ModuleResearch({ routeId, literatureSource = '', literatureFile,
   }
 
   const handleSaveAndExit = () => {
-    if (onSaveAndExit) {
-      onSaveAndExit({
-        candidateRoutes,
-        selectedRouteIds,
-        experimentPlans,
-      })
-      message.success('已保存当前进度')
-    }
+    if (!saving) void onSaveAndExit?.({ candidateRoutes, selectedRouteIds, experimentPlans })
   }
+
+  const uploadLiterature = (label: string) => (
+    <Upload accept=".pdf,.txt,.doc,.docx,.md,.markdown,.rtf" showUploadList={false} disabled={saving}
+      beforeUpload={(file) => {
+        setIsParsing(true)
+        setReplacementFile(file)
+        return Upload.LIST_IGNORE
+      }}>
+      <Button disabled={saving}>{label}</Button>
+    </Upload>
+  )
 
   // 解析中界面
   if (isParsing) {
@@ -262,20 +267,18 @@ export function ModuleResearch({ routeId, literatureSource = '', literatureFile,
   }
 
   // 如果没有初始数据且没有文件，显示上传文件界面
-  if (!initialData && !literatureFile && candidateRoutes.length === 0) {
+  if (!initialData && !fileToParse && candidateRoutes.length === 0) {
     return (
       <div style={{ padding: 40 }}>
         <Alert
           title="需要上传文献文件"
-          description="请返回上一步上传文献文件，或重新开始工作流"
+          description="请上传文献文件后开始解析"
           type="warning"
           showIcon
           style={{ marginBottom: 24 }}
         />
         <div style={{ textAlign: 'center' }}>
-          <Button type="primary" onClick={() => window.history.back()}>
-            返回上传文件
-          </Button>
+          {uploadLiterature('上传文献文件')}
         </div>
       </div>
     )
@@ -294,11 +297,9 @@ export function ModuleResearch({ routeId, literatureSource = '', literatureFile,
         />
         <div style={{ textAlign: 'center' }}>
           <Space>
-            <Button onClick={() => window.location.reload()}>
-              重新上传
-            </Button>
+            {uploadLiterature('重新上传')}
             {onSaveAndExit && (
-              <Button type="primary" onClick={handleSaveAndExit}>
+              <Button type="primary" loading={saving} onClick={handleSaveAndExit}>
                 保存并退出
               </Button>
             )}
@@ -609,6 +610,7 @@ export function ModuleResearch({ routeId, literatureSource = '', literatureFile,
               <Button 
                 icon={<SaveOutlined />} 
                 onClick={handleSaveAndExit}
+                loading={saving}
                 size="large"
                 disabled={selectedRouteIds.length === 0}
               >
@@ -620,7 +622,7 @@ export function ModuleResearch({ routeId, literatureSource = '', literatureFile,
               icon={<CheckCircleOutlined />}
               onClick={handleConfirm}
               size="large"
-              disabled={selectedRouteIds.length === 0}
+              disabled={saving || selectedRouteIds.length === 0}
             >
               ✓ 方案确认，开始做实验 →
             </Button>

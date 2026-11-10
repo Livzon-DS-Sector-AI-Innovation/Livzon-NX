@@ -13,7 +13,6 @@ export default function MaintenanceBoundary({ children }: { children: React.Reac
   const [now, setNow] = useState(() => Date.now())
   const [dialogOpen, setDialogOpen] = useState(false)
   const [dismissedPhase, setDismissedPhase] = useState('')
-  const dirty = useRef(false)
   const screen = useRef<HTMLDivElement>(null)
   const active = state.phase === 'maintenance'
 
@@ -50,12 +49,6 @@ export default function MaintenanceBoundary({ children }: { children: React.Reac
       catch { /* A network failure does not reopen maintenance traffic. */ }
       finally { polling = false }
     }
-    const changed = () => { dirty.current = true }
-    const beforeUnload = (event: BeforeUnloadEvent) => {
-      if (dirty.current || isMaintenanceActive(stateRef.current)) {
-        event.preventDefault(); event.returnValue = ''
-      }
-    }
     const preventAction = (event: Event) => {
       if (!isMaintenanceActive(stateRef.current) || !(event.target instanceof Element)) return
       if (event.target.closest('[data-maintenance-control],.dazah-maintenance-dialog')) return
@@ -69,21 +62,15 @@ export default function MaintenanceBoundary({ children }: { children: React.Reac
       void check()
     }, 1000)
     document.addEventListener('visibilitychange', check)
-    document.addEventListener('input', changed, true)
-    document.addEventListener('change', changed, true)
     document.addEventListener('click', preventAction, true)
     document.addEventListener('submit', preventAction, true)
-    window.addEventListener('beforeunload', beforeUnload)
     void check()
     return () => {
       mounted = false; clearInterval(timer)
       if (window.fetch === wrapped) window.fetch = original
       document.removeEventListener('visibilitychange', check)
-      document.removeEventListener('input', changed, true)
-      document.removeEventListener('change', changed, true)
       document.removeEventListener('click', preventAction, true)
       document.removeEventListener('submit', preventAction, true)
-      window.removeEventListener('beforeunload', beforeUnload)
     }
   }, [])
 

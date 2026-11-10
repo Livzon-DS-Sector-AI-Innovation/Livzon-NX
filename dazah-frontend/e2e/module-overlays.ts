@@ -1,9 +1,15 @@
 import { randomUUID } from 'node:crypto'
 import { expect, test, type Locator } from '@playwright/test'
 
-export function registerModuleOverlayTests(module: 'quality' | 'hr' | 'warehouse' | 'registration') {
+export function registerModuleOverlayTests(
+  module: 'quality' | 'hr' | 'warehouse' | 'registration',
+  scope: 'critical' | 'extended' = 'extended',
+) {
   for (const width of [1280, 768, 390, 320]) {
     for (const mode of ['light', 'dark'] as const) {
+      // Keep one mobile case per module in the PR gate; retain the rest in the full matrix.
+      const critical = width === 390 && mode === 'dark'
+      if (critical !== (scope === 'critical')) continue
       test(`${module} overlays ${width}px ${mode}`, async ({ context, page, baseURL }) => {
         test.setTimeout(240_000)
         page.setDefaultTimeout(15_000)
