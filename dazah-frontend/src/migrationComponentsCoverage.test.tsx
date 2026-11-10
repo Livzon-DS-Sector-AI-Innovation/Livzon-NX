@@ -3663,6 +3663,13 @@ describe('migrated component coverage', () => {
         let rendered: ReturnType<typeof renderClient> | null = null
         try {
           const componentProps = interactivePropsFor(path)
+          if (path.endsWith('/EmployeeProfileClient.tsx')) {
+            getMock('lib/api/hr', 'fetchEmployeeFilterOptions').mockResolvedValue({
+              departments: [{ department: '质量部', sub_department: '分析组' }],
+              levels: ['中级'],
+              educations: ['本科'],
+            })
+          }
           if (path.endsWith('/FeeDashboardPage.tsx')) {
             getMock('lib/api/client/registration', 'fetchFeeDashboard').mockResolvedValue(componentProps.dashboard)
           }

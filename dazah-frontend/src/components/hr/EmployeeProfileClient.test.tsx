@@ -6,6 +6,7 @@ import { App as AntdApp } from 'antd'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const actions = vi.hoisted(() => ({
+  fetchEmployees: vi.fn(),
   fetchEmployeesAction: vi.fn(),
   syncFromFeishuAction: vi.fn(),
 }))
@@ -30,6 +31,7 @@ vi.mock('./EmployeeDetailDrawer', () => ({ default: () => null }))
 vi.mock('./ContractAlertBanner', () => ({ default: () => null }))
 
 import EmployeeProfileClient from './EmployeeProfileClient'
+import EmployeeProfilePage from '@/app/(dashboard)/hr/profile/page'
 import { HrListReadError } from '@/lib/api/hr'
 import type { Employee } from '@/types/hr'
 
@@ -42,6 +44,30 @@ const options = {
   levels: ['中级'],
   educations: ['本科', '大专'],
 }
+
+describe('employee profile server rendering', () => {
+  it('uses the URL filters and pagination for the initial employee query', async () => {
+    actions.fetchEmployees.mockResolvedValueOnce({ data: [employee], meta: { total: 101 } })
+    const page = await EmployeeProfilePage({
+      searchParams: Promise.resolve({
+        department: ['质量部', '生产部'], sub_department: '分析组',
+        education: ' 本科 ', page: '3', page_size: '50',
+      }),
+    })
+
+    expect(actions.fetchEmployees).toHaveBeenLastCalledWith(expect.objectContaining({
+      first_department: '质量部', sub_department: '分析组', education: '本科', page: 3, page_size: 50,
+    }))
+    expect(page.props).toMatchObject({ initialEmployees: [employee], initialTotal: 101 })
+  })
+
+  it('allows the client to retry when the initial employee query fails', async () => {
+    actions.fetchEmployees.mockRejectedValueOnce(new Error('Service unavailable'))
+    const page = await EmployeeProfilePage({ searchParams: Promise.resolve({}) })
+
+    expect(page.props).toMatchObject({ initialEmployees: [], initialTotal: 0 })
+  })
+})
 
 describe('employee profile filters', () => {
   let root: Root
