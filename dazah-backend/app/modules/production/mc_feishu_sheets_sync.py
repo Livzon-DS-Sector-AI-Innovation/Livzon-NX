@@ -230,7 +230,7 @@ def _safe_yield(val: Any, fraction_ceiling: float = 1.0) -> float | None:
 
 
 def _apply_st_fields(
-    st: Any, row: list[str], tank_no: int, pending_st2_data: dict
+    st: Any, row: list[str], tank_no: int, pending_st2_data: dict[str, Any]
 ) -> None:
     """把表格当前行写入子罐字段（0 基列号，2026-11 核对源表表头）。
 
