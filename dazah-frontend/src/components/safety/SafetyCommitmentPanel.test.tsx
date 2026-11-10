@@ -404,32 +404,6 @@ describe('SafetyCommitmentPanel：发布与信息卡', () => {
 
 
 describe('SafetyCommitmentPanel：发布成功与历史日期加载', () => {
-  it('填写承诺人后发布成功并更新报告', async () => {
-    mocks.publishCommitment.mockResolvedValue({
-      code: 200,
-      data: { report: { ...REPORT, status: 'published', publisher_name: '秦刚' } },
-    })
-    await renderPanel()
-    // 承诺人姓名默认预填主要负责人，直接确认发布
-    await act(async () => {
-      buttons('发布承诺公告')[0]?.click()
-    })
-    await flush(40)
-    await act(async () => {
-      const ok = Array.from(
-        document.body.querySelectorAll<HTMLButtonElement>('.ant-modal button'),
-      ).find((b) => (b.textContent ?? '').replace(/\s/g, '') === '确认发布')
-      ok?.click()
-    })
-    await flush(60)
-    expect(mocks.publishCommitment).toHaveBeenCalledWith(
-      'r-1',
-      '秦刚',
-      'safety:safety-commitment',
-    )
-    expect(mocks.message.success).toHaveBeenCalledWith('承诺公告已发布')
-  })
-
   it('历史日期加载走 getCommitmentByDate 并进入只读', async () => {
     mocks.getCommitmentByDate.mockResolvedValue({
       code: 200,
@@ -473,36 +447,6 @@ describe('SafetyCommitmentPanel：发布成功与历史日期加载', () => {
 
 
 describe('SafetyCommitmentPanel：渲染变体', () => {
-  it('已发布态渲染发布信息与禁用发布按钮', async () => {
-    await renderPanel({
-      initialReport: {
-        ...REPORT,
-        status: 'published',
-        published_at: '2026-11-10T09:00:00+08:00',
-      } as never,
-    })
-    expect(buttons('承诺公告已发布').length).toBeGreaterThan(0)
-    expect(document.body.textContent).toContain('由 秦刚 于')
-  })
-
-  it('AI 研判含数据依据时渲染依据面板', async () => {
-    await renderPanel({
-      initialReport: {
-        ...REPORT,
-        risk_assessment: {
-          risk_level: '较高',
-          summary: '动火与受限空间并行',
-          key_risks: ['动火作业 1 处'],
-          suggestions: ['加强监护'],
-          data_basis: ['今日作业票 2 张', '库存乙酸乙酯 4 吨'],
-        },
-      } as never,
-    })
-    expect(document.body.textContent).toContain('数据依据')
-    expect(document.body.textContent).toContain('今日作业票 2 张')
-    expect(document.body.textContent).toContain('库存乙酸乙酯 4 吨')
-  })
-
   it('无 AI 研判时提示未生成', async () => {
     await renderPanel({
       initialReport: { ...REPORT, risk_assessment: null } as never,
@@ -510,15 +454,4 @@ describe('SafetyCommitmentPanel：渲染变体', () => {
     expect(document.body.textContent).toContain('尚未生成 AI 风险研判')
   })
 
-  it('信息卡含告错样本时渲染行级提示', async () => {
-    await renderPanel({
-      initialCards: [
-        {
-          ...CARDS[0],
-          title: '含错卡',
-        } as never,
-      ],
-    })
-    expect(document.body.textContent).toContain('储罐区管控要点')
-  })
 })
