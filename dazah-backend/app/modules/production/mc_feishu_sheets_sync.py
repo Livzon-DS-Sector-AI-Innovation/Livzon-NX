@@ -408,6 +408,8 @@ async def _sync_crude(
         async def _write_st_fields(st: Any) -> None:
             """写入发酵液+粗品字段（含 tank-2 收率继承），创建与重同步共用。"""
             _apply_st_fields(st, row, tank_no, pending_st2_data)
+            if tank_no == 2 and pending_st2_data:
+                pending_st2_data.clear()  # 消费后清空，防止串批
 
             # tank-2 继承 tank-1 的收率（同一提炼批共用收率，飞书表格仅填在 tank-1 行）
             if tank_no == 2 and st.yield_rate is None:
@@ -428,7 +430,8 @@ async def _sync_crude(
         )
         existing = (await session.execute(stq)).scalar_one_or_none()
         if existing:
-            # 飞书为数据源：重同步时以非空新值刷新，修复历史错列数据
+            # 飞书为数据源：重同步按源表当前值刷新（空值清空），
+            # 历史错列/错值一次重同步即订正
             cur_st_id = str(existing.id)
             await _write_st_fields(existing)
             return
