@@ -1132,3 +1132,92 @@ async def test_chat_flow_service_real_steps(
 
     await db_session.delete(user)
     await db_session.flush()
+
+
+async def test_chat_flow_submit_seeded_state(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """直接播种完整表单状态后提交：覆盖 submit 建票/指派/推送/清理全链。"""
+
+    from app.core.redis import cache_delete, cache_set
+    from app.modules.safety.models import WorkPermit
+    from app.modules.safety.service import work_permit_notify as wp_notify
+    from app.modules.safety.service.work_permit_card_forms import (
+        base_form_values,
+    )
+    from app.modules.safety.service.work_permit_chat_flow import (
+        ChatFlowService,
+        initiator_sign_keys,
+    )
+
+    pushed: list[str] = []
+
+    async def _stub_raw_card(*_a: Any, **_k: Any) -> str | None:
+        return "om_seeded"
+
+    monkeypatch.setattr(wp_notify, "send_raw_card", _stub_raw_card)
+    monkeypatch.setattr(
+        "app.modules.safety.feishu.notification.send_group_card",
+        lambda *_a, **_k: "om_group",
+    )
+
+    user = User(
+        id=uuid4(),
+        name=f"{_MARK}播种用户{uuid4().hex[:6]}",
+        role="user",
+        status="active",
+        feishu_open_id=f"ou-seed-{uuid4().hex[:8]}",
+    )
+    db_session.add(user)
+    await db_session.flush()
+
+    service = ChatFlowService(db_session, open_id=user.feishu_open_id)
+    permit_type = "blind_plate"
+    values = base_form_values(permit_type, None)
+    values["work_description"] = "播种提交测试"
+    values["type_data"] = { "blind_action": "堵盲板", "equipment_pipe_name": "R101 循环水管线" }
+    values["planned_start"] = "2026-11-12 08:00"
+    values["planned_end"] = "2026-11-12 18:00"
+    values["persons"] = [{ "role": "work_leader", "name": "播种人" }]
+    # 审批节点指派：安全员意见节点指派给另一个测试用户
+    assignee = User(
+        id=uuid4(), name=f"{_MARK}审批人{uuid4().hex[:6]}",
+        role="user", status="active",
+        feishu_open_id=f"ou-assign-{uuid4().hex[:8]}",
+    )
+    db_session.add(assignee)
+    await db_session.flush()
+    values["assignments"] = {
+        "safety_officer_opinion": str(assignee.feishu_open_id),
+        "workshop_leader_opinion": str(assignee.feishu_open_id),
+    }
+    sign: dict[str, str] = {}
+    for key in initiator_sign_keys(permit_type):
+        sign[key] = f"signs/{key}.png"
+    state = {
+        "type": permit_type,
+        "step": 6,
+        "values": values,
+        "sign": sign,
+        "assignments": {},
+    }
+    await cache_set(
+        f"wp_form:{user.feishu_open_id}:{permit_type}",
+        json.dumps(state, ensure_ascii=False, default=str),
+        ex=300,
+    )
+    try:
+        receipt = await service.submit(permit_type)
+        assert receipt
+        permit = (
+            await db_session.scalars(
+                select(WorkPermit).where(
+                    WorkPermit.work_description == "播种提交测试"
+                )
+            )
+        ).first()
+        assert permit is not None, "提交后应真实建票"
+        assert permit.permit_no.startswith("MB-")
+        await service.clear_state(permit_type)
+    finally:
+        await cache_delete(f"wp_form:{user.feishu_open_id}:{permit_type}")

@@ -25,6 +25,12 @@ from app.modules.safety.scheduled import (
     SafetyWorkPermitGasDueGenerator,
 )
 from app.modules.safety.service import work_permit_reminders as reminders
+from app.modules.safety.service.work_permit_notify import (
+    _approval_buttons,
+    _detail_link,
+    _permit_line,
+    _time_text,
+)
 from app.platform.identity.models import User
 
 _WP_MARK = "GAS测试"
@@ -315,3 +321,39 @@ async def test_generators_production_paths(
     finally:
         await db_session.delete(settings)
         await db_session.flush()
+
+
+def test_permit_line_and_time_text() -> None:
+    from datetime import datetime as dt
+
+
+    permit = WorkPermit(
+        permit_no=f"{_WP_MARK}-L1",
+        permit_type="hot_work",
+        permit_level="special",
+        work_description="罐区动火",
+        work_location="罐区东",
+        planned_start_time=dt(2026, 11, 10, 8, 0),
+        planned_end_time=dt(2026, 11, 10, 18, 0),
+    )
+    line = _permit_line(permit)
+    assert "罐区动火" in line
+    assert _time_text(None) == "-"
+    assert _time_text(dt(2026, 11, 10, 8, 0)).startswith("11-10 08:00")
+
+
+def test_approval_buttons_and_detail_link() -> None:
+    from uuid import uuid4
+
+
+    buttons = _approval_buttons(uuid4(), uuid4(), "DH-1")
+    assert isinstance(buttons, list)
+    # 测试环境 FRONTEND_URL 为空时返回空列表
+    from app.core.config import get_settings
+
+    if get_settings().FRONTEND_URL:
+        link = _detail_link(uuid4())
+        assert "/safety/work-permits/" in str(link)
+    else:
+        assert _detail_link(uuid4()) == []
+    assert "/safety/work-permits/" in str(link)
