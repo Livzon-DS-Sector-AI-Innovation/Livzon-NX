@@ -14,6 +14,7 @@ from typing import Any
 
 from sqlalchemy import or_, select
 
+from app.core.maintenance import MaintenanceActiveError, business_activity
 from app.modules.safety.models import SafetyPageFeishuConfig
 from app.modules.safety.service import (
     hazard_due_reminder,
@@ -25,6 +26,7 @@ from app.platform.scheduler import ScheduleConfig, ScheduleStrategy, TaskGenerat
 logger = logging.getLogger(__name__)
 
 MIRROR_SYNC_INTERVAL = timedelta(minutes=15)
+_MIRROR_SYNC_RETRY_SECONDS = 5
 
 
 class SafetyRegulationRadarGenerator(TaskGenerator):
@@ -345,8 +347,13 @@ async def mirror_sync_loop() -> None:
     )
     generator = SafetyPageMirrorSyncGenerator()
     while not _mirror_sync_stop.is_set():
+        delay = MIRROR_SYNC_INTERVAL.total_seconds()
         try:
-            async with page_table.async_session_factory() as session:
+            # 启动阶段放行数据库会话用于初始化；镜像同步须先按调度任务准入。
+            async with (
+                business_activity("scheduler"),
+                page_table.async_session_factory() as session,
+            ):
                 due = await generator.find_due(session)
                 synced: list[str] = []
                 for page_key in due:
@@ -374,11 +381,12 @@ async def mirror_sync_loop() -> None:
                         await retry_pending_inspection_writebacks(session)
                     except Exception:
                         logger.exception("点检记录回写补写失败，等待下一轮")
+        except MaintenanceActiveError:
+            # 维护结束后尽快重试，到期判断仍由 find_due 执行。
+            delay = _MIRROR_SYNC_RETRY_SECONDS
         except Exception:
             logger.exception("页面镜像独立同步本轮失败，等待下一轮")
         try:
-            await asyncio.wait_for(
-                _mirror_sync_stop.wait(), timeout=MIRROR_SYNC_INTERVAL.total_seconds()
-            )
+            await asyncio.wait_for(_mirror_sync_stop.wait(), timeout=delay)
         except TimeoutError:
             pass  # 正常到点进入下一轮
