@@ -5101,6 +5101,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/hr/employees/filter-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 员工档案筛选选项 */
+        get: operations["get_employee_filter_options_api_v1_hr_employees_filter_options_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/hr/employees/max-seq": {
         parameters: {
             query?: never;
@@ -31509,6 +31526,24 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** ApiResponseEnvelope[EmployeeFilterOptions] */
+        ApiResponseEnvelope_EmployeeFilterOptions_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["EmployeeFilterOptions"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** ApiResponseEnvelope[EmployeeTrainingListMemberOut] */
         ApiResponseEnvelope_EmployeeTrainingListMemberOut_: {
             /**
@@ -44765,6 +44800,22 @@ export interface components {
              * @description 工作年限
              */
             work_years?: number | null;
+        };
+        /** EmployeeDepartmentFilterOption */
+        EmployeeDepartmentFilterOption: {
+            /** Department */
+            department: string;
+            /** Sub Department */
+            sub_department: string | null;
+        };
+        /** EmployeeFilterOptions */
+        EmployeeFilterOptions: {
+            /** Departments */
+            departments: components["schemas"]["EmployeeDepartmentFilterOption"][];
+            /** Educations */
+            educations: string[];
+            /** Levels */
+            levels: string[];
         };
         /**
          * EmployeePublicCreate
@@ -83177,6 +83228,18 @@ export interface operations {
                 status?: string | null;
                 /** @description 姓名或工号关键词 */
                 keyword?: string | null;
+                /** @description 一级部门 */
+                first_department?: string | null;
+                /** @description 二级部门 */
+                sub_department?: string | null;
+                /** @description 职务或岗位前缀 */
+                position?: string | null;
+                /** @description 性别 */
+                gender?: string | null;
+                /** @description 职级 */
+                level?: string | null;
+                /** @description 学历 */
+                education?: string | null;
                 page?: number;
                 page_size?: number;
             };
@@ -83444,6 +83507,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_employee_filter_options_api_v1_hr_employees_filter_options_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_EmployeeFilterOptions_"];
                 };
             };
             /** @description Validation Error */

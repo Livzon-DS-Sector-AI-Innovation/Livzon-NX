@@ -1,41 +1,33 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
-import { App, Button, Select, Input } from 'antd'
-import { PlusOutlined, SearchOutlined, SyncOutlined } from '@ant-design/icons'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
+import { App, Button } from 'antd'
+import { PlusOutlined, SyncOutlined } from '@ant-design/icons'
 import { Employee } from '@/types/hr'
 import { syncFromFeishuAction } from '@/actions/hr'
-import { fetchEmployees, HrListReadError } from '@/lib/api/hr'
+import { fetchEmployeeFilterOptions, fetchEmployees, HrListReadError, type EmployeeFilterOptions } from '@/lib/api/hr'
 import { getUserErrorMessage } from '@/lib/user-error'
 import PlatformNotice from '@/components/shared/PlatformNotice'
-import { fetchEmployeeDepartments } from '@/lib/api/client/hr'
-import { useHrStore } from '@/stores/hr'
+import { useListUrlState } from '@/lib/useListUrlState'
 import { usePagePermissions } from '@/hooks/usePagePermissions'
 import EmployeeTable from './EmployeeTable'
 import EmployeeForm from './EmployeeForm'
 import EmployeeDetailDrawer from './EmployeeDetailDrawer'
 import ContractAlertBanner from './ContractAlertBanner'
+import EmployeeProfileFilterBar from './EmployeeProfileFilterBar'
+import { employeeProfileQuery, readEmployeeProfileFilters } from './employeeProfileQuery'
 
 interface EmployeeProfileClientProps {
   initialEmployees: Employee[]
   initialTotal: number
-  initialDepartment?: string
   fetchAction?: typeof fetchEmployees
 }
 
-function useDebounce<T>(value: T, delay: number): T {
-  const [debouncedValue, setDebouncedValue] = useState<T>(value)
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedValue(value), delay)
-    return () => clearTimeout(timer)
-  }, [value, delay])
-  return debouncedValue
-}
+const emptyOptions: EmployeeFilterOptions = { departments: [], levels: [], educations: [] }
 
 export default function EmployeeProfileClient({
   initialEmployees,
   initialTotal,
-  initialDepartment = '',
   fetchAction }: EmployeeProfileClientProps) {
   const { message } = App.useApp()
   const { canOperate: canEditHr, canDelete, canSync } = usePagePermissions(
@@ -46,71 +38,73 @@ export default function EmployeeProfileClient({
   const [loading, setLoading] = useState(false)
   const [employees, setEmployees] = useState<Employee[]>(initialEmployees)
   const [total, setTotal] = useState(initialTotal)
-  const [page, setPage] = useState(1)
-  const [pageSize, setPageSize] = useState(20)
   const [formOpen, setFormOpen] = useState(false)
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null)
   const [viewingEmployee, setViewingEmployee] = useState<Employee | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
-  const [departments, setDepartments] = useState<string[]>([])
-  const [filterDepartment, setFilterDepartment] = useState(initialDepartment)
-  const [filterSubDepartment, setFilterSubDepartment] = useState('')
-  const [filterGender, setFilterGender] = useState('')
-  const [filterLevel, setFilterLevel] = useState('')
-  const [filterPosition, setFilterPosition] = useState('')
-
-  const { searchKeyword, setSearchKeyword, filterStatus, setFilterStatus } = useHrStore()
-  const debouncedSearchKeyword = useDebounce(searchKeyword, 300)
-  const debouncedPosition = useDebounce(filterPosition, 300)
+  const [options, setOptions] = useState(emptyOptions)
+  const [loadingOptions, setLoadingOptions] = useState(true)
+  const [optionsFailed, setOptionsFailed] = useState(false)
+  const [refreshVersion, setRefreshVersion] = useState(0)
+  const listRequestId = useRef(0)
+  const optionsRequestId = useRef(0)
+  const { page, pageSize, params, setListQuery } = useListUrlState()
+  const queryString = params.toString()
+  const filters = useMemo(() => {
+    const query = new URLSearchParams(queryString)
+    return readEmployeeProfileFilters(key => query.get(key))
+  }, [queryString])
 
   const doFetch = fetchAction || fetchEmployees
 
   const loadData = useCallback(async () => {
+    const requestId = ++listRequestId.current
     setLoading(true)
     try {
-      const res = await doFetch({
-        keyword: debouncedSearchKeyword || undefined,
-        department: filterDepartment || undefined,
-        sub_department: filterSubDepartment || undefined,
-        status: filterStatus || undefined,
-        gender: filterGender || undefined,
-        level: filterLevel || undefined,
-        position: debouncedPosition || undefined,
-        page,
-        page_size: pageSize })
+      const res = await doFetch(employeeProfileQuery(filters, page, pageSize))
+      if (requestId !== listRequestId.current) return
       setEmployees(res.data)
       setTotal(res.meta?.total || 0)
       setLoadError(null)
     } catch (err) {
+      if (requestId !== listRequestId.current) return
       setLoadError(getUserErrorMessage(err, '员工档案加载失败，请稍后重试'))
       if (err instanceof HrListReadError && [401, 403].includes(err.status)) {
         setEmployees([])
         setTotal(0)
       }
     } finally {
-      setLoading(false)
+      if (requestId === listRequestId.current) setLoading(false)
     }
-  }, [debouncedSearchKeyword, filterDepartment, filterSubDepartment, filterStatus, filterGender, filterLevel, debouncedPosition, page, pageSize, doFetch])
+  }, [filters, page, pageSize, doFetch])
 
-  const loadDepartments = useCallback(async () => {
+  const loadOptions = useCallback(async () => {
+    const requestId = ++optionsRequestId.current
+    setLoadingOptions(true)
     try {
-      // 部门选项使用员工档案自身的一级部门（员工统计接口的部门分布），
-      // 与员工实际 department 一致（如 AI创新部），避免出现培训口径的部门名
-      const depts = await fetchEmployeeDepartments()
-      setDepartments(depts || [])
+      const result = await fetchEmployeeFilterOptions()
+      if (requestId !== optionsRequestId.current) return
+      setOptions(result)
+      setOptionsFailed(false)
     } catch {
-      setDepartments([])
+      if (requestId !== optionsRequestId.current) return
+      setOptions(emptyOptions)
+      setOptionsFailed(true)
+    } finally {
+      if (requestId === optionsRequestId.current) setLoadingOptions(false)
     }
   }, [])
 
   const handlePageChange = (newPage: number, newPageSize: number) => {
-    setPage(newPage)
-    setPageSize(newPageSize)
+    if (newPageSize === pageSize) {
+      setListQuery({ page: newPage })
+    } else {
+      setListQuery({ page_size: newPageSize }, true)
+    }
   }
 
   const handleRefresh = () => {
-    loadData()
-    loadDepartments()
+    setRefreshVersion(version => version + 1)
   }
 
   const handleSync = async (silent = false) => {
@@ -152,23 +146,33 @@ export default function EmployeeProfileClient({
   }
 
   const handleFormSuccess = () => {
-    loadData()
+    handleRefresh()
   }
 
   // Sync is manual-only — no auto-sync on mount
 
   useEffect(() => {
-    queueMicrotask(loadData)
-  }, [debouncedSearchKeyword, filterDepartment, filterSubDepartment, filterStatus, filterGender, filterLevel, debouncedPosition, page, pageSize, loadData])
+    let active = true
+    queueMicrotask(() => { if (active) void loadData() })
+    return () => {
+      active = false
+      listRequestId.current += 1
+    }
+  }, [loadData, refreshVersion])
 
   useEffect(() => {
-    queueMicrotask(loadDepartments)
-  }, [loadDepartments])
+    let active = true
+    queueMicrotask(() => { if (active) void loadOptions() })
+    return () => {
+      active = false
+      optionsRequestId.current += 1
+    }
+  }, [loadOptions, refreshVersion])
 
-  const departmentOptions = departments.map((d) => ({ value: d, label: d }))
+  const hasFilters = Object.values(filters).some(Boolean)
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 @container">
       <div className="flex justify-between items-center">
         <h1 className="text-[22px] font-semibold text-[var(--color-charcoal)]">
           员工档案
@@ -185,81 +189,15 @@ export default function EmployeeProfileClient({
 
       <ContractAlertBanner />
 
-      {/* 筛选区 - 所有条件同一行 */}
-      <div className="flex flex-nowrap gap-2 items-center">
-        <Input
-          placeholder="姓名/工号"
-          value={searchKeyword}
-          onChange={(e) => setSearchKeyword(e.target.value)}
-          prefix={<SearchOutlined />}
-          style={{ width: 130 }}
-          allowClear
-        />
-        <Input
-          placeholder="岗位"
-          value={filterPosition}
-          onChange={(e) => setFilterPosition(e.target.value)}
-          style={{ width: 100 }}
-          allowClear
-        />
-        <Select
-          placeholder="部门"
-          value={filterDepartment || undefined}
-          onChange={(value) => setFilterDepartment(value || '')}
-          allowClear
-          style={{ width: 110 }}
-          options={departmentOptions}
-          showSearch
-          filterOption={(input, option) =>
-            (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-          }
-        />
-        <Select
-          placeholder="二级部门"
-          value={filterSubDepartment || undefined}
-          onChange={(value) => setFilterSubDepartment(value || '')}
-          allowClear
-          style={{ width: 110 }}
-          showSearch
-        />
-        <Select
-          placeholder="性别"
-          value={filterGender || undefined}
-          onChange={(value) => setFilterGender(value || '')}
-          allowClear
-          style={{ width: 70 }}
-          options={[
-            { value: '男', label: '男' },
-            { value: '女', label: '女' },
-          ]}
-        />
-        <Select
-          placeholder="职级"
-          value={filterLevel || undefined}
-          onChange={(value) => setFilterLevel(value || '')}
-          allowClear
-          style={{ width: 70 }}
-          options={[
-            { value: '高级', label: '高级' },
-            { value: '中级', label: '中级' },
-            { value: '初级', label: '初级' },
-            { value: '员级', label: '员级' },
-          ]}
-        />
-        <Select
-          placeholder="状态"
-          value={filterStatus || undefined}
-          onChange={(value) => setFilterStatus(value || '')}
-          allowClear
-          style={{ width: 90 }}
-          options={[
-            { value: '在职', label: '在职' },
-            { value: '试用期', label: '试用期' },
-            { value: '离职', label: '离职' },
-            { value: '待审批', label: '待审批' },
-          ]}
-        />
-      </div>
+      <EmployeeProfileFilterBar
+        key={JSON.stringify(filters)}
+        filters={filters}
+        options={options}
+        loadingOptions={loadingOptions}
+        optionsFailed={optionsFailed}
+        onRetryOptions={loadOptions}
+        onSubmit={patch => setListQuery(patch, true)}
+      />
 
       {loadError && <PlatformNotice type="error" title={loadError}
         description="员工档案查询未成功。临时故障时保留上次加载的记录；登录失效或权限不足时清空记录，请重新登录或联系管理员。恢复后可重试。"
@@ -270,6 +208,8 @@ export default function EmployeeProfileClient({
         total={total}
         page={page}
         pageSize={pageSize}
+        listLoading={loading}
+        filtered={hasFilters}
         onPageChange={handlePageChange}
         onRefresh={handleRefresh}
         onEdit={handleEdit}

@@ -17,6 +17,16 @@ from app.platform.identity.page_permissions import PagePermissionService
 from app.platform.identity.schemas import EffectivePageGrantOut, PageDataScopeInput
 
 
+def test_employee_filter_options_use_employee_page_query_grant() -> None:
+    binding = page_policy.api_binding_for_route(
+        "GET", "/api/v1/hr/employees/filter-options"
+    )
+    assert binding is not None
+    assert binding.page_keys == ("hr:employee-management:profile",)
+    assert binding.permission == "query"
+    assert binding.scope_adapter == "hr.employee_department"
+
+
 def test_reviewed_modules_have_complete_runtime_page_api_bindings() -> None:
     from app.main import app
 

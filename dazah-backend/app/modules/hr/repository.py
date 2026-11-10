@@ -262,6 +262,8 @@ class EmployeeRepository:
         *,
         department: str | None = None,
         sub_department: str | None = None,
+        first_department: str | None = None,
+        second_department: str | None = None,
         status: str | None = None,
         keyword: str | None = None,
         team: str | None = None,
@@ -326,6 +328,10 @@ class EmployeeRepository:
             )
         if sub_department:
             stmt = stmt.where(Employee.sub_department.ilike(f"{sub_department}%"))
+        if first_department:
+            stmt = stmt.where(func.trim(Employee.department) == first_department)
+        if second_department:
+            stmt = stmt.where(func.trim(Employee.sub_department) == second_department)
         if status == "在职":
             # “在职”映射为非离职/待审批：兼容飞书同步的“正式/试用期/实习生”取值
             stmt = stmt.where(active_employee_status_filter())
@@ -346,11 +352,11 @@ class EmployeeRepository:
         if job_category:
             stmt = stmt.where(Employee.job_category == job_category)
         if level:
-            stmt = stmt.where(Employee.level == level)
+            stmt = stmt.where(func.trim(Employee.level) == level)
         if gender:
             stmt = stmt.where(Employee.gender == gender)
         if education:
-            stmt = stmt.where(Employee.education == education)
+            stmt = stmt.where(func.trim(Employee.education) == education)
         if political_status:
             stmt = stmt.where(Employee.political_status == political_status)
         if marital_status:
@@ -521,20 +527,53 @@ class EmployeeRepository:
         )
         return result.scalar() or 0
 
-    async def get_stats(self, dept_alias_set: set[str] | None = None) -> dict[str, Any]:
-        """Return employee statistics for dashboard."""
-        # 部门级数据隔离：非管理员只统计可见部门
-        dept_scope: ColumnElement[bool] | None = None
+    async def _visible_department_filter(
+        self, dept_alias_set: set[str] | None
+    ) -> ColumnElement[bool] | None:
         page_scope = await employee_page_scope(self.session)
         if page_scope is not None:
             if not page_scope.is_all:
-                dept_scope = employee_department_expression().in_(
+                return employee_department_expression().in_(
                     page_scope.department_names
                 )
         elif dept_alias_set is not None:
-            dept_scope = (Employee.department.in_(dept_alias_set)) | (
+            return (Employee.department.in_(dept_alias_set)) | (
                 Employee.sub_department.in_(dept_alias_set)
             )
+        return None
+
+    async def get_filter_options(
+        self, dept_alias_set: set[str] | None
+    ) -> tuple[list[tuple[str, str | None]], list[str], list[str]]:
+        department = func.trim(Employee.department)
+        sub_department = func.nullif(func.trim(Employee.sub_department), "")
+        level = func.trim(Employee.level)
+        education = func.trim(Employee.education)
+        dept_scope = await self._visible_department_filter(dept_alias_set)
+        conditions: list[ColumnElement[bool]] = [Employee.is_deleted.is_(False)]
+        if dept_scope is not None:
+            conditions.append(dept_scope)
+
+        departments = await self.session.execute(
+            select(department, sub_department)
+            .where(*conditions)
+            .distinct()
+            .order_by(department, sub_department)
+        )
+        levels = await self.session.scalars(
+            select(level).where(*conditions, level != "").distinct().order_by(level)
+        )
+        educations = await self.session.scalars(
+            select(education)
+            .where(*conditions, education != "")
+            .distinct()
+            .order_by(education)
+        )
+        return list(departments.tuples()), list(levels), list(educations)
+
+    async def get_stats(self, dept_alias_set: set[str] | None = None) -> dict[str, Any]:
+        """Return employee statistics for dashboard."""
+        dept_scope = await self._visible_department_filter(dept_alias_set)
         base = select(Employee).where(Employee.is_deleted.is_(False))
         if dept_scope is not None:
             base = base.where(dept_scope)

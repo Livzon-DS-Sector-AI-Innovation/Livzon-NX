@@ -96,6 +96,8 @@ from app.modules.hr.schemas import (
     DepartmentCreate,
     DepartmentUpdate,
     EmployeeCreate,
+    EmployeeDepartmentFilterOption,
+    EmployeeFilterOptions,
     EmployeeUpdate,
     NewHireOut,
     OffboardingRecordCreate,
@@ -485,6 +487,23 @@ class EmployeeService:
     ) -> dict[str, Any]:
         return await self.repo.get_stats(dept_alias_set=dept_alias_set)
 
+    async def get_employee_filter_options(
+        self, dept_alias_set: set[str] | None
+    ) -> EmployeeFilterOptions:
+        departments, levels, educations = await self.repo.get_filter_options(
+            dept_alias_set
+        )
+        return EmployeeFilterOptions(
+            departments=[
+                EmployeeDepartmentFilterOption(
+                    department=department, sub_department=sub
+                )
+                for department, sub in departments
+            ],
+            levels=levels,
+            educations=educations,
+        )
+
     async def create_employee(
         self, data: EmployeeCreate
     ) -> Employee | tuple[Employee, str]:
@@ -685,10 +704,13 @@ class EmployeeService:
         *,
         department: str | None = None,
         sub_department: str | None = None,
+        first_department: str | None = None,
+        second_department: str | None = None,
         status: str | None = None,
         keyword: str | None = None,
         gender: str | None = None,
         level: str | None = None,
+        education: str | None = None,
         position: str | None = None,
         page: int = 1,
         page_size: int = 20,
@@ -699,10 +721,13 @@ class EmployeeService:
         return await self.repo.list_employees(
             department=department,
             sub_department=sub_department,
+            first_department=first_department,
+            second_department=second_department,
             status=status,
             keyword=keyword,
             gender=gender,
             level=level,
+            education=education,
             position=position,
             page=page,
             page_size=page_size,

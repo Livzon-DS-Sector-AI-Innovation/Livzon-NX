@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { fetchEmployees, fetchOffboardingRecords } from './hr'
+import { fetchEmployeeFilterOptions, fetchEmployees, fetchOffboardingRecords } from './hr'
 
 describe('offboarding list API failures', () => {
   afterEach(() => vi.unstubAllGlobals())
@@ -28,7 +28,7 @@ describe('offboarding list API failures', () => {
 
   it('preserves every employee profile filter and page permission context', async () => {
     vi.stubGlobal('window', { location: { pathname: '/hr/profile' } })
-    const filters = { department: '质量部', sub_department: '分析组', status: '在职', keyword: '测试', gender: '男', level: '高级', position: '分析员', page: 2, page_size: 50 }
+    const filters = { first_department: '质量部', sub_department: '分析组', status: '在职', keyword: '测试', gender: '男', level: '高级', education: '本科', position: '分析员', page: 2, page_size: 50 }
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: [], meta: { total: 0 } })))
     vi.stubGlobal('fetch', fetchMock)
     await fetchEmployees(filters)
@@ -36,6 +36,29 @@ describe('offboarding list API failures', () => {
     expect(url.pathname).toBe('/api/v1/hr/employees')
     expect(Object.fromEntries(url.searchParams)).toEqual({ ...filters, page: '2', page_size: '50' })
     expect(fetchMock.mock.calls[0][1].headers).toEqual({ 'X-Dazah-Page-Path': '/hr/profile' })
+  })
+
+  it('reads scoped employee filter options with the employee page context', async () => {
+    vi.stubGlobal('window', { location: { pathname: '/hr/profile' } })
+    const data = { departments: [{ department: '质量部', sub_department: null }], levels: ['中级'], educations: ['本科'] }
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ data })))
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(fetchEmployeeFilterOptions()).resolves.toEqual(data)
+    expect(fetchMock).toHaveBeenCalledWith('/api/v1/hr/employees/filter-options', {
+      cache: 'no-store', headers: { 'X-Dazah-Page-Path': '/hr/profile' },
+    })
+  })
+
+  it('rejects malformed filter options', async () => {
+    const data = { departments: [{ department: '质量部', sub_department: 42 }], levels: [], educations: ['本科'] }
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ data }))))
+    await expect(fetchEmployeeFilterOptions()).rejects.toMatchObject({ status: 502 })
+  })
+
+  it('rejects a non-text education option', async () => {
+    const data = { departments: [], levels: [], educations: [42] }
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ data }))))
+    await expect(fetchEmployeeFilterOptions()).rejects.toMatchObject({ status: 502 })
   })
 
   it.each([401, 403, 500])('employee reads retain HTTP %s without upstream diagnostics', async status => {

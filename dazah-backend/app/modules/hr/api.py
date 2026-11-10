@@ -4,7 +4,7 @@ import zipfile
 from datetime import UTC, date, datetime
 from io import BytesIO
 from pathlib import Path
-from typing import Any, cast
+from typing import Annotated, Any, cast
 from urllib.parse import quote
 from uuid import UUID, uuid4
 
@@ -106,6 +106,7 @@ from app.modules.hr.schemas import (
     DeptApprovalConfigUpdate,
     EmailConfigUpdate,
     EmployeeCreate,
+    EmployeeFilterOptions,
     EmployeePublicCreate,
     EmployeeResponse,
     EmployeeTrainingListMemberCreate,
@@ -494,6 +495,18 @@ async def list_employees(
     department: str | None = Query(None, description="部门筛选"),
     status: str | None = Query(None, description="状态筛选"),
     keyword: str | None = Query(None, description="姓名或工号关键词"),
+    first_department: Annotated[
+        str | None, Query(max_length=64, description="一级部门")
+    ] = None,
+    sub_department: Annotated[
+        str | None, Query(max_length=64, description="二级部门")
+    ] = None,
+    position: Annotated[
+        str | None, Query(max_length=64, description="职务或岗位前缀")
+    ] = None,
+    gender: Annotated[str | None, Query(max_length=8, description="性别")] = None,
+    level: Annotated[str | None, Query(max_length=32, description="职级")] = None,
+    education: Annotated[str | None, Query(max_length=16, description="学历")] = None,
     page_params: PageParams = Depends(),
     db: AsyncSession = Depends(get_db),
     service: EmployeeService = Depends(get_employee_service),
@@ -505,6 +518,12 @@ async def list_employees(
         department=department,
         status=status,
         keyword=keyword,
+        first_department=(first_department or "").strip() or None,
+        second_department=(sub_department or "").strip() or None,
+        position=(position or "").strip() or None,
+        gender=(gender or "").strip() or None,
+        level=(level or "").strip() or None,
+        education=(education or "").strip() or None,
         page=page_params.page,
         page_size=page_params.page_size,
         dept_alias_set=alias_set,
@@ -518,6 +537,18 @@ async def list_employees(
         page_size=page_params.page_size,
         total=total,
     )
+
+
+@router.get("/employees/filter-options", summary="员工档案筛选选项")
+async def get_employee_filter_options(
+    db: AsyncSession = Depends(get_db),
+    service: EmployeeService = Depends(get_employee_service),
+    current_user: CurrentUser = None,
+) -> ApiResponseEnvelope[EmployeeFilterOptions]:
+    await _assert_employee_page_access(db, current_user)
+    alias_set = await _resolve_visible_scope(db, current_user)
+    options = await service.get_employee_filter_options(alias_set)
+    return ApiResponseEnvelope(data=options)
 
 
 @router.get("/employees/stats", summary="员工统计")
