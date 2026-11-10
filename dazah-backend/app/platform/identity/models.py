@@ -11,6 +11,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -273,7 +274,12 @@ class Role(BaseModel):
 
     __tablename__ = "roles"
     __table_args__ = (
-        UniqueConstraint("code", name="uq_identity_roles_code"),
+        Index(
+            "uq_identity_roles_active_code",
+            "code",
+            unique=True,
+            postgresql_where=text("is_deleted = false"),
+        ),
         {"schema": "identity"},
     )
 

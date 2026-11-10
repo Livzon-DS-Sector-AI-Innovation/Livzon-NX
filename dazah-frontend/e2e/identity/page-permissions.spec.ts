@@ -1,6 +1,37 @@
 import { expect, test } from '@playwright/test'
 
 test.describe('页面最小授权', () => {
+  for (const appearance of ['light', 'dark']) {
+    test(`系统设置的用户角色可检索首批名单外的账号 ${appearance}`, async ({ context, page }) => {
+      await context.addCookies([{ name: 'auth_token', value: 'effective-admin', url: 'http://127.0.0.1:3200' }])
+      await page.addInitScript((mode) => localStorage.setItem('dazah-appearance', mode), appearance)
+      await page.route(/\/api\/v1\/identity\/admin\/users\?/, async (route) => {
+        const params = new URL(route.request().url()).searchParams
+        const match = params.get('keyword') === 'late-account@example.test'
+        await route.fulfill({ json: { code: 200, data: {
+          total: match ? 1 : 501,
+          items: [{ id: match ? 'user-501' : 'user-1', name: match ? '后页用户' : '首批用户', roles: [] }],
+        } } })
+      })
+      await page.goto('/settings?tab=permissions')
+      await page.getByRole('button', { name: '用户角色', exact: true }).click()
+      await expect(page.locator('html')).toHaveAttribute('data-theme', appearance)
+      await expect(page.getByRole('row', { name: /首批用户/ })).toBeVisible()
+
+      const search = page.getByPlaceholder('按姓名、部门、账号、邮箱、手机号或工号搜索')
+      await search.fill('late-account@example.test')
+      const request = page.waitForRequest((item) => item.url().includes('/identity/admin/users?')
+        && new URL(item.url()).searchParams.has('keyword'))
+      await search.press('Enter')
+      const params = new URL((await request).url()).searchParams
+      expect(Object.fromEntries(params)).toEqual({ keyword: 'late-account@example.test', offset: '0', limit: '20' })
+      const matchedRow = page.getByRole('row', { name: /后页用户/ })
+      await expect(matchedRow).toBeVisible()
+      await expect(matchedRow.getByRole('button', { name: '分配角色' })).toBeEnabled()
+      await expect(page.getByRole('row', { name: /首批用户/ })).toHaveCount(0)
+    })
+  }
+
   for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
     test(`有效权限只读展示自动模块入口 ${viewport.width}`, async ({ context, page }, testInfo) => {
       await page.setViewportSize(viewport)

@@ -1,16 +1,16 @@
 'use client'
 
 import { useEffect } from 'react'
-import { Button, Space } from 'antd'
+import { Button } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
 import { getUserErrorMessage } from '@/lib/user-error'
 
 export default function DashboardErrorPage({
   error,
-  unstable_retry,
+  retry,
 }: {
   error: Error & { digest?: string }
-  unstable_retry: () => void
+  retry: () => void
 }) {
   useEffect(() => {
     console.error('[仪表盘] 页面渲染错误:', error)
@@ -22,7 +22,7 @@ export default function DashboardErrorPage({
         type="error"
         showIcon
         title={"页面加载失败：" + getUserErrorMessage(error, "请重试或刷新页面")}
-        action={<Space wrap><Button size="small" onClick={() => unstable_retry()}>重试</Button><Button size="small" onClick={() => window.location.reload()}>刷新页面</Button></Space>}
+        action={<Button size="small" onClick={retry}>重试</Button>}
         description={
           <div>
             <p style={{ margin: '4px 0' }}>{getUserErrorMessage(error, '页面加载失败，请重试或刷新页面')}</p>

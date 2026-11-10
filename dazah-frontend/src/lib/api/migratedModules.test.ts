@@ -126,6 +126,21 @@ describe('migrated module browser API contracts', () => {
     )
   })
 
+  it('replaces the expired admin session with the login document only on 401', async () => {
+    const replace = vi.spyOn(window.location, 'replace').mockImplementation(() => {})
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ message: '禁止访问' }), { status: 403 }))
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 401 }))
+    try {
+      await expect(adminApi.fetchAdminUsers()).rejects.toThrow('禁止访问')
+      expect(replace).not.toHaveBeenCalled()
+      await expect(adminApi.fetchAdminUsers()).rejects.toThrow('未登录或登录已过期')
+      expect(replace).toHaveBeenCalledExactlyOnceWith('/login')
+    } finally {
+      replace.mockRestore()
+    }
+  })
+
   it('covers optional query parameters, exports, and defensive search handling', async () => {
     const fetchMock = vi.mocked(fetch)
     fetchMock.mockImplementation(async (input) => {

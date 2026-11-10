@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { Button, Input, Table, Tag, Card, App, Space, Popconfirm, Select } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
-import { PlayCircleOutlined, ReloadOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons'
+import { PlayCircleOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons'
 import { ProcessOptimizationWorkflowPage } from './ProcessOptimizationWorkflowPage'
 import { fetchOptimizations, createOptimization, deleteOptimization } from '@/lib/api/rd'
 import { fetchRoutes } from '@/lib/api/rd'
@@ -41,6 +41,7 @@ export function ProcessOptimizationPage({ initialOptimizations, initialTotal }: 
   const [creating, setCreating] = useState(false)
   const [apiAvailable, setApiAvailable] = useState(true)
   const [savedWorkflows, setSavedWorkflows] = useState<Map<string, { updatedAt: string; step: number }>>(new Map())
+  const latestRequest = useRef(0)
 
   // 创建表单状态
   const [showCreateForm, setShowCreateForm] = useState(false)
@@ -51,16 +52,18 @@ export function ProcessOptimizationPage({ initialOptimizations, initialTotal }: 
   const [loadingRoutes, setLoadingRoutes] = useState(false)
 
   const loadOptimizations = useCallback(async () => {
+    const request = ++latestRequest.current
     setLoading(true)
     try {
       const result = await fetchOptimizations({ page, page_size: pageSize })
+      if (request !== latestRequest.current) return
       setOptimizations(result.items)
       setTotal(result.total)
       setApiAvailable(true)
     } catch {
-      setApiAvailable(false)
+      if (request === latestRequest.current) setApiAvailable(false)
     } finally {
-      setLoading(false)
+      if (request === latestRequest.current) setLoading(false)
     }
   }, [page, pageSize])
 
@@ -70,6 +73,7 @@ export function ProcessOptimizationPage({ initialOptimizations, initialTotal }: 
 
   // 加载已保存的工作流状态
   useEffect(() => {
+    if (workflowOptimization) return
     const saved = new Map<string, { updatedAt: string; step: number }>()
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i)
@@ -84,8 +88,8 @@ export function ProcessOptimizationPage({ initialOptimizations, initialTotal }: 
         } catch {}
       }
     }
-    setSavedWorkflows(saved)
-  }, [])
+    queueMicrotask(() => setSavedWorkflows(saved))
+  }, [workflowOptimization])
 
   // 加载可用的打通路线记录
   const loadAvailableRoutes = async () => {
@@ -157,8 +161,7 @@ export function ProcessOptimizationPage({ initialOptimizations, initialTotal }: 
   // 返回入口页
   const handleBackToList = () => {
     setWorkflowOptimization(null)
-    loadOptimizations()
-    window.location.reload()
+    void loadOptimizations()
   }
 
   if (workflowOptimization) {

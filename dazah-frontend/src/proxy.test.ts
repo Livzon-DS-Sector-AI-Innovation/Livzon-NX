@@ -31,6 +31,24 @@ it('重新登录后使用新会话恢复设备页访问', async () => {
   expect(fetchMock).toHaveBeenCalledOnce()
 })
 
+it('从设备工作台 URL 提取权限上下文，并忽略客户端伪造的模块头', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => new Response(JSON.stringify({ data: {
+    role: 'user', module_codes: ['equipment'], page_permissions: [
+      { page_key: 'equipment:assets', module_code: 'equipment', permissions: ['access', 'query'] },
+    ],
+  } }))))
+  const root = 'https://frontend.test/equipment'
+  const allowed = await proxy(new NextRequest(`${root}?module=assets`, {
+    headers: { 'X-Dazah-Equipment-Module': 'maintenance' },
+  }))
+  expect(allowed.headers.get('x-middleware-request-x-dazah-equipment-module')).toBe('assets')
+  expect(allowed.headers.get('x-middleware-request-x-dazah-page-path')).toBe('/equipment')
+  const denied = await proxy(new NextRequest(`${root}?module=maintenance`, {
+    headers: { 'X-Dazah-Equipment-Module': 'assets' },
+  }))
+  expect(denied.status).toBe(403)
+})
+
 it('retains the exact Feishu energy task destination through login', async () => {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { status: 401 })))
   const result = await proxy(new NextRequest('http://frontend.test/energy/entry?task=task-id&source=feishu'))
