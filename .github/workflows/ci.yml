@@ -352,6 +352,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Generate API contract for unit tests
+        run: pnpm generate:api
+
       - name: Run Vitest shard with coverage
         env:
           SHARD: ${{ matrix.shard }}
@@ -1338,7 +1341,7 @@ jobs:
 
       - name: Install Hermes contract dependencies
         shell: *ci_tools_shell
-        run: python3 ../.github/scripts/ci_support.py install hermes
+        run: python3 .github/scripts/ci_support.py install hermes
 
       - name: Run Hermes adapter contracts
         shell: *ci_tools_shell

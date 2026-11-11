@@ -172,6 +172,16 @@ class GateTests(unittest.TestCase):
                 )
                 export = next(s for s in steps if s.get("id") == "phases")
                 self.assertEqual(export["if"], "${{ always() }}")
+        install_hermes = next(
+            step
+            for step in jobs["hermes-contract"]["steps"]
+            if step["name"] == "Install Hermes contract dependencies"
+        )
+        self.assertNotIn("working-directory", install_hermes)
+        self.assertEqual(
+            install_hermes["run"],
+            "python3 .github/scripts/ci_support.py install hermes",
+        )
         contract = str(jobs["hermes-contract"])
         for filename in (
             "test_agent_v2_contracts.py",
@@ -411,6 +421,8 @@ class GateTests(unittest.TestCase):
             'pnpm test:coverage --shard="$SHARD/3" --reporter=blob', shard["run"]
         )
         self.assertEqual(shard["env"]["SHARD"], "${{ matrix.shard }}")
+        generate = next(s for s in unit["steps"] if s.get("run") == "pnpm generate:api")
+        self.assertLess(unit["steps"].index(generate), unit["steps"].index(shard))
         upload = next(
             step
             for step in unit["steps"]
