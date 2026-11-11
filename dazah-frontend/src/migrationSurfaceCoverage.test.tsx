@@ -113,6 +113,13 @@ function propsFor(path: string, exportName: string): Record<string, unknown> {
   if (path.includes('DepartmentTable')) Object.assign(props, { departments: [], orgTreeData: [], filters: { keyword: '', parentId: null, leaderName: '' }, allDepartments: [] })
   if (path.includes('DepartmentTreeView')) props.departments = []
   if (path.includes('EmployeeDashboardClient')) props.stats = { total: 0, contract_expiring_count: 0, department_distribution: [], status_distribution: {}, expiring_contracts: [] }
+  if (path.endsWith('/EmployeeProfileFilterBar.tsx')) Object.assign(props, {
+    filters: { department: '质量部' },
+    options: { departments: [{ department: '质量部', sub_department: '分析组' }], levels: ['中级'], educations: ['本科'] },
+    loadingOptions: false,
+    optionsFailed: false,
+    onRetryOptions: vi.fn(),
+  })
   if (path.includes('RosterClient')) Object.assign(props, { initialEmployees: [], initialTotal: 0 })
   if (path.includes('ChangeActionPlanTable')) Object.assign(props, { items: [{ id: 'plan-1', change_code: 'CHG-1', project_name: '项目A', related_work: '验证', owner_name: '张三', status: '未启动' }], filters: { change_code: '', project_name: '', related_work: '', owner_name: '', status: '' }, loading: false, page: 1, pageSize: 20 })
   if (path.includes('DeviationAiConversationPanel')) props.deviation = { id: 'deviation-1', deviation_code: 'DEV-1', title: '偏差', status: 'open' }

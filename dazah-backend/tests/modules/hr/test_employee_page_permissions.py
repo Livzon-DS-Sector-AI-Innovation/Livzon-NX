@@ -129,6 +129,9 @@ async def test_employee_http_crud_stats_and_sync_share_real_department_scope(
         department="总部门",
         sub_department=own_name,
         position="操作工",
+        gender="女",
+        level="中级",
+        education="本科",
         status="在职",
         feishu_record_id="test-r1",
     )
@@ -138,6 +141,8 @@ async def test_employee_http_crud_stats_and_sync_share_real_department_scope(
         department=own_name,
         sub_department=other_name,
         position="操作工",
+        level="外部职级",
+        education="博士",
         status="在职",
     )
     child = Employee(
@@ -146,6 +151,7 @@ async def test_employee_http_crud_stats_and_sync_share_real_department_scope(
         department=own_name,
         sub_department=child_name,
         position="操作工",
+        education="大专",
         status="在职",
     )
     db_session.add_all([actor, own, other, child])
@@ -181,6 +187,45 @@ async def test_employee_http_crud_stats_and_sync_share_real_department_scope(
         assert stats.json()["data"]["total"] == 2
         filtered = await client.get(base, params={"department": own_name})
         assert [row["id"] for row in filtered.json()["data"]] == [str(own.id)]
+        options = await client.get(base + "/filter-options")
+        assert options.status_code == 200, options.text
+        filter_options = options.json()["data"]
+        assert {
+            (row["department"], row["sub_department"])
+            for row in filter_options["departments"]
+        } == {(own_name, child_name), ("总部门", own_name)}
+        assert filter_options["levels"] == ["中级"]
+        assert set(filter_options["educations"]) == {"本科", "大专"}
+        params = {
+            "first_department": "总部门",
+            "sub_department": own_name,
+            "position": "操作",
+            "gender": "女",
+            "level": "中级",
+            "education": "本科",
+            "page_size": 1,
+        }
+        filtered = await client.get(base, params=params)
+        assert filtered.status_code == 200, filtered.text
+        assert [row["id"] for row in filtered.json()["data"]] == [str(own.id)]
+        assert filtered.json()["meta"]["total"] == 1
+        for key, value in [
+            ("first_department", own_name),
+            ("sub_department", other_name),
+            ("sub_department", own_name[:-1]),
+            ("position", "工程"),
+            ("gender", "男"),
+            ("level", "高级"),
+            ("education", "大专"),
+            ("education", "博士"),
+        ]:
+            empty = await client.get(base, params={**params, key: value})
+            assert empty.status_code == 200, empty.text
+            assert empty.json()["meta"]["total"] == 0
+        invalid = await client.get(base, params={"position": "岗" * 65})
+        assert invalid.status_code == 422
+        invalid_education = await client.get(base, params={"education": "学" * 17})
+        assert invalid_education.status_code == 422
         assert (
             await client.get(base, params={"department": other_name})
         ).status_code == 403
@@ -270,6 +315,7 @@ async def test_employee_http_crud_stats_and_sync_share_real_department_scope(
     ("method", "suffix", "permissions", "actions", "expected"),
     [
         ("GET", "", ["access"], [], 403),
+        ("GET", "/filter-options", ["access"], [], 403),
         ("PUT", "/00000000-0000-0000-0000-000000000001", ["access", "query"], [], 403),
         (
             "DELETE",

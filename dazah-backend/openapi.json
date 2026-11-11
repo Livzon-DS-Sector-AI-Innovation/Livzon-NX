@@ -6204,6 +6204,40 @@
         "title": "ApiResponseEnvelope[EmergencySupplyResponse]",
         "type": "object"
       },
+      "ApiResponseEnvelope_EmployeeFilterOptions_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/EmployeeFilterOptions"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[EmployeeFilterOptions]",
+        "type": "object"
+      },
       "ApiResponseEnvelope_EmployeeTrainingListMemberOut_": {
         "properties": {
           "code": {
@@ -38617,6 +38651,63 @@
           "hire_date"
         ],
         "title": "EmployeeCreate",
+        "type": "object"
+      },
+      "EmployeeDepartmentFilterOption": {
+        "properties": {
+          "department": {
+            "title": "Department",
+            "type": "string"
+          },
+          "sub_department": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sub Department"
+          }
+        },
+        "required": [
+          "department",
+          "sub_department"
+        ],
+        "title": "EmployeeDepartmentFilterOption",
+        "type": "object"
+      },
+      "EmployeeFilterOptions": {
+        "properties": {
+          "departments": {
+            "items": {
+              "$ref": "#/components/schemas/EmployeeDepartmentFilterOption"
+            },
+            "title": "Departments",
+            "type": "array"
+          },
+          "educations": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Educations",
+            "type": "array"
+          },
+          "levels": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Levels",
+            "type": "array"
+          }
+        },
+        "required": [
+          "departments",
+          "levels",
+          "educations"
+        ],
+        "title": "EmployeeFilterOptions",
         "type": "object"
       },
       "EmployeePublicCreate": {
@@ -128241,6 +128332,120 @@
             }
           },
           {
+            "description": "一级部门",
+            "in": "query",
+            "name": "first_department",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "一级部门",
+              "title": "First Department"
+            }
+          },
+          {
+            "description": "二级部门",
+            "in": "query",
+            "name": "sub_department",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "二级部门",
+              "title": "Sub Department"
+            }
+          },
+          {
+            "description": "职务或岗位前缀",
+            "in": "query",
+            "name": "position",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "职务或岗位前缀",
+              "title": "Position"
+            }
+          },
+          {
+            "description": "性别",
+            "in": "query",
+            "name": "gender",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 8,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "性别",
+              "title": "Gender"
+            }
+          },
+          {
+            "description": "职级",
+            "in": "query",
+            "name": "level",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 32,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "职级",
+              "title": "Level"
+            }
+          },
+          {
+            "description": "学历",
+            "in": "query",
+            "name": "education",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 16,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "学历",
+              "title": "Education"
+            }
+          },
+          {
             "in": "query",
             "name": "page",
             "required": false,
@@ -128783,6 +128988,55 @@
           }
         },
         "summary": "保存导入的模板配置",
+        "tags": [
+          "人事管理"
+        ]
+      }
+    },
+    "/api/v1/hr/employees/filter-options": {
+      "get": {
+        "operationId": "get_employee_filter_options_api_v1_hr_employees_filter_options_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_EmployeeFilterOptions_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "员工档案筛选选项",
         "tags": [
           "人事管理"
         ]
