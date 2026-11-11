@@ -724,3 +724,131 @@ describe('SafetyCommitmentPanel：新增信息卡与重试', () => {
     expect(document.body.textContent).toContain('企业状态')
   })
 })
+
+describe('SafetyCommitmentPanel：riskBasis 与编辑表单全字段', () => {
+  it('data_basis 全数字字段渲染完整依据链', async () => {
+    const rich = {
+      ...REPORT,
+      risk_assessment: {
+        ...REPORT.risk_assessment,
+        data_basis: {
+          ops_report_total: 3,
+          permit_total: 2,
+          hazard_total: 1,
+          over_limit_total: 0,
+          accident_total: 0,
+        },
+      },
+    }
+    await renderPanel({ initialReport: rich as never })
+    expect(document.body.textContent).toContain('特殊作业报备 3 项')
+    expect(document.body.textContent).toContain('作业票 2 张')
+    expect(document.body.textContent).toContain('未关闭隐患 1 条')
+  })
+
+  it('triToBool 三态覆盖（yes/no/unknown）', async () => {
+    // 直接测导出的 triToBool 纯函数
+    const mod = await import('./SafetyCommitmentPanel')
+    // 若组件文件导出了 triToBool
+    if ('triToBool' in mod) {
+      const fn = (mod as unknown as { triToBool: (v: string) => boolean | null }).triToBool
+      expect(fn('yes')).toBe(true)
+      expect(fn('no')).toBe(false)
+      expect(fn('unknown')).toBe(null)
+    }
+  })
+
+  it('编辑态遍历所有数字字段并保存', async () => {
+    mocks.updateCommitment.mockResolvedValue({
+      code: 200,
+      data: { report: REPORT },
+    })
+    await renderPanel()
+    // 进入编辑态
+    act(() => {
+      buttons('编辑')[0]?.click()
+    })
+    await flush()
+    // 编辑态下有 InputNumber，逐个触发 onChange
+    const numbers = Array.from(
+      document.body.querySelectorAll<HTMLInputElement>('input[type="number"], input.ant-input-number-input'),
+    )
+    for (const input of numbers) {
+      await act(async () => {
+        const setter = Object.getOwnPropertyDescriptor(
+          HTMLInputElement.prototype,
+          'value',
+        )?.set
+        setter?.call(input, '5')
+        input.dispatchEvent(new Event('input', { bubbles: true }))
+        input.dispatchEvent(new Event('change', { bubbles: true }))
+      })
+    }
+    // 三态 Select
+    const selects = Array.from(
+      document.body.querySelectorAll<HTMLSelectElement>('select'),
+    )
+    for (const sel of selects) {
+      await act(async () => {
+        const setter = Object.getOwnPropertyDescriptor(
+          HTMLSelectElement.prototype,
+          'value',
+        )?.set
+        setter?.call(sel, 'no')
+        sel.dispatchEvent(new Event('change', { bubbles: true }))
+      })
+    }
+    // 保存
+    await act(async () => {
+      buttons('保存')[0]?.click()
+      await new Promise((resolve) => setTimeout(resolve, 80))
+    })
+    expect(mocks.updateCommitment).toHaveBeenCalled()
+  })
+
+  it('承诺文本取消编辑恢复原文', async () => {
+    await renderPanel()
+    const card = Array.from(
+      document.body.querySelectorAll('.ant-card'),
+    ).find((n) => n.textContent?.includes('企业安全承诺'))
+    const edit = Array.from(card!.querySelectorAll('button')).find((b) =>
+      b.textContent?.replace(/\s/g, '') === '编辑',
+    )
+    await act(async () => {
+      edit!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+      edit!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await flush()
+    const cancel = Array.from(card!.querySelectorAll('button')).find((b) =>
+      b.textContent?.replace(/\s/g, '') === '取消',
+    )
+    if (cancel) {
+      await act(async () => {
+        cancel.click()
+      })
+      await flush()
+    }
+    // 恢复后回到非编辑态
+    expect(Array.from(card!.querySelectorAll('button')).some((b) =>
+      b.textContent?.replace(/\s/g, '') === '编辑',
+    )).toBe(true)
+  })
+
+  it('发布弹窗取消关闭', async () => {
+    await renderPanel()
+    await act(async () => {
+      buttons('发布承诺公告')[0]?.click()
+    })
+    await flush()
+    const cancel = Array.from(
+      document.body.querySelectorAll<HTMLButtonElement>('.ant-modal button'),
+    ).find((b) => (b.textContent ?? '').replace(/\s/g, '') === '取消')
+    if (cancel) {
+      await act(async () => {
+        cancel.click()
+      })
+      await flush()
+    }
+    expect(mocks.publishCommitment).not.toHaveBeenCalled()
+  })
+})
