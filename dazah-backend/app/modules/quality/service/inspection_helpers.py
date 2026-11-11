@@ -185,9 +185,7 @@ def _get_link_record_ids(record: dict[str, Any], field_name: str) -> list[str]:
     fields = record.get("fields") or {}
     value = fields.get(field_name)
     if isinstance(value, dict):
-        record_ids = value.get("link_record_ids")
-        if isinstance(record_ids, list):
-            return [str(item) for item in record_ids if item]
+        value = value.get("link_record_ids")
     if isinstance(value, list):
         return [str(item) for item in value if item]
     return []
