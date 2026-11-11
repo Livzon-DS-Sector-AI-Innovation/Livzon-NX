@@ -439,15 +439,17 @@ async def test_extraction_scope_cannot_change_fermentation_actuals(monkeypatch):
             "/api/v1/production/tank-maintenance",
             {"tank_no": "302A", "reason": "检修"},
         ),
-        (
+        pytest.param(
             "DELETE",
             f"/api/v1/production/tank-maintenance/{uuid4()}",
             None,
+            id="delete-tank-maintenance",
         ),
-        (
+        pytest.param(
             "DELETE",
             f"/api/v1/production/fermentation-batch-actuals/{uuid4()}",
             None,
+            id="delete-fermentation-batch-actual",
         ),
         (
             "POST",

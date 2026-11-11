@@ -193,7 +193,7 @@ HTTP 500 只用于未预期的服务端故障，不得把可预期的业务分�
 - 修改 API 路由、请求/响应 Schema、权限或错误映射时，运行受影响接口的 `AsyncClient` 测试，覆盖本次变化涉及的成功路径和最可能失败路径；仅当契约发生变化时增加根目录契约生成及前端类型核对。
 - 修改 Model、migration 或模块 schema 时，增加独立测试库上的 Alembic head、相关升级/降级和受影响数据库测试；没有数据库结构变化时不运行完整 migration 流程。
 - 修改依赖、锁文件、Dockerfile、系统依赖、启动命令或运行时配置时，增加同步、启动或 Docker Build 中与变化直接相关的检查。
-- 影响范围无法可靠收敛，或触及应用启动、共享基础设施、全局路由、数据库基线、测试基础设施并可能波及大部分应用时，扩大本地相关测试范围；完整推送合并流程的全量 Pytest 与覆盖率由最新 PR head 的 `Backend Integration` 执行，本地不重复运行作为推送前门槛。仅本地交付、CI 失败复现或 CI 无法覆盖的本地风险需要时，运行相应完整后端门禁。
+- 影响范围无法可靠收敛，或触及应用启动、共享基础设施、全局路由、数据库基线、测试基础设施并可能波及大部分应用时，扩大本地相关测试范围。完整推送合并流程的全量 Pytest 与覆盖率由最新 PR head 的 `Backend Integration` 分片及 `Backend Coverage` 汇总验证，本地不重复运行作为推送前门槛。仅本地交付、CI 失败复现或 CI 无法覆盖的本地风险需要时，运行相应完整后端门禁。
 
 局部代码通常从以下定向检查中选择：
 
@@ -206,7 +206,11 @@ uv run --no-sync mypy <相关路径>
 根据风险和实际影响扩大验证范围。CI 对应关系如下：
 
 - `Backend Quality`：权限生命周期、V2 残留扫描、变更文件 Ruff、编译、core Mypy，以及变更 `app/` Python 文件及其依赖链的 Mypy；不启动数据库或重复执行单测。增量 Mypy 使用默认依赖诊断，不得通过 `silent`、`skip` 或忽略导入错误绕过门禁；Git 变更范围解析失败必须使门禁失败。本地可运行 `uv run --no-sync python scripts/mypy_changed.py` 检查未提交及未跟踪的运行代码。
-- `Backend Integration`：在独立 PostgreSQL/Redis 环境确认单一 Alembic head，执行迁移、模型漂移和 OpenAPI 检查，然后一次运行全量 Pytest（包含 unit/core）和完整覆盖率门禁。
+- `Backend Migrations and Contracts` 在空测试库验证单一 Alembic head、迁移、模型漂移、
+  FastAPI import 和 OpenAPI。
+- `Backend Integration` 分四片运行全量 Pytest（包含 unit/core）。各片使用独立
+  PostgreSQL/Redis，先迁移本片测试库并初始化菜单目录。`Backend Coverage` 核对全部用例恰好完成一次，
+  合并原始分支覆盖率数据并执行原有三项阈值。
 - `Backend Image Verify`：构建后端交付镜像，执行安全扫描、隔离数据库迁移和容器健康检查。
 - `CI Gate` 汇总本次范围内的必需任务；全量测试仍由 Integration 保证，不因 Quality 移除重复单测而减少覆盖。
 
@@ -218,7 +222,7 @@ uv run --no-sync mypy <相关路径>
 ```powershell
 uv sync --frozen --extra dev --group dev
 uv run --no-sync ruff check <本次变更的 Python 路径>
-uv run --no-sync pytest --cov=app --cov-branch --cov-report=term-missing --cov-report=xml
+uv run --no-sync pytest --cov --cov-branch --cov-report=term-missing --cov-report=xml
 uv run --no-sync python ../scripts/check-coverage-floor.py --coverage-file coverage.xml --min-lines 60 --min-branches 33.5
 uv run --no-sync python ../scripts/check-diff-coverage.py --coverage-file coverage.xml --path-prefix dazah-backend/app --minimum 80
 # 本地开发镜像；交付镜像仅在 CI 或明确授权的隔离交付验证中构建

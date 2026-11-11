@@ -8,12 +8,16 @@
 - person 类型经 /training/dept-mappings 现有端点全流程可维护。
 """
 
+from collections.abc import AsyncIterator
 from datetime import date
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.database import get_db
+from app.main import app
 from app.modules.hr import training_dept_resolver
 from app.modules.hr.schemas import TrainingLedgerCreate
 from app.modules.hr.service import TrainingLedgerService
@@ -21,6 +25,8 @@ from app.modules.hr.training_dept_resolver import (
     get_person_overrides,
     invalidate_training_dept_mapping_cache,
 )
+from app.platform.identity.deps import get_current_user
+from app.platform.identity.models import User
 
 _MC = "201二车间（MC）"
 _DR = "201二车间（DR）"
@@ -38,6 +44,24 @@ def _patch_resolver_mappings(monkeypatch):
     invalidate_training_dept_mapping_cache()
     yield
     invalidate_training_dept_mapping_cache()
+
+
+@pytest.fixture
+async def persisted_mapping_author(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> AsyncIterator[None]:
+    """Make the request's test identity visible to the mapping's audit foreign keys."""
+    user = await app.dependency_overrides[get_current_user]()
+    if await db_session.get(User, user.id) is None:
+        db_session.add(user)
+        await db_session.flush()
+
+    async def shared_test_session() -> AsyncIterator[AsyncSession]:
+        yield db_session
+
+    with monkeypatch.context() as overrides:
+        overrides.setitem(app.dependency_overrides, get_db, shared_test_session)
+        yield
 
 
 def _mapping_list() -> list[dict]:
@@ -165,6 +189,7 @@ async def test_guard_does_not_intercept_overridden_trainees():
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("persisted_mapping_author")
 async def test_person_mapping_crud_via_endpoint(client: AsyncClient):
     """person 类型经现有映射端点全流程：创建 → 列表可见 → 停用。"""
     url = "/api/v1/hr/training/dept-mappings"
