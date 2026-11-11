@@ -98,7 +98,9 @@ async def test_ordinary_admin_keeps_business_access_but_cannot_open_system_setti
         join_transaction_mode="create_savepoint",
         expire_on_commit=False,
     ) as db:
-        actor = User(name="系统管理员", role="admin")
+        actor = User(name="系统管理员", role="admin", status="active")
+        # The last-system-admin guard excludes users with the ordinary admin role.
+        spare_admin = User(name="备用系统管理员", role="admin", status="active")
         target = User(name="普通管理员", role="user")
         ordinary_role = await db.scalar(
             select(Role).where(Role.code == "ordinary_admin")
@@ -108,7 +110,7 @@ async def test_ordinary_admin_keeps_business_access_but_cannot_open_system_setti
                 name="普通管理员", code="ordinary_admin", is_system=True
             )
             db.add(ordinary_role)
-        db.add_all([actor, target])
+        db.add_all([actor, spare_admin, target])
         await db.flush()
 
         app = FastAPI()
@@ -153,12 +155,11 @@ async def test_ordinary_admin_keeps_business_access_but_cannot_open_system_setti
 
             app.dependency_overrides[deps.get_current_user] = lambda: actor
             assert (await client.get("/identity/admin/roles")).status_code == 200
-            assert (
-                await client.put(
-                    f"/identity/users/{target.id}",
-                    json={"role": "user", "reason": "验证普通管理员降权"},
-                )
-            ).status_code == 200
+            demoted = await client.put(
+                f"/identity/users/{target.id}",
+                json={"role": "user", "reason": "验证普通管理员降权"},
+            )
+            assert demoted.status_code == 200, demoted.text
             assert target.role == "user"
             assert not await db.scalar(
                 select(UserRole).where(
