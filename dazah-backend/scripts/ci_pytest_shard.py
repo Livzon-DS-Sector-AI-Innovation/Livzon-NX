@@ -13,7 +13,7 @@ from typing import TypedDict
 
 import pytest
 
-SHARD_COUNT = 4
+SHARD_COUNT = 5
 DEFAULT_SECONDS_PER_CASE = 0.021
 # File totals from the four full-suite JUnit reports for CI run 42948663467.
 # Files below one second and newly collected files use a per-case estimate.
