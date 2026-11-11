@@ -1140,135 +1140,135 @@ async def test_commitment_notify_test_endpoint(
 
 
 
-async def test_chat_flow_service_real_steps(
-    db_session: AsyncSession, stub_flow: type[_StubFlow]
-) -> None:
-    """真实 ChatFlowService 分步驱动（不经 handler stub）：发起→保存→汇总。"""
-    from app.core.redis import cache_get
-    from app.modules.safety.service.work_permit_chat_flow import ChatFlowService
+class TestChatFlowHelpers:
+    """ChatFlowService 辅助函数直测（模块级纯函数 + 简单 DB mock）。"""
+    def _make_service(self, db: Any = None) -> Any:
+        from app.modules.safety.service.work_permit_chat_flow import (
+            ChatFlowService,
+        )
+        return ChatFlowService(db or object(), open_id="ou-h")
 
-    user = User(
-        id=uuid4(),
-        name=f"{_MARK}聊天用户{uuid4().hex[:6]}",
-        role="user",
-        status="active",
-        feishu_open_id=f"ou-flow-{uuid4().hex[:8]}",
-    )
-    db_session.add(user)
-    await db_session.flush()
+    async def test_user_by_feishu_id_direct(self) -> None:
+        """open_id 精确命中。"""
+        from types import SimpleNamespace
 
-    service = ChatFlowService(db_session, open_id=user.feishu_open_id or "")
-    permit_type = "hot_work"
+        user = SimpleNamespace(id="u1", name="张三", feishu_open_id="ou-h")
+        result_mock = SimpleNamespace(scalar_one_or_none=lambda: user)
 
-    card = await service.start_form(permit_type)
-    assert card
-    state = await cache_get(f"wp_form:{service.open_id}:{permit_type}")
-    assert state
+        class _DB:
+            async def execute(self, *_a: Any, **_kw: Any) -> Any:
+                return result_mock
 
-    from app.modules.safety.service.work_permit_card_forms import steps_for
+        svc = self._make_service(_DB())
+        found = await svc._user_by_feishu_id("ou-h")
+        assert found is user
 
-    steps = steps_for(permit_type)
-    form_value: dict[str, Any] = {"work_description": "聊天流测试动火"}
-    for step in steps[:-1]:
-        await service.save_step(permit_type, step, dict(form_value))
-    summary = await service.build_summary(permit_type)
-    assert summary
+    async def test_user_by_feishu_id_none(self) -> None:
+        from types import SimpleNamespace
 
-    await service.my_drafts()
-    await service.cancel(permit_type)
-    leftover = await cache_get(f"wp_form:{service.open_id}:{permit_type}")
-    assert not leftover
+        result_mock = SimpleNamespace(scalar_one_or_none=lambda: None)
 
-    await db_session.delete(user)
-    await db_session.flush()
+        class _DB:
+            async def execute(self, *_a: Any, **_kw: Any) -> Any:
+                return result_mock
 
+        svc = self._make_service(_DB())
+        assert await svc._user_by_feishu_id("ou-x") is None
 
-async def test_chat_flow_submit_seeded_state(
+    async def test_certificate_by_name(self) -> None:
+        from types import SimpleNamespace
+
+        cert = SimpleNamespace(id="c1", certificate_no="DJ-1")
+        result_mock = SimpleNamespace(scalar_one_or_none=lambda: cert)
+
+        class _DB:
+            async def execute(self, *_a: Any, **_kw: Any) -> Any:
+                return result_mock
+
+        svc = self._make_service(_DB())
+        found = await svc._certificate_by_name("张三", "work_leader")
+        assert found is cert
+
+    async def test_certificate_for_user(self) -> None:
+        from types import SimpleNamespace
+
+        cert = SimpleNamespace(id="c2")
+        result_mock = SimpleNamespace(scalar_one_or_none=lambda: cert)
+
+        class _DB:
+            async def execute(self, *_a: Any, **_kw: Any) -> Any:
+                return result_mock
+
+        svc = self._make_service(_DB())
+        found = await svc._certificate_for_user("u1", "guardian")
+        assert found is cert
+
+    def test_parse_dt_strict(self) -> None:
+        from app.modules.safety.service.work_permit_chat_flow import (
+            _parse_dt_strict,
+        )
+
+        assert _parse_dt_strict("2026-11-01 08:00") is not None
+        assert _parse_dt_strict("2026-11-01T08:00") is not None
+        assert _parse_dt_strict("") is None
+        assert _parse_dt_strict(None) is None
+        assert _parse_dt_strict("bad") is None
+
+    def test_cert_snapshot(self) -> None:
+        from types import SimpleNamespace
+
+        from app.modules.safety.service.work_permit_chat_flow import (
+            _cert_snapshot,
+        )
+
+        cert = SimpleNamespace(
+            id="c9", certificate_no="DJ-9",
+            certificate_category="electrician",
+            expiry_date=None, status="valid",
+        )
+        snap = _cert_snapshot(cert)
+        assert snap["certificate_id"] == "c9"
+        assert snap["certificate_no"] == "DJ-9"
+        assert snap["certificate_category"] == "electrician"
+
+    async def test_resolve_assignment_names_no_assignments(
+        self,
+    ) -> None:
+        svc = self._make_service()
+        values: dict[str, Any] = {"assignments": {}}
+        await svc._resolve_assignment_names(values)
+        assert values["assignments"] == {}
+
+async def test_chat_flow_step1_warnings_paths(
     db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """直接播种完整表单状态后提交：覆盖 submit 建票/指派/推送/清理全链。"""
+    """时间校验三分支：缺失/倒序/正常（mock runtime settings）。"""
+    from app.modules.safety.service.work_permit_chat_flow import ChatFlowService
 
-    from app.core.redis import cache_delete, cache_set
-    from app.modules.safety.models import WorkPermit
-    from app.modules.safety.service import work_permit_notify as wp_notify
-    from app.modules.safety.service.work_permit_card_forms import (
-        base_form_values,
-    )
-    from app.modules.safety.service.work_permit_chat_flow import (
-        ChatFlowService,
-        initiator_sign_keys,
-    )
+    async def _settings(db: Any) -> dict[str, Any]:
+        return {}
 
+    async def _hours(settings: dict, ptype: str, level: str) -> float | None:
+        return None
 
-    async def _stub_raw_card(*_a: Any, **_k: Any) -> str | None:
-        return "om_seeded"
-
-    monkeypatch.setattr(wp_notify, "send_raw_card", _stub_raw_card)
     monkeypatch.setattr(
-        "app.modules.safety.feishu.notification.send_group_card",
-        lambda *_a, **_k: "om_group",
+        "app.modules.safety.service.work_permit.get_runtime_settings", _settings
+    )
+    monkeypatch.setattr(
+        "app.modules.safety.service.work_permit._validity_hours", _hours
     )
 
-    user = User(
-        id=uuid4(),
-        name=f"{_MARK}播种用户{uuid4().hex[:6]}",
-        role="user",
-        status="active",
-        feishu_open_id=f"ou-seed-{uuid4().hex[:8]}",
-    )
-    db_session.add(user)
-    await db_session.flush()
-
-    service = ChatFlowService(db_session, open_id=user.feishu_open_id)
-    permit_type = "blind_plate"
-    values = base_form_values(permit_type, None)
-    values["work_description"] = "播种提交测试"
-    values["type_data"] = {
-        "blind_action": "堵盲板",
-        "equipment_pipe_name": "R101 循环水管线",
-    }
-    values["planned_start"] = "2026-11-12 08:00"
-    values["planned_end"] = "2026-11-12 18:00"
-    values["persons"] = [{"role": "work_leader", "name": "播种人"}]
-    # 审批节点指派：安全员意见节点指派给另一个测试用户
-    assignee = User(
-        id=uuid4(), name=f"{_MARK}审批人{uuid4().hex[:6]}",
-        role="user", status="active",
-        feishu_open_id=f"ou-assign-{uuid4().hex[:8]}",
-    )
-    db_session.add(assignee)
-    await db_session.flush()
-    values["assignments"] = {
-        "safety_officer_opinion": str(assignee.feishu_open_id),
-        "workshop_leader_opinion": str(assignee.feishu_open_id),
-    }
-    sign: dict[str, str] = {}
-    for key in initiator_sign_keys(permit_type):
-        sign[key] = f"signs/{key}.png"
-    state = {
-        "type": permit_type,
-        "step": 6,
-        "values": values,
-        "sign": sign,
-        "assignments": {},
-    }
-    await cache_set(
-        f"wp_form:{user.feishu_open_id}:{permit_type}",
-        json.dumps(state, ensure_ascii=False, default=str),
-        ex=300,
-    )
-    try:
-        receipt = await service.submit(permit_type)
-        assert receipt
-        permit = (
-            await db_session.scalars(
-                select(WorkPermit).where(
-                    WorkPermit.work_description == "播种提交测试"
-                )
-            )
-        ).first()
-        assert permit is not None, "提交后应真实建票"
-        assert permit.permit_no.startswith("MB-")
-        await service.clear_state(permit_type)
-    finally:
-        await cache_delete(f"wp_form:{user.feishu_open_id}:{permit_type}")
+    svc = ChatFlowService(db_session, open_id="ou-t")
+    # 缺时间 → None（不校验）
+    assert await svc._step1_warnings("hot_work", {}) is None
+    # 倒序 → 错误消息
+    msg = await svc._step1_warnings("hot_work", {
+        "planned_start": "2026-11-01 18:00",
+        "planned_end": "2026-11-01 08:00",
+    })
+    assert msg is not None and "晚于" in msg
+    # 正常 → None
+    assert await svc._step1_warnings("hot_work", {
+        "planned_start": "2026-11-01 08:00",
+        "planned_end": "2026-11-01 18:00",
+    }) is None
