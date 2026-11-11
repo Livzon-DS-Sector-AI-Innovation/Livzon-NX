@@ -12,6 +12,7 @@ import Dashboard from '@/components/production/Dashboard'
 import MCSheetsSyncButton from '@/components/production/MCSheetsSyncButton'
 import MCTraceButton from '@/components/production/MCTraceButton'
 import { applyCrudeYieldScope, crudeCumulativeYieldPercent, hasCrudeOutput } from '@/components/production/crude-yield'
+import { useChartThresholds } from '@/components/production/chart-thresholds'
 import { PRODUCTION_PAGE_KEYS, useProductionPermissions } from '@/components/production/useProductionPermissions'
 
 const { Title, Text } = Typography
@@ -123,6 +124,8 @@ function DateCellInput({ value, onSave }: { value: string | null | undefined; on
 export default function CrudeExtractionPage() {
   const router = useRouter(); const { message } = App.useApp()
   const { canOperate } = useProductionPermissions(PRODUCTION_PAGE_KEYS.workshop2012)
+  const { values: lineValues } = useChartThresholds('workshop-201-2/crude-extraction')
+  const yieldLine = lineValues['yield'] ?? 92
   const [data, setData] = useState<CrudeItem[]>([]); const [loading, setLoading] = useState(false); const [saving, setSaving] = useState(false)
   const [month, setMonth] = useState<number>(dayjs().month() + 1) // 默认当前月份
   const [createVisible, setCreateVisible] = useState(false); const [createForm] = Form.useForm()
@@ -302,7 +305,7 @@ export default function CrudeExtractionPage() {
     { title: '含量\n(%)', key: 'cr_ct', width: 50, render: (_, r) => SM(<CellInput value={r.st?.crude_content} onSave={v => saveST(r.st?.id, 'crude_content', v, r.st)} />, r), onCell: onStCell },
     { title: '水分', key: 'cr_ms', width: 45, render: (_, r) => SM(<CellInput value={r.st?.crude_moisture} onSave={v => saveST(r.st?.id, 'crude_moisture', v, r.st)} />, r), onCell: onStCell },
     { title: '产品量\n(kg)', key: 'cr_pq', width: 58, render: (_, r) => SM(<CellInput value={r.st?.crude_product_qty} color="#1677ff" onSave={v => saveST(r.st?.id, 'crude_product_qty', v, r.st)} />, r), onCell: onStCell },
-    { title: '收率\n≥92%', key: 'cr_yd', width: 55, render: (_, r) => SM(<CellInput value={r.st?.yield_rate} color={r.st?.yield_rate != null ? (r.st.yield_rate >= 92 ? '#52c41a' : '#f5222d') : undefined} onSave={v => saveST(r.st?.id, 'yield_rate', v, r.st)} />, r), onCell: onStCell },
+    { title: `收率\n≥${yieldLine}%`, key: 'cr_yd', width: 55, render: (_, r) => SM(<CellInput value={r.st?.yield_rate} color={r.st?.yield_rate != null ? (r.st.yield_rate >= yieldLine ? '#52c41a' : '#f5222d') : undefined} onSave={v => saveST(r.st?.id, 'yield_rate', v, r.st)} />, r), onCell: onStCell },
     { title: '累积粗\n品产品量', key: 'cr_cq', width: 62, render: (_, r) => SM(<CellInput value={r.st?.cumulative_crude_qty} onSave={v => saveST(r.st?.id, 'cumulative_crude_qty', v, r.st)} />, r), onCell: onStCell },
     { title: '粗品累\n计收率', key: 'cr_cy', width: 58, render: (_, r) => SM(<CellInput value={r.st?.cumulative_crude_yield} onSave={v => saveST(r.st?.id, 'cumulative_crude_yield', v, r.st)} />, r), onCell: onStCell },
     { title: '备注', key: 'cr_rm', width: 55, render: (_, r) => SM(<Input size="small" style={{ width: '100%', fontSize: 10, height: 20, padding: '0 2px' }} defaultValue={r.st?.remarks ?? undefined} onBlur={e => saveST(r.st?.id, 'remarks', e.target.value, r.st)} />, r), onCell: onStCell },
@@ -342,12 +345,14 @@ export default function CrudeExtractionPage() {
       </div>
 
       <Dashboard title="粗提工段仪表盘" data={dashData} dateField="produce_date" month={month}
+        scopeKey="workshop-201-2/crude-extraction"
+        lineConfigs={[{ key: 'yield', label: '收率警戒线', unit: '%' }]}
         cards={[
           { title: '累计放罐产品量', value: () => { let total = 0; for (const item of data) for (const sw of (item.sub_tanks || [])) { const q = sw.sub_tank?.total_input; if (q != null) total += q } return total > 0 ? Math.round(total) : null; }, suffix: 'kg', precision: 0 },
           { title: '累计粗品产量', value: () => { let total = 0; for (const item of data) for (const sw of (item.sub_tanks || [])) { const q = sw.sub_tank?.crude_product_qty; if (q != null) total += q } return total > 0 ? Math.round(total) : null; }, suffix: 'kg', precision: 0 },
-          { title: '粗品累计收率', value: () => crudeCumulativeYieldPercent(data.flatMap(item => (item.sub_tanks || []).map(sw => sw.sub_tank || {}))), suffix: '%', precision: 1, color: (v) => v >= 92 ? '#52c41a' : '#f5222d' },
+          { title: '粗品累计收率', value: () => crudeCumulativeYieldPercent(data.flatMap(item => (item.sub_tanks || []).map(sw => sw.sub_tank || {}))), suffix: '%', precision: 1, color: (v) => v >= yieldLine ? '#52c41a' : '#f5222d' },
           { title: '批数', value: (_, f) => f.length, suffix: '批', precision: 0 },
-          { title: '平均收率', value: (_, f) => { let s = 0, n = 0; for (const d of f) { if (d.yield_rate != null) { s += d.yield_rate; n++ } } return n > 0 ? Math.round(s / n * 100) / 100 : null; }, suffix: '%', precision: 1, color: (v) => v >= 92 ? '#52c41a' : '#f5222d' },
+          { title: '平均收率', value: (_, f) => { let s = 0, n = 0; for (const d of f) { if (d.yield_rate != null) { s += d.yield_rate; n++ } } return n > 0 ? Math.round(s / n * 100) / 100 : null; }, suffix: '%', precision: 1, color: (v) => v >= yieldLine ? '#52c41a' : '#f5222d' },
         ]}
         charts={[
           { key: 'yield', title: '单批收率趋势', unit: '%', color: '#1890ff', markLine: 92, label: '收率趋势', field: 'yield_rate' },

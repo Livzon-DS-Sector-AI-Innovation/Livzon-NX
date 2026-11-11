@@ -10425,6 +10425,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/production/chart-thresholds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 读取图表警戒线配置 */
+        get: operations["list_chart_thresholds_api_v1_production_chart_thresholds_get"];
+        /** 更新图表警戒线（管理员） */
+        put: operations["upsert_chart_threshold_api_v1_production_chart_thresholds_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/production/conc1": {
         parameters: {
             query?: never;
@@ -38708,6 +38726,15 @@ export interface components {
             typeDistribution: {
                 [key: string]: unknown;
             }[];
+        };
+        /** ChartThresholdUpsert */
+        ChartThresholdUpsert: {
+            /** Chart Key */
+            chart_key: string;
+            /** Scope Key */
+            scope_key: string;
+            /** Threshold */
+            threshold: number;
         };
         /**
          * ChatRequest
@@ -96629,6 +96656,75 @@ export interface operations {
             };
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_chart_thresholds_api_v1_production_chart_thresholds_get: {
+        parameters: {
+            query: {
+                /** @description 页面范围键 */
+                scope_key: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upsert_chart_threshold_api_v1_production_chart_thresholds_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChartThresholdUpsert"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

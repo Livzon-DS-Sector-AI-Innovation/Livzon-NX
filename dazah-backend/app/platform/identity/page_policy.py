@@ -3741,6 +3741,21 @@ def _production_api_bindings() -> tuple[PageApiBinding, ...]:
         overview,
         scope_adapter="production.dashboard",
     )
+    # 图表警戒线配置：读取挂在概览页 query（看板可见即可读）；
+    # 更新要求管理员（API 内已校验），登记到概览页 operate 口径
+    add_many(
+        "GET",
+        ("/chart-thresholds",),
+        overview,
+        scope_adapter="production.dashboard",
+    )
+    add_many(
+        "PUT",
+        ("/chart-thresholds",),
+        overview,
+        permission="operate",
+        scope_adapter="production.dashboard",
+    )
     # Daily reports use the overview page grant and extraction stage scope.
     add(
         "GET",

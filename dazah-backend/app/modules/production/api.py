@@ -1138,3 +1138,10 @@ from app.modules.production.board_preferences_api import (  # noqa: E402
 )
 
 router.include_router(board_preferences_router, tags=["生产管理 - 看板偏好"])
+
+# ============ 仪表盘图表警戒线配置 ============
+from app.modules.production.chart_thresholds_api import (  # noqa: E402
+    router as chart_thresholds_router,
+)
+
+router.include_router(chart_thresholds_router, tags=["生产管理 - 图表警戒线"])
