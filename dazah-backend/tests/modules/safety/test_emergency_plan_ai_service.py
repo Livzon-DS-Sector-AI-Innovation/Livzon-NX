@@ -360,3 +360,46 @@ def test_organization_patch_schema_defaults() -> None:
     assert issue.quote == ""
     edit = ChatEdit(target="preface", content="新引言")
     assert edit.chapter_key is None
+
+
+def test_plan_generation_context_facts_text_variants() -> None:
+    """上下文纯逻辑：facts_text 的全字段/缺字段/空列表三形态。"""
+    from app.modules.safety.service.emergency_plan_context import (
+        PlanGenerationContext,
+        SubstanceContext,
+    )
+
+    full = PlanGenerationContext(
+        substances=[
+            SubstanceContext(
+                name="乙醇",
+                cas_no="64-17-5",
+                category="易燃液体",
+                hazard_statements="高度易燃液体和蒸气",
+                storage_requirements="远离火源",
+                inventories=["库房 A 20 桶"],
+                msds_text="MSDS 原文节选",
+            )
+        ],
+        building_name="危险品库",
+        building_category="warehouse",
+    )
+    facts = full.facts_text()
+    assert "【事故场所】危险品库（warehouse）" in facts
+    assert "CAS 号：64-17-5" in facts
+    assert "车间库存：库房 A 20 桶" in facts
+    assert "MSDS 原文节选" in facts
+
+    # 无 MSDS 原文：提示不得自行编写
+    sparse = PlanGenerationContext(
+        substances=[SubstanceContext(name="丙酮")],
+    )
+    sparse_facts = sparse.facts_text()
+    assert "MSDS 原文：未提供（理化数值不得自行编写）" in sparse_facts
+    assert "【事故场所】" not in sparse_facts
+
+    # 空上下文
+    empty = PlanGenerationContext(substances=[])
+    assert empty.facts_text() == "（未关联危化品档案）"
+    assert empty.substance_names == []
+    assert empty.msds_text == ""

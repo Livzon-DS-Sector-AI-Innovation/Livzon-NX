@@ -357,3 +357,82 @@ def test_approval_buttons_and_detail_link() -> None:
     else:
         assert _detail_link(uuid4()) == []
     assert "/safety/work-permits/" in str(link)
+
+
+def test_build_ticket_html_renders_full_permit() -> None:
+    """PDF 模块纯函数：build_ticket_html 富数据渲染全覆盖。"""
+    from datetime import datetime as dt
+    from types import SimpleNamespace
+
+    from app.modules.safety.models import (
+        WorkPermitGasAnalysis,
+        WorkPermitNode,
+    )
+    from app.modules.safety.service.work_permit_pdf import build_ticket_html
+
+    permit = WorkPermit(
+        permit_no=f"{_WP_MARK}-PDF-1",
+        permit_type="hot_work",
+        permit_level="special",
+        status="completed",
+        apply_department="一车间",
+        apply_time=dt(2026, 11, 10, 8, 0),
+        work_description="罐区动火检修",
+        work_location="罐区东",
+        work_unit="维修班",
+        planned_start_time=dt(2026, 11, 10, 9, 0),
+        planned_end_time=dt(2026, 11, 10, 17, 0),
+        actual_start_time=dt(2026, 11, 10, 9, 10),
+        actual_end_time=dt(2026, 11, 10, 16, 40),
+        persons=[
+            {"role": "work_leader", "name": "张三", "certificate_no": "DJ-1"},
+            {"role": "guardian", "name": "李四"},
+        ],
+        risk_identifications=["动火产生火花"],
+        safety_measures=[
+            {"key": "m1", "status": "yes", "fills": {"距离": "5米"}},
+            {"key": "m2", "status": "not_applicable"},
+        ],
+        type_data={"动火等级": "特级"},
+        related_legacy_no_text="DH-20260101-001",
+        remark="备注内容",
+        created_by=None,
+    )
+    node = WorkPermitNode(
+        permit_id=permit.id or uuid4(),
+        round=1,
+        seq=1,
+        node_key="work_leader_opinion",
+        node_name="作业负责人意见",
+        node_kind="approve",
+        status="approved",
+        assigned_approver_id=None,
+        acted_by=None,
+        acted_at=dt(2026, 11, 10, 8, 30),
+        opinion="同意",
+    )
+    gas = WorkPermitGasAnalysis(
+        permit_id=permit.id or uuid4(),
+        phase="pre_work",
+        sampled_at=dt(2026, 11, 10, 8, 0),
+        analysis_point="罐区东",
+        items=[{"name": "可燃气体", "standard": "0", "value": "0"}],
+        analyst_name="李四",
+    )
+    bundle = {
+        "signatures": {
+            "work_leader_opinion": SimpleNamespace(image_key="signs/a.png"),
+        },
+        "signature_images": {"signs/a.png": b"png"},
+        "user_names": {"u1": "王主任"},
+    }
+    html = build_ticket_html(permit, [node], [gas], bundle)
+    assert "动火安全作业票" in html
+    assert "GAS测试-PDF-1" in html
+    assert "罐区动火检修" in html
+    assert "作业负责人意见" in html
+    assert "已签" in html
+    assert "可燃气体" in html
+    assert "动火等级" in html
+    assert "DH-20260101-001" in html
+    assert "_esc" not in html
