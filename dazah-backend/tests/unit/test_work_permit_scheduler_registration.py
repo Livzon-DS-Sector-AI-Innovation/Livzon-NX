@@ -4,6 +4,8 @@ main.py lifespan 将这些生成器注册进统一调度引擎；任务重名会
 抛 ValueError 导致应用无法启动，这里守护名称唯一且可注册。
 """
 
+import asyncio
+
 import pytest
 
 from app.modules.administration.scheduled import (
@@ -37,7 +39,7 @@ def test_multi_batch_generators_register_with_unique_names() -> None:
             registry.register_generator(gen)
 
 
-def test_sign_relay_config_and_poller_disabled_by_default(
+async def test_sign_relay_config_and_poller_disabled_by_default(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """签名中继：默认配置不启用；配置网关后 poller 才启动。"""
@@ -53,7 +55,7 @@ def test_sign_relay_config_and_poller_disabled_by_default(
     task = start_sign_relay_poller_task()
     assert task is None
 
-    # 启用后启动（httpx mock 网关不可达 → poller 仍启动为后台协程）
+    # 启用后创建后台协程（async 事件循环内 asyncio.create_task 可用）
     monkeypatch.setattr(
         "app.modules.safety.sign_relay_poller.get_settings",
         lambda: type("S", (), {
@@ -66,3 +68,7 @@ def test_sign_relay_config_and_poller_disabled_by_default(
     task2 = start_sign_relay_poller_task()
     assert task2 is not None
     task2.cancel()
+    try:
+        await task2
+    except asyncio.CancelledError:
+        pass
