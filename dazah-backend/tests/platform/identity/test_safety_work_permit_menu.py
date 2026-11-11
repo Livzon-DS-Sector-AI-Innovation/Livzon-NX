@@ -19,3 +19,10 @@ def test_safety_work_permit_menu_and_permission_catalog_agree() -> None:
     certificates = get_page_definition("safety:ops-safety:work-certificates")
     assert certificates is not None
     assert certificates.route_path == "/safety/work-certificates"
+
+
+def test_sign_relay_prefix_registered_as_public() -> None:
+    """签名中继网关路径登记在公共前缀（不走登录与模块权限）。"""
+    from app.platform.identity import rbac
+
+    assert "/api/v1/safety/sign-relay/" in rbac.PUBLIC_PATH_PREFIXES

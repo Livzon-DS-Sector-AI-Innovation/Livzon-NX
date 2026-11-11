@@ -95,7 +95,7 @@ async def sign_relay_submit(request: Request) -> JSONResponse:
     if png is None:
         return _bad_request("签名图片无效或过大")
 
-    await redis_client.rpush(
+    await redis_client.rpush(  # type: ignore[misc]
         _INBOX_KEY,
         json.dumps({"token": token, "image": image}, ensure_ascii=False),
     )
@@ -127,7 +127,7 @@ async def sign_relay_pull(
         )
     items: list[dict[str, Any]] = []
     while len(items) < _PULL_BATCH_MAX:
-        raw = await redis_client.rpop(_INBOX_KEY)
+        raw = await redis_client.rpop(_INBOX_KEY)  # type: ignore[misc]
         if not raw:
             break
         try:

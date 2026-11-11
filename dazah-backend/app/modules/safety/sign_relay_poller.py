@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from typing import Any
 
 import httpx
 
@@ -21,7 +22,7 @@ _PULL_TIMEOUT_SECONDS = 10
 _BATCH_MAX = 50
 
 
-async def _process_item(item: dict) -> bool:
+async def _process_item(item: dict[str, Any]) -> bool:
     """处理一条中转签名；返回是否成功落库（失败不重试，等用户重签）。"""
     from app.modules.safety.service.work_permit_signatures import (
         apply_signature_submission,
@@ -105,7 +106,7 @@ async def sign_relay_loop() -> None:
         await asyncio.sleep(interval)
 
 
-def start_sign_relay_poller_task() -> asyncio.Task | None:
+def start_sign_relay_poller_task() -> asyncio.Task[None] | None:
     """lifespan 启动入口：已配置网关时创建轮询任务，否则返回 None。"""
     settings = get_settings()
     if not (settings.SIGN_RELAY_GATEWAY_BASE and settings.SIGN_RELAY_KEY):

@@ -653,8 +653,8 @@ async def _accept_stage_elements(
     base: list[dict[str, Any]],
     *,
     with_gas: bool = False,
-) -> tuple[UUID | None, list[dict[str, Any]]]:
-    """完工验收卡（无验票票种签批完毕 / 验票开工后）。"""
+) -> tuple[UUID | None, list[dict[str, Any]], str]:
+    """完工验收卡（无验票票种签批完毕 / 验票开工后）。返回 (审批人, 卡片, 签名链接)。"""
     from app.modules.safety.service.work_permit_card_forms import _md
 
     recipient = await _accept_target(db, permit)

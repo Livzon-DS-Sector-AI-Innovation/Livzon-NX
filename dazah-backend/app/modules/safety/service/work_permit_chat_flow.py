@@ -363,7 +363,7 @@ class ChatFlowService:
                     # 并按姓名尝试关联证件
                     contact_name, _tenant = await feishu_user_info(picked_text)
                     display_name = contact_name or picked_text
-                    entry = {"role": role_key, "name": display_name}
+                    entry: dict[str, Any] = {"role": role_key, "name": display_name}
                     if contact_name:
                         cert = await self._certificate_by_name(
                             contact_name, role_key
@@ -372,7 +372,7 @@ class ChatFlowService:
                             entry.update(_cert_snapshot(cert))
                     persons.append(entry)
                     continue
-                entry: dict[str, Any] = {
+                entry = {
                     "role": role_key,
                     "name": user.name,
                     "user_id": str(user.id),
@@ -385,7 +385,7 @@ class ChatFlowService:
                 entry = {
                     "role": role_key,
                     "name": ext_name,
-                    "external": True,
+                    "external": "true",
                 }
                 if ext_cert:
                     entry["certificate_no"] = ext_cert
