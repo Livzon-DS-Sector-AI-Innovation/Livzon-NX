@@ -123,10 +123,31 @@ def test_step_cards_carry_module_and_act() -> None:
             if el.get("tag") in ("select_static", "input", "select_person")
         ]
 
-    # ④ 风险逐行涉及/不涉及
-    risk_names = _form_names("hot_work", 4)
-    assert any(n.startswith("risk__") for n in risk_names), "风险辨识应逐行选择"
-    assert not any(n.startswith("m__") for n in risk_names)
+    # ② 人员选人 + 外部人员手工录入
+    person_names = _form_names("hot_work", 2)
+    assert any(
+        n.startswith("person__") for n in person_names
+    ), "人员步应含通讯录选人组件"
+    assert any(
+        n.startswith("person_ext_cert__") for n in person_names
+    ), "人员步应支持外部人员证件号录入"
+    # ④ 风险辨识：下拉多选（与动火方式一致）
+    step4_card = forms.build_step_card(
+        "hot_work", 4, forms.base_form_values("hot_work", None), "ou-x"
+    )
+    step4_form = [
+        el for el in step4_card["body"]["elements"] if el.get("tag") == "form"
+    ][0]
+    risk_selects = [
+        el
+        for el in step4_form["elements"]
+        if el.get("name") == "risk"
+        and el.get("tag") == "multi_select_static"
+    ]
+    assert risk_selects, "风险辨识应为下拉多选"
+    assert len(risk_selects[0].get("options") or []) >= 20, (
+        "风险辨识下拉应含全部选项"
+    )
     # ⑤ 措施逐行是/否 + 下划线填空
     measure_names = _form_names("hot_work", 5)
     assert any(n.startswith("m__") for n in measure_names), "安全措施应逐行选择"
@@ -138,6 +159,25 @@ def test_step_cards_carry_module_and_act() -> None:
     assert any(
         n.startswith("assign_") for n in assign_names
     ), "审批人指派步应含选人组件"
+
+
+def test_all_selects_have_options() -> None:
+    """所有下拉/多选必须带非空选项（模板 options 为 tuple，曾被误判为空）。"""
+    from app.modules.safety.service.work_permit_templates import PERMIT_TEMPLATES
+
+    for code in PERMIT_TEMPLATES:
+        values = forms.base_form_values(code, None)
+        for step in forms.steps_for(code)[:-1]:
+            card = forms.build_step_card(code, step, values, "ou-x")
+            for element in card["body"]["elements"]:
+                if element.get("tag") != "form":
+                    continue
+                for field in element["elements"]:
+                    if str(field.get("tag", "")).endswith("select_static"):
+                        assert field.get("options"), (
+                            f"{code} 第{step}步下拉 "
+                            f"{field.get('name')} 无选项"
+                        )
 
 
 def test_summary_card_sign_gating_and_default_button() -> None:
@@ -635,7 +675,12 @@ def test_form_submit_buttons_carry_encoded_name() -> None:
 
     step_card = build_step_card("hot_work", 1, {}, "ou_x")
     form = [el for el in step_card["body"]["elements"] if el.get("tag") == "form"][0]
-    submit = [el for el in form["elements"] if el.get("tag") == "button"][0]
+    # 表单内还有级别切换按钮，取带 form_submit 标记的提交按钮
+    submit = [
+        el
+        for el in form["elements"]
+        if el.get("tag") == "button" and el.get("action_type") == "form_submit"
+    ][0]
     assert submit["name"] == "wp|step_save|hot_work|1"
     assert submit["action_type"] == "form_submit"
 
@@ -741,7 +786,9 @@ async def test_next_stage_unassigned_nodes_fall_back_creator(
         return confirm_node
 
     monkeypatch.setattr(notify, "_pending_node", _fake_pending_node)
-    recipient, elements = await notify._next_stage_elements(db_session, permit)
+    recipient, elements, _title = await notify._next_stage_elements(
+        db_session, permit
+    )
     assert recipient == creator_id
     assert "同意" in json.dumps(elements, ensure_ascii=False)
 
@@ -758,7 +805,9 @@ async def test_next_stage_unassigned_nodes_fall_back_creator(
         return verify_node
 
     monkeypatch.setattr(notify, "_verify_node", _fake_verify_node)
-    recipient, elements = await notify._next_stage_elements(db_session, permit)
+    recipient, elements, _title = await notify._next_stage_elements(
+        db_session, permit
+    )
     assert recipient == creator_id
     assert "确认开工" in json.dumps(elements, ensure_ascii=False)
 

@@ -4358,7 +4358,8 @@ export async function getCommitmentByDate(
   date: string,
   pageKey?: string
 ) {
-  return fetchApi<{ report: SafetyCommitmentReport }>(
+  // 后端 data 即日报对象本身
+  return fetchApi<SafetyCommitmentReport>(
     `/safety/safety-commitments/by-date/${date}`,
     { headers: commitmentHeaders(pageKey) }
   )
@@ -4382,7 +4383,7 @@ export async function updateCommitment(
   },
   pageKey?: string
 ) {
-  const res = await fetchApi<{ report: SafetyCommitmentReport }>(
+  const res = await fetchApi<SafetyCommitmentReport>(
     `/safety/safety-commitments/${reportId}`,
     {
       method: 'PUT',
@@ -4402,7 +4403,7 @@ export async function publishCommitment(
   publisherName: string,
   pageKey?: string
 ) {
-  const res = await fetchApi<{ report: SafetyCommitmentReport }>(
+  const res = await fetchApi<SafetyCommitmentReport>(
     `/safety/safety-commitments/${reportId}/publish`,
     {
       method: 'POST',

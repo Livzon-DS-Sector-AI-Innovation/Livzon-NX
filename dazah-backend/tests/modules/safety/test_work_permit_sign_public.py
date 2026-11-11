@@ -197,8 +197,10 @@ async def test_node_signature_saves_row_and_refreshes(
     async def _refresh_or_push(db: Any, permit_id_arg: Any) -> None:
         refresh_calls.append(str(permit_id_arg))
 
+    # 落库逻辑已收敛到 work_permit_signatures.apply_signature_submission
     monkeypatch.setattr(
-        sign_mod, "save_signature_row", _save_signature_row
+        "app.modules.safety.service.work_permit_signatures.save_signature_row",
+        _save_signature_row,
     )
     monkeypatch.setattr(
         "app.modules.safety.service.work_permit_notify.refresh_or_push_approval_card",

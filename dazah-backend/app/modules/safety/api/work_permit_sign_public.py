@@ -26,7 +26,6 @@ from app.modules.safety.models import WorkPermit
 from app.modules.safety.service.work_permit_pdf import render_permit_pdf
 from app.modules.safety.service.work_permit_signatures import (
     render_signature_page,
-    save_signature_row,
     store_signature_image,
     verify_token,
 )
@@ -52,52 +51,12 @@ async def _save_and_refresh(
     payload: dict[str, Any],
     image_key: str,
 ) -> None:
-    """落库签名并刷新相关卡片。"""
-    from app.modules.safety.service.work_permit_chat_flow import (
-        ChatFlowService,
+    """落库签名并刷新相关卡片（与中转轮询共用同一处理函数）。"""
+    from app.modules.safety.service.work_permit_signatures import (
+        apply_signature_submission,
     )
 
-    open_id = str(payload.get("oid") or "")
-    permit_type = str(payload.get("ptype") or "")
-    pid_raw = str(payload.get("pid") or "")
-    is_form = pid_raw == str(uuid_module.UUID(int=0))
-
-    if is_form:
-        # 发起行签名：存 Redis 状态 + 按汇总卡原消息 PATCH 刷新
-        flow = ChatFlowService(session, open_id=open_id)
-        await flow.save_initiator_signature(
-            permit_type, sign_key_from(payload), image_key
-        )
-        await flow.refresh_summary_card(permit_type)
-    else:
-        # 节点签名：落库 + 刷新已推的审批卡（无缓存卡时退回推送新卡）
-        permit_id = uuid_module.UUID(pid_raw)
-        round_no = int(payload.get("rnd") or 1)
-        node_id_raw = payload.get("nid")
-        node_id = uuid_module.UUID(str(node_id_raw)) if node_id_raw else None
-        signer_user_id_raw = payload.get("uid")
-        signer_user_id = (
-            uuid_module.UUID(str(signer_user_id_raw))
-            if signer_user_id_raw
-            else None
-        )
-        signer_name = str(payload.get("nm") or "")
-        await save_signature_row(
-            session,
-            permit_id=permit_id,
-            round_no=round_no,
-            sign_key=sign_key_from(payload),
-            node_id=node_id,
-            signer_user_id=signer_user_id,
-            signer_name=signer_name,
-            image_key=image_key,
-        )
-        await session.commit()
-        from app.modules.safety.service.work_permit_notify import (
-            refresh_or_push_approval_card,
-        )
-
-        await refresh_or_push_approval_card(session, permit_id)
+    await apply_signature_submission(session, payload, image_key)
 
 
 def sign_key_from(payload: dict[str, Any]) -> str:

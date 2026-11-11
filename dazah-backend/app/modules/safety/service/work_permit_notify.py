@@ -420,7 +420,7 @@ async def push_approval_card_for_next_node(
         permit = await _resolve_permit(db, permit_or_id)
         if permit is None:
             return
-        recipient, elements = await _next_stage_elements(db, permit)
+        recipient, elements, card_title = await _next_stage_elements(db, permit)
         if recipient is None or not elements:
             return
         union_id = await _recipient_union_id(db, recipient)
@@ -431,7 +431,9 @@ async def push_approval_card_for_next_node(
                 permit.status,
             )
             return
-        message_id = await send_raw_card_by_union_id(union_id, _card_for(elements))
+        message_id = await send_raw_card_by_union_id(
+            union_id, _card_for(elements, title=card_title or "作业票审批")
+        )
         if message_id:
             await cache_set(
                 f"wp_approval_card:{union_id}:{permit.id}",
@@ -470,9 +472,12 @@ async def refresh_or_push_approval_card(
         if not cached_message_id:
             await push_approval_card_for_next_node(db, permit)
             return
-        _, elements = await _next_stage_elements(db, permit)
+        _recipient, elements, card_title = await _next_stage_elements(db, permit)
         if elements:
-            await update_card(cached_message_id, _card_for(elements))
+            await update_card(
+                cached_message_id,
+                _card_for(elements, title=card_title or "作业票审批"),
+            )
     except Exception:
         logger.exception(
             "审批卡刷新失败: permit=%s",
@@ -493,22 +498,29 @@ async def _resolve_permit(
 
 async def _next_stage_elements(
     db: AsyncSession, permit: WorkPermit
-) -> tuple[UUID | None, list[dict[str, Any]]]:
-    """按票据状态构建下一环节卡片元素，返回 (目标用户, elements)。"""
+) -> tuple[UUID | None, list[dict[str, Any]], str]:
+    """按票据状态构建下一环节卡片元素，返回 (目标用户, elements, 标题)。
+
+    卡片标题与首行都带"待您处理：节点名"，让审批人一眼看出这是新节点
+    （票面内容相同，仅靠内容无法区分已推进）。
+    """
     from app.modules.safety.service.work_permit_card_forms import _hr, _md
 
     base: list[dict[str, Any]] = [_md(_ticket_markdown(permit)), _hr()]
+    records = await _sign_records_markdown(db, permit)
+    if records:
+        base.extend([_md(records), _hr()])
 
     if permit.status == PERMIT_STATUS_PENDING:
         node = await _pending_node(db, permit)
         if node is None:
-            return None, []
+            return None, [], ""
         # 未指派的确认/验票/验收节点由创建人处理（引擎同口径）；
         # approve 节点提交时已强制指派，未指派视为异常跳过
         recipient = node.assigned_approver_id
         if recipient is None:
             if node.node_kind == "approve" or permit.created_by is None:
-                return None, []
+                return None, [], ""
             recipient = permit.created_by
         elements = list(base)
         if await _node_signed(db, permit, node):
@@ -560,8 +572,15 @@ async def _next_stage_elements(
             ]
         )
         # 卡片 2.0 不支持 action 容器（200861），按钮平铺
+        elements.insert(
+            0, _md(f"🔔 **待您处理：{node.node_name}**")
+        )
         elements.extend(actions)
-        return recipient, elements
+        return (
+            recipient,
+            elements,
+            f"作业票审批 · {node.node_name}（{permit.permit_no}）",
+        )
 
     if permit.status == PERMIT_STATUS_APPROVED:
         verify_node = await _verify_node(db, permit)
@@ -595,17 +614,21 @@ async def _next_stage_elements(
                 },
             }
         )
-        return verify_recipient, elements
+        return (
+            verify_recipient,
+            elements,
+            f"作业票验票 · 确认开工（{permit.permit_no}）",
+        )
 
     if permit.status == PERMIT_STATUS_ACTIVE:
         return await _accept_stage_elements(db, permit, base, with_gas=True)
 
     if permit.status == PERMIT_STATUS_COMPLETED:
         if permit.created_by is None:
-            return None, []
+            return None, [], ""
         download_url = await _download_url(permit.id)
         if not download_url:
-            return None, []
+            return None, [], ""
         elements = list(base)
         elements.append(
             {
@@ -615,9 +638,13 @@ async def _next_stage_elements(
                 "url": download_url,
             }
         )
-        return permit.created_by, elements
+        return (
+            permit.created_by,
+            elements,
+            f"作业票已完成 · {permit.permit_no}",
+        )
 
-    return None, []
+    return None, [], ""
 
 
 async def _accept_stage_elements(
@@ -632,7 +659,7 @@ async def _accept_stage_elements(
 
     recipient = await _accept_target(db, permit)
     if recipient is None:
-        return None, []
+        return None, [], ""
     elements = list(base)
     if with_gas:
         cycle = _gas_cycle_for(permit)
@@ -653,7 +680,12 @@ async def _accept_stage_elements(
             },
         }
     )
-    return recipient, elements
+    elements.insert(0, _md("🔔 **待您处理：完工验收**"))
+    return (
+        recipient,
+        elements,
+        f"作业票验收 · 完工验收（{permit.permit_no}）",
+    )
 
 
 async def _accept_target(db: AsyncSession, permit: WorkPermit) -> UUID | None:
@@ -679,6 +711,59 @@ async def _accept_node(
         .limit(1)
     )
     return result.scalar_one_or_none()
+
+
+async def _sign_records_markdown(
+    db: AsyncSession, permit: WorkPermit
+) -> str:
+    """签字记录（逐节点：状态、签字人、时间、是否留手写签名）。
+
+    最终卡/审批卡都展示，验收时可核对每一级是谁签的。
+    """
+    from app.modules.safety.models import WorkPermitSignature
+
+    rows = (
+        await db.execute(
+            select(WorkPermitNode, User.name)
+            .outerjoin(User, User.id == WorkPermitNode.acted_by)
+            .where(
+                WorkPermitNode.permit_id == permit.id,
+                WorkPermitNode.round == permit.approval_round,
+                WorkPermitNode.is_deleted.is_(False),
+            )
+            .order_by(WorkPermitNode.seq)
+        )
+    ).all()
+    if not rows:
+        return ""
+    sig_node_ids = set(
+        (
+            await db.execute(
+                select(WorkPermitSignature.node_id).where(
+                    WorkPermitSignature.permit_id == permit.id,
+                    WorkPermitSignature.round == permit.approval_round,
+                    WorkPermitSignature.node_id.isnot(None),
+                    WorkPermitSignature.is_deleted.is_(False),
+                )
+            )
+        ).scalars()
+    )
+    marks = {
+        "approved": "✅",
+        "rejected": "❌",
+        "pending": "⏳",
+        "waiting": "⏸",
+        "skipped": "—",
+    }
+    lines = ["**签字记录**"]
+    for node, acted_name in rows:
+        mark = marks.get(node.status, "")
+        who = acted_name or ""
+        when = node.acted_at.strftime("%m-%d %H:%M") if node.acted_at else ""
+        sig = " 🖊" if node.id in sig_node_ids else ""
+        suffix = f"（{who} {when}{sig}）" if who or when else ""
+        lines.append(f"{node.seq}. {mark} {node.node_name}{suffix}")
+    return "\n".join(lines)
 
 
 async def _node_signed(
@@ -745,13 +830,16 @@ def _hr() -> dict[str, Any]:
 
 
 def _card_for(
-    elements: list[dict[str, Any]], *, template: str = "blue"
+    elements: list[dict[str, Any]],
+    *,
+    template: str = "blue",
+    title: str = "作业票审批",
 ) -> dict[str, Any]:
     return {
         "schema": "2.0",
         "config": {"update_multi": True},
         "header": {
-            "title": {"tag": "plain_text", "content": "作业票审批"},
+            "title": {"tag": "plain_text", "content": title},
             "template": template,
         },
         "body": {"elements": elements},
@@ -805,11 +893,13 @@ def _ticket_markdown(permit: WorkPermit) -> str:
         permit.permit_type, values, permit_no=permit.permit_no
     )
     status = PERMIT_STATUS_LABELS.get(permit.status, permit.status)
-    return f"{content}\n**当前状态** {status}"
+    # 空行分隔（单换行在飞书 markdown 中被并入上一行）
+    return f"{content}\n\n**当前状态** {status}"
 
 
 async def _node_sign_url(permit: WorkPermit, node: WorkPermitNode) -> str:
     from app.modules.safety.service.work_permit_signatures import (
+        build_sign_url,
         create_sign_token,
     )
 
@@ -821,7 +911,7 @@ async def _node_sign_url(permit: WorkPermit, node: WorkPermitNode) -> str:
         open_id="",
         signer_name=node.node_name,
     )
-    return f"{public_base_url()}/api/v1/safety/work-permit-sign/{token}"
+    return build_sign_url(token)
 
 
 async def _download_url(permit_id: UUID) -> str:

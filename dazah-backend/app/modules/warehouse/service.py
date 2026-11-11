@@ -1281,14 +1281,18 @@ class WarehouseService:
         """
         batch_size = min(max(page_size, 100), 500)
         last_synced_ms = int(last_synced_at.timestamp() * 1000) if last_synced_at else 0
-        # 飞书业务日期字段的取值为「当天零点」的时间戳（日期型字段无时刻），
-        # 而 last_synced_at 是精确到毫秒的同步时刻。直接用上次同步时刻做水线
-        # 会把当天新录入但日期为当天的记录（零点 < 同步时刻）误判为旧数据，
-        # 导致增量永远拉不到当天数据。因此业务日期水线改用「上次同步当天零点」。
+        # 飞书业务日期字段的取值为「业务时区当天零点」的时间戳（日期型字段无
+        # 时刻），水线必须同样按北京时间零点计算。last_synced_at 是 UTC 时刻，
+        # 若直接取 .date() 再拼 UTC 零点，得到的其实是北京时间 08:00：白天
+        # （08:00 之后）同步时，日期为当天的记录（北京时间 00:00）会小于水线
+        # 被误判为旧数据，导致当天新录入的数据要到次日全量兜底才出现。
+        # 第二路 last_modified_time 排序飞书不支持（InvalidSort），无法兜底。
         last_synced_day_ms = (
             int(
                 datetime.combine(
-                    last_synced_at.date(), datetime.min.time(), tzinfo=UTC
+                    last_synced_at.astimezone(CHINA_TIMEZONE).date(),
+                    datetime.min.time(),
+                    tzinfo=CHINA_TIMEZONE,
                 ).timestamp()
                 * 1000
             )
