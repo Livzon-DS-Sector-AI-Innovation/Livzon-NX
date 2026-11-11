@@ -21,7 +21,7 @@ flowchart LR
   scope --> backend["Backend Quality"]
   scope --> tools["CI Tools Image"]
   tools --> backendMigrations["Backend Migrations and Contracts"]
-  tools --> integration["Backend Integration × 4"]
+  tools --> integration["Backend Integration × 6"]
   integration --> backendCoverage["Backend Coverage"]
   scope --> prodImage["Backend Production Image Verify"]
   scope --> devImage["Backend Development Image Verify"]
@@ -146,21 +146,22 @@ CI 将依赖安装与质量检查拆成独立步骤；本地 `ci.sh quality` 仍
 `Backend Migrations and Contracts` 在空测试库核对唯一 Alembic head，运行
 upgrade、模型漂移、FastAPI import 和 OpenAPI 漂移检查。
 
-`Backend Integration` 四片并行运行原全量 Pytest。各片使用独立的 PostgreSQL 17
+`Backend Integration` 六片并行运行原全量 Pytest。各片使用独立的 PostgreSQL 17
 和 Redis 8，在本片测试库迁移和菜单目录初始化成功后执行测试。同一文件的用例留在同一片并保留
 原有收集顺序。分片权重使用成功运行的四份 JUnit 报告，记录累计至少一秒的文件；
 其他文件按报告中较短用例的平均耗时估算，每例 0.021 秒。
+各片记录 Pytest 启动与收集耗时以及最慢的 15 个测试阶段。
 [权重来源 42948663467](https://github.com/Livzon-DS-Sector-AI-Innovation/Livzon-NX/actions/runs/42948663467)
 
-`Backend Coverage` 核对四份清单的全量收集结果一致，并验证所有用例 ID 恰好完成
+`Backend Coverage` 核对六份清单的全量收集结果一致，并验证所有用例 ID 恰好完成
 一次。它合并原始分支覆盖率数据，生成 `coverage.xml`，执行 60% 行、33.5% 分支和
-80% 变更行门槛。四片各自上传 JUnit、用例清单和原始覆盖率数据，汇总任务上传
-覆盖率报告。迁移与契约、四片测试和覆盖率汇总都成功后，`CI Gate` 才能通过。
+80% 变更行门槛。六片各自上传 JUnit、用例清单和原始覆盖率数据，汇总任务上传
+覆盖率报告。迁移与契约、六片测试和覆盖率汇总都成功后，`CI Gate` 才能通过。
 本地 `ci.sh integration` 仍提供单进程全量验证入口。
 
 汇总任务通过 `uv sync --frozen --only-group ci-coverage` 安装锁文件中的
 Coverage.py、Pytest、greenlet 及其依赖。它读取原始覆盖率和源码生成报告，不加载业务
-运行环境。全套业务依赖由四个集成分片安装并执行。全量清单核对、分支数据校验、
+运行环境。全套业务依赖由六个集成分片安装并执行。全量清单核对、分支数据校验、
 60% 行、33.5% 分支和 80% 变更行门槛继续在汇总任务执行。
 
 `Backend Production Image Verify` 和 `Backend Development Image Verify` 各在
@@ -305,7 +306,7 @@ React Scheduler 收尾回归连续 5 轮、每轮 3 项通过；中文字体及 
 `docker/Dockerfile.ci-tools`，固定 Ubuntu 24.04 和 uv 0.13.4 的基础镜像 digest，
 预装 Python 3.12、PostgreSQL 客户端和 CJK 字体。系统包层使用独立的
 `type=gha,scope=ci-tools` 缓存，每个 UTC ISO 周刷新。该任务预检系统工具并
-保存镜像；后端迁移、四个集成分片及 Hermes 契约下载同一份归档，按构建任务输出的
+保存镜像；后端迁移、六个集成分片及 Hermes 契约下载同一份归档，按构建任务输出的
 镜像 ID 校验并运行，不再逐 runner 安装 apt 包。
 
 此试点用本次 Actions 运行的 artifact 分发工具镜像，保留 1 天，不需要写入镜像

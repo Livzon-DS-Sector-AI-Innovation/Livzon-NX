@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 
 import pytest
+import yaml
 
 SCRIPT = (
     Path(__file__).resolve().parents[3] / "dazah-backend/scripts/ci_pytest_shard.py"
@@ -20,18 +21,33 @@ shards = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(shards)
 
 
-def test_weighted_partition_balances_slow_files_without_splitting_them(monkeypatch):
-    inventory = [
-        f"test_{index}.py::test_{case}" for index in range(8) for case in range(2)
+def test_workflow_schedules_every_backend_shard() -> None:
+    workflow = SCRIPT.parents[2] / ".github/workflows/ci.yml"
+    job = yaml.safe_load(workflow.read_text(encoding="utf-8"))["jobs"][
+        "backend-integration"
     ]
-    weights = {f"test_{index}.py": float(8 - index) for index in range(8)}
+    count = shards.SHARD_COUNT
+    assert job["strategy"]["matrix"]["shard"] == list(range(1, count + 1))
+    assert job["name"] == f"Backend Integration (${{{{ matrix.shard }}}}/{count})"
+
+
+def test_weighted_partition_balances_slow_files_without_splitting_them(monkeypatch):
+    file_count = shards.SHARD_COUNT * 2
+    inventory = [
+        f"test_{index}.py::test_{case}"
+        for index in range(file_count)
+        for case in range(2)
+    ]
+    weights = {
+        f"test_{index}.py": float(file_count - index) for index in range(file_count)
+    }
     monkeypatch.setattr(shards, "TEST_FILE_SECONDS", weights)
     plan = shards.partition(inventory)
     totals = [
         sum(weights[file] for file in {node.split("::", 1)[0] for node in group})
         for group in plan
     ]
-    assert totals == [9, 9, 9, 9]
+    assert totals == [file_count + 1] * shards.SHARD_COUNT
     assert set.union(*plan) == set(inventory)
     assert sum(map(len, plan)) == len(inventory)
     assert plan == shards.partition(inventory[::-1])
@@ -39,8 +55,8 @@ def test_weighted_partition_balances_slow_files_without_splitting_them(monkeypat
 
 def test_pytest_runs_each_file_once_in_original_order(tmp_path: Path) -> None:
     expected = []
-    for index in range(8):
-        filename = f"test_file_{index}.py"
+    for index in range(shards.SHARD_COUNT * 2):
+        filename = f"test_file_{index:02d}.py"
         (tmp_path / filename).write_text(
             "import pytest\n"
             "@pytest.mark.parametrize('value', [2, 1])\n"
@@ -63,7 +79,7 @@ def test_pytest_runs_each_file_once_in_original_order(tmp_path: Path) -> None:
         "plugin = IntegrationShard(int(sys.argv[2]), Path(sys.argv[3])); "
         "raise SystemExit(pytest.main(['-q'], plugins=[plugin]))"
     )
-    for shard in range(1, 5):
+    for shard in range(1, shards.SHARD_COUNT + 1):
         directory = tmp_path / f"backend-integration-shard-{shard}"
         directory.mkdir()
         path = directory / "manifest.json"
@@ -81,6 +97,7 @@ def test_pytest_runs_each_file_once_in_original_order(tmp_path: Path) -> None:
             check=False,
         )
         assert result.returncode == 0, result.stdout + result.stderr
+        assert "pytest startup and collection" in result.stdout
         manifest = json.loads(path.read_text(encoding="utf-8"))
         assert manifest["collected"] == sorted(expected)
         assert manifest["finished"] == [
@@ -93,7 +110,7 @@ def test_pytest_runs_each_file_once_in_original_order(tmp_path: Path) -> None:
                 if node.startswith(filename + "::")
             )
         (directory / "coverage-data").touch()
-    assert len(shards.verify_shards(tmp_path)) == 4
+    assert len(shards.verify_shards(tmp_path)) == shards.SHARD_COUNT
 
 
 @pytest.mark.parametrize(
@@ -110,9 +127,11 @@ def test_rejects_incomplete_shard_results(
     tmp_path: Path, problem: str, message: str
 ) -> None:
     inventory = [
-        f"test_{index}.py::test_{case}" for index in range(4) for case in range(2)
+        f"test_{index}.py::test_{case}"
+        for index in range(shards.SHARD_COUNT)
+        for case in range(2)
     ]
-    for index in range(4):
+    for index in range(shards.SHARD_COUNT):
         directory = tmp_path / f"backend-integration-shard-{index + 1}"
         directory.mkdir()
         manifest = {

@@ -249,13 +249,7 @@ class GateTests(unittest.TestCase):
             jobs[job]
             for job in ("backend-migrations", "backend-integration", "backend-coverage")
         )
-        self.assertEqual(
-            integration["strategy"],
-            {
-                "fail-fast": False,
-                "matrix": {"shard": [1, 2, 3, 4]},
-            },
-        )
+        self.assertIs(integration["strategy"]["fail-fast"], False)
         self.assertEqual(integration["services"], migrations["services"])
         self.assertEqual(set(integration["services"]), {"postgres", "redis"})
         self.assertNotIn("services", coverage)
