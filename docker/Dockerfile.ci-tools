@@ -1,0 +1,21 @@
+# syntax=docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
+# CI test tooling only; the build context is docker/ and contains no app source.
+FROM ghcr.io/astral-sh/uv:0.13.4@sha256:9f130421e930bfbdc563c00740466603f8723158e90297d07957c2294640262b AS uv
+FROM ubuntu:24.04@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852
+
+COPY apt-download.conf /etc/apt/apt.conf.d/80dazah-download
+COPY --from=uv /uv /usr/local/bin/uv
+
+# Refresh OS packages at least once per ISO week even on a warm layer cache.
+ARG CI_TOOLS_WEEK
+RUN test -n "$CI_TOOLS_WEEK" \
+    && apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && apt-get install -y --no-install-recommends \
+        ca-certificates curl git python3-venv python-is-python3 \
+        postgresql-client fonts-noto-cjk \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN useradd --uid 1001 --create-home runner
+USER runner
+ENV UV_PYTHON=/usr/bin/python3 UV_PYTHON_DOWNLOADS=never

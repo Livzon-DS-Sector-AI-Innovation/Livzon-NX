@@ -9,6 +9,8 @@ const coverageThresholds = {
   statements: 4.5,
 } as const
 
+const isShardedRun = process.argv.some(arg => arg === '--shard' || arg.startsWith('--shard='))
+
 export default defineConfig({
   resolve: {
     alias: {
@@ -36,13 +38,10 @@ export default defineConfig({
         'src/**/*.d.ts',
         'src/types/generated/**',
       ],
-      reporter: ['text-summary', 'json-summary', 'cobertura'],
-      thresholds: {
-        // Floors are rounded down from the current full-src baseline. Keep
-        // them monotonic while changed executable lines remain under the
-        // stricter PR gate.
-        ...coverageThresholds,
-      },
+      // Shards emit coverage maps via the blob reporter. Apply the full-src
+      // floors and write reports when the maps are merged or the suite runs whole.
+      reporter: isShardedRun ? [] : ['text-summary', 'json-summary', 'cobertura'],
+      thresholds: isShardedRun ? undefined : coverageThresholds,
     },
   },
 })

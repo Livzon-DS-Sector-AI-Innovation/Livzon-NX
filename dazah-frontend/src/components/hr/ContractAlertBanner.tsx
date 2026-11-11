@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { App, Button, Card, Modal, Space, Tag, Row, Col, Table, Upload } from 'antd'
+import { App, Button, Card, Modal, Space, Tag, Row, Col, Table, Upload, theme } from 'antd'
 import { SendOutlined, DownloadOutlined, UploadOutlined } from '@ant-design/icons'
 import PlatformNotice from '@/components/shared/PlatformNotice'
 import * as XLSX from 'xlsx'
@@ -61,6 +61,7 @@ export default function ContractAlertBanner({ onViewExpiring }: Props) {
   const [exportOpen, setExportOpen] = useState(false)
   const [quarter] = useState(getNextQuarter)
   const { message } = App.useApp()
+  const { token } = theme.useToken()
 
   useEffect(() => {
     (async () => {
@@ -268,6 +269,35 @@ export default function ContractAlertBanner({ onViewExpiring }: Props) {
     )
   }
 
+  const renderExpiringItem = (item: ContractExpiringItem) => (
+    <div style={{
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: '5px 10px',
+      backgroundColor: token.colorBgLayout,
+      color: token.colorText,
+      borderRadius: token.borderRadiusXS,
+      border: `1px solid ${token.colorBorderSecondary}`,
+    }}>
+      <span>
+        <strong>{item.name}</strong>
+        <span style={{ color: token.colorTextSecondary, marginLeft: token.marginXS, fontSize: token.fontSizeSM }}>
+          {item.department}
+        </span>
+      </span>
+      <Tag style={{
+        margin: 0,
+        backgroundColor: token.colorWarningBg,
+        borderColor: token.colorWarningBorder,
+        color: token.colorText,
+        transition: 'none',
+      }}>
+        {item.contract_end_date}
+      </Tag>
+    </div>
+  )
+
   return (
     <>
       <Card
@@ -294,13 +324,7 @@ export default function ContractAlertBanner({ onViewExpiring }: Props) {
         <Row gutter={[12, 6]}>
           {items.slice(0, 20).map((item) => (
             <Col key={item.employee_id} xs={24} sm={12}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 10px', background: 'rgba(255,255,255,0.5)', borderRadius: 4, border: '1px solid #ffe7ba' }}>
-                <span>
-                  <strong>{item.name}</strong>
-                  <span style={{ color: '#8c8c8c', marginLeft: 8, fontSize: 12 }}>{item.department}</span>
-                </span>
-                <Tag color="volcano" style={{ margin: 0 }}>{item.contract_end_date}</Tag>
-              </div>
+              {renderExpiringItem(item)}
             </Col>
           ))}
         </Row>
@@ -315,10 +339,7 @@ export default function ContractAlertBanner({ onViewExpiring }: Props) {
         <Row gutter={[12, 6]}>
           {items.map((item) => (
             <Col key={item.employee_id} span={12}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '5px 10px', background: '#fffbe6', borderRadius: 4, border: '1px solid #ffe7ba' }}>
-                <span><strong>{item.name}</strong><span style={{ color: '#8c8c8c', marginLeft: 8, fontSize: 12 }}>{item.department}</span></span>
-                <Tag color="volcano" style={{ margin: 0 }}>{item.contract_end_date}</Tag>
-              </div>
+              {renderExpiringItem(item)}
             </Col>
           ))}
         </Row>

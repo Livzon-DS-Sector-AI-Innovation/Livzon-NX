@@ -81,6 +81,13 @@ Server Action 示例见 `examples/server-actions.md`。
   展开、跳转、键盘操作及受影响模块首页。
 - 页面使用清晰的中文业务名称；标题、关键状态与操作、台账或表单按业务任务
   排列，不为统一外观牺牲信息密度。
+- 优先用布局、视觉层级、间距和明确的主操作说明任务流程。省去重复表达标题、
+  状态或操作含义的次级标签和辅助文案。默认省略口号式副标题、教学段落和逐区说明。
+- 确需补充的非关键信息，优先使用信息图标触发的 `Tooltip`，确保键盘和触屏用户
+  也能查看。完成任务所需的信息应直接可见。
+- 保留必要的表单标签及其与控件的关联，并为交互控件提供清晰的可访问名称。
+- 改版时先移除冗余标签和说明。首次使用者应能看出下一步在哪里操作、操作后会发生
+  什么。若清晰度下降，优先调整布局、视觉层级和按钮文案。
 - 表格考虑查询、筛选、分页、溢出、固定列和批量操作。独立列表页的已提交
   查询状态和详情返回路径按 `examples/list-url-state.md` 实现；嵌入式表格或
   多表页面先确定各自状态范围，不机械套用单列表 URL 参数。
@@ -98,7 +105,8 @@ Server Action 示例见 `examples/server-actions.md`。
   禁止在业务页面直接导入 Ant Design `Alert` 或手写另一套提示条。
   文案、操作入口、语义色与窄屏布局遵守
   `DESIGN.md` 的“统一提示框与提示条”。提示弹窗复用 `Modal`，不得另造主题。
-- 删除、覆盖、审批、驳回、同步和批量变更等高风险操作必须说明影响并二次确认。
+- 删除、支付、提交永久性变更、覆盖、审批、驳回、同步和批量变更等高风险或不可逆
+  操作必须二次确认，并在确认界面直接说明操作对象和实际后果。
 - 权限不足应呈现明确状态，不得伪装成空数据或普通网络失败。
 - 移动端至少支持必要查看和轻量操作；复杂台账以桌面效率为主。
 
@@ -187,22 +195,25 @@ docker build --file ../Dockerfile --target frontend --tag dazah-frontend:ci ..
 - `pnpm typecheck` 对应 `Frontend Quality` 中的类型检查，不得依赖 Next.js Build 间接发现类型错误。
 - 定向单测使用 `pnpm exec vitest run <测试文件或目录>`；`pnpm test:unit` 自带
   `src` 过滤条件，会运行整个 `src` 测试集，不用追加文件参数冒充定向验证。
-  CI 通过 `pnpm test:coverage` 执行同一套测试；新增业务逻辑或缺陷修复必须有相关测试。
+  CI 的 `Frontend Unit` 通过 `pnpm test:coverage` 分三片执行同一套测试。
+  新增业务逻辑或缺陷修复必须有相关测试。
 - `pnpm test:coverage` 按 `vitest.config.ts` 的 include/exclude 和全应用基线检查，
-  变更行覆盖率由根目录脚本与 CI 单独检查；两种指标不得混用，禁止降低现有门禁。
+  CI 的 `Frontend Coverage` 合并三片报告后检查全应用基线，再用根目录脚本检查变更行覆盖率。
+  两种指标不得混用，禁止降低现有门禁。
 - `pnpm test:build` 验证构建脚本的失败边界与类型覆盖保护；构建脚本或相关守卫
   变化时运行，对应当前 `Frontend Quality` 的独立检查步骤。
-- `pnpm test:e2e:critical` 对应 `Stable Frontend E2E`，覆盖不依赖真实外部系统的关键
-  用户流程。
-- `pnpm build` 对应 `Frontend Quality` 中的构建步骤，用于验证 Next.js 生产构建、Server/Client 边界和静态生成。
-- Docker 交付镜像构建对应 `Frontend Image Verify`，与 `Frontend Quality` 的
+- `pnpm test:e2e:critical` 对应 `Stable Frontend E2E`，CI 分四片覆盖不依赖真实外部系统的
+  关键用户流程。
+- `pnpm build` 对应 `Frontend Build`，用于验证 Next.js 生产构建、Server/Client 边界和静态生成。
+- Docker 交付镜像构建对应 `Frontend Image Verify`，与 `Frontend Build` 的
   `pnpm build` 分开。变化影响镜像构建或容器运行时，执行相应开发镜像构建或容器验证，
   本地使用 `docker build --file ../Dockerfile.dev --target frontend --tag dazah-frontend:dev ..`；
   standalone 等交付镜像特有变化由 CI 或明确授权的隔离交付验证覆盖。
-- `Stable Frontend E2E` 和隔离测试复用同次 CI 的 standalone 构建产物；生产 Docker 镜像独立构建并缓存构建层。
+- `Stable Frontend E2E` 和隔离测试复用同次 CI 的 `Frontend Build` 产物。
+  生产 Docker 镜像独立构建并缓存构建层。
 - 统一 `CI Gate` 按根目录 `.github/scripts/ci_gate.py` 的变更范围要求相应任务
-  成功；前端范围包括 `Frontend Quality`、`Frontend Image Verify` 和
-  `Stable Frontend E2E`。只有门禁确认不适用的任务可跳过，隔离测试不阻断合并。
+  成功；前端范围包括静态检查、生产构建、全量单测及覆盖率、镜像验证和稳定 E2E。
+  只有门禁确认不适用的任务可跳过，隔离测试不阻断合并。
 
 命令在 `dazah-frontend/` 执行，包管理器遵守 `packageManager` 声明。遇到工具
 自动要求重装、清空 `node_modules` 或修改锁文件时，先核对工具版本和环境；

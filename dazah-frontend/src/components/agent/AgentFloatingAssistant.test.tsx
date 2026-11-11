@@ -13,7 +13,6 @@ import {
 } from "./AgentFloatingAssistant"
 import type { AgentConfirmation, AgentSessionItem } from "@/lib/api/agent"
 import { useAgentStore } from "@/stores/agent"
-import { useAgentEntryPreferencesStore } from "@/stores/agent-entry-preferences"
 import { useAuthStore } from "@/stores/auth"
 
 const mocks = vi.hoisted(() => ({
@@ -132,25 +131,16 @@ describe("agent session history", () => {
     await act(async () => historyButton!.click())
   }
 
-  it("preserves an expanded conversation while hiding its minimized entry", async () => {
+  it("preserves a draft when reopening a minimized conversation", async () => {
     useAgentStore.getState().setDraft("保留草稿")
     await act(async () => root.render(createElement(App, null, createElement(AgentFloatingAssistant))))
-    try {
-      await act(async () => useAgentEntryPreferencesStore.getState().setVisible(false))
-      expect(host.querySelector('.agent-floating-assistant')).not.toBeNull()
-      expect(useAgentStore.getState().draft).toBe("保留草稿")
-      await act(async () => useAgentStore.getState().setMinimized(true))
-      expect(host.querySelector('.agent-floating-entry-button')).toBeNull()
-      await act(async () => useAgentEntryPreferencesStore.getState().setVisible(true))
-      const entry = host.querySelector<HTMLButtonElement>('.agent-floating-entry-button')
-      expect(entry).not.toBeNull()
-      await act(async () => entry!.click())
-      expect(host.querySelector('.agent-floating-assistant')).not.toBeNull()
-      expect(useAgentStore.getState().draft).toBe("保留草稿")
-    } finally {
-      await act(async () => useAgentEntryPreferencesStore.getState().setVisible(true))
-      localStorage.removeItem('dazah.agent.floating-entry-visible')
-    }
+    await act(async () => useAgentStore.getState().setMinimized(true))
+    expect(host.querySelector('.agent-floating-assistant')).toBeNull()
+    const entry = host.querySelector<HTMLButtonElement>('button[aria-label="展开中枢助手"]')
+    expect(entry).not.toBeNull()
+    await act(async () => entry!.click())
+    expect(host.querySelector('.agent-floating-assistant')).not.toBeNull()
+    expect(useAgentStore.getState().draft).toBe("保留草稿")
   })
 
   it("starts a new conversation before slow archiving and preserves new messages", async () => {

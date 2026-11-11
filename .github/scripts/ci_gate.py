@@ -34,13 +34,21 @@ def expected_jobs(scopes: dict[str, bool]) -> dict[str, bool]:
     )
     return {
         "change-scope": True,
+        "repository-policy": True,
         "source-security": True,
+        "ci-tools": contract,
         "frontend-quality": frontend,
+        "frontend-build": frontend,
+        "frontend-unit": frontend,
+        "frontend-coverage": frontend,
         "frontend-image-verify": frontend,
         "frontend-e2e": frontend,
         "backend-quality": backend,
+        "backend-migrations": backend,
         "backend-integration": backend,
+        "backend-coverage": backend,
         "backend-image-verify": backend,
+        "backend-dev-image-verify": backend,
         "hermes-quality": hermes,
         "hermes-contract": contract,
     }

@@ -159,8 +159,8 @@ def test_warning_status_and_department_normalization() -> None:
 @pytest.mark.parametrize(
     ("page_key", "row", "expected"),
     [
-        (next(iter(FINISHED_PRODUCT_DETAIL_PAGE_KEYS)), {"库存量": 0}, True),
-        (next(iter(FINISHED_PRODUCT_DETAIL_PAGE_KEYS)), {"库存量": 2}, False),
+        (min(FINISHED_PRODUCT_DETAIL_PAGE_KEYS), {"库存量": 0}, True),
+        (min(FINISHED_PRODUCT_DETAIL_PAGE_KEYS), {"库存量": 2}, False),
         ("raw-detail", {"本日结存": "0"}, True),
         ("packaging-detail", {"本日结存": "bad"}, True),
         ("hardware-workshop", {"结存量": -1}, True),
