@@ -3,11 +3,12 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { App, Card, Row, Col, Typography, Statistic, Button, Tag, Space, Spin, Progress, DatePicker, InputNumber, Modal } from 'antd'
+import { Card, Row, Col, Typography, Statistic, Button, Tag, Space, Spin, Progress, DatePicker } from 'antd'
 import {ExperimentOutlined, FilterOutlined, BulbOutlined,
   CalculatorOutlined, CheckCircleOutlined, DatabaseOutlined,
-  ArrowRightOutlined, NodeIndexOutlined, ScheduleOutlined, SettingOutlined,} from '@ant-design/icons'
+  ArrowRightOutlined, NodeIndexOutlined, ScheduleOutlined,} from '@ant-design/icons'
 import ReactECharts from '@/components/shared/ThemedEChart'
+import ChartLineSetting from '@/components/production/ChartLineSetting'
 import { useChartThresholds } from '@/components/production/chart-thresholds'
 import dayjs, { type Dayjs } from 'dayjs'
 import SyncSettingsButton from '@/components/production/SyncSettingsButton'
@@ -28,23 +29,8 @@ const STAGE_MAP: Record<string, (typeof STAGES)[number]> = {}
 STAGES.forEach(s => { STAGE_MAP[s.key] = s })
 
 export default function Workshop2013Page() {
-  const { message } = App.useApp()
   const { values: drLineValues, save: saveDrLine } = useChartThresholds('workshop-201-2-dr')
   const passLine = drLineValues['pass_rate'] ?? 80
-  const [lineModalOpen, setLineModalOpen] = useState(false)
-  const [passLineDraft, setPassLineDraft] = useState<number | undefined>(80)
-  const [lineSaving, setLineSaving] = useState(false)
-  const handlePassLineSave = async () => {
-    if (passLineDraft == null) return
-    setLineSaving(true)
-    try {
-      const ok = await saveDrLine('pass_rate', passLineDraft)
-      if (ok) { message.success('收率达标率红线已保存，全平台生效'); setLineModalOpen(false) }
-      else message.error('保存失败')
-    } finally {
-      setLineSaving(false)
-    }
-  }
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<'dashboard' | 'workshop'>('dashboard')
   const [loading, setLoading] = useState(true)
@@ -130,19 +116,13 @@ export default function Workshop2013Page() {
         <>
           {/* KPI 卡片 */}
           <div style={{ textAlign: 'right', marginBottom: 8 }}>
-            <Button size="small" icon={<SettingOutlined />} onClick={() => { setPassLineDraft(passLine); setLineModalOpen(true) }}>
-              警戒线
-            </Button>
+            <ChartLineSetting
+              configs={[{ key: 'pass_rate', label: '收率达标率红线', unit: '%' }]}
+              values={{ pass_rate: passLine }}
+              onSave={saveDrLine}
+              title="收率达标率红线（全平台共享）"
+            />
           </div>
-          <Modal title="收率达标率红线（全平台共享）" open={lineModalOpen} onOk={handlePassLineSave}
-            onCancel={() => setLineModalOpen(false)} confirmLoading={lineSaving}
-            okText="保存" cancelText="取消" width={420}>
-            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
-              <Text style={{ flex: 1 }}>收率达标率红线（%）</Text>
-              <InputNumber value={passLineDraft} onChange={(v) => setPassLineDraft(v ?? undefined)} style={{ width: 120 }} />
-            </div>
-            <Text type="secondary">保存后达标率卡片的红绿判断立即按新值生效，对所有用户生效。</Text>
-          </Modal>
           <Row gutter={16} className="mb-4">
             <Col span={6}>
               <Card><Statistic title="本月产量" value={d.monthly_output_kg || 0} suffix="kg" styles={{ content: { color: '#1677ff', fontSize: 28 } }} /></Card>

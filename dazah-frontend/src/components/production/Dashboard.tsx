@@ -2,9 +2,9 @@
 // 通用工段仪表盘：统计卡片 + 月份选择 + 趋势图（警戒线可配置）
 
 import { useMemo, useState } from 'react'
-import { Button, Card, InputNumber, Modal, Row, Col, Select, Space, Typography, Statistic, App } from 'antd'
-import { SettingOutlined } from '@ant-design/icons'
+import { Card, Row, Col, Select, Space, Typography, Statistic } from 'antd'
 import ReactECharts from '@/components/shared/ThemedEChart'
+import ChartLineSetting from './ChartLineSetting'
 import { useChartThresholds, type ChartLineConfig } from './chart-thresholds'
 
 const { Text } = Typography
@@ -37,16 +37,19 @@ interface DashboardProps {
 }
 
 export default function Dashboard({ title, data, dateField, cards, charts, month: externalMonth, scopeKey, lineConfigs }: DashboardProps) {
-  const { message } = App.useApp()
   const hasExternalMonth = externalMonth !== undefined
   const [internalMonth, setInternalMonth] = useState<string>('全部')
   const [selectedChart, setSelectedChart] = useState<string>(charts[0]?.key || '')
-  const [lineModalOpen, setLineModalOpen] = useState(false)
-  const [lineDraft, setLineDraft] = useState<Record<string, number | undefined>>({})
-  const [lineSaving, setLineSaving] = useState(false)
   const { values: lineValues, save: saveLine } = useChartThresholds(
     scopeKey && lineConfigs?.length ? scopeKey : undefined,
   )
+
+  // 弹窗展示值：后端配置优先，缺省回落图表自带 markLine
+  const displayLineValues: Record<string, number | undefined> = {}
+  for (const conf of lineConfigs ?? []) {
+    displayLineValues[conf.key] = lineValues[conf.key] ??
+      charts.find((c) => c.key === conf.key)?.markLine
+  }
 
   // 可配置图表的线值：后端配置优先，缺省回落图表自带 markLine
   const lineFor = (cfg: ChartDef): number | undefined => {
@@ -107,34 +110,8 @@ export default function Dashboard({ title, data, dateField, cards, charts, month
       }],
       grid: { left: 55, right: 20, top: 40, bottom: 60 },
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtered, selectedChart, charts, lineValues, lineConfigs])
-
-  const openLineModal = () => {
-    const draft: Record<string, number | undefined> = {}
-    for (const conf of lineConfigs ?? []) {
-      draft[conf.key] = lineValues[conf.key] ??
-        charts.find((c) => c.key === conf.key)?.markLine
-    }
-    setLineDraft(draft)
-    setLineModalOpen(true)
-  }
-
-  const handleLineSave = async () => {
-    if (!scopeKey) return
-    setLineSaving(true)
-    try {
-      for (const conf of lineConfigs ?? []) {
-        const v = lineDraft[conf.key]
-        if (v == null) continue
-        const ok = await saveLine(conf.key, v)
-        if (!ok) { message.error(`「${conf.label}」保存失败`); return }
-      }
-      message.success('警戒线已保存，全平台生效')
-      setLineModalOpen(false)
-    } finally {
-      setLineSaving(false)
-    }
-  }
 
   return (
     <Card size="small" className="mb-4" title={
@@ -162,28 +139,17 @@ export default function Dashboard({ title, data, dateField, cards, charts, month
           <Select aria-label={`${title}趋势指标`} size="small" value={selectedChart} onChange={setSelectedChart} style={{ width: 150, marginLeft: 8 }}
             options={charts.map(c => ({ value: c.key, label: c.label }))} />
           {scopeKey && lineConfigs?.length ? (
-            <Button size="small" icon={<SettingOutlined />} style={{ marginLeft: 8 }} onClick={openLineModal}>
-              警戒线
-            </Button>
+            <span style={{ marginLeft: 8 }}>
+              <ChartLineSetting
+                configs={lineConfigs}
+                values={displayLineValues}
+                onSave={saveLine}
+              />
+            </span>
           ) : null}
         </Col></Row>
         <ReactECharts option={chartOption} style={{ height: 260 }} />
       </>}
-      <Modal title="警戒线配置（全平台共享）" open={lineModalOpen} onOk={handleLineSave}
-        onCancel={() => setLineModalOpen(false)} confirmLoading={lineSaving}
-        okText="保存" cancelText="取消" width={420}>
-        {(lineConfigs ?? []).map((conf) => (
-          <div key={conf.key} style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
-            <Text style={{ flex: 1 }}>{conf.label}{conf.unit ? `（${conf.unit}）` : ''}</Text>
-            <InputNumber
-              value={lineDraft[conf.key]}
-              onChange={(v) => setLineDraft((prev) => ({ ...prev, [conf.key]: v ?? undefined }))}
-              style={{ width: 120 }}
-            />
-          </div>
-        ))}
-        <Text type="secondary">保存后趋势图红线与相关卡片红绿判断立即按新值生效，对所有用户生效。</Text>
-      </Modal>
     </Card>
   )
 }
