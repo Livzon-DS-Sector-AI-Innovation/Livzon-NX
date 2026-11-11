@@ -172,7 +172,16 @@ class GateTests(unittest.TestCase):
                 )
                 export = next(s for s in steps if s.get("id") == "phases")
                 self.assertEqual(export["if"], "${{ always() }}")
-        contract = str(jobs["hermes-contract"])
+        contract_steps = jobs["hermes-contract"]["steps"]
+        install_hermes = next(
+            step
+            for step in contract_steps
+            if step["name"] == "Install Hermes contract dependencies"
+        )
+        self.assertEqual(
+            install_hermes["run"], "python3 .github/scripts/ci_support.py install hermes"
+        )
+        contract = str(contract_steps)
         for filename in (
             "test_agent_v2_contracts.py",
             "test_tool_registry_executor.py",
@@ -402,11 +411,18 @@ class GateTests(unittest.TestCase):
             },
         )
         self.assertEqual(coverage["needs"], ["change-scope", "frontend-unit"])
+        generate = next(
+            step
+            for step in unit["steps"]
+            if step["name"] == "Generate API contract for unit tests"
+        )
         shard = next(
             step
             for step in unit["steps"]
             if step["name"] == "Run Vitest shard with coverage"
         )
+        self.assertEqual(generate["run"], "pnpm generate:api")
+        self.assertLess(unit["steps"].index(generate), unit["steps"].index(shard))
         self.assertIn(
             'pnpm test:coverage --shard="$SHARD/3" --reporter=blob', shard["run"]
         )
