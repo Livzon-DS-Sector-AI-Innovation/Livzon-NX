@@ -21,7 +21,7 @@ flowchart LR
   scope --> backend["Backend Quality"]
   scope --> tools["CI Tools Image"]
   tools --> backendMigrations["Backend Migrations and Contracts"]
-  tools --> integration["Backend Integration × 6"]
+  scope --> integration["Backend Integration × 6"]
   integration --> backendCoverage["Backend Coverage"]
   scope --> prodImage["Backend Production Image Verify"]
   scope --> devImage["Backend Development Image Verify"]
@@ -150,7 +150,9 @@ upgrade、模型漂移、FastAPI import 和 OpenAPI 漂移检查。
 和 Redis 8，在本片测试库迁移和菜单目录初始化成功后执行测试。同一文件的用例留在同一片并保留
 原有收集顺序。分片权重使用成功运行的四份 JUnit 报告，记录累计至少一秒的文件；
 其他文件按报告中较短用例的平均耗时估算，每例 0.021 秒。
-各片记录 Pytest 启动与收集耗时以及最慢的 15 个测试阶段。
+各片记录 Pytest 启动与收集耗时以及最慢的 15 个测试阶段。范围判定后各片直接在
+Ubuntu 24.04 runner 上启动，使用固定的 Python 版本范围和 uv 版本。各片准备
+PostgreSQL 客户端和 CJK 字体，通过同一套环境预检后才迁移和运行测试。
 [权重来源 42948663467](https://github.com/Livzon-DS-Sector-AI-Innovation/Livzon-NX/actions/runs/42948663467)
 
 `Backend Coverage` 核对六份清单的全量收集结果一致，并验证所有用例 ID 恰好完成
@@ -306,8 +308,8 @@ React Scheduler 收尾回归连续 5 轮、每轮 3 项通过；中文字体及 
 `docker/Dockerfile.ci-tools`，固定 Ubuntu 24.04 和 uv 0.13.4 的基础镜像 digest，
 预装 Python 3.12、PostgreSQL 客户端和 CJK 字体。系统包层使用独立的
 `type=gha,scope=ci-tools` 缓存，每个 UTC ISO 周刷新。该任务预检系统工具并
-保存镜像；后端迁移、六个集成分片及 Hermes 契约下载同一份归档，按构建任务输出的
-镜像 ID 校验并运行，不再逐 runner 安装 apt 包。
+保存镜像；后端迁移与 Hermes 契约下载同一份归档，按构建任务输出的镜像 ID
+校验并运行。集成分片独立于工具镜像构建执行。
 
 此试点用本次 Actions 运行的 artifact 分发工具镜像，保留 1 天，不需要写入镜像
 仓库或增加 token 权限。本地镜像归档约 162 MiB，上线时需比较上传下载的耗时与

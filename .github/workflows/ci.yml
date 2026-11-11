@@ -833,7 +833,7 @@ jobs:
 
   backend-integration:
     name: Backend Integration (${{ matrix.shard }}/6)
-    needs: [change-scope, ci-tools]
+    needs: change-scope
     if: >-
       ${{ needs.change-scope.outputs.backend_changed == 'true' ||
           needs.change-scope.outputs.shared_changed == 'true' }}
@@ -853,20 +853,38 @@ jobs:
       - name: uv cache ${{ steps.uv.outputs.cache-hit }}
         run: echo "Recorded uv cache status for this shard."
 
-      - *ci_tools_download
-      - *ci_tools_load
-      - *ci_tools_preflight
-      - *ci_tools_backend_dependencies
-      - *backend_test_environment
+      - *backend_test_toolchain
+
+      - name: Prepare backend shard system dependencies
+        shell: bash
+        run: |
+          packages=(fonts-noto-cjk)
+          if ! command -v psql >/dev/null || ! command -v pg_isready >/dev/null; then
+            packages+=(postgresql-client)
+          fi
+          if ! sudo apt-get -c docker/apt-download.conf install -y --no-install-recommends "${packages[@]}"; then
+            sudo apt-get -c docker/apt-download.conf update
+            sudo apt-get -c docker/apt-download.conf install -y --no-install-recommends "${packages[@]}"
+          fi
+
+      - name: Install backend dependencies
+        run: python3 .github/scripts/ci_support.py install backend
+
+      - name: Verify backend environment
+        shell: bash
+        run: |
+          cd dazah-backend
+          python3 ../.github/scripts/ci_support.py run --phase backend-environment --category environment -- \
+            uv run --no-sync python ../.github/scripts/ci_support.py preflight backend
 
       - name: Migrate backend shard database
-        shell: *ci_tools_shell
+        shell: bash
         run: >-
           python3 .github/scripts/ci_support.py run --phase backend-migrations --category migration --
           bash dazah-backend/scripts/ci.sh migrate-test-database
 
       - name: Run backend test shard
-        shell: *ci_tools_shell
+        shell: bash
         env:
           SHARD: ${{ matrix.shard }}
         run: >-

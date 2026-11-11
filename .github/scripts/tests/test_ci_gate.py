@@ -132,7 +132,7 @@ class GateTests(unittest.TestCase):
         build = next(s for s in producer["steps"] if s.get("id") == "build")
         self.assertEqual(build["with"]["file"], "docker/Dockerfile.ci-tools")
         self.assertFalse(build["with"].get("push", False))
-        for job in ("backend-migrations", "backend-integration", "hermes-contract"):
+        for job in ("backend-migrations", "hermes-contract"):
             with self.subTest(job=job):
                 self.assertEqual(jobs[job]["needs"], ["change-scope", "ci-tools"])
                 steps = {s["name"]: s for s in jobs[job]["steps"]}
@@ -250,6 +250,7 @@ class GateTests(unittest.TestCase):
             for job in ("backend-migrations", "backend-integration", "backend-coverage")
         )
         self.assertIs(integration["strategy"]["fail-fast"], False)
+        self.assertEqual(integration["needs"], "change-scope")
         self.assertEqual(integration["services"], migrations["services"])
         self.assertEqual(set(integration["services"]), {"postgres", "redis"})
         self.assertNotIn("services", coverage)
@@ -272,7 +273,15 @@ class GateTests(unittest.TestCase):
         )
         steps = {step["name"]: step for step in integration["steps"]}
         names = list(steps)
+        self.assertNotIn("Download CI tools image", steps)
+        self.assertNotIn("Load verified CI tools image", steps)
+        self.assertIn(
+            "fonts-noto-cjk", steps["Prepare backend shard system dependencies"]["run"]
+        )
+        self.assertIn("preflight backend", steps["Verify backend environment"]["run"])
         pipeline = [
+            "Verify CI toolchain",
+            "Prepare backend shard system dependencies",
             "Install backend dependencies",
             "Verify backend environment",
             "Migrate backend shard database",
