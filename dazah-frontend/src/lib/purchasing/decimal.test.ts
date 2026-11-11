@@ -11,6 +11,11 @@ describe('purchasing decimal helpers', () => {
     expect(sumQuantity(['1.250', 2, '-0.05'])).toBe('3.2')
   })
 
+  it('preserves trailing zeroes in integer quantities', () => {
+    expect(sumQuantity([6, 4])).toBe('10')
+    expect(sumQuantity([-10, -20])).toBe('-30')
+  })
+
   it('distinguishes valid zero values from missing or invalid input', () => {
     expect(isPresentDecimal(0)).toBe(true)
     expect(isPresentDecimal('0.00')).toBe(true)
