@@ -757,6 +757,11 @@ async def test_training_ledger_create_update_delete_conflict_and_notification(
     instance = service.TrainingLedgerService.__new__(service.TrainingLedgerService)
     instance.session = session
     instance.repo = repo
+    # 普通部门台账使用显式的空映射配置，不读取其他用例留下的进程缓存。
+    monkeypatch.setattr(
+        "app.modules.hr.training_dept_resolver._load_mappings",
+        AsyncMock(return_value=[]),
+    )
     monkeypatch.setattr(
         "app.modules.hr.training_dept_resolver.split_ledger_departments",
         AsyncMock(side_effect=lambda _session, name: [name]),

@@ -19,6 +19,15 @@ from app.modules.hr.schemas import TrainingLedgerCreate
 from app.modules.hr.service import TrainingLedgerService
 
 
+@pytest.fixture(autouse=True)
+def _isolated_department_mappings(monkeypatch: pytest.MonkeyPatch) -> None:
+    """这些用例使用无拆分映射的配置，隔离其他文件留下的部门映射缓存。"""
+    monkeypatch.setattr(
+        "app.modules.hr.training_dept_resolver._load_mappings",
+        AsyncMock(return_value=[]),
+    )
+
+
 def _make_session() -> AsyncMock:
     """mock AsyncSession：查 Trainer 无结果（回退授课部门）、session.get 返回 None."""
     session = AsyncMock()
