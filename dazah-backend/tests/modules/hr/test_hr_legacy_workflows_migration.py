@@ -738,6 +738,8 @@ async def test_training_ledger_create_update_delete_conflict_and_notification(
         scalar_one_or_none=lambda: "质量部",
         # 培训师授课部门解析按 (姓名, 部门) 行读取（批量 IN 查询形状）
         all=lambda: [("王老师", "质量部")],
+        # 部门映射列表查询走 result.scalars().all() 形状
+        scalars=lambda: SimpleNamespace(all=lambda: []),
     )
     repo = SimpleNamespace(
         create=AsyncMock(side_effect=lambda value: value),
