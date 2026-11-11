@@ -878,6 +878,9 @@ from app.modules.production.ceramic_models import (  # noqa: F401, E402
     CeramicMembraneClean,
     CeramicMembraneOps,
 )
+from app.modules.production.chart_threshold_models import (  # noqa: F401, E402
+    ChartThreshold,
+)
 from app.modules.production.conc1_models import Conc1  # noqa: F401, E402
 from app.modules.production.conc2_models import Conc2  # noqa: F401, E402
 from app.modules.production.decolor1_models import Decolor1  # noqa: F401, E402

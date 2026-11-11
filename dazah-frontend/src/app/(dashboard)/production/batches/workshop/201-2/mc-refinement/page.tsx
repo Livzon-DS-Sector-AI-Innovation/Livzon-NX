@@ -9,6 +9,7 @@ import dayjs from 'dayjs'
 import Dashboard from '@/components/production/Dashboard'
 import MCSheetsSyncButton from '@/components/production/MCSheetsSyncButton'
 import MCTraceButton from '@/components/production/MCTraceButton'
+import { useChartThresholds } from '@/components/production/chart-thresholds'
 import { PRODUCTION_PAGE_KEYS, useProductionPermissions } from '@/components/production/useProductionPermissions'
 
 const { Title, Text } = Typography
@@ -90,6 +91,8 @@ function TextCellInput({ value, onSave }: { value: string | null | undefined; on
 }
 
 export default function McRefinementPage() {
+  const { values: lineValues } = useChartThresholds('workshop-201-2/mc-refinement')
+  const yieldLine = lineValues['yield'] ?? 85
   const router = useRouter(); const { message, modal } = App.useApp()
   const { canOperate, canDelete } = useProductionPermissions(PRODUCTION_PAGE_KEYS.workshop2012)
   const [form] = Form.useForm()
@@ -164,7 +167,7 @@ export default function McRefinementPage() {
     { title: '湿粉重\n量(kg)', dataIndex: 'wet_weight', width: 65, render: (_, r) => M(<CellInput value={r.wet_weight} onSave={v => saveRecord(r.id, 'wet_weight', v, r)} />, r), onCell },
     { title: '干粉重\n量(kg)', dataIndex: 'dry_weight', width: 65, render: (_, r) => M(<CellInput value={r.dry_weight} onSave={v => saveRecord(r.id, 'dry_weight', v, r)} />, r), onCell },
     { title: '累计干\n粉重量', dataIndex: 'cumulative_dry_weight', width: 65, render: (_, r) => M(<CellInput value={r.cumulative_dry_weight} onSave={v => saveRecord(r.id, 'cumulative_dry_weight', v, r)} />, r), onCell },
-    { title: '单步\n收率', dataIndex: 'single_step_yield', width: 52, render: (_, r) => M(<CellInput value={r.single_step_yield} color={r.single_step_yield != null ? (r.single_step_yield >= 85 ? '#52c41a' : '#f5222d') : undefined} onSave={v => saveRecord(r.id, 'single_step_yield', v, r)} />, r), onCell },
+    { title: '单步\n收率', dataIndex: 'single_step_yield', width: 52, render: (_, r) => M(<CellInput value={r.single_step_yield} color={r.single_step_yield != null ? (r.single_step_yield >= yieldLine ? '#52c41a' : '#f5222d') : undefined} onSave={v => saveRecord(r.id, 'single_step_yield', v, r)} />, r), onCell },
     { title: '二次结晶\n累计收率', dataIndex: 'cumulative_yield', width: 68, render: (_, r) => M(<CellInput value={r.cumulative_yield} onSave={v => saveRecord(r.id, 'cumulative_yield', v, r)} />, r), onCell },
     { title: '操作', key: 'act', width: 50, fixed: 'right', render: (_, r) => M(canDelete ? <Button type="link" size="small" danger onClick={() => modal.confirm({ title: `删除 ${r.batch_no}?`, onOk: async () => { await api(`/refinement-records/${r.id}`, { method: 'DELETE' }); load() } })} style={{ fontSize: 10 }}>删除</Button> : null, r), onCell },
   ]
@@ -196,12 +199,14 @@ export default function McRefinementPage() {
       </div>
 
       <Dashboard title="MC二次精制仪表盘" data={records} dateField="created_at" month={month}
+        scopeKey="workshop-201-2/mc-refinement"
+        lineConfigs={[{ key: 'yield', label: '收率警戒线', unit: '%' }]}
         cards={[
           { title: '累计折干产品量', value: (all) => { let v = null; for (const d of all) if (d.cumulative_dry_product != null) v = d.cumulative_dry_product; return v }, suffix: 'kg', precision: 0 },
           { title: '累计干粉重量', value: (all) => { let v = null; for (const d of all) if (d.cumulative_dry_weight != null) v = d.cumulative_dry_weight; return v }, suffix: 'kg', precision: 0 },
           { title: '批数', value: (_, f) => f.length, suffix: '批', precision: 0 },
           { title: '总干粉产量', value: (_, f) => f.reduce((a, b) => a + (b.dry_weight || 0), 0), suffix: 'kg', precision: 0 },
-          { title: '平均收率', value: (_, f) => { let s = 0, n = 0; f.forEach(d => { if (d.single_step_yield != null) { s += d.single_step_yield; n++ } }); return n > 0 ? Math.round(s / n * 100) / 100 : null }, suffix: '%', precision: 1, color: (v) => v >= 85 ? '#52c41a' : '#f5222d' },
+          { title: '平均收率', value: (_, f) => { let s = 0, n = 0; f.forEach(d => { if (d.single_step_yield != null) { s += d.single_step_yield; n++ } }); return n > 0 ? Math.round(s / n * 100) / 100 : null }, suffix: '%', precision: 1, color: (v) => v >= yieldLine ? '#52c41a' : '#f5222d' },
         ]}
         charts={[
           { key: 'yield', title: '单步收率趋势', unit: '%', color: '#1890ff', markLine: 85, label: '收率趋势', field: 'single_step_yield' },

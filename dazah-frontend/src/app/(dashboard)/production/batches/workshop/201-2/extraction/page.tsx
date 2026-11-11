@@ -9,6 +9,7 @@ import dayjs from 'dayjs'
 import Dashboard from '@/components/production/Dashboard'
 import MCSheetsSyncButton from '@/components/production/MCSheetsSyncButton'
 import MCTraceButton from '@/components/production/MCTraceButton'
+import { useChartThresholds } from '@/components/production/chart-thresholds'
 import { PRODUCTION_PAGE_KEYS, useProductionPermissions } from '@/components/production/useProductionPermissions'
 
 const { Title, Text } = Typography
@@ -91,6 +92,8 @@ function TextCellInput({ value, onSave }: { value: string | null | undefined; on
 export default function ExtractionPage() {
   const router = useRouter(); const { message, modal } = App.useApp()
   const { canOperate, canDelete } = useProductionPermissions(PRODUCTION_PAGE_KEYS.workshop2012)
+  const { values: lineValues } = useChartThresholds('workshop-201-2/extraction')
+  const yieldLine = lineValues['yield'] ?? 85
   const [form] = Form.useForm()
   const [records, setRecords] = useState<ExtractionRecord[]>([]); const [loading, setLoading] = useState(false); const [saving, setSaving] = useState(false)
   const [month, setMonth] = useState<number>(dayjs().month() + 1)
@@ -209,12 +212,14 @@ export default function ExtractionPage() {
       </div>
 
       <Dashboard title="提取工段仪表盘" data={records} dateField="extract_date" month={month}
+        scopeKey="workshop-201-2/extraction"
+        lineConfigs={[{ key: 'yield', label: '收率警戒线', unit: '%' }]}
         cards={[
           { title: '总粗品投入量', value: (_, f) => f.reduce((a, b) => a + (b.total_crude_weight || 0), 0), suffix: 'kg', precision: 0 },
           { title: '总折干产量', value: (_, f) => f.reduce((a, b) => a + (b.dry_weight || 0), 0), suffix: 'kg', precision: 0 },
           { title: '总滤液产品量', value: (_, f) => f.reduce((a, b) => a + (b.filter_product_qty || 0), 0), suffix: 'kg', precision: 0 },
           { title: '批数', value: (_, f) => f.length, suffix: '批', precision: 0 },
-          { title: '平均收率', value: (_, f) => { let s = 0, n = 0; f.forEach(d => { if (d.yield_rate != null) { s += d.yield_rate; n++ } }); return n > 0 ? Math.round(s / n * 100) / 100 : null }, suffix: '%', precision: 1, color: (v) => v >= 85 ? '#52c41a' : '#f5222d' },
+          { title: '平均收率', value: (_, f) => { let s = 0, n = 0; f.forEach(d => { if (d.yield_rate != null) { s += d.yield_rate; n++ } }); return n > 0 ? Math.round(s / n * 100) / 100 : null }, suffix: '%', precision: 1, color: (v) => v >= yieldLine ? '#52c41a' : '#f5222d' },
         ]}
         charts={[
           { key: 'yield', title: '收率趋势', unit: '%', color: '#1890ff', markLine: 85, label: '收率趋势', field: 'yield_rate' },
