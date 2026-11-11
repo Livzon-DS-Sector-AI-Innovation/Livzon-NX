@@ -47,7 +47,7 @@ function formatScaledInt(value: bigint, scale: number, options?: { trim?: boolea
   const fraction = scale > 0 ? absoluteText.slice(-scale) : ''
   const text = scale > 0 ? `${sign}${integer}.${fraction}` : `${sign}${integer}`
 
-  if (!options?.trim) return text
+  if (!options?.trim || scale === 0) return text
 
   const trimmed = text.replace(/\.?0+$/, '')
   return trimmed === '' || trimmed === '-' ? '0' : trimmed
