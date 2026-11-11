@@ -208,7 +208,7 @@ uv run --no-sync mypy <相关路径>
 - `Backend Quality`：权限生命周期、V2 残留扫描、变更文件 Ruff、编译、core Mypy，以及变更 `app/` Python 文件及其依赖链的 Mypy；不启动数据库或重复执行单测。增量 Mypy 使用默认依赖诊断，不得通过 `silent`、`skip` 或忽略导入错误绕过门禁；Git 变更范围解析失败必须使门禁失败。本地可运行 `uv run --no-sync python scripts/mypy_changed.py` 检查未提交及未跟踪的运行代码。
 - `Backend Migrations and Contracts` 在空测试库验证单一 Alembic head、迁移、模型漂移、
   FastAPI import 和 OpenAPI。
-- `Backend Integration` 分四片运行全量 Pytest（包含 unit/core）。各片使用独立
+- `Backend Integration` 分六片运行全量 Pytest（包含 unit/core）。各片使用独立
   PostgreSQL/Redis，先迁移本片测试库并初始化菜单目录。`Backend Coverage` 核对全部用例恰好完成一次，
   合并原始分支覆盖率数据并执行原有三项阈值。
 - `Backend Image Verify`：构建后端交付镜像，执行安全扫描、隔离数据库迁移和容器健康检查。

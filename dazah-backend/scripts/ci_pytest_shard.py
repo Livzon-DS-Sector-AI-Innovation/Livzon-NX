@@ -8,11 +8,12 @@ import os
 from collections import Counter, defaultdict
 from collections.abc import Generator, Sequence
 from pathlib import Path
+from time import perf_counter
 from typing import TypedDict
 
 import pytest
 
-SHARD_COUNT = 4
+SHARD_COUNT = 6
 DEFAULT_SECONDS_PER_CASE = 0.021
 # File totals from the four full-suite JUnit reports for CI run 42948663467.
 # Files below one second and newly collected files use a per-case estimate.
@@ -190,6 +191,7 @@ def partition(node_ids: Sequence[str]) -> list[set[str]]:
 class IntegrationShard:
     def __init__(self, shard: int, manifest_path: Path) -> None:
         self.manifest_path = manifest_path
+        self.started_at = perf_counter()
         self.manifest: Manifest = {"shard": shard, "collected": [], "finished": []}
 
     @pytest.hookimpl(wrapper=True, tryfirst=True)
@@ -208,6 +210,16 @@ class IntegrationShard:
             items=[item for item in items if item.nodeid not in selected]
         )
         items[:] = [item for item in items if item.nodeid in selected]
+
+    def pytest_collection_finish(self, session: pytest.Session) -> None:
+        terminal = session.config.pluginmanager.get_plugin("terminalreporter")
+        if terminal is not None:
+            collected = len(self.manifest["collected"])
+            terminal.write_line(
+                f"Backend shard {self.manifest['shard']}/{SHARD_COUNT}: "
+                f"{len(session.items)} of {collected} tests selected; "
+                f"pytest startup and collection {perf_counter() - self.started_at:.2f}s"
+            )
 
     def pytest_runtest_logfinish(self, nodeid: str) -> None:
         self.manifest["finished"].append(nodeid)
@@ -230,6 +242,7 @@ def run_shard(shard: int, output: Path) -> int:
                 "--cov",
                 "--cov-branch",
                 "--cov-report=",
+                "--durations=15",
                 f"--junitxml={output / 'junit.xml'}",
                 "-ra",
             ],
