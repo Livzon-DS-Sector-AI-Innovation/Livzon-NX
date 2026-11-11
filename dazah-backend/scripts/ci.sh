@@ -49,11 +49,21 @@ run_integration() {
   run_coverage
 }
 
-prepare_integration() {
+require_test_database() {
+  if [[ "${APP_ENV:-}" != test || -z "${TEST_DATABASE_URL:-}" || "${DATABASE_URL:-}" != "$TEST_DATABASE_URL" ]]; then
+    echo "Backend CI shards require APP_ENV=test and matching explicit DATABASE_URL and TEST_DATABASE_URL." >&2
+    return 2
+  fi
+}
+
+migrate_test_database() {
   bash "${repository_dir}/scripts/wait-for-database.sh"
 
   echo "== Verify one Alembic head =="
-  mapfile -t alembic_heads < <(uv run --no-sync alembic heads)
+  local heads_output
+  local -a alembic_heads
+  heads_output="$(uv run --no-sync alembic heads)"
+  mapfile -t alembic_heads < <(printf '%s' "$heads_output")
   [[ "${#alembic_heads[@]}" -eq 1 ]] || {
     echo "Expected exactly one Alembic head, found ${#alembic_heads[@]}:" >&2
     printf '%s\n' "${alembic_heads[@]}" >&2
@@ -62,6 +72,30 @@ prepare_integration() {
 
   echo "== Apply Alembic migrations =="
   uv run --no-sync alembic upgrade head
+}
+
+prepare_shard_database() {
+  require_test_database
+  migrate_test_database
+
+  echo "== Seed the page menu catalog for this backend shard =="
+  uv run --no-sync python -c '
+import asyncio
+
+from app.core.database import async_session_factory
+from app.platform.identity.rbac import seed_menus
+
+async def main():
+    async with async_session_factory() as session:
+        await seed_menus(session)
+
+asyncio.run(main())
+'
+}
+
+prepare_integration() {
+  migrate_test_database
+
   echo "== Check model/migration drift =="
   uv run --no-sync alembic check
   echo "== FastAPI import check =="
@@ -75,12 +109,22 @@ run_integration_tests() {
   echo "== Backend database and API integration tests =="
   uv run --no-sync pytest \
     -p no:anyio \
-    --cov=app \
+    --cov \
     --cov-branch \
     --cov-report=term-missing \
     --cov-report=xml \
     --junitxml=.pytest_cache/backend-integration-junit.xml \
     -ra
+}
+
+run_integration_shard() {
+  require_test_database
+  uv run --no-sync python -m scripts.ci_pytest_shard run "$@"
+}
+
+merge_shard_coverage() {
+  uv run --no-sync python -m scripts.ci_pytest_shard combine "$@"
+  run_coverage
 }
 
 run_coverage() {
@@ -122,7 +166,7 @@ run_security() {
 }
 
 usage() {
-  echo "Usage: $0 {quality|quality-checks|integration|prepare-integration|integration-tests|coverage|container|security|all}" >&2
+  echo "Usage: $0 {quality|quality-checks|integration|prepare-integration|migrate-test-database|integration-tests|integration-shard <shard> <output>|coverage|merge-shard-coverage <artifacts>|container|security|all}" >&2
   exit 2
 }
 
@@ -131,8 +175,11 @@ case "${1:-}" in
   quality-checks) run_quality_checks ;;
   integration) run_integration ;;
   prepare-integration) prepare_integration ;;
+  migrate-test-database) prepare_shard_database ;;
   integration-tests) run_integration_tests ;;
+  integration-shard) shift; run_integration_shard "$@" ;;
   coverage) run_coverage ;;
+  merge-shard-coverage) shift; merge_shard_coverage "$@" ;;
   container) run_container ;;
   security) run_security ;;
   all)

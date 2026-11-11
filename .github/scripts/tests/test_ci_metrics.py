@@ -162,14 +162,59 @@ class MetricsTests(unittest.TestCase):
         report = metrics.cache_observations(
             {
                 "frontend-quality": {"outputs": {"pnpm_cache_hit": "true"}},
-                "frontend-e2e": {"outputs": {"pnpm_cache_hit": "false"}},
+                "backend-coverage": {"outputs": {"uv_cache_hit": "false"}},
                 "frontend-image-verify": {
                     "outputs": {"cached_steps": "3", "total_steps": "12"}
                 },
-            }
+                "backend-image-verify": {
+                    "outputs": {"cached_steps": "8", "total_steps": "10"}
+                },
+                "backend-dev-image-verify": {
+                    "outputs": {"cached_steps": "0", "total_steps": "9"}
+                },
+                "ci-tools": {"outputs": {"cached_steps": "11", "total_steps": "10"}},
+            },
+            [
+                {
+                    "name": "Stable Frontend E2E (1/4)",
+                    "steps": [
+                        {"name": "pnpm store cache false", "conclusion": "success"}
+                    ],
+                },
+                {
+                    "name": "Stable Frontend E2E (2/4)",
+                    "steps": [
+                        {"name": "pnpm store cache true", "conclusion": "skipped"}
+                    ],
+                },
+                {"name": "Frontend Unit (1/3)", "steps": []},
+                {
+                    "name": "Backend Integration (1/4)",
+                    "steps": [{"name": "uv cache true", "conclusion": "success"}],
+                },
+                {"name": "Backend Integration (2/4)", "steps": []},
+            ],
         )
         self.assertEqual(report["pnpm_hit_percent"], 50)
+        self.assertEqual(report["pnpm"]["Stable Frontend E2E (1/4)"], "miss")
+        self.assertEqual(report["pnpm"]["Stable Frontend E2E (2/4)"], "unavailable")
+        self.assertEqual(report["pnpm"]["Frontend Unit (1/3)"], "unavailable")
+        self.assertEqual(report["uv"]["Backend Integration (1/4)"], "hit")
+        self.assertEqual(report["uv"]["Backend Integration (2/4)"], "unavailable")
+        self.assertEqual(report["uv_hit_percent"], 50)
         self.assertEqual(report["docker"]["cached_step_percent"], 25)
+        self.assertEqual(
+            {
+                job: value["cached_step_percent"]
+                for job, value in report["docker_images"].items()
+            },
+            {
+                "frontend-image-verify": 25,
+                "backend-image-verify": 80,
+                "backend-dev-image-verify": 0,
+                "ci-tools": None,
+            },
+        )
         self.assertEqual(
             metrics.cache_observations({})["pnpm"]["frontend-quality"], "unavailable"
         )
@@ -211,6 +256,7 @@ class MetricsTests(unittest.TestCase):
                     "name": "Frontend Quality",
                     "status": "completed",
                     "conclusion": "skipped",
+                    "created_at": "2026-10-28T23:59:50Z",
                     "started_at": "2026-10-29T00:00:00Z",
                     "completed_at": "2026-10-29T00:00:00Z",
                     "steps": None,
@@ -218,6 +264,7 @@ class MetricsTests(unittest.TestCase):
             ]
         )
         self.assertIsNone(observed[0]["duration_seconds"])
+        self.assertIsNone(observed[0]["queued_seconds"])
         self.assertEqual(observed[0]["steps"], [])
 
     def run_report(self, api_failure: bool = False) -> tuple[dict, str]:
@@ -228,6 +275,7 @@ class MetricsTests(unittest.TestCase):
                 "name": "Frontend | Quality",
                 "status": "completed",
                 "conclusion": "failure",
+                "created_at": "2026-10-28T23:59:40Z",
                 "started_at": "2026-10-29T00:00:00Z",
                 "completed_at": "2026-10-29T00:02:00Z",
                 "steps": [
@@ -283,8 +331,10 @@ class MetricsTests(unittest.TestCase):
         self.assertEqual(report["attempt"], "2")
         self.assertEqual(report["timing_status"], "available")
         self.assertEqual(report["jobs"][0]["duration_seconds"], 120)
+        self.assertEqual(report["jobs"][0]["queued_seconds"], 20)
         self.assertEqual(report["jobs"][0]["steps"][0]["duration_seconds"], 90)
         self.assertIsNone(report["jobs"][1]["duration_seconds"])
+        self.assertIsNone(report["jobs"][1]["queued_seconds"])
         self.assertIn("failure", text)
         self.assertIn("Frontend \\| Quality", text)
         self.assertIn("not final workflow duration", text)

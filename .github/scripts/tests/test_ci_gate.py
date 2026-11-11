@@ -32,23 +32,13 @@ def results(value: str = "success") -> dict[str, str]:
 class GateTests(unittest.TestCase):
     def test_backend_builds_use_authenticated_action_and_separate_layer_caches(self):
         jobs = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]
-        steps = jobs["backend-image-verify"]["steps"]
-        for name, filename, scope, tag in (
-            (
-                "Build backend image once",
-                "Dockerfile",
-                "backend",
-                "${{ env.IMAGE_TAG }}",
-            ),
-            (
-                "Build development backend image",
-                "Dockerfile.dev",
-                "backend-dev",
-                "${{ env.IMAGE_TAG }}-dev",
-            ),
+        for job, filename, scope, suffix in (
+            ("backend-image-verify", "Dockerfile", "backend", ""),
+            ("backend-dev-image-verify", "Dockerfile.dev", "backend-dev", "-dev"),
         ):
             with self.subTest(scope=scope):
-                build = next(step for step in steps if step["name"] == name)
+                steps = jobs[job]["steps"]
+                build = next(step for step in steps if step.get("id") == "build")
                 self.assertEqual(
                     build["uses"],
                     "docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8",
@@ -58,32 +48,96 @@ class GateTests(unittest.TestCase):
                 self.assertEqual(build["with"]["target"], "backend")
                 self.assertIs(build["with"]["load"], True)
                 self.assertFalse(build["with"].get("push", False))
-                self.assertEqual(build["with"]["tags"], tag)
+                self.assertEqual(build["with"]["tags"], "${{ env.IMAGE_TAG }}")
+                self.assertEqual(
+                    jobs[job]["env"]["IMAGE_TAG"],
+                    "dazah-backend:ci-${{ github.sha }}" + suffix,
+                )
                 self.assertEqual(build["with"]["cache-from"], f"type=gha,scope={scope}")
                 self.assertIn("mode=max", build["with"]["cache-to"])
                 self.assertIn(f"scope={scope}", build["with"]["cache-to"])
                 self.assertNotIn("ignore-error", build["with"]["cache-to"])
                 self.assertNotIn("continue-on-error", build)
 
-    def test_runner_apt_installations_share_strict_download_policy(self):
+    def test_backend_images_keep_runtime_checks_and_production_security_gate(self):
         jobs = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]
-        for job in ("backend-integration", "hermes-contract"):
+        production, development = (
+            {step["name"]: step for step in jobs[job]["steps"]}
+            for job in ("backend-image-verify", "backend-dev-image-verify")
+        )
+        for name in (
+            "Verify Chromium as app",
+            "Verify Chinese document conversion as app",
+        ):
+            self.assertEqual(production[name], development[name])
+            self.assertIn(
+                '--user app --entrypoint .venv/bin/python "$IMAGE_TAG"',
+                production[name]["run"],
+            )
+            self.assertNotIn("continue-on-error", production[name])
+        for name in (
+            "Generate complete image vulnerability report",
+            "Enforce image vulnerability gate",
+            "Upload image vulnerability report",
+            "Migrate container database",
+            "Run bounded health and smoke checks",
+            "Clean up containers",
+        ):
+            self.assertIn(name, production)
+            self.assertNotIn(name, development)
+        gate = production["Enforce image vulnerability gate"]["with"]
+        self.assertEqual(gate["severity"], "HIGH,CRITICAL")
+        self.assertEqual(gate["exit-code"], "1")
+        self.assertIs(gate["ignore-unfixed"], True)
+
+    def test_system_prerequisites_are_provided_by_the_same_ci_tools_image(self):
+        jobs = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]
+        producer = jobs["ci-tools"]
+        upload = next(
+            s for s in producer["steps"] if s["name"] == "Upload CI tools image"
+        )
+        self.assertEqual(upload["with"]["if-no-files-found"], "error")
+        build = next(s for s in producer["steps"] if s.get("id") == "build")
+        self.assertEqual(build["with"]["file"], "docker/Dockerfile.ci-tools")
+        self.assertFalse(build["with"].get("push", False))
+        for job in ("backend-migrations", "backend-integration", "hermes-contract"):
             with self.subTest(job=job):
-                step = next(
-                    step
-                    for step in jobs[job]["steps"]
-                    if step["name"] == "Install backend system prerequisites"
+                self.assertEqual(jobs[job]["needs"], ["change-scope", "ci-tools"])
+                steps = {s["name"]: s for s in jobs[job]["steps"]}
+                self.assertEqual(
+                    steps["Download CI tools image"]["with"]["name"],
+                    upload["with"]["name"],
                 )
-                command = step["run"]
-                self.assertLess(
-                    command.index("sudo install -m 0644 docker/apt-download.conf"),
-                    command.index("sudo apt-get update"),
+                load = steps["Load verified CI tools image"]
+                self.assertEqual(
+                    load["env"]["CI_TOOLS_IMAGE_ID"],
+                    "${{ needs.ci-tools.outputs.image_id }}",
                 )
-                self.assertIn(
-                    "sudo apt-get install --yes --no-install-recommends", command
-                )
-                self.assertNotIn("|| true", command)
-                self.assertNotIn("continue-on-error", step)
+                self.assertNotIn("continue-on-error", load)
+                preflight = steps["Verify backend environment"]
+                self.assertIn("ci-tools.sh {0}", preflight["shell"])
+                self.assertIn("preflight backend", preflight["run"])
+                self.assertNotIn("apt-get", str(steps))
+
+    def test_repository_policy_and_security_start_without_waiting_for_scope(self):
+        jobs = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]
+        for job in ("change-scope", "repository-policy", "source-security"):
+            self.assertNotIn("needs", jobs[job])
+            self.assertNotIn("if", jobs[job])
+        scope_steps = jobs["change-scope"]["steps"]
+        self.assertEqual(
+            [step["run"] for step in scope_steps if "run" in step],
+            ["python3 .github/scripts/change_scope.py"],
+        )
+        commands = "\n".join(
+            s.get("run", "") for s in jobs["repository-policy"]["steps"]
+        )
+        for command in (
+            "scripts/check-agent-instruction-bridges.py",
+            "pytest .github/scripts/tests scripts/tests -q",
+            "scripts/check-test-impact.py",
+        ):
+            self.assertIn(command, commands)
 
     def test_python_phases_and_environment_remain_blocking(self) -> None:
         workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
@@ -93,7 +147,9 @@ class GateTests(unittest.TestCase):
             self.assertEqual(job["runs-on"], "ubuntu-24.04")
         for name in (
             "backend-quality",
+            "backend-migrations",
             "backend-integration",
+            "backend-coverage",
             "hermes-quality",
             "hermes-contract",
         ):
@@ -102,10 +158,6 @@ class GateTests(unittest.TestCase):
             python = next(s for s in steps if s["name"] == "Set up Python")
             self.assertLess(steps.index(python), steps.index(setup))
             self.assertEqual(setup["with"]["version"], "${{ env.UV_VERSION }}")
-            self.assertEqual(
-                jobs[name]["outputs"]["uv_cache_hit"],
-                "${{ steps.uv.outputs.cache-hit }}",
-            )
             for step in steps:
                 if (
                     "ci_support.py" in step.get("run", "")
@@ -113,25 +165,13 @@ class GateTests(unittest.TestCase):
                 ):
                     self.assertNotIn("continue-on-error", step)
                     self.assertNotIn("always()", step.get("if", ""))
-            export = next(s for s in steps if s.get("id") == "phases")
-            self.assertEqual(export["if"], "${{ always() }}")
-        integration = jobs["backend-integration"]["steps"]
-        names = [s["name"] for s in integration]
-        for earlier, later in zip(
-            (
-                "Install backend dependencies",
-                "Verify backend environment",
-                "Verify backend migrations and contracts",
-                "Run backend full test suite",
-            ),
-            (
-                "Verify backend environment",
-                "Verify backend migrations and contracts",
-                "Run backend full test suite",
-                "Enforce backend coverage gates",
-            ),
-        ):
-            self.assertLess(names.index(earlier), names.index(later))
+            if name != "backend-integration":
+                self.assertEqual(
+                    jobs[name]["outputs"]["uv_cache_hit"],
+                    "${{ steps.uv.outputs.cache-hit }}",
+                )
+                export = next(s for s in steps if s.get("id") == "phases")
+                self.assertEqual(export["if"], "${{ always() }}")
         contract = str(jobs["hermes-contract"])
         for filename in (
             "test_agent_v2_contracts.py",
@@ -148,15 +188,95 @@ class GateTests(unittest.TestCase):
     def test_independent_checks_start_after_scope_and_remain_required(self) -> None:
         jobs = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]
         independent = {
+            "frontend-quality",
+            "frontend-build",
+            "frontend-unit",
             "frontend-image-verify",
-            "backend-integration",
             "backend-image-verify",
-            "hermes-contract",
+            "backend-dev-image-verify",
+            "ci-tools",
         }
         for job in independent:
             with self.subTest(job=job):
                 self.assertEqual(jobs[job]["needs"], "change-scope")
                 self.assertIn(job, jobs["ci-gate"]["needs"])
+
+    def test_backend_shards_migrate_independent_services_and_merge_all_artifacts(self):
+        jobs = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]
+        migrations, integration, coverage = (
+            jobs[job]
+            for job in ("backend-migrations", "backend-integration", "backend-coverage")
+        )
+        self.assertEqual(
+            integration["strategy"],
+            {
+                "fail-fast": False,
+                "matrix": {"shard": [1, 2, 3, 4]},
+            },
+        )
+        self.assertEqual(integration["services"], migrations["services"])
+        self.assertEqual(set(integration["services"]), {"postgres", "redis"})
+        self.assertNotIn("services", coverage)
+        self.assertEqual(coverage["needs"], ["change-scope", "backend-integration"])
+        for job in (migrations, integration, coverage):
+            self.assertNotIn("continue-on-error", job)
+        self.assertTrue(
+            any(
+                "scripts/ci.sh prepare-integration" in step.get("run", "")
+                for step in migrations["steps"]
+            )
+        )
+        steps = {step["name"]: step for step in integration["steps"]}
+        names = list(steps)
+        pipeline = [
+            "Install backend dependencies",
+            "Verify backend environment",
+            "Migrate backend shard database",
+            "Run backend test shard",
+        ]
+        self.assertEqual([name for name in names if name in pipeline], pipeline)
+        self.assertIn("uv cache ${{ steps.uv.outputs.cache-hit }}", steps)
+        self.assertIn("scripts/ci.sh migrate-test-database", steps[pipeline[-2]]["run"])
+        run = steps[pipeline[-1]]
+        self.assertEqual(run["env"]["SHARD"], "${{ matrix.shard }}")
+        self.assertIn(
+            'integration-shard "$SHARD" "$RUNNER_TEMP/backend-integration-shard-$SHARD"',
+            run["run"],
+        )
+        upload = steps["Upload backend shard reports"]["with"]
+        self.assertEqual(
+            upload["name"], "backend-integration-shard-${{ matrix.shard }}"
+        )
+        self.assertEqual(upload["if-no-files-found"], "error")
+        merge = {step["name"]: step for step in coverage["steps"]}
+        download = merge["Download backend shard reports"]["with"]
+        self.assertEqual(download["pattern"], "backend-integration-shard-*")
+        self.assertIs(download["merge-multiple"], False)
+        self.assertIn(
+            'merge-shard-coverage "$RUNNER_TEMP/backend-shards"',
+            merge["Enforce backend coverage gates"]["run"],
+        )
+
+    def test_expected_backend_jobs_must_succeed(self):
+        for job in (
+            "backend-migrations",
+            "backend-integration",
+            "backend-coverage",
+            "backend-image-verify",
+            "backend-dev-image-verify",
+        ):
+            for scope in ("backend_changed", "shared_changed"):
+                for result in ("skipped", "failure", "cancelled", "", "success"):
+                    with self.subTest(job=job, scope=scope, result=result):
+                        job_results = results()
+                        job_results[job] = result
+                        check = next(
+                            item
+                            for item in ci_gate.evaluate({scope: True}, job_results)
+                            if item.job == job
+                        )
+                        self.assertTrue(check.expected)
+                        self.assertEqual(check.ok, result == "success")
 
     def test_frontend_image_is_required_for_frontend_and_shared_changes(self) -> None:
         for scope in ("frontend_changed", "shared_changed"):
@@ -184,26 +304,35 @@ class GateTests(unittest.TestCase):
                 "${{ needs." + job + ".result }}",
             )
 
-    def test_e2e_reuses_bundle_without_waiting_for_image(self) -> None:
+    def test_e2e_and_quarantine_wait_only_for_the_production_bundle(self) -> None:
         jobs = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]
-        quality, image, e2e = (
+        quality, production, image, e2e, quarantine = (
             jobs[job]
-            for job in ("frontend-quality", "frontend-image-verify", "frontend-e2e")
+            for job in (
+                "frontend-quality",
+                "frontend-build",
+                "frontend-image-verify",
+                "frontend-e2e",
+                "frontend-flaky-quarantine",
+            )
         )
-        self.assertEqual(image["if"], quality["if"])
-        self.assertEqual(e2e["needs"], ["change-scope", "frontend-quality"])
+        self.assertEqual(e2e["needs"], ["change-scope", "frontend-build"])
+        self.assertEqual(quarantine["needs"], e2e["needs"])
+        self.assertIs(quarantine["continue-on-error"], True)
         self.assertNotIn("continue-on-error", image)
         quality_commands = "\n".join(step.get("run", "") for step in quality["steps"])
         for command in (
             "pnpm lint",
             "pnpm typecheck",
             "pnpm test:build",
-            "pnpm test:coverage",
-            "--minimum 80",
+            "node --test scripts/plan-critical-e2e-shard.test.mjs",
             "pnpm generate:api",
-            "pnpm build",
+            "generate-page-routes.py --check",
         ):
             self.assertIn(command, quality_commands)
+        self.assertNotIn("pnpm build", quality_commands)
+        self.assertNotIn("pnpm test:coverage", quality_commands)
+        self.assertIn("pnpm build", [step.get("run") for step in production["steps"]])
         self.assertFalse(any("docker/" in s.get("uses", "") for s in quality["steps"]))
         build = next(s for s in image["steps"] if s.get("id") == "build")
         self.assertEqual(build["with"]["target"], "frontend")
@@ -221,7 +350,7 @@ class GateTests(unittest.TestCase):
         )
         upload = next(
             s
-            for s in quality["steps"]
+            for s in production["steps"]
             if s.get("with", {}).get("name") == "frontend-e2e-bundle"
         )
         download = next(
@@ -232,8 +361,87 @@ class GateTests(unittest.TestCase):
         self.assertIn("upload-artifact@", upload["uses"])
         self.assertIn("download-artifact@", download["uses"])
         self.assertEqual(upload["with"]["if-no-files-found"], "error")
-        self.assertIn("pnpm test:e2e:critical --grep-invert @flaky", str(e2e))
+        stable = next(
+            step
+            for step in e2e["steps"]
+            if step["name"] == "Run stable critical Playwright tests"
+        )
+        self.assertEqual(stable["env"]["SHARD"], "${{ matrix.shard }}")
+        for command in (
+            "pnpm test:e2e:critical --grep-invert @flaky --list --reporter=json",
+            'node scripts/plan-critical-e2e-shard.mjs "$inventory" "$SHARD" "$excluded"',
+            '--reporter=html,json --test-list-invert="$excluded"',
+            'node scripts/plan-critical-e2e-shard.mjs "$inventory" "$SHARD" "$excluded" "$results"',
+        ):
+            self.assertIn(command, stable["run"])
         self.assertNotIn("pnpm build", str(e2e))
+        self.assertEqual(
+            e2e["strategy"],
+            {
+                "fail-fast": False,
+                "matrix": {"shard": [1, 2, 3, 4]},
+            },
+        )
+        report = next(
+            step for step in e2e["steps"] if step["name"] == "Upload stable E2E report"
+        )
+        self.assertEqual(
+            report["with"]["name"], "frontend-e2e-report-${{ matrix.shard }}"
+        )
+        self.assertEqual(report["if"], "${{ always() }}")
+
+    def test_frontend_coverage_requires_all_vitest_shards_and_both_coverage_gates(self):
+        jobs = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]
+        unit = jobs["frontend-unit"]
+        coverage = jobs["frontend-coverage"]
+        self.assertEqual(
+            unit["strategy"],
+            {
+                "fail-fast": False,
+                "matrix": {"shard": [1, 2, 3]},
+            },
+        )
+        self.assertEqual(coverage["needs"], ["change-scope", "frontend-unit"])
+        shard = next(
+            step
+            for step in unit["steps"]
+            if step["name"] == "Run Vitest shard with coverage"
+        )
+        self.assertIn(
+            'pnpm test:coverage --shard="$SHARD/3" --reporter=blob', shard["run"]
+        )
+        self.assertEqual(shard["env"]["SHARD"], "${{ matrix.shard }}")
+        upload = next(
+            step
+            for step in unit["steps"]
+            if step["name"] == "Upload Vitest shard report"
+        )
+        self.assertEqual(upload["with"]["name"], "frontend-vitest-${{ matrix.shard }}")
+        self.assertEqual(upload["with"]["if-no-files-found"], "error")
+        download = next(
+            step
+            for step in coverage["steps"]
+            if step["name"] == "Download Vitest shard reports"
+        )
+        self.assertEqual(download["with"]["pattern"], "frontend-vitest-*")
+        self.assertIs(download["with"]["merge-multiple"], True)
+        merge = next(
+            step
+            for step in coverage["steps"]
+            if step["name"] == "Merge Vitest reports and enforce coverage gates"
+        )
+        self.assertIn("for shard in 1 2 3", merge["run"])
+        self.assertIn('if [[ ! -s "$report" ]]', merge["run"])
+        self.assertIn("exit 1", merge["run"])
+        self.assertIn(
+            '--merge-reports="$RUNNER_TEMP/frontend-vitest" --coverage', merge["run"]
+        )
+        self.assertIn("--coverage-file coverage/cobertura-coverage.xml", merge["run"])
+        self.assertIn("--minimum 80", merge["run"])
+        for job in (unit, coverage, jobs["frontend-e2e"]):
+            self.assertNotIn("continue-on-error", job)
+            for step in job["steps"]:
+                self.assertNotIn("continue-on-error", step)
 
     def test_metrics_cannot_mask_gate_failure_or_expand_build_permissions(self) -> None:
         workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
@@ -254,29 +462,59 @@ class GateTests(unittest.TestCase):
         self.assertEqual(metrics["if"], "${{ always() }}")
         self.assertIs(metrics["continue-on-error"], True)
         self.assertGreater(gate["steps"].index(metrics), gate["steps"].index(evaluate))
-        for job in ("frontend-quality", "frontend-e2e"):
+        for job in ("frontend-quality", "frontend-build", "frontend-coverage"):
             self.assertEqual(
                 jobs[job]["outputs"]["pnpm_cache_hit"],
                 "${{ steps.node.outputs.cache-hit }}",
             )
+        for job in ("frontend-unit", "frontend-e2e"):
+            self.assertIn(
+                "pnpm store cache ${{ steps.node.outputs.cache-hit }}",
+                [step["name"] for step in jobs[job]["steps"]],
+            )
 
-    def test_metadata_still_requires_security_and_scope_success(self) -> None:
+    def test_metadata_still_requires_policy_security_and_scope_success(self) -> None:
         job_results = results("skipped")
-        job_results["change-scope"] = "success"
-        job_results["source-security"] = "success"
+        always_required = ("change-scope", "repository-policy", "source-security")
+        job_results.update(dict.fromkeys(always_required, "success"))
         self.assertTrue(all(c.ok for c in ci_gate.evaluate({}, job_results)))
-        job_results["source-security"] = "failure"
-        self.assertFalse(all(c.ok for c in ci_gate.evaluate({}, job_results)))
+        for job in always_required:
+            for result in ("failure", "skipped", "cancelled", ""):
+                with self.subTest(job=job, result=result):
+                    self.assertFalse(
+                        all(
+                            c.ok
+                            for c in ci_gate.evaluate({}, {**job_results, job: result})
+                        )
+                    )
 
-    def test_expected_jobs_must_succeed(self) -> None:
-        job_results = results()
-        job_results["frontend-quality"] = "skipped"
-        checks = ci_gate.evaluate({"frontend_changed": True}, job_results)
-        self.assertFalse(next(c for c in checks if c.job == "frontend-quality").ok)
+    def test_expected_frontend_jobs_must_succeed(self) -> None:
+        jobs = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]
+        for job in (
+            "frontend-quality",
+            "frontend-build",
+            "frontend-unit",
+            "frontend-coverage",
+            "frontend-e2e",
+        ):
+            self.assertEqual(jobs[job]["if"], jobs["frontend-image-verify"]["if"])
+            for scope in ("frontend_changed", "shared_changed"):
+                for result in ("skipped", "failure", "cancelled", "", "success"):
+                    with self.subTest(job=job, scope=scope, result=result):
+                        job_results = results()
+                        job_results[job] = result
+                        check = next(
+                            c
+                            for c in ci_gate.evaluate({scope: True}, job_results)
+                            if c.job == job
+                        )
+                        self.assertTrue(check.expected)
+                        self.assertEqual(check.ok, result == "success")
 
     def test_unneeded_skips_are_allowed(self) -> None:
         job_results = results("skipped")
         job_results["change-scope"] = "success"
+        job_results["repository-policy"] = "success"
         job_results["source-security"] = "success"
         checks = ci_gate.evaluate({"docs_only": True}, job_results)
         self.assertTrue(all(check.ok for check in checks))
@@ -304,6 +542,16 @@ class GateTests(unittest.TestCase):
             with self.subTest(scope=scope):
                 expected = ci_gate.expected_jobs({scope: True})
                 self.assertTrue(expected["hermes-contract"])
+                self.assertTrue(expected["ci-tools"])
+                for result in ("failure", "skipped", "cancelled", "", "success"):
+                    check = next(
+                        c
+                        for c in ci_gate.evaluate(
+                            {scope: True}, {**results(), "ci-tools": result}
+                        )
+                        if c.job == "ci-tools"
+                    )
+                    self.assertEqual(check.ok, result == "success")
 
 
 if __name__ == "__main__":

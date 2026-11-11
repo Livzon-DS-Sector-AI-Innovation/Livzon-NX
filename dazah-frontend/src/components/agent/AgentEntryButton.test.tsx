@@ -4,15 +4,12 @@ import { act } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { AgentEntryButton } from "./AgentEntryButton"
-import { useAgentEntryPreferencesStore } from "@/stores/agent-entry-preferences"
 
 describe("AgentEntryButton", () => {
   let host: HTMLDivElement
   let root: Root
 
   beforeEach(() => {
-    localStorage.clear()
-    useAgentEntryPreferencesStore.setState({ visible: true, hydrated: false })
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true)
     host = document.createElement("div")
     document.body.append(host)
@@ -47,11 +44,13 @@ describe("AgentEntryButton", () => {
     expect(host.querySelector("button")?.disabled).toBe(true)
   })
 
-  it.each([{}, { minimized: true }, { loading: true }])("hides every entry variant when the saved preference is hidden: %j", async (props) => {
+  it.each([{}, { minimized: true }, { loading: true }])("ignores the retired visibility preference for every entry variant: %j", async (props) => {
     localStorage.setItem('dazah.agent.floating-entry-visible', 'false')
-    await act(async () => root.render(<AgentEntryButton {...props} />))
-    expect(host.querySelector('button')).toBeNull()
-    await act(async () => useAgentEntryPreferencesStore.getState().setVisible(true))
-    expect(host.querySelector('button')).not.toBeNull()
+    try {
+      await act(async () => root.render(<AgentEntryButton {...props} />))
+      expect(host.querySelector('button')).not.toBeNull()
+    } finally {
+      localStorage.removeItem('dazah.agent.floating-entry-visible')
+    }
   })
 })

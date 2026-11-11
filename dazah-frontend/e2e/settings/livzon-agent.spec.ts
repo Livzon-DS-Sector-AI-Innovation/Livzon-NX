@@ -36,6 +36,24 @@ test.describe('Livzon Agent 治理台', () => {
     await expect(page.getByText('外部验收状态')).toHaveCount(0)
   })
 
+  for (const appearance of ['light', 'dark']) {
+    test(`运行总览移除悬浮入口设置且可打开助手（${appearance}）`, async ({ page }) => {
+      await page.addInitScript((mode) => {
+        localStorage.setItem('dazah-appearance', mode)
+        localStorage.setItem('dazah.agent.floating-entry-visible', 'false')
+      }, appearance)
+      await openAgentGovernance(page)
+
+      await expect(page.locator('html')).toHaveAttribute('data-theme', appearance)
+      await expect(page.getByRole('button', { name: '运行总览', exact: true })).toHaveAttribute('aria-current', 'page')
+      await expect(page.getByText('助手悬浮入口', { exact: true })).toHaveCount(0)
+      await expect(page.getByRole('switch', { name: 'Livzon助手悬浮按钮' })).toHaveCount(0)
+
+      await page.getByRole('button', { name: '打开中枢助手' }).click()
+      await expect(page.getByRole('textbox', { name: '中枢助手输入框' })).toBeVisible()
+    })
+  }
+
   test('从最近异常直接打开并查询调用链路', async ({ page }) => {
     await openAgentGovernance(page)
 
