@@ -1,7 +1,6 @@
 "use client"
 
 import { Button } from "antd"
-import { useAgentEntryPreferences } from "@/stores/agent-entry-preferences"
 
 interface AgentEntryButtonProps {
   minimized?: boolean
@@ -28,9 +27,6 @@ export function AgentEntryButton({
   loading = false,
   onClick,
 }: AgentEntryButtonProps) {
-  const { visible, hydrated } = useAgentEntryPreferences()
-  if (!hydrated || !visible) return null
-
   return (
     <Button
       aria-label={loading ? "正在加载中枢助手" : minimized ? "展开中枢助手" : "打开中枢助手"}

@@ -43,6 +43,23 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Resolve changed scopes
+        id: scope
+        env: &ci_revision_range
+          CI_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          CI_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: python3 .github/scripts/change_scope.py
+
+  repository-policy:
+    name: Repository Policy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository with full history
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+
       - name: Set up Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
@@ -63,23 +80,12 @@ jobs:
           python -m pip install pytest==9.0.3 PyYAML==6.0.3
           python -m pytest .github/scripts/tests scripts/tests -q
 
-      - name: Resolve changed scopes
-        id: scope
-        env:
-          CI_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-          CI_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: python .github/scripts/change_scope.py
-
       - name: Verify production changes include corresponding tests
-        env:
-          CI_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-          CI_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        env: *ci_revision_range
         run: python scripts/check-test-impact.py
 
   source-security:
     name: Source Security
-    needs: change-scope
-    if: ${{ always() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -117,6 +123,82 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  ci-tools:
+    name: CI Tools Image
+    needs: change-scope
+    if: >-
+      ${{ needs.change-scope.outputs.backend_changed == 'true' ||
+          needs.change-scope.outputs.hermes_changed == 'true' ||
+          needs.change-scope.outputs.shared_changed == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      IMAGE_TAG: dazah-ci-tools:${{ github.sha }}
+    outputs:
+      image_id: ${{ steps.export.outputs.image_id }}
+      cached_steps: ${{ steps.cache.outputs.cached_steps }}
+      total_steps: ${{ steps.cache.outputs.total_steps }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+
+      - name: Set OS package refresh week
+        id: refresh
+        run: printf 'week=%s\n' "$(date --utc +%G-W%V)" >> "$GITHUB_OUTPUT"
+
+      - name: Build CI tools with persistent cache
+        id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
+        with:
+          context: docker
+          file: docker/Dockerfile.ci-tools
+          platforms: linux/amd64
+          load: true
+          tags: ${{ env.IMAGE_TAG }}
+          build-args: CI_TOOLS_WEEK=${{ steps.refresh.outputs.week }}
+          cache-from: type=gha,scope=ci-tools
+          cache-to: type=gha,mode=max,scope=ci-tools
+
+      - &docker_cache_stats
+        name: Collect Docker image cache statistics
+        id: cache
+        if: ${{ always() }}
+        continue-on-error: true
+        env:
+          BUILD_METADATA: ${{ steps.build.outputs.metadata }}
+        run: python3 .github/scripts/ci_metrics.py build-cache
+
+      - name: Verify and export CI tools image
+        id: export
+        shell: bash
+        run: |
+          image_id="$(docker image inspect --format '{{.Id}}' "$IMAGE_TAG")"
+          [[ "$image_id" =~ ^sha256:[0-9a-f]{64}$ ]]
+          docker run --rm --pull=never --network none \
+            --env PYTHON_VERSION --env UV_VERSION \
+            --mount "type=bind,src=$GITHUB_WORKSPACE/.github/scripts/ci_support.py,dst=/ci/.github/scripts/ci_support.py,readonly" \
+            "$image_id" bash -euc '
+              python3 /ci/.github/scripts/ci_support.py preflight tools
+              psql --version
+              pg_isready --version
+              test -s /usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc
+            '
+          docker image save --output "$RUNNER_TEMP/ci-tools-image.tar" "$IMAGE_TAG"
+          printf 'image_id=%s\n' "$image_id" >> "$GITHUB_OUTPUT"
+
+      - name: Upload CI tools image
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ci-tools-image
+          path: ${{ runner.temp }}/ci-tools-image.tar
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 1
+          overwrite: true
+
   frontend-quality:
     name: Frontend Quality
     needs: change-scope
@@ -132,8 +214,6 @@ jobs:
         working-directory: dazah-frontend
     env:
       API_BASE_URL: http://127.0.0.1:4100
-      COVERAGE_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-      COVERAGE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - name: Check out repository with full history
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -178,13 +258,43 @@ jobs:
       - name: Verify bounded build failure and type coverage guards
         run: pnpm test:build
 
-      - name: Run unit tests and coverage gates
-        run: |
-          pnpm test:coverage
-          python ../scripts/check-diff-coverage.py \
-            --coverage-file coverage/cobertura-coverage.xml \
-            --path-prefix dazah-frontend \
-            --minimum 80
+      - name: Test stable E2E shard planning
+        run: node --test scripts/plan-critical-e2e-shard.test.mjs
+
+  frontend-build:
+    name: Frontend Build
+    needs: change-scope
+    if: >-
+      ${{ needs.change-scope.outputs.frontend_changed == 'true' ||
+          needs.change-scope.outputs.shared_changed == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    outputs:
+      pnpm_cache_hit: ${{ steps.node.outputs.cache-hit }}
+    defaults:
+      run:
+        working-directory: dazah-frontend
+    env:
+      API_BASE_URL: http://127.0.0.1:4100
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Set up Node.js
+        id: node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: dazah-frontend/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Build production application
         run: pnpm build
@@ -200,6 +310,134 @@ jobs:
           if-no-files-found: error
           retention-days: 1
           compression-level: 0
+          overwrite: true
+
+  frontend-unit:
+    name: Frontend Unit (${{ matrix.shard }}/3)
+    needs: change-scope
+    if: >-
+      ${{ needs.change-scope.outputs.frontend_changed == 'true' ||
+          needs.change-scope.outputs.shared_changed == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    defaults:
+      run:
+        working-directory: dazah-frontend
+    env:
+      API_BASE_URL: http://127.0.0.1:4100
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Set up Node.js
+        id: node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: dazah-frontend/pnpm-lock.yaml
+
+      - name: pnpm store cache ${{ steps.node.outputs.cache-hit }}
+        run: echo "Recorded pnpm cache status for this shard."
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate API contract for unit tests
+        run: pnpm generate:api
+
+      - name: Run Vitest shard with coverage
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: >-
+          pnpm test:coverage --shard="$SHARD/3" --reporter=blob
+          --outputFile="$RUNNER_TEMP/frontend-vitest-$SHARD.json"
+
+      - name: Upload Vitest shard report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: frontend-vitest-${{ matrix.shard }}
+          path: ${{ runner.temp }}/frontend-vitest-${{ matrix.shard }}.json
+          if-no-files-found: error
+          retention-days: 14
+          overwrite: true
+
+  frontend-coverage:
+    name: Frontend Coverage
+    needs:
+      - change-scope
+      - frontend-unit
+    if: >-
+      ${{ needs.change-scope.outputs.frontend_changed == 'true' ||
+          needs.change-scope.outputs.shared_changed == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      pnpm_cache_hit: ${{ steps.node.outputs.cache-hit }}
+    defaults:
+      run:
+        working-directory: dazah-frontend
+    env:
+      COVERAGE_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+      COVERAGE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Check out repository with full history
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Set up Node.js
+        id: node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: dazah-frontend/pnpm-lock.yaml
+
+      - name: Set up Python for coverage policy
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download Vitest shard reports
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: frontend-vitest-*
+          path: ${{ runner.temp }}/frontend-vitest
+          merge-multiple: true
+
+      - name: Merge Vitest reports and enforce coverage gates
+        run: |
+          for shard in 1 2 3; do
+            report="$RUNNER_TEMP/frontend-vitest/frontend-vitest-$shard.json"
+            if [[ ! -s "$report" ]]; then
+              echo "::error::Missing Vitest coverage report for shard $shard/3"
+              exit 1
+            fi
+          done
+          pnpm exec vitest run --merge-reports="$RUNNER_TEMP/frontend-vitest" --coverage
+          python ../scripts/check-diff-coverage.py \
+            --coverage-file coverage/cobertura-coverage.xml \
+            --path-prefix dazah-frontend \
+            --minimum 80
 
       - name: Upload frontend coverage
         if: ${{ always() && hashFiles('dazah-frontend/coverage/**') != '' }}
@@ -209,6 +447,7 @@ jobs:
           path: dazah-frontend/coverage
           if-no-files-found: ignore
           retention-days: 14
+          overwrite: true
 
   frontend-image-verify:
     name: Frontend Image Verify
@@ -243,26 +482,22 @@ jobs:
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
 
-      - name: Collect frontend image cache statistics
-        id: cache
-        if: ${{ always() }}
-        continue-on-error: true
-        env:
-          BUILD_METADATA: ${{ steps.build.outputs.metadata }}
-        run: python3 .github/scripts/ci_metrics.py build-cache
+      - *docker_cache_stats
 
   frontend-e2e:
-    name: Stable Frontend E2E
+    name: Stable Frontend E2E (${{ matrix.shard }}/4)
     needs:
       - change-scope
-      - frontend-quality
+      - frontend-build
     if: >-
       ${{ needs.change-scope.outputs.frontend_changed == 'true' ||
           needs.change-scope.outputs.shared_changed == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 25
-    outputs:
-      pnpm_cache_hit: ${{ steps.node.outputs.cache-hit }}
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     defaults:
       run:
         working-directory: dazah-frontend
@@ -284,6 +519,9 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
           cache-dependency-path: dazah-frontend/pnpm-lock.yaml
+
+      - name: pnpm store cache ${{ steps.node.outputs.cache-hit }}
+        run: echo "Recorded pnpm cache status for this shard."
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -307,24 +545,34 @@ jobs:
         run: tar -xzf frontend-e2e-bundle.tar.gz
 
       - name: Run stable critical Playwright tests
-        run: pnpm test:e2e:critical --grep-invert @flaky
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: |
+          inventory="$RUNNER_TEMP/frontend-e2e-inventory.json"
+          excluded="$RUNNER_TEMP/frontend-e2e-excluded.txt"
+          results="$RUNNER_TEMP/frontend-e2e-results.json"
+          PLAYWRIGHT_JSON_OUTPUT_FILE="$inventory" pnpm test:e2e:critical --grep-invert @flaky --list --reporter=json
+          node scripts/plan-critical-e2e-shard.mjs "$inventory" "$SHARD" "$excluded"
+          PLAYWRIGHT_JSON_OUTPUT_FILE="$results" pnpm test:e2e:critical --grep-invert @flaky --reporter=html,json --test-list-invert="$excluded"
+          node scripts/plan-critical-e2e-shard.mjs "$inventory" "$SHARD" "$excluded" "$results"
 
       - name: Upload stable E2E report
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: frontend-e2e-report
+          name: frontend-e2e-report-${{ matrix.shard }}
           path: |
             dazah-frontend/playwright-report
             dazah-frontend/test-results
           if-no-files-found: warn
           retention-days: 14
+          overwrite: true
 
   frontend-flaky-quarantine:
     name: Frontend Flaky Quarantine
     needs:
       - change-scope
-      - frontend-quality
+      - frontend-build
     if: >-
       ${{ needs.change-scope.outputs.frontend_changed == 'true' ||
           needs.change-scope.outputs.shared_changed == 'true' }}
@@ -433,12 +681,14 @@ jobs:
           enable-cache: true
           cache-dependency-glob: dazah-backend/uv.lock
 
-      - name: Verify CI toolchain
+      - &backend_test_toolchain
+        name: Verify CI toolchain
         run: >-
           python3 .github/scripts/ci_support.py run --phase toolchain --category environment --
           python3 .github/scripts/ci_support.py preflight tools
 
-      - name: Install backend dependencies
+      - &backend_test_dependencies
+        name: Install backend dependencies
         run: python3 .github/scripts/ci_support.py install backend
 
       - name: Verify shipped frontend page inventory
@@ -455,18 +705,18 @@ jobs:
         continue-on-error: true
         run: python3 .github/scripts/ci_support.py summarize
 
-  backend-integration:
-    name: Backend Integration
-    needs: change-scope
+  backend-migrations:
+    name: Backend Migrations and Contracts
+    needs: [change-scope, ci-tools]
     if: >-
       ${{ needs.change-scope.outputs.backend_changed == 'true' ||
           needs.change-scope.outputs.shared_changed == 'true' }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    timeout-minutes: 35
     outputs:
       uv_cache_hit: ${{ steps.uv.outputs.cache-hit }}
       phases: ${{ steps.phases.outputs.phases }}
-    services:
+    services: &backend_test_services
       postgres:
         image: postgres:17
         env:
@@ -490,11 +740,9 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 12
-    env:
+    env: &backend_test_env
       CI_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
       CI_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-      COVERAGE_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-      COVERAGE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       PGHOST: localhost
       PGPORT: "5432"
       PGUSER: dazah_ci
@@ -514,17 +762,21 @@ jobs:
       LIVZON_FEISHU_EVENT_WS_ENABLED: "false"
       MINIO_ENABLED: "false"
     steps:
-      - name: Check out repository with full history
+      - &backend_test_checkout
+        name: Check out repository with full history
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           fetch-depth: 0
+          persist-credentials: false
 
-      - name: Set up Python
+      - &backend_test_python
+        name: Set up Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Set up uv
+      - &backend_test_uv
+        name: Set up uv
         id: uv
         uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff
         with:
@@ -533,66 +785,163 @@ jobs:
           enable-cache: true
           cache-dependency-glob: dazah-backend/uv.lock
 
-      - name: Verify CI toolchain
+      - &ci_tools_download
+        name: Download CI tools image
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: ci-tools-image
+          path: ${{ runner.temp }}
+
+      - &ci_tools_load
+        name: Load verified CI tools image
+        env:
+          CI_TOOLS_IMAGE_ID: ${{ needs.ci-tools.outputs.image_id }}
+        run: bash .github/scripts/ci-tools.sh load "$RUNNER_TEMP/ci-tools-image.tar"
+
+      - &ci_tools_preflight
+        name: Verify CI toolchain
+        shell: &ci_tools_shell bash --noprofile --norc .github/scripts/ci-tools.sh {0}
         run: >-
           python3 .github/scripts/ci_support.py run --phase toolchain --category environment --
           python3 .github/scripts/ci_support.py preflight tools
 
-      - name: Install backend system prerequisites
-        run: |
-          sudo install -m 0644 docker/apt-download.conf /etc/apt/apt.conf.d/80dazah-download
-          sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends postgresql-client fonts-noto-cjk
-
-      - name: Install backend dependencies
+      - &ci_tools_backend_dependencies
+        name: Install backend dependencies
+        shell: *ci_tools_shell
         run: python3 .github/scripts/ci_support.py install backend
 
-      - name: Verify backend environment
-        working-directory: dazah-backend
-        run: >-
-          python3 ../.github/scripts/ci_support.py run --phase backend-environment --category environment --
-          uv run --no-sync python ../.github/scripts/ci_support.py preflight backend
+      - &backend_test_environment
+        name: Verify backend environment
+        shell: *ci_tools_shell
+        run: |
+          cd dazah-backend
+          python3 ../.github/scripts/ci_support.py run --phase backend-environment --category environment -- \
+            uv run --no-sync python ../.github/scripts/ci_support.py preflight backend
 
       - name: Verify backend migrations and contracts
+        shell: *ci_tools_shell
         run: >-
           python3 .github/scripts/ci_support.py run --phase backend-migrations --category migration --
           bash dazah-backend/scripts/ci.sh prepare-integration
 
-      - name: Run backend full test suite
-        run: >-
-          python3 .github/scripts/ci_support.py run --phase backend-tests --category tests --
-          bash dazah-backend/scripts/ci.sh integration-tests
-
-      - name: Enforce backend coverage gates
-        run: >-
-          python3 .github/scripts/ci_support.py run --phase backend-coverage --category coverage --
-          bash dazah-backend/scripts/ci.sh coverage
-
-      - name: Upload backend integration reports
-        if: ${{ always() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: backend-integration-reports
-          path: |
-            dazah-backend/.pytest_cache/backend-integration-junit.xml
-            dazah-backend/coverage.xml
-          if-no-files-found: ignore
-          retention-days: 14
-
-      - name: Export CI phase observations
+      - &backend_test_phases
+        name: Export CI phase observations
         id: phases
         if: ${{ always() }}
         continue-on-error: true
         run: python3 .github/scripts/ci_support.py summarize
 
+  backend-integration:
+    name: Backend Integration (${{ matrix.shard }}/4)
+    needs: [change-scope, ci-tools]
+    if: >-
+      ${{ needs.change-scope.outputs.backend_changed == 'true' ||
+          needs.change-scope.outputs.shared_changed == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    services: *backend_test_services
+    env: *backend_test_env
+    steps:
+      - *backend_test_checkout
+      - *backend_test_python
+      - *backend_test_uv
+
+      - name: uv cache ${{ steps.uv.outputs.cache-hit }}
+        run: echo "Recorded uv cache status for this shard."
+
+      - *ci_tools_download
+      - *ci_tools_load
+      - *ci_tools_preflight
+      - *ci_tools_backend_dependencies
+      - *backend_test_environment
+
+      - name: Migrate backend shard database
+        shell: *ci_tools_shell
+        run: >-
+          python3 .github/scripts/ci_support.py run --phase backend-migrations --category migration --
+          bash dazah-backend/scripts/ci.sh migrate-test-database
+
+      - name: Run backend test shard
+        shell: *ci_tools_shell
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: >-
+          python3 .github/scripts/ci_support.py run --phase backend-tests --category tests --
+          bash dazah-backend/scripts/ci.sh integration-shard
+          "$SHARD" "$RUNNER_TEMP/backend-integration-shard-$SHARD"
+
+      - name: Upload backend shard reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: backend-integration-shard-${{ matrix.shard }}
+          path: ${{ runner.temp }}/backend-integration-shard-${{ matrix.shard }}/
+          if-no-files-found: error
+          retention-days: 14
+          overwrite: true
+
+  backend-coverage:
+    name: Backend Coverage
+    needs:
+      - change-scope
+      - backend-integration
+    if: >-
+      ${{ needs.change-scope.outputs.backend_changed == 'true' ||
+          needs.change-scope.outputs.shared_changed == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      uv_cache_hit: ${{ steps.uv.outputs.cache-hit }}
+      phases: ${{ steps.phases.outputs.phases }}
+    env:
+      COVERAGE_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+      COVERAGE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - *backend_test_checkout
+      - *backend_test_python
+      - *backend_test_uv
+      - *backend_test_toolchain
+      - *backend_test_dependencies
+
+      - name: Download backend shard reports
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: backend-integration-shard-*
+          path: ${{ runner.temp }}/backend-shards
+          merge-multiple: false
+
+      - name: Enforce backend coverage gates
+        run: >-
+          python3 .github/scripts/ci_support.py run --phase backend-coverage --category coverage --
+          bash dazah-backend/scripts/ci.sh merge-shard-coverage "$RUNNER_TEMP/backend-shards"
+
+      - name: Upload backend coverage report
+        if: ${{ always() && hashFiles('dazah-backend/coverage.xml') != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: backend-coverage
+          path: dazah-backend/coverage.xml
+          if-no-files-found: ignore
+          retention-days: 14
+          overwrite: true
+
+      - *backend_test_phases
+
   backend-image-verify:
-    name: Backend Image Verify
+    name: Backend Production Image Verify
     needs: change-scope
     if: >-
       ${{ needs.change-scope.outputs.backend_changed == 'true' ||
           needs.change-scope.outputs.shared_changed == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 35
+    outputs: &docker_cache_outputs
+      cached_steps: ${{ steps.cache.outputs.cached_steps }}
+      total_steps: ${{ steps.cache.outputs.total_steps }}
     env:
       IMAGE_TAG: dazah-backend:ci-${{ github.sha }}
       NETWORK_NAME: dazah-backend-ci
@@ -603,7 +952,8 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
 
-      - name: Build backend image once
+      - name: Build backend production image
+        id: build
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
         with:
           context: .
@@ -613,6 +963,8 @@ jobs:
           tags: ${{ env.IMAGE_TAG }}
           cache-from: type=gha,scope=backend
           cache-to: type=gha,mode=max,scope=backend
+
+      - *docker_cache_stats
 
       - name: Generate complete image vulnerability report
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25
@@ -634,23 +986,12 @@ jobs:
           format: table
           exit-code: "1"
 
-      - name: Build development backend image
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
-        with:
-          context: .
-          file: Dockerfile.dev
-          target: backend
-          load: true
-          tags: ${{ env.IMAGE_TAG }}-dev
-          cache-from: type=gha,scope=backend-dev
-          cache-to: type=gha,scope=backend-dev,mode=max
-
-      - name: Verify Chromium as app in both backend images
+      - &backend_chromium_check
+        name: Verify Chromium as app
         shell: bash
         run: |
-          for image in "$IMAGE_TAG" "${IMAGE_TAG}-dev"; do
-            timeout 60s docker run --rm --interactive --network none \
-              --user app --entrypoint .venv/bin/python "$image" - <<'PY'
+          timeout 60s docker run --rm --interactive --network none \
+            --user app --entrypoint .venv/bin/python "$IMAGE_TAG" - <<'PY'
           import os
           import pwd
           from pathlib import Path
@@ -672,14 +1013,13 @@ jobs:
               finally:
                   browser.close()
           PY
-          done
 
-      - name: Verify Chinese document conversion in both backend images
+      - &backend_document_check
+        name: Verify Chinese document conversion as app
         shell: bash
         run: |
-          for image in "$IMAGE_TAG" "${IMAGE_TAG}-dev"; do
-            timeout 90s docker run --rm --interactive --network none \
-              --user app --entrypoint .venv/bin/python "$image" - <<'PY'
+          timeout 90s docker run --rm --interactive --network none \
+            --user app --entrypoint .venv/bin/python "$IMAGE_TAG" - <<'PY'
           import subprocess
           import tempfile
           from pathlib import Path
@@ -704,7 +1044,6 @@ jobs:
                   assert "原料药" in text and "99.5%" in text, text
               print("soffice entrypoint and Chinese DOCX to PDF conversion OK")
           PY
-          done
 
       - name: Start isolated dependencies
         run: |
@@ -813,6 +1152,40 @@ jobs:
             2>/dev/null || true
           docker network rm "$NETWORK_NAME" 2>/dev/null || true
 
+  backend-dev-image-verify:
+    name: Backend Development Image Verify
+    needs: change-scope
+    if: >-
+      ${{ needs.change-scope.outputs.backend_changed == 'true' ||
+          needs.change-scope.outputs.shared_changed == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    outputs: *docker_cache_outputs
+    env:
+      IMAGE_TAG: dazah-backend:ci-${{ github.sha }}-dev
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+
+      - name: Build development backend image
+        id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
+        with:
+          context: .
+          file: Dockerfile.dev
+          target: backend
+          load: true
+          tags: ${{ env.IMAGE_TAG }}
+          cache-from: type=gha,scope=backend-dev
+          cache-to: type=gha,mode=max,scope=backend-dev
+
+      - *docker_cache_stats
+      - *backend_chromium_check
+      - *backend_document_check
+
   hermes-quality:
     name: Hermes Quality
     needs: change-scope
@@ -872,7 +1245,7 @@ jobs:
 
   hermes-contract:
     name: Hermes Contract
-    needs: change-scope
+    needs: [change-scope, ci-tools]
     if: >-
       ${{ needs.change-scope.outputs.backend_changed == 'true' ||
           needs.change-scope.outputs.hermes_changed == 'true' ||
@@ -923,6 +1296,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
@@ -940,35 +1315,23 @@ jobs:
             dazah-backend/uv.lock
             Hermes-Lite/uv.lock
 
-      - name: Verify CI toolchain
-        run: >-
-          python3 .github/scripts/ci_support.py run --phase toolchain --category environment --
-          python3 .github/scripts/ci_support.py preflight tools
-
-      - name: Install backend system prerequisites
-        run: |
-          sudo install -m 0644 docker/apt-download.conf /etc/apt/apt.conf.d/80dazah-download
-          sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends postgresql-client fonts-noto-cjk
-
-      - name: Install backend contract dependencies
-        run: python3 .github/scripts/ci_support.py install backend
-
-      - name: Verify backend environment
-        working-directory: dazah-backend
-        run: >-
-          python3 ../.github/scripts/ci_support.py run --phase backend-environment --category environment --
-          uv run --no-sync python ../.github/scripts/ci_support.py preflight backend
+      - *ci_tools_download
+      - *ci_tools_load
+      - *ci_tools_preflight
+      - *ci_tools_backend_dependencies
+      - *backend_test_environment
 
       - name: Migrate contract database
-        working-directory: dazah-backend
-        run: >-
-          python3 ../.github/scripts/ci_support.py run --phase contract-migrations --category migration --
-          uv run --no-sync alembic upgrade head
+        shell: *ci_tools_shell
+        run: |
+          cd dazah-backend
+          python3 ../.github/scripts/ci_support.py run --phase contract-migrations --category migration -- \
+            uv run --no-sync alembic upgrade head
 
       - name: Run backend Agent and Tool Registry contracts
-        working-directory: dazah-backend
+        shell: *ci_tools_shell
         run: |
+          cd dazah-backend
           python3 ../.github/scripts/ci_support.py run --phase backend-contract --category contract -- uv run --no-sync pytest \
             tests/modules/agent/test_agent_v2_contracts.py \
             tests/modules/agent/test_tool_registry_executor.py \
@@ -977,12 +1340,13 @@ jobs:
             --junitxml=.pytest_cache/hermes-contract-backend-junit.xml
 
       - name: Install Hermes contract dependencies
-        working-directory: Hermes-Lite
-        run: python3 ../.github/scripts/ci_support.py install hermes
+        shell: *ci_tools_shell
+        run: python3 .github/scripts/ci_support.py install hermes
 
       - name: Run Hermes adapter contracts
-        working-directory: Hermes-Lite
+        shell: *ci_tools_shell
         run: |
+          cd Hermes-Lite
           python3 ../.github/scripts/ci_support.py run --phase hermes-contract --category contract -- uv run --no-sync pytest \
             tests/test_dazah_feishu_tool_payload.py \
             tests/test_dazah_backend_contract.py \
@@ -1011,13 +1375,21 @@ jobs:
     if: ${{ always() }}
     needs:
       - change-scope
+      - repository-policy
       - source-security
+      - ci-tools
       - frontend-quality
+      - frontend-build
+      - frontend-unit
+      - frontend-coverage
       - frontend-image-verify
       - frontend-e2e
       - backend-quality
+      - backend-migrations
       - backend-integration
+      - backend-coverage
       - backend-image-verify
+      - backend-dev-image-verify
       - hermes-quality
       - hermes-contract
     runs-on: ubuntu-24.04
@@ -1038,13 +1410,21 @@ jobs:
           SHARED_CHANGED: ${{ needs.change-scope.outputs.shared_changed }}
           DOCS_ONLY: ${{ needs.change-scope.outputs.docs_only }}
           CHANGE_SCOPE_RESULT: ${{ needs.change-scope.result }}
+          REPOSITORY_POLICY_RESULT: ${{ needs.repository-policy.result }}
           SOURCE_SECURITY_RESULT: ${{ needs.source-security.result }}
+          CI_TOOLS_RESULT: ${{ needs.ci-tools.result }}
           FRONTEND_QUALITY_RESULT: ${{ needs.frontend-quality.result }}
+          FRONTEND_BUILD_RESULT: ${{ needs.frontend-build.result }}
+          FRONTEND_UNIT_RESULT: ${{ needs.frontend-unit.result }}
+          FRONTEND_COVERAGE_RESULT: ${{ needs.frontend-coverage.result }}
           FRONTEND_IMAGE_VERIFY_RESULT: ${{ needs.frontend-image-verify.result }}
           FRONTEND_E2E_RESULT: ${{ needs.frontend-e2e.result }}
           BACKEND_QUALITY_RESULT: ${{ needs.backend-quality.result }}
+          BACKEND_MIGRATIONS_RESULT: ${{ needs.backend-migrations.result }}
           BACKEND_INTEGRATION_RESULT: ${{ needs.backend-integration.result }}
+          BACKEND_COVERAGE_RESULT: ${{ needs.backend-coverage.result }}
           BACKEND_IMAGE_VERIFY_RESULT: ${{ needs.backend-image-verify.result }}
+          BACKEND_DEV_IMAGE_VERIFY_RESULT: ${{ needs.backend-dev-image-verify.result }}
           HERMES_QUALITY_RESULT: ${{ needs.hermes-quality.result }}
           HERMES_CONTRACT_RESULT: ${{ needs.hermes-contract.result }}
         run: python3 .github/scripts/ci_gate.py
