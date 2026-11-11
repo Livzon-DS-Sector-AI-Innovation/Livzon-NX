@@ -67,14 +67,56 @@ async def list_emergency_plans(
         status=status,
         keyword=keyword,
     )
+    content_status_map = await _plan_content_status_map(db, [item.id for item in items])
     return ApiResponseEnvelope(
         data=EmergencyPlanListResponse(
-            items=[EmergencyPlanResponse.model_validate(item) for item in items],
+            items=[
+                _with_content_status(
+                    EmergencyPlanResponse.model_validate(item),
+                    content_status_map.get(item.id),
+                )
+                for item in items
+            ],
             total=total,
             page=page,
             page_size=page_size,
         )
     )
+
+
+async def _plan_content_status_map(
+    db: AsyncSession, plan_ids: list[UUID]
+) -> dict[UUID, tuple[str, datetime | None]]:
+    """批量读取预案正文的轻量状态（AI 工作台列表列展示）。"""
+    if not plan_ids:
+        return {}
+    from sqlalchemy import select
+
+    from app.modules.safety.models import EmergencyPlanContent
+
+    rows = await db.execute(
+        select(
+            EmergencyPlanContent.plan_id,
+            EmergencyPlanContent.content_status,
+            EmergencyPlanContent.last_reviewed_at,
+        ).where(
+            EmergencyPlanContent.plan_id.in_(plan_ids),
+            EmergencyPlanContent.is_deleted.is_(False),
+        )
+    )
+    return {
+        row.plan_id: (row.content_status, row.last_reviewed_at) for row in rows.all()
+    }
+
+
+def _with_content_status(
+    response: EmergencyPlanResponse,
+    status: tuple[str, datetime | None] | None,
+) -> EmergencyPlanResponse:
+    if status is not None:
+        response.content_status = status[0]
+        response.last_reviewed_at = status[1]
+    return response
 
 
 @emergency_mgmt_router.get(
@@ -91,7 +133,12 @@ async def get_emergency_plan(
     plan = await service.get_plan(plan_id)
     if plan is None:
         raise NotFoundException("应急预案")
-    return ApiResponseEnvelope(data=EmergencyPlanResponse.model_validate(plan))
+    status_map = await _plan_content_status_map(db, [plan.id])
+    return ApiResponseEnvelope(
+        data=_with_content_status(
+            EmergencyPlanResponse.model_validate(plan), status_map.get(plan.id)
+        )
+    )
 
 
 @emergency_mgmt_router.post(

@@ -1,6 +1,48 @@
 {
   "version": 1,
   "pages": {
+    "admin:feishu-settings": {
+      "status": "active",
+      "module_code": "administration",
+      "route_path": "/admin/settings/feishu",
+      "actions": {
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        },
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        }
+      }
+    },
+    "admin:tobacco-gift:dashboard": {
+      "status": "active",
+      "module_code": "administration",
+      "route_path": "/admin/tobacco-gift",
+      "actions": {}
+    },
+    "admin:tobacco-gift:items": {
+      "status": "active",
+      "module_code": "administration",
+      "route_path": "/admin/tobacco-gift/items",
+      "actions": {}
+    },
+    "admin:tobacco-gift:records": {
+      "status": "active",
+      "module_code": "administration",
+      "route_path": "/admin/tobacco-gift/records",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        }
+      }
+    },
     "energy:alerts": {
       "status": "retired",
       "module_code": "energy",
@@ -5197,6 +5239,17 @@
       "module_code": "safety",
       "route_path": "/safety",
       "actions": {}
+    },
+    "safety:safety-commitment": {
+      "status": "active",
+      "module_code": "safety",
+      "route_path": "/safety/safety-commitment",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        }
+      }
     },
     "safety:site-mgmt:safety-facilities": {
       "status": "active",

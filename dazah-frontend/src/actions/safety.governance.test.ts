@@ -257,7 +257,7 @@ describe('safety governance actions（批次4：法规/处置卡/目标/设施/�
     expect(i6?.method).toBe('POST')
 
     const [u7] = await capture(() =>
-      safety.downloadEmergencyPlanFile('p1'),
+      safety.fetchEmergencyPlanFileBytes('p1'),
     )
     expect(u7).toContain('/api/v1/safety/')
 
@@ -324,7 +324,7 @@ describe('safety governance actions（批次4：法规/处置卡/目标/设施/�
     }
     // 下载类把非 2xx 当错误抛出
     await expect(safety.downloadRegulationDocument('r1')).rejects.toThrow()
-    await expect(safety.downloadEmergencyPlanFile('p1')).rejects.toThrow()
+    await expect(safety.fetchEmergencyPlanFileBytes('p1')).rejects.toThrow()
     vi.unstubAllGlobals()
   })
 
