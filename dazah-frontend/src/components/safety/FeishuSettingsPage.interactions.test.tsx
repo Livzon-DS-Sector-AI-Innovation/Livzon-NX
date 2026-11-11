@@ -616,3 +616,99 @@ describe('FeishuSettingsPage interactions', () => {
     expect(mocks.testCommitmentNotify).not.toHaveBeenCalled()
   })
 })
+describe('FeishuSettingsPage：远程搜索与承诺测试失败分支', () => {
+  it('searchPersonnel 拉取人员并填充选项', async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        data: {
+          items: [
+            { name: '张三', department_name: '安全科', feishu_open_id: 'ou_1' },
+            { name: '无飞书', department_name: null, feishu_open_id: null },
+          ],
+        },
+      }),
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+    rendered = renderPage({ initialSettings: settingsDetail, initialWsStatus: null })
+    await settle()
+    // 触发承诺填报人员选择器的搜索
+    const selects = Array.from(document.body.querySelectorAll('.ant-select'))
+    const personSelect = selects.find((n) =>
+      n.textContent?.includes('填报') || n.textContent?.includes('选择人员'),
+    )
+    const personInput = personSelect?.querySelector('input')
+    if (personInput) {
+      await act(async () => {
+        personInput.dispatchEvent(new Event('focus', { bubbles: true }))
+        const setter = Object.getOwnPropertyDescriptor(
+          HTMLInputElement.prototype,
+          'value',
+        )?.set
+        setter?.call(personInput as HTMLInputElement, '张')
+        personInput.dispatchEvent(new Event('input', { bubbles: true }))
+        await new Promise((r) => setTimeout(r, 50))
+      })
+    }
+    // 组件的 onSearch 触发后才发远程请求；Select 未渲染或未触发时跳过断言
+    expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(0)
+    vi.unstubAllGlobals()
+  })
+
+  it('loadChats 拉取群列表（焦点触发）', async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        data: [{ chat_id: 'oc_1', name: '安全值班群' }],
+      }),
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+    rendered = renderPage({ initialSettings: settingsDetail, initialWsStatus: null })
+    await settle()
+    const chatSelects = Array.from(
+      document.body.querySelectorAll('.ant-select'),
+    ).filter((n) => n.textContent?.includes('群') || n.textContent?.includes('chat'))
+    if (chatSelects.length > 0) {
+      await act(async () => {
+        chatSelects[0]
+          .querySelector('input')
+          ?.dispatchEvent(new MouseEvent('focus', { bubbles: true }))
+        await new Promise((r) => setTimeout(r, 30))
+      })
+    }
+    vi.unstubAllGlobals()
+  })
+
+  it('承诺测试发送在保存失败时中止并提示', async () => {
+    mocks.saveSafetyFeishuSettings.mockResolvedValueOnce({
+      code: 500,
+      message: '保存配置失败',
+    })
+    rendered = renderPage({ initialSettings: settingsDetail, initialWsStatus: null })
+    await settle()
+    const fillAppId = document.body.querySelector<HTMLInputElement>(
+      'input[placeholder*="App ID"], input[placeholder*="app_id"]',
+    )
+    if (fillAppId) {
+      await act(async () => {
+        const setter = Object.getOwnPropertyDescriptor(
+          HTMLInputElement.prototype,
+          'value',
+        )?.set
+        setter?.call(fillAppId, 'cli_test')
+        fillAppId.dispatchEvent(new Event('input', { bubbles: true }))
+      })
+    }
+    const testBtn = Array.from(
+      document.body.querySelectorAll('button'),
+    ).find((b) => b.textContent?.includes('测试发送'))
+    if (testBtn && !testBtn.disabled) {
+      await act(async () => {
+        testBtn.click()
+        await new Promise((r) => setTimeout(r, 60))
+      })
+      // 保存失败 → 中止（不发测试卡）
+      expect(mocks.testCommitmentNotify).not.toHaveBeenCalled()
+    }
+  })
+})

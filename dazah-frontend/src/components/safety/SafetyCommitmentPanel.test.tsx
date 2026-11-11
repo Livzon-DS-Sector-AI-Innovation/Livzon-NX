@@ -651,3 +651,76 @@ describe('SafetyCommitmentPanel：企业状态编辑表单', () => {
     expect(document.body.textContent).toContain('安全承诺加载失败')
   })
 })
+
+describe('SafetyCommitmentPanel：新增信息卡与重试', () => {
+  it('新增信息卡：打开弹窗、填写并创建成功', async () => {
+    mocks.createCommitmentCard.mockResolvedValue({
+      code: 200,
+      data: { ...CARDS[0], id: 'c-new', title: '新卡片' },
+    })
+    await renderPanel()
+    const add = buttons('新增')[0]
+    expect(add).toBeTruthy()
+    await act(async () => {
+      add.click()
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    const titleInput = document.body.querySelector<HTMLInputElement>(
+      'input[placeholder="卡片标题"]',
+    )
+    expect(titleInput).toBeTruthy()
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        'value',
+      )?.set
+      setter?.call(titleInput!, '新卡片')
+      titleInput!.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    const create = Array.from(
+      document.body.querySelectorAll<HTMLButtonElement>('.ant-modal button'),
+    ).find((b) => (b.textContent ?? '').replace(/\s/g, '') === '创建')
+    expect(create).toBeTruthy()
+    await act(async () => {
+      create!.click()
+      await new Promise((resolve) => setTimeout(resolve, 80))
+    })
+    expect(mocks.createCommitmentCard).toHaveBeenCalledWith(
+      expect.objectContaining({ card_type: 'commitment', title: '新卡片' }),
+      'safety:safety-commitment',
+    )
+    expect(mocks.message.success).toHaveBeenCalledWith('信息卡已新增')
+  })
+
+  it('新增信息卡失败提示错误', async () => {
+    mocks.createCommitmentCard.mockResolvedValue({ code: 500, message: '新增失败' })
+    await renderPanel()
+    await act(async () => {
+      buttons('新增')[0]?.click()
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    const create = Array.from(
+      document.body.querySelectorAll<HTMLButtonElement>('.ant-modal button'),
+    ).find((b) => (b.textContent ?? '').replace(/\s/g, '') === '创建')
+    await act(async () => {
+      create!.click()
+      await new Promise((resolve) => setTimeout(resolve, 80))
+    })
+    expect(mocks.message.error).toHaveBeenCalledWith('新增失败')
+  })
+
+  it('加载失败后点重试重新拉取今日数据', async () => {
+    mocks.getCommitmentToday
+      .mockResolvedValueOnce({ code: 500, message: '数据库不可用' })
+      .mockResolvedValue({ code: 200, data: { report: REPORT, created_today: false } })
+    await renderPanel({ initialError: '数据库不可用' })
+    const retry = buttons('重试')[0]
+    expect(retry).toBeTruthy()
+    await act(async () => {
+      retry!.click()
+      await new Promise((resolve) => setTimeout(resolve, 80))
+    })
+    expect(mocks.getCommitmentToday).toHaveBeenCalledTimes(1)
+    expect(document.body.textContent).toContain('企业状态')
+  })
+})
