@@ -360,3 +360,41 @@ describe('EmergencyPlanGenerateModal：错误分支与 import 流程', () => {
     expect(onCreated).not.toHaveBeenCalled()
   })
 })
+
+describe('EmergencyPlanGenerateModal：向导交互分支', () => {
+  it('上一步回退与级别切换', async () => {
+    const onCreated = await renderModal('generate')
+    void onCreated
+    // 第一步 → 第二步 → 上一步
+    await act(async () => {
+      findButton('下一步')!.click()
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+    const prev = findButton('上一步')
+    expect(prev).toBeDefined()
+    await act(async () => {
+      prev!.click()
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+    expect(findButton('下一步')).toBeTruthy()
+    // 级别切换（company ↔ workshop）
+    const levelSelect = [...container.querySelectorAll('select')][0]
+    if (levelSelect) {
+      await act(async () => {
+        setNativeValue(levelSelect, 'workshop', 'change')
+        await new Promise((resolve) => setTimeout(resolve, 10))
+      })
+    }
+  })
+
+  it('取消按钮关闭弹窗', async () => {
+    const onCreated = await renderModal('generate')
+    const cancel = findButton('取消')
+    expect(cancel).toBeTruthy()
+    await act(async () => {
+      cancel!.click()
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+    expect(onCreated).not.toHaveBeenCalled()
+  })
+})

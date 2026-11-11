@@ -563,3 +563,91 @@ describe('SafetyCommitmentPanel：发布与 AI 研判失败分支', () => {
     expect(mocks.message.error).toHaveBeenCalledWith('正文保存失败')
   })
 })
+
+describe('SafetyCommitmentPanel：企业状态编辑表单', () => {
+  it('编辑态修改数值与三态开关并保存', async () => {
+    mocks.updateCommitment.mockResolvedValue({
+      code: 200,
+      data: { report: REPORT },
+    })
+    await renderPanel()
+    act(() => {
+      buttons('编辑')[0]?.click()
+    })
+    await flush()
+    // 三态开关（yes/no/unknown）
+    const triSelects = Array.from(
+      document.body.querySelectorAll<HTMLSelectElement>('select'),
+    )
+    if (triSelects.length > 0) {
+      await act(async () => {
+        const setter = Object.getOwnPropertyDescriptor(
+          HTMLSelectElement.prototype,
+          'value',
+        )?.set
+        setter?.call(triSelects[0], 'no')
+        triSelects[0].dispatchEvent(new Event('change', { bubbles: true }))
+      })
+    }
+    // 数值输入（车间总数）
+    const numberInputs = Array.from(
+      document.body.querySelectorAll<HTMLInputElement>('input'),
+    ).filter((n) => n.type === 'number' || /总数|数量/.test(n.placeholder ?? ''))
+    if (numberInputs.length > 0) {
+      await act(async () => {
+        const setter = Object.getOwnPropertyDescriptor(
+          HTMLInputElement.prototype,
+          'value',
+        )?.set
+        setter?.call(numberInputs[0], '8')
+        numberInputs[0].dispatchEvent(new Event('input', { bubbles: true }))
+      })
+    }
+    await act(async () => {
+      buttons('保存')[0]?.click()
+      await new Promise((resolve) => setTimeout(resolve, 80))
+    })
+    expect(mocks.updateCommitment).toHaveBeenCalled()
+    expect(mocks.message.success).toHaveBeenCalledWith('企业状态已保存')
+  })
+
+  it('取消编辑不触发保存', async () => {
+    await renderPanel()
+    act(() => {
+      buttons('编辑')[0]?.click()
+    })
+    await flush()
+    const cancel = buttons('取消')[0]
+    if (cancel) {
+      await act(async () => {
+        cancel.click()
+      })
+      await flush()
+    }
+    expect(mocks.updateCommitment).not.toHaveBeenCalled()
+    expect(buttons('编辑').length).toBeGreaterThan(0)
+  })
+
+  it('历史日期无日报时显示空态提示', async () => {
+    mocks.getCommitmentByDate.mockResolvedValue({ code: 404, message: '该日期暂无安全承诺日报' })
+    await renderPanel()
+    const dateInput = document.body.querySelector<HTMLInputElement>(
+      'input[placeholder*="日期"], .ant-picker input',
+    )
+    expect(dateInput).toBeTruthy()
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        'value',
+      )?.set
+      setter?.call(dateInput!, '2026-11-01')
+      dateInput!.dispatchEvent(new Event('input', { bubbles: true }))
+      dateInput!.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }),
+      )
+      await new Promise((resolve) => setTimeout(resolve, 80))
+    })
+    // 404 由 PlatformNotice 展示错误态（正文摘要 + 重试按钮）
+    expect(document.body.textContent).toContain('安全承诺加载失败')
+  })
+})

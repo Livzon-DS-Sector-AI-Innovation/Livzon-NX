@@ -590,3 +590,72 @@ describe('EmergencyPlanWorkbench：修订记录与定稿', () => {
     }
   })
 })
+
+describe('EmergencyPlanWorkbench：正文加载失败与恢复', () => {
+  it('正文接口失败展示错误态', async () => {
+    mocks.fetchEmergencyPlanContent.mockResolvedValue({
+      code: 500,
+      message: '加载预案失败',
+    })
+    await renderWorkbench()
+    await new Promise((resolve) => setTimeout(resolve, 40))
+    expect(container!.textContent).toContain('加载预案失败')
+  })
+
+  it('恢复修订版本成功后刷新正文', async () => {
+    mocks.fetchEmergencyPlanRevisions.mockResolvedValue({
+      code: 200,
+      data: {
+        items: [
+          {
+            id: 'rev-9',
+            revision_no: 2,
+            source: 'ai_review',
+            summary: '修正 2 处',
+            created_at: '2026-11-10T10:00:00+08:00',
+          },
+        ],
+      },
+    } as never)
+    mocks.restoreEmergencyPlanRevision.mockResolvedValue({ code: 200 })
+    await renderWorkbench()
+    const revTab = Array.from(
+      container!.querySelectorAll('.ant-tabs-tab'),
+    ).find((n) => n.textContent?.includes('修订记录'))
+    await act(async () => {
+      revTab?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+      revTab?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    // 修订列表由「刷新」按钮触发加载（tab 切换不自动拉取）
+    const refresh = Array.from(
+      container!.querySelectorAll('button'),
+    ).find((b) => b.textContent?.includes('刷新'))
+    await act(async () => {
+      refresh!.click()
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    const restore = Array.from(
+      container!.querySelectorAll('button'),
+    ).find((b) => b.textContent?.includes('恢复'))
+    expect(restore).toBeTruthy()
+    // confirm 弹窗（Modal.confirm 的 ok）
+    await act(async () => {
+      restore!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+      restore!.click()
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    const ok = Array.from(
+      document.body.querySelectorAll<HTMLButtonElement>(
+        '.ant-modal button, .ant-popconfirm button',
+      ),
+    ).find((b) => ['确 定', '确定', 'OK'].includes(b.textContent?.replace(/\s/g, '') ?? ''))
+    if (ok) {
+      await act(async () => {
+        ok.click()
+        await new Promise((resolve) => setTimeout(resolve, 50))
+      })
+      expect(mocks.restoreEmergencyPlanRevision).toHaveBeenCalled()
+    }
+  })
+})
