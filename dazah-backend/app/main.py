@@ -178,6 +178,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     safety_ws_task = asyncio.create_task(start_ws())
 
+    # ── 手写签名公网中转轮询（内网部署侧，配置网关后才启动）──
+    from app.modules.safety.sign_relay_poller import (
+        start_sign_relay_poller_task,
+    )
+
+    sign_relay_task = start_sign_relay_poller_task()
+
     # ── 人事模块专属飞书长连接（合同/岗位调动审批卡片回调）──
     try:
         from app.modules.hr.feishu.ws_client import start_hr_ws_if_configured
@@ -424,6 +431,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # 停止安全模块 WebSocket
     await stop_ws()
     safety_ws_task.cancel()
+    if sign_relay_task is not None:
+        sign_relay_task.cancel()
 
     # 停止定时任务调度引擎
     stop_scheduled_task_flag.set()

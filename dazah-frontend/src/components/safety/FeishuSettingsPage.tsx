@@ -109,7 +109,6 @@ export default function FeishuSettingsPage({
     commitment_notify_enabled:
       initialSettings?.commitment_notify_enabled ?? false,
     commitment_push_time: initialSettings?.commitment_push_time || '08:30',
-    commitment_chat_ids: initialSettings?.commitment_chat_ids ?? [],
     commitment_user_ids: initialSettings?.commitment_user_ids ?? [],
     is_enabled: initialSettings?.is_enabled ?? true,
   })
@@ -160,12 +159,9 @@ export default function FeishuSettingsPage({
   const [certMilestonesText, setCertMilestonesText] = useState(
     (initialSettings?.cert_expiry_notify_milestones ?? [30, 15, 7]).join(',')
   )
-  // 安全承诺填报：人员（open_id）/ 公告群（chat_id）选择器的远程候选项
+  // 安全承诺填报：填报人员（open_id）选择器的远程候选项
   const [commitmentTesting, setCommitmentTesting] = useState(false)
   const [personOptions, setPersonOptions] = useState<
-    { label: string; value: string }[]
-  >([])
-  const [chatOptions, setChatOptions] = useState<
     { label: string; value: string }[]
   >([])
   const [wsStatus, setWsStatus] = useState<WsStatus | null>(
@@ -199,27 +195,6 @@ export default function FeishuSettingsPage({
       )
     } catch {
       // 搜索失败保持手动粘贴 open_id 的能力
-    }
-  }, [])
-
-  /** 远程加载机器人所在群（value = chat_id）。 */
-  const loadChats = useCallback(async () => {
-    try {
-      const res = await fetch('/api/v1/safety/scheduled-tasks/feishu-chats')
-      if (!res.ok) return
-      const body = (await res.json()) as {
-        data?: { chat_id?: string; name?: string }[]
-      }
-      setChatOptions(
-        (body.data ?? [])
-          .filter((item) => item.chat_id)
-          .map((item) => ({
-            label: item.name ? `${item.name}` : String(item.chat_id),
-            value: String(item.chat_id),
-          }))
-      )
-    } catch {
-      // 加载失败保持手动粘贴 chat_id 的能力
     }
   }, [])
 
@@ -259,7 +234,6 @@ export default function FeishuSettingsPage({
       cert_expiry_notify_user_ids: parseIds(certUserIdsText),
       commitment_notify_enabled: form.commitment_notify_enabled,
       commitment_push_time: form.commitment_push_time,
-      commitment_chat_ids: form.commitment_chat_ids,
       commitment_user_ids: form.commitment_user_ids,
     }),
     [form, notifyChatIdsText, notifyUserIdsText, dueChatIdsText, dueUserIdsText, milestonesText, fireChatIdsText, fireUserIdsText, fireMilestonesText]
@@ -908,31 +882,12 @@ export default function FeishuSettingsPage({
               notFoundContent="无匹配人员（可直接粘贴 open_id 回车）"
             />
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              仅显示已绑定飞书账号的人员；人员填写后数据直接落库到当日安全承诺日报。
+              仅显示已绑定飞书账号的人员；人员填写后数据自动落库到当日安全承诺日报。
             </Typography.Text>
           </Space>
-          <Space orientation="vertical" size={4} style={{ display: 'flex' }}>
-            <Typography.Text>承诺公告推送群（发布后自动推送公告卡）</Typography.Text>
-            <Select
-              mode="tags"
-              showSearch
-              style={{ width: '100%' }}
-              placeholder="选择机器人所在的群，或直接粘贴 chat_id（oc_ 开头）"
-              value={form.commitment_chat_ids}
-              onFocus={() => void loadChats()}
-              options={chatOptions}
-              onChange={(values) =>
-                setForm((current) => ({
-                  ...current,
-                  commitment_chat_ids: values,
-                }))
-              }
-              notFoundContent="无匹配群聊（可直接粘贴 chat_id 回车）"
-            />
-          </Space>
           <Typography.Text type="secondary">
-            需先把本应用的机器人拉进目标群。修改后先「保存配置」，再点「发送测试填报卡」验证；
-            承诺公告在「安全承诺」页面发布时自动推送到上方群。
+            修改后先「保存配置」，再点「发送测试填报卡」验证；填报人员在飞书卡片里
+            提交后数据自动回填平台日报。
           </Typography.Text>
           <div>
             <Button

@@ -21,6 +21,12 @@ from app.modules.registration import router as registration_router
 from app.modules.regulatory_tracker import router as regulatory_tracker_router
 from app.modules.research import router as research_router
 from app.modules.safety import router as safety_router
+from app.modules.safety.api.sign_relay_public import (
+    sign_relay_public_router,
+)
+from app.modules.safety.api.work_permit_sign_public import (
+    work_permit_sign_public_router,
+)
 from app.modules.warehouse import router as warehouse_router
 from app.platform.audit.api import router as audit_router
 from app.platform.identity.api import (
@@ -93,6 +99,20 @@ include_business_router(
     module_code="safety",
     prefix="/safety",
     tags=["安全管理"],
+)
+# 作业票免登签名/PDF 下载：HMAC token 保护，不走登录与模块权限
+# （挂 require_module_view 会导致飞书内手写签名 401）
+api_router.include_router(
+    work_permit_sign_public_router,
+    prefix="/safety",
+    tags=["安全作业票免登签名"],
+)
+# 手写签名公网中转网关（仅 SIGN_RELAY_GATEWAY_ENABLED 环境生效；
+# 内网环境的签名链接指向公网网关，由内网轮询拉回落库）
+api_router.include_router(
+    sign_relay_public_router,
+    prefix="/safety",
+    tags=["安全作业票签名中转"],
 )
 include_business_router(
     environment_router,

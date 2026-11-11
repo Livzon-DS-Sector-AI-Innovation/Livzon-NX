@@ -1,7 +1,8 @@
-"""安全承诺飞书推送：每日填报卡（个人）与承诺公告卡（群）。
+"""安全承诺飞书推送：每日填报卡（发给配置的填报人员个人）。
 
-飞书未配置或推送失败只记日志，不影响日报业务事务；
-推送目标与开关来自 safety.feishu_app_settings（commitment_* 字段）。
+填报人员填完提交后数据自动落库平台日报；飞书未配置或推送失败只记
+日志，不影响日报业务事务。推送目标与开关来自
+safety.feishu_app_settings（commitment_notify_enabled / commitment_user_ids）。
 """
 
 from __future__ import annotations
@@ -13,10 +14,8 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.safety.feishu.notification import send_group_card
 from app.modules.safety.models import SafetyFeishuAppSettings
 from app.modules.safety.service.commitment_card_forms import (
-    build_announcement_markdown,
     build_reminder_card,
 )
 from app.modules.safety.service.work_permit_notify import send_raw_card
@@ -85,37 +84,6 @@ async def push_fill_cards(
     logger.info(
         "安全承诺填报提醒推送完成: date=%s 成功=%s 失败=%s",
         report_date,
-        sent,
-        failed,
-    )
-    return sent, failed
-
-
-async def push_announcement_cards(
-    db: AsyncSession, item: dict[str, Any]
-) -> tuple[int, int]:
-    """发布后推送承诺公告卡到配置群，返回（成功数, 失败数）。"""
-    settings = await get_commitment_settings(db)
-    if settings is None:
-        return 0, 0
-    chat_ids = [cid for cid in (settings.commitment_chat_ids or []) if cid]
-    if not chat_ids:
-        logger.info("安全承诺公告群未配置（commitment_chat_ids 为空），跳过公告推送")
-        return 0, 0
-    content = build_announcement_markdown(item)
-    title = f"安全承诺公告 · {item.get('report_date', '')}"
-    sent = failed = 0
-    for chat_id in chat_ids:
-        message_id = await send_group_card(
-            str(chat_id), title, content, header_template="green"
-        )
-        if message_id:
-            sent += 1
-        else:
-            failed += 1
-    logger.info(
-        "安全承诺公告推送完成: date=%s 成功=%s 失败=%s",
-        item.get("report_date"),
         sent,
         failed,
     )

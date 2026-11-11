@@ -71,9 +71,11 @@ def _btn(
         "text": {"tag": "plain_text", "content": text},
         "type": type_,
         "value": {"module": "commitment", **value},
-        "action_type": "form_submit" if form_submit else "callback",
     }
     if form_submit:
+        # 卡片 2.0：表单提交按钮显式声明；回调按钮必须省略 action_type
+        # （显式 "callback" 会被判 action_type is invalid，缺省即回调）
+        button["action_type"] = "form_submit"
         button["form_action_type"] = "submit"
     return button
 
@@ -101,11 +103,13 @@ def _input(
 
 def _select(
     name: str,
-    label: str,
     options: list[dict[str, str]],
     *,
-    default: str | None = None,
+    placeholder: str = "请选择",
 ) -> dict[str, Any]:
+    """下拉框。卡片 2.0 的 select_static 仅支持 tag/name/options/placeholder
+    （无 label、无 default_value——作业票级别选择也因此用按钮代替），
+    标签与当前值需放在前一行 markdown 文本里。"""
     element: dict[str, Any] = {
         "tag": "select_static",
         "name": name,
@@ -116,11 +120,8 @@ def _select(
             }
             for item in options
         ],
-        "placeholder": {"tag": "plain_text", "content": "请选择"},
-        "label": {"tag": "plain_text", "content": label},
+        "placeholder": {"tag": "plain_text", "content": placeholder},
     }
-    if default:
-        element["default_value"] = default
     return element
 
 
@@ -298,43 +299,54 @@ def build_step_card(
              "elements": [*form_elements, submit_with_name]}
         )
         body.append(_hr())
-        nav: list[dict[str, Any]] = []
+        # 卡片 2.0 不支持 tag:"action" 容器，按钮直接放 body 顶层（同作业票卡）
         if step > 1:
-            nav.append(
+            body.append(
                 _btn("上一步", {"act": "form_prev", "date": report_date, "step": step})
             )
-        nav.append(
+        body.append(
             _btn("取消", {"act": "form_cancel", "date": report_date, "step": step},
                  type_="danger")
         )
-        body.append({"tag": "action", "actions": nav})
         return _card(title, body)
+
+    def _labeled_select(
+        name: str, label: str, current: Any, options: list[dict[str, str]],
+        placeholder: str = "请选择",
+    ) -> list[dict[str, Any]]:
+        """标签行（含当前值）+ 下拉框（select 无 label/default_value）。"""
+        known = {opt["value"]: opt["label"] for opt in options}
+        current_label = known.get(str(current or ""), "")
+        suffix = f"（当前：{current_label}）" if current_label else ""
+        return [
+            _md(f"**{label}**{suffix}"),
+            _select(name, options, placeholder=placeholder),
+        ]
 
     if step == 3:
         form_elements = [
             _input("hazard_count", "一般安全生产隐患条数",
                    default=_num_display(values.get("hazard_count"))),
-            _select("hazard_rectified", "隐患是否整改", YES_NO_OPTIONS,
-                    default=str(values.get("hazard_rectified") or "unknown")),
-            _select("hazard_temp_measures", "未整改隐患是否制定临时安全措施",
-                    YES_NO_OPTIONS,
-                    default=str(values.get("hazard_temp_measures") or "unknown")),
-            _select("contractor_work", "今日是否有承包商作业", YES_NO_OPTIONS,
-                    default=str(values.get("contractor_work") or "no")),
-            _select("contractor_trained", "承包商是否已培训及落实现场安全措施",
-                    YES_NO_OPTIONS,
-                    default=str(values.get("contractor_trained") or "unknown")),
+            *_labeled_select("hazard_rectified", "隐患是否整改",
+                             values.get("hazard_rectified"), YES_NO_OPTIONS),
+            *_labeled_select("hazard_temp_measures",
+                             "未整改隐患是否制定临时安全措施",
+                             values.get("hazard_temp_measures"), YES_NO_OPTIONS),
+            *_labeled_select("contractor_work", "今日是否有承包商作业",
+                             values.get("contractor_work"), YES_NO_OPTIONS),
+            *_labeled_select("contractor_trained",
+                             "承包商是否已培训及落实现场安全措施",
+                             values.get("contractor_trained"), YES_NO_OPTIONS),
         ]
     else:  # step == 4
         form_elements = [
-            _select("major_hazard_safe", "储区、仓库等重大危险源是否处于安全状态",
-                    YES_NO_OPTIONS,
-                    default=str(values.get("major_hazard_safe") or "unknown")),
-            _select("responsibility_implemented", "重大危险源安全包保责任制是否落实",
-                    YES_NO_OPTIONS,
-                    default=str(
-                        values.get("responsibility_implemented") or "unknown"
-                    )),
+            *_labeled_select("major_hazard_safe",
+                             "储区、仓库等重大危险源是否处于安全状态",
+                             values.get("major_hazard_safe"), YES_NO_OPTIONS),
+            *_labeled_select("responsibility_implemented",
+                             "重大危险源安全包保责任制是否落实",
+                             values.get("responsibility_implemented"),
+                             YES_NO_OPTIONS),
             _input("person_main", "主要负责人",
                    default=str(values.get("person_main") or "")),
             _input("person_tech", "技术负责人",
@@ -344,30 +356,43 @@ def build_step_card(
             _hr(),
             _md("**⚠️ 承诺确认**：我确认以上信息真实准确，当日装置、罐区、"
                 "仓库处于安全运行状态，安全风险得到有效管控。"),
-            _select("commitment_confirm", "承诺确认（必须选“是”才能提交）",
+            _select("commitment_confirm",
                     [{"label": "是", "value": "yes"},
                      {"label": "否", "value": "no"}],
-                    default=str(values.get("commitment_confirm") or "")),
+                    placeholder="承诺确认（必须选“是”才能提交）"),
         ]
-    submit = _btn(
-        "提交安全承诺填报",
-        {"act": "submit", "date": report_date, "step": step},
-        type_="primary",
-        form_submit=True,
-    )
+    if step < TOTAL_STEPS:
+        # 第③步：保存进状态后回第④步卡；仅最后一步（含承诺确认）做最终提交
+        submit = _btn(
+            "保存并下一步",
+            {"act": "step_save", "date": report_date, "step": step},
+            type_="primary",
+            form_submit=True,
+        )
+        submit_name_act = "step_save"
+    else:
+        submit = _btn(
+            "提交安全承诺填报",
+            {"act": "submit", "date": report_date, "step": step},
+            type_="primary",
+            form_submit=True,
+        )
+        submit_name_act = "submit"
     submit_with_name = dict(submit)
-    submit_with_name["name"] = cm_submit_name("submit", report_date, step)
+    submit_with_name["name"] = cm_submit_name(submit_name_act, report_date, step)
     body.append(
         {"tag": "form", "name": "commitment_form",
          "elements": [*form_elements, submit_with_name]}
     )
     body.append(_hr())
-    nav = [
-        _btn("上一步", {"act": "form_prev", "date": report_date, "step": step}),
+    # 卡片 2.0 不支持 tag:"action" 容器，按钮直接放 body 顶层（同作业票卡）
+    body.append(
+        _btn("上一步", {"act": "form_prev", "date": report_date, "step": step})
+    )
+    body.append(
         _btn("取消", {"act": "form_cancel", "date": report_date, "step": step},
-             type_="danger"),
-    ]
-    body.append({"tag": "action", "actions": nav})
+             type_="danger")
+    )
     return _card(title, body, template="blue")
 
 
@@ -381,21 +406,17 @@ def build_reminder_card(
         _md(f"**日期**：{report_date}"),
         _md(status_text),
         _hr(),
+        # 卡片 2.0 不支持 tag:"action" 容器，按钮直接放 body 顶层
+        _btn(
+            "开始填报",
+            {"act": "start_form", "date": report_date},
+            type_="primary",
+        ),
         {
-            "tag": "action",
-            "actions": [
-                _btn(
-                    "开始填报",
-                    {"act": "start_form", "date": report_date},
-                    type_="primary",
-                ),
-                {
-                    "tag": "button",
-                    "text": {"tag": "plain_text", "content": "网页端查看"},
-                    "type": "default",
-                    "url": detail_url,
-                },
-            ],
+            "tag": "button",
+            "text": {"tag": "plain_text", "content": "网页端查看"},
+            "type": "default",
+            "url": detail_url,
         },
     ]
     return _card(f"安全承诺填报提醒 · {report_date}", body, template="orange")
@@ -412,48 +433,3 @@ def build_receipt_card(
         _md("如需修改可在网页端编辑；感谢您的填报。"),
     ]
     return _card(f"安全承诺填报回执 · {report_date}", body, template="green")
-
-
-def _yes_no_label(value: Any) -> str:
-    return {"yes": "是", "no": "否"}.get(str(value or "").strip(), "未确认")
-
-
-def build_announcement_markdown(item: dict[str, Any]) -> str:
-    """把日报渲染为承诺公告卡 markdown（推群）。"""
-    status = item.get("enterprise_status") or {}
-    risk = item.get("risk_assessment") or {}
-    lines = [f"**承诺日期**：{item.get('report_date', '')}"]
-    lines.append(
-        f"**生产车间**：共 {status.get('workshop_total', 0)} 个，运行 "
-        f"{status.get('workshop_running', 0)} 个，停产 "
-        f"{status.get('workshop_stopped', 0)} 个，检修 "
-        f"{status.get('workshop_maintenance', 0)} 个"
-    )
-    special = status.get("special_work") or {}
-    lines.append(
-        f"**当日特殊危险作业**：{status.get('special_work_total', 0)} 处"
-        f"（一级动火 {special.get('hot_work_level1', 0)}、二级动火 "
-        f"{special.get('hot_work_level2', 0)}、登高 {special.get('height_work', 0)}、"
-        f"受限空间 {special.get('confined_space', 0)}、其他 {special.get('other', 0)}）"
-    )
-    lines.append(
-        f"**一般安全生产隐患**：{status.get('hazard_count', 0)} 条，整改情况："
-        f"{_yes_no_label(status.get('hazard_rectified'))}"
-    )
-    lines.append(
-        f"**重大危险源安全状态**：{_yes_no_label(status.get('major_hazard_safe'))}，"
-        f"包保责任制：{_yes_no_label(status.get('responsibility_implemented'))}"
-    )
-    if risk:
-        lines.append(
-            f"**AI 风险研判**：{risk.get('risk_level', '')} "
-            f"— {risk.get('summary', '')}"
-        )
-    lines.append(
-        f"**承诺人（主要负责人）**：{item.get('publisher_name') or '待发布'}"
-    )
-    lines.append(
-        "> 依据《危险化学品企业安全风险研判与承诺公告制度》"
-        "（应急〔2018〕74号）每日发布"
-    )
-    return "\n".join(lines)

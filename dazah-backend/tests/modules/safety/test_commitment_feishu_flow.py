@@ -1,6 +1,6 @@
 """安全承诺飞书填报链路测试。
 
-覆盖：卡片构建器（分步/提醒/回执/公告 markdown）、表单值合并与
+覆盖：卡片构建器（分步/提醒/回执）、表单值合并与
 enterprise_status 转换、填报推送（mock send_raw_card + 设置开关）。
 不连真实飞书。
 """
@@ -143,7 +143,12 @@ def test_build_reminder_and_receipt_cards() -> None:
     reminder = forms.build_reminder_card(
         "2026-11-09", "今日待填报", "http://x/safety/safety-commitment"
     )
-    buttons = reminder["body"]["elements"][-1]["actions"]
+    # 卡片 2.0 不支持 tag:"action" 容器，按钮直接放 body 顶层
+    tags = [el.get("tag") for el in reminder["body"]["elements"]]
+    assert "action" not in tags
+    buttons = [
+        el for el in reminder["body"]["elements"] if el.get("tag") == "button"
+    ]
     acts = [btn["value"]["act"] for btn in buttons if "value" in btn]
     assert "start_form" in acts
 
@@ -151,35 +156,20 @@ def test_build_reminder_and_receipt_cards() -> None:
     assert "已提交" in receipt["body"]["elements"][1]["content"]
 
 
-def test_build_announcement_markdown() -> None:
-    item = {
-        "report_date": "2026-11-09",
-        "enterprise_status": {
-            "workshop_total": 6,
-            "workshop_running": 6,
-            "workshop_stopped": 0,
-            "workshop_maintenance": 0,
-            "special_work_total": 1,
-            "special_work": {
-                "hot_work_level1": 1,
-                "hot_work_level2": 0,
-                "height_work": 0,
-                "confined_space": 0,
-                "other": 0,
-            },
-            "hazard_count": 2,
-            "hazard_rectified": True,
-            "major_hazard_safe": True,
-            "responsibility_implemented": True,
-        },
-        "risk_assessment": {"risk_level": "中", "summary": "有动火作业"},
-        "publisher_name": "秦刚",
-    }
-    md = forms.build_announcement_markdown(item)
-    assert "承诺日期**：2026-11-09" in md
-    assert "秦刚" in md
-    assert "应急〔2018〕74号" in md
-    assert "一级动火 1" in md
+def test_build_step_card_has_no_action_container() -> None:
+    """分步卡各步骤均不得再出现卡片 2.0 已不支持的 tag:"action"。"""
+    values = forms.initial_values(None)
+    for step in range(1, forms.TOTAL_STEPS + 1):
+        card = forms.build_step_card("2026-11-09", step, values)
+
+        def _walk(elements: list[dict]) -> None:
+            for el in elements:
+                assert el.get("tag") != "action"
+                for child in (el.get("elements") or []):
+                    if isinstance(child, dict):
+                        _walk([child])
+
+        _walk(card["body"]["elements"])
 
 
 # ── 填报推送 ──
@@ -246,37 +236,6 @@ async def test_push_fill_cards_enabled(
     )
     assert (sent, failed) == (2, 0)
     assert _mock_send == ["ou-a", "ou-b"]
-
-
-async def test_push_announcement_cards(
-    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    sent_chats: list[str] = []
-
-    async def _fake_group_card(
-        chat_id: str, title: str, content: str, header_template: str = "orange"
-    ) -> str | None:
-        sent_chats.append(chat_id)
-        return "om_group_msg"
-
-    monkeypatch.setattr(commitment_notify, "send_group_card", _fake_group_card)
-    db_session.add(
-        SafetyFeishuAppSettings(
-            app_id=f"{_MARK}app",
-            app_secret="x",
-            commitment_chat_ids=["oc-x", "oc-y"],
-        )
-    )
-    await db_session.flush()
-
-    item = {
-        "report_date": "2026-11-09",
-        "enterprise_status": {},
-        "publisher_name": "秦刚",
-    }
-    sent, failed = await commitment_notify.push_announcement_cards(db_session, item)
-    assert (sent, failed) == (2, 0)
-    assert sent_chats == ["oc-x", "oc-y"]
 
 
 async def test_commitment_card_action_handler(

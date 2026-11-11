@@ -573,7 +573,6 @@ describe('FeishuSettingsPage interactions', () => {
         commitment_notify_enabled: false,
         commitment_push_time: '08:30',
         commitment_user_ids: ['ou-a'],
-        commitment_chat_ids: ['oc-x'],
       },
       initialWsStatus: null,
     })
@@ -597,7 +596,6 @@ describe('FeishuSettingsPage interactions', () => {
       expect.objectContaining({
         commitment_notify_enabled: true,
         commitment_push_time: expect.any(String),
-        commitment_chat_ids: expect.any(Array),
         commitment_user_ids: expect.any(Array),
       })
     )

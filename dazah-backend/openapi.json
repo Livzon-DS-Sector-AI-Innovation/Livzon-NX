@@ -80214,13 +80214,6 @@
             "title": "Cert Expiry Notify User Ids",
             "type": "array"
           },
-          "commitment_chat_ids": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Commitment Chat Ids",
-            "type": "array"
-          },
           "commitment_notify_enabled": {
             "default": false,
             "title": "Commitment Notify Enabled",
@@ -96268,13 +96261,6 @@
               "type": "string"
             },
             "title": "Cert Expiry Notify User Ids",
-            "type": "array"
-          },
-          "commitment_chat_ids": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Commitment Chat Ids",
             "type": "array"
           },
           "commitment_notify_enabled": {
@@ -246773,6 +246759,114 @@
         ]
       }
     },
+    "/api/v1/safety/sign-relay": {
+      "post": {
+        "operationId": "sign_relay_submit_api_v1_safety_sign_relay_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "手写签名中转提交（暂存收件箱，等待内网拉取）",
+        "tags": [
+          "安全作业票签名中转"
+        ]
+      }
+    },
+    "/api/v1/safety/sign-relay/pull": {
+      "post": {
+        "operationId": "sign_relay_pull_api_v1_safety_sign_relay_pull_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Relay-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Relay-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "内网拉取暂存签名（共享密钥认证，拉取即清空）",
+        "tags": [
+          "安全作业票签名中转"
+        ]
+      }
+    },
+    "/api/v1/safety/sign-relay/{token}": {
+      "get": {
+        "operationId": "sign_relay_page_api_v1_safety_sign_relay__token__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "手写签名中转页（公网网关渲染自包含手写板）",
+        "tags": [
+          "安全作业票签名中转"
+        ]
+      }
+    },
     "/api/v1/safety/special-operation-ledger": {
       "get": {
         "description": "获取特殊作业台账列表（审批中 + 已审批的报备记录）",
@@ -250979,22 +251073,6 @@
               "title": "Token",
               "type": "string"
             }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
           }
         ],
         "responses": {
@@ -251014,7 +251092,7 @@
         },
         "summary": "下载票据 PDF（token 保护，审批结束后可用）",
         "tags": [
-          "安全管理"
+          "安全作业票免登签名"
         ]
       }
     },
@@ -251127,24 +251205,6 @@
     "/api/v1/safety/work-permit-sign": {
       "post": {
         "operationId": "submit_work_permit_signature_api_v1_safety_work_permit_sign_post",
-        "parameters": [
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
         "responses": {
           "200": {
             "content": {
@@ -251153,21 +251213,11 @@
               }
             },
             "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
           }
         },
         "summary": "提交手写签名 PNG（token 保护）",
         "tags": [
-          "安全管理"
+          "安全作业票免登签名"
         ]
       }
     },
@@ -251182,22 +251232,6 @@
             "schema": {
               "title": "Token",
               "type": "string"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
             }
           }
         ],
@@ -251225,7 +251259,7 @@
         },
         "summary": "免登手写签名页（token 保护）",
         "tags": [
-          "安全管理"
+          "安全作业票免登签名"
         ]
       }
     },

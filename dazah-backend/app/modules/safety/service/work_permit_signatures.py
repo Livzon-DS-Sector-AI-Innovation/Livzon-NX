@@ -31,7 +31,9 @@ from app.modules.safety.service.work_permit_files import store_object
 logger = logging.getLogger(__name__)
 
 SIGN_TOKEN_TTL_SECONDS = 30 * 60
-_DOWNLOAD_TOKEN_TTL_SECONDS = 10 * 60
+# 完工票 PDF 下载链接（HMAC 防伪；归档件需要长期可点，7 天足够覆盖
+# 审批后存档场景，过期可在平台重新生成）
+_DOWNLOAD_TOKEN_TTL_SECONDS = 7 * 24 * 3600
 _MAX_IMAGE_BYTES = 2 * 1024 * 1024
 
 
@@ -111,6 +113,82 @@ def verify_token(token: str, *, expected_act: str) -> dict[str, Any] | None:
     if not isinstance(exp, (int, float)) or exp < datetime.now(UTC).timestamp():
         return None
     return payload
+
+
+def build_sign_url(token: str) -> str:
+    """手写签名页链接：配置公网网关（SIGN_RELAY_GATEWAY_BASE）时指向
+    网关中转页（手机可达），否则指向本环境直连页。"""
+    settings = get_settings()
+    gateway = (settings.SIGN_RELAY_GATEWAY_BASE or "").rstrip("/")
+    if gateway:
+        return f"{gateway}/api/v1/safety/sign-relay/{token}"
+    return (
+        f"{(settings.FRONTEND_URL or settings.BACKEND_PUBLIC_URL).rstrip('/')}"
+        f"/api/v1/safety/work-permit-sign/{token}"
+    )
+
+
+async def apply_signature_submission(
+    session: AsyncSession, payload: dict[str, Any], image_key: str
+) -> None:
+    """签名提交共用处理（直连端点与中转轮询共用）。
+
+    发起行（表单态，pid=UUID(int=0)）：写入聊天表单状态并 PATCH 汇总卡；
+    审批节点：落库 + 提交 + 刷新已推审批卡。
+    """
+    from app.modules.safety.service.work_permit_chat_flow import (
+        ChatFlowService,
+    )
+
+    open_id = str(payload.get("oid") or "")
+    permit_type = str(payload.get("ptype") or "")
+    pid_raw = str(payload.get("pid") or "")
+    is_form = pid_raw == str(uuid_module.UUID(int=0))
+
+    if is_form:
+        flow = ChatFlowService(session, open_id=open_id)
+        await flow.save_initiator_signature(
+            permit_type, str(payload.get("sk") or ""), image_key
+        )
+        await flow.refresh_summary_card(permit_type)
+        return
+
+    permit_id = uuid_module.UUID(pid_raw)
+    round_no = int(payload.get("rnd") or 1)
+    node_id_raw = payload.get("nid")
+    node_id = (
+        uuid_module.UUID(str(node_id_raw)) if node_id_raw else None
+    )
+    signer_user_id_raw = payload.get("uid")
+    signer_user_id = (
+        uuid_module.UUID(str(signer_user_id_raw)) if signer_user_id_raw else None
+    )
+    await save_signature_row(
+        session,
+        permit_id=permit_id,
+        round_no=round_no,
+        sign_key=str(payload.get("sk") or ""),
+        node_id=node_id,
+        signer_user_id=signer_user_id,
+        signer_name=str(payload.get("nm") or ""),
+        image_key=image_key,
+    )
+    await session.commit()
+    from app.modules.safety.service.work_permit_notify import (
+        refresh_or_push_approval_card,
+    )
+
+    await refresh_or_push_approval_card(session, permit_id)
+
+
+def decode_signature_data_url(image: str) -> bytes | None:
+    """data URL → PNG bytes；非法/超限/非 PNG 魔数返回 None（中转共用）。"""
+    raw = _decode_data_url(image)
+    if raw is None:
+        return None
+    if not raw.startswith(b"\x89PNG\r\n\x1a\n"):
+        return None
+    return raw
 
 
 # ── 签名图存储与落库 ──
@@ -277,7 +355,7 @@ _SIGNATURE_PAGE_TEMPLATE = """<!DOCTYPE html>
   <div class="tip" id="tip">请用手指在白板上写名字</div>
 </div>
 <script>
-const POST_URL = "/api/v1/safety/work-permit-sign";
+const POST_URL = {post_url_json};
 const TOKEN = {token_json};
 const canvas = document.getElementById("pad");
 const tip = document.getElementById("tip");
@@ -356,12 +434,18 @@ def render_signature_page(
     permit_no: str,
     row_name: str,
     token: str,
+    post_url: str = "/api/v1/safety/work-permit-sign",
 ) -> str:
-    """免登手写板自包含页（canvas 手写 → POST 提交）。"""
+    """免登手写板自包含页（canvas 手写 → POST 提交）。
+
+    ``post_url`` 供公网中转模式使用（180 网关页提交到网关收件端点）；
+    默认提交到本环境直连端点。
+    """
     return _SIGNATURE_PAGE_TEMPLATE.format(
         title=f"{permit_no} · 手写签名",
         sub=f"签字行：{row_name}（签名将存档到作业票，可重新手写覆盖）",
         token_json=json.dumps(token, ensure_ascii=False),
+        post_url_json=json.dumps(post_url, ensure_ascii=False),
     )
 
 

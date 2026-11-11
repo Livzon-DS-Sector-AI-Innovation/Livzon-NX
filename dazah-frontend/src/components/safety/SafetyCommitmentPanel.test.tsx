@@ -176,7 +176,7 @@ beforeEach(() => {
   })
   mocks.updateCommitment.mockResolvedValue({
     code: 200,
-    data: { report: REPORT },
+    data: REPORT,
   })
 })
 
@@ -268,7 +268,7 @@ describe('SafetyCommitmentPanel：发布与信息卡', () => {
   it('发布承诺公告：空姓名警告、成功后关闭弹窗', async () => {
     mocks.publishCommitment.mockResolvedValue({
       code: 200,
-      data: { report: { ...REPORT, status: 'published' } },
+      data: { ...REPORT, status: 'published' },
     })
     await renderPanel()
     act(() => {
@@ -568,7 +568,7 @@ describe('SafetyCommitmentPanel：企业状态编辑表单', () => {
   it('编辑态修改数值与三态开关并保存', async () => {
     mocks.updateCommitment.mockResolvedValue({
       code: 200,
-      data: { report: REPORT },
+      data: REPORT,
     })
     await renderPanel()
     act(() => {
@@ -761,7 +761,7 @@ describe('SafetyCommitmentPanel：riskBasis 与编辑表单全字段', () => {
   it('编辑态遍历所有数字字段并保存', async () => {
     mocks.updateCommitment.mockResolvedValue({
       code: 200,
-      data: { report: REPORT },
+      data: REPORT,
     })
     await renderPanel()
     // 进入编辑态

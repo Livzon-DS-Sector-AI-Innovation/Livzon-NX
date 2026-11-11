@@ -58,6 +58,7 @@ _FAST_ACTS = frozenset(
         "reject_start",
         "toggle_risk",
         "toggle_measure",
+        "set_level",
     }
 )
 _HEAVY_ACTS = frozenset(
@@ -331,6 +332,10 @@ async def _run_fast_action(
                 field = "risk" if act == "toggle_risk" else "measures"
                 card = await flow.toggle_check(
                     permit_type, field, str(value.get("key") or "")
+                )
+            elif act == "set_level":
+                card = await flow.set_level(
+                    permit_type, str(value.get("level") or "")
                 )
             elif act == "use_default_sign":
                 card = await flow.use_default_sign(

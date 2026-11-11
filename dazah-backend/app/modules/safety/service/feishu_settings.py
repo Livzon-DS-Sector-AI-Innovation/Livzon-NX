@@ -139,7 +139,6 @@ def _build_detail(
         ),
         commitment_notify_enabled=model.commitment_notify_enabled,
         commitment_push_time=model.commitment_push_time or "08:30",
-        commitment_chat_ids=list(model.commitment_chat_ids or []),
         commitment_user_ids=list(model.commitment_user_ids or []),
         is_enabled=model.is_enabled,
         knowledge_last_sync_status=model.knowledge_last_sync_status,
@@ -215,7 +214,6 @@ async def update_safety_feishu_app_settings(
                 ),
                 commitment_notify_enabled=data.commitment_notify_enabled,
                 commitment_push_time=_clean_optional(data.commitment_push_time),
-                commitment_chat_ids=list(data.commitment_chat_ids or []),
                 commitment_user_ids=list(data.commitment_user_ids or []),
                 is_enabled=data.is_enabled,
             )
@@ -306,8 +304,6 @@ async def update_safety_feishu_app_settings(
                 model.commitment_push_time = _clean_optional(
                     data.commitment_push_time
                 )
-            if "commitment_chat_ids" in data.model_fields_set:
-                model.commitment_chat_ids = list(data.commitment_chat_ids or [])
             if "commitment_user_ids" in data.model_fields_set:
                 model.commitment_user_ids = list(data.commitment_user_ids or [])
         await db.commit()

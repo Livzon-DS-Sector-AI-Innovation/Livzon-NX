@@ -81,6 +81,15 @@ class Settings(BaseSettings):
     BACKEND_PUBLIC_URL: str = ""
     FEISHU_WS_ENABLED: bool = True
 
+    # 手写签名公网中转（内网部署专用）：手机飞书点签名链接时打开公网
+    # 网关（如测试服务器 180.76.112.99）的手写板，签名图暂存网关，
+    # 内网服务器后台轮询拉回验签落库。内网侧配 GATEWAY_BASE + KEY，
+    # 公网网关侧只开 GATEWAY_ENABLED。三端留空 = 不启用，链接走本环境。
+    SIGN_RELAY_GATEWAY_BASE: str = ""
+    SIGN_RELAY_KEY: str = ""
+    SIGN_RELAY_POLL_SECONDS: int = 10
+    SIGN_RELAY_GATEWAY_ENABLED: bool = False
+
     # Feishu 设备部
     FEISHU_EQUIPMENT_DEPT_ID: str = ""
     FEISHU_EQUIPMENT_CHAT_ID: str = "oc_ba1a54a70a0d611315f29581621c50b5"
