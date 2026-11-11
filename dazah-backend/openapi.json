@@ -23792,6 +23792,29 @@
         "title": "ChangeStatistics",
         "type": "object"
       },
+      "ChartThresholdUpsert": {
+        "properties": {
+          "chart_key": {
+            "title": "Chart Key",
+            "type": "string"
+          },
+          "scope_key": {
+            "title": "Scope Key",
+            "type": "string"
+          },
+          "threshold": {
+            "title": "Threshold",
+            "type": "number"
+          }
+        },
+        "required": [
+          "scope_key",
+          "chart_key",
+          "threshold"
+        ],
+        "title": "ChartThresholdUpsert",
+        "type": "object"
+      },
       "ChatRequest": {
         "description": "聊天请求",
         "properties": {
@@ -158841,6 +158864,125 @@
         "tags": [
           "生产管理",
           "生产管理 - 陶瓷膜过滤"
+        ]
+      }
+    },
+    "/api/v1/production/chart-thresholds": {
+      "get": {
+        "operationId": "list_chart_thresholds_api_v1_production_chart_thresholds_get",
+        "parameters": [
+          {
+            "description": "页面范围键",
+            "in": "query",
+            "name": "scope_key",
+            "required": true,
+            "schema": {
+              "description": "页面范围键",
+              "title": "Scope Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response List Chart Thresholds Api V1 Production Chart Thresholds Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "读取图表警戒线配置",
+        "tags": [
+          "生产管理",
+          "生产管理 - 图表警戒线"
+        ]
+      },
+      "put": {
+        "operationId": "upsert_chart_threshold_api_v1_production_chart_thresholds_put",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChartThresholdUpsert"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Upsert Chart Threshold Api V1 Production Chart Thresholds Put"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "更新图表警戒线（管理员）",
+        "tags": [
+          "生产管理",
+          "生产管理 - 图表警戒线"
         ]
       }
     },

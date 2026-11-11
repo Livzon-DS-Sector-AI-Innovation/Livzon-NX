@@ -8,6 +8,8 @@ import {ExperimentOutlined, FilterOutlined, BulbOutlined,
   CalculatorOutlined, CheckCircleOutlined, DatabaseOutlined,
   ArrowRightOutlined, NodeIndexOutlined, ScheduleOutlined,} from '@ant-design/icons'
 import ReactECharts from '@/components/shared/ThemedEChart'
+import ChartLineSetting from '@/components/production/ChartLineSetting'
+import { useChartThresholds } from '@/components/production/chart-thresholds'
 import dayjs, { type Dayjs } from 'dayjs'
 import SyncSettingsButton from '@/components/production/SyncSettingsButton'
 import { PRODUCTION_PAGE_KEYS } from '@/components/production/useProductionPermissions'
@@ -27,6 +29,8 @@ const STAGE_MAP: Record<string, (typeof STAGES)[number]> = {}
 STAGES.forEach(s => { STAGE_MAP[s.key] = s })
 
 export default function Workshop2013Page() {
+  const { values: drLineValues, save: saveDrLine } = useChartThresholds('workshop-201-2-dr')
+  const passLine = drLineValues['pass_rate'] ?? 80
   const router = useRouter()
   const [activeTab, setActiveTab] = useState<'dashboard' | 'workshop'>('dashboard')
   const [loading, setLoading] = useState(true)
@@ -111,6 +115,14 @@ export default function Workshop2013Page() {
       {activeTab === 'dashboard' && (
         <>
           {/* KPI 卡片 */}
+          <div style={{ textAlign: 'right', marginBottom: 8 }}>
+            <ChartLineSetting
+              configs={[{ key: 'pass_rate', label: '收率达标率红线', unit: '%' }]}
+              values={{ pass_rate: passLine }}
+              onSave={saveDrLine}
+              title="收率达标率红线（全平台共享）"
+            />
+          </div>
           <Row gutter={16} className="mb-4">
             <Col span={6}>
               <Card><Statistic title="本月产量" value={d.monthly_output_kg || 0} suffix="kg" styles={{ content: { color: '#1677ff', fontSize: 28 } }} /></Card>
@@ -122,7 +134,7 @@ export default function Workshop2013Page() {
               <Card><Statistic title="平均收率" value={d.avg_yield || 0} suffix="%" styles={{ content: { color: '#fa8c16', fontSize: 28 } }} /></Card>
             </Col>
             <Col span={6}>
-              <Card><Statistic title="收率达标率" value={d.pass_rate || 0} suffix="%" styles={{ content: { color: d.pass_rate >= 80 ? '#52c41a' : '#fa8c16', fontSize: 28 } }} /></Card>
+              <Card><Statistic title="收率达标率" value={d.pass_rate || 0} suffix="%" styles={{ content: { color: d.pass_rate >= passLine ? '#52c41a' : '#fa8c16', fontSize: 28 } }} /></Card>
             </Col>
           </Row>
 
