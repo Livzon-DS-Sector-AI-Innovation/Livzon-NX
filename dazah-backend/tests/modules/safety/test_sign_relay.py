@@ -8,6 +8,7 @@ from __future__ import annotations
 import base64
 import io
 import json
+from typing import Any
 
 import pytest
 from fastapi import FastAPI
@@ -134,3 +135,256 @@ def test_relay_payload_roundtrip_shape() -> None:
     """收件箱条目结构（token+image）与拉取端契约一致。"""
     payload = {"token": "tok", "image": "data:image/png;base64,xx"}
     assert json.loads(json.dumps(payload)) == payload
+
+
+async def test_process_item_full_pipeline(monkeypatch: pytest.MonkeyPatch) -> None:
+    """_process_item 全链路：验签→解码→存储→落库。"""
+    from app.modules.safety.sign_relay_poller import _process_item
+
+    calls: dict[str, Any] = {}
+
+    def _verify(token: str, *, expected_act: str) -> dict[str, Any] | None:
+        calls["verify"] = token
+        return {"sk": "initiator", "pid": "zero-uuid"}
+
+    def _decode(data_url: str) -> bytes | None:
+        calls["decode"] = data_url
+        return b"\x89PNG"
+
+    def _store(png: bytes) -> str | None:
+        calls["store"] = png
+        return "signs/relay.png"
+
+    async def _apply(session: Any, payload: dict[str, Any], key: str) -> None:
+        calls["apply"] = (payload, key)
+
+    from contextlib import asynccontextmanager
+
+    @asynccontextmanager
+    async def _factory():
+        yield object()
+
+    monkeypatch.setattr(
+        "app.modules.safety.service.work_permit_signatures.verify_token",
+        _verify,
+    )
+    monkeypatch.setattr(
+        "app.modules.safety.service.work_permit_signatures.decode_signature_data_url",
+        _decode,
+    )
+    monkeypatch.setattr(
+        "app.modules.safety.service.work_permit_signatures.store_signature_image",
+        _store,
+    )
+    monkeypatch.setattr(
+        "app.modules.safety.service.work_permit_signatures.apply_signature_submission",
+        _apply,
+    )
+    monkeypatch.setattr("app.core.database.async_session_factory", _factory)
+
+    ok = await _process_item({"token": "tok1", "image": "data:image/png;base64,AA"})
+    assert ok is True
+    assert calls["verify"] == "tok1"
+    assert calls["store"] == b"\x89PNG"
+    assert calls["apply"][1] == "signs/relay.png"
+
+
+async def test_process_item_bad_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.modules.safety.sign_relay_poller import _process_item
+
+    monkeypatch.setattr(
+        "app.modules.safety.service.work_permit_signatures.verify_token",
+        lambda token, *, expected_act: None,
+    )
+    assert await _process_item({"token": "bad"}) is False
+
+
+async def test_process_item_bad_image(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.modules.safety.sign_relay_poller import _process_item
+
+    monkeypatch.setattr(
+        "app.modules.safety.service.work_permit_signatures.verify_token",
+        lambda token, *, expected_act: {"sk": "k"},
+    )
+    monkeypatch.setattr(
+        "app.modules.safety.service.work_permit_signatures.decode_signature_data_url",
+        lambda url: None,
+    )
+    assert await _process_item({"token": "t", "image": "bad"}) is False
+
+
+async def test_process_item_store_fail(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.modules.safety.sign_relay_poller import _process_item
+
+    monkeypatch.setattr(
+        "app.modules.safety.service.work_permit_signatures.verify_token",
+        lambda token, *, expected_act: {"sk": "k"},
+    )
+    monkeypatch.setattr(
+        "app.modules.safety.service.work_permit_signatures.decode_signature_data_url",
+        lambda url: b"png",
+    )
+    monkeypatch.setattr(
+        "app.modules.safety.service.work_permit_signatures.store_signature_image",
+        lambda png: None,
+    )
+    assert await _process_item({"token": "t", "image": "data:..."}) is False
+
+
+async def test_poll_once_disabled_returns_zero() -> None:
+    from app.modules.safety.sign_relay_poller import poll_once
+
+    assert await poll_once() == 0
+
+
+async def test_poll_once_success(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.modules.safety import sign_relay_poller as poller
+
+    monkeypatch.setattr(
+        poller,
+        "get_settings",
+        lambda: type("S", (), {
+            "SIGN_RELAY_GATEWAY_BASE": "http://relay",
+            "SIGN_RELAY_KEY": "k",
+            "SIGN_RELAY_POLL_SECONDS": 10,
+            "SIGN_RELAY_GATEWAY_ENABLED": True,
+        })(),
+    )
+
+    class _Resp:
+        status_code = 200
+        text = ""
+
+        def json(self) -> dict:
+            return {"data": {"items": [{"token": "t1", "image": "i1"}]}}
+
+    class _Client:
+        async def __aenter__(self) -> _Client:
+            return self
+
+        async def __aexit__(self, *args: object) -> None:
+            pass
+
+        async def post(self, url: str, **kwargs: object) -> _Resp:
+            return _Resp()
+
+    monkeypatch.setattr(poller.httpx, "AsyncClient", lambda **kwargs: _Client())
+    async def _ok(item: dict[str, Any]) -> bool:
+        return True
+
+    monkeypatch.setattr(poller, "_process_item", _ok)
+    count = await poller.poll_once()
+    assert count == 1
+
+
+async def test_poll_once_http_fail(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.modules.safety import sign_relay_poller as poller
+
+    monkeypatch.setattr(
+        poller,
+        "get_settings",
+        lambda: type("S", (), {
+            "SIGN_RELAY_GATEWAY_BASE": "http://relay",
+            "SIGN_RELAY_KEY": "k",
+            "SIGN_RELAY_POLL_SECONDS": 10,
+        })(),
+    )
+
+    class _Resp:
+        status_code = 503
+        text = "unavailable"
+
+        def json(self) -> dict:
+            return {}
+
+    class _Client:
+        async def __aenter__(self) -> _Client:
+            return self
+
+        async def __aexit__(self, *args: object) -> None:
+            pass
+
+        async def post(self, url: str, **kwargs: object) -> _Resp:
+            return _Resp()
+
+    monkeypatch.setattr(poller.httpx, "AsyncClient", lambda **kwargs: _Client())
+    assert await poller.poll_once() == 0
+
+
+async def test_poll_once_process_exception(monkeypatch: pytest.MonkeyPatch) -> None:
+    """单条处理异常不阻断整批。"""
+    from app.modules.safety import sign_relay_poller as poller
+
+    monkeypatch.setattr(
+        poller,
+        "get_settings",
+        lambda: type("S", (), {
+            "SIGN_RELAY_GATEWAY_BASE": "http://r",
+            "SIGN_RELAY_KEY": "k",
+            "SIGN_RELAY_POLL_SECONDS": 10,
+        })(),
+    )
+
+    class _Resp:
+        status_code = 200
+        text = ""
+
+        def json(self) -> dict:
+            return {"data": {"items": [{"t": 1}, {"t": 2}]}}
+
+    class _Client:
+        async def __aenter__(self) -> _Client:
+            return self
+
+        async def __aexit__(self, *args: object) -> None:
+            pass
+
+        async def post(self, url: str, **kwargs: object) -> _Resp:
+            return _Resp()
+
+    monkeypatch.setattr(poller.httpx, "AsyncClient", lambda **kwargs: _Client())
+
+    async def _boom(item: dict) -> bool:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(poller, "_process_item", _boom)
+    assert await poller.poll_once() == 0
+
+
+async def test_sign_relay_loop_no_config_returns() -> None:
+    from app.modules.safety.sign_relay_poller import sign_relay_loop
+
+    # 未配置直接返回（不进入循环）
+    await sign_relay_loop()
+
+
+async def test_sign_relay_loop_cancels(monkeypatch: pytest.MonkeyPatch) -> None:
+    """loop 可被取消（真实 sleep 10s 间隔，在 sleep 前取消即可）。"""
+    import asyncio
+
+    from app.modules.safety import sign_relay_poller as poller
+
+    monkeypatch.setattr(
+        poller,
+        "get_settings",
+        lambda: type("S", (), {
+            "SIGN_RELAY_GATEWAY_BASE": "http://r",
+            "SIGN_RELAY_KEY": "k",
+            "SIGN_RELAY_POLL_SECONDS": 10,
+        })(),
+    )
+
+    async def _noop_poll() -> int:
+        return 0
+
+    monkeypatch.setattr(poller, "poll_once", _noop_poll)
+
+    task = asyncio.create_task(poller.sign_relay_loop())
+    await asyncio.sleep(0.05)
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
