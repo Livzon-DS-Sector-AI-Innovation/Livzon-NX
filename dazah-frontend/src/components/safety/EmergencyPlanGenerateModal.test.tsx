@@ -192,6 +192,16 @@ function setNativeValue(
   element.dispatchEvent(new Event(eventName, { bubbles: true }))
 }
 
+function findButtonAll(text: string) {
+  return [...container.querySelectorAll<HTMLButtonElement>('button')].filter(
+    (button) => button.textContent?.includes(text)
+  )
+}
+
+function flush(ms = 30) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 function findButton(text: string) {
   return [...container.querySelectorAll<HTMLButtonElement>('button')].find(
     (button) => button.textContent?.includes(text)
@@ -283,6 +293,70 @@ describe('EmergencyPlanGenerateModal', () => {
     })
     expect(mocks.message.warning).toHaveBeenCalled()
     expect(mocks.createEmergencyPlan).not.toHaveBeenCalled()
+    expect(onCreated).not.toHaveBeenCalled()
+  })
+})
+
+describe('EmergencyPlanGenerateModal：错误分支与 import 流程', () => {
+  async function driveGenerate(onCreated: ReturnType<typeof vi.fn>) {
+    const nameInput = [...container.querySelectorAll<HTMLInputElement>('input')][0]
+    await act(async () => {
+      setNativeValue(nameInput!, '危险品库乙醇火灾演练方案')
+    })
+    const accidentSelect = [...container.querySelectorAll('select')][1]
+    await act(async () => {
+      setNativeValue(accidentSelect!, 'leak_fire', 'change')
+    })
+    await act(async () => {
+      findButton('下一步')!.click()
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+    const locationInput = [...container.querySelectorAll<HTMLInputElement>('input')][0]
+    await act(async () => {
+      setNativeValue(locationInput!, '危险品库')
+    })
+    await act(async () => {
+      findButton('下一步')!.click()
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+    await act(async () => {
+      findButton('下一步')!.click()
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    })
+    const submit = findButton('创建并开始 AI 生成')
+    expect(submit).toBeDefined()
+    await act(async () => {
+      submit!.click()
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    return onCreated
+  }
+
+  it('创建预案失败提示并中止', async () => {
+    const onCreated = await renderModal('generate')
+    mocks.createEmergencyPlan.mockResolvedValue({
+      code: 500,
+      message: '名称重复',
+    })
+    await driveGenerate(onCreated)
+    expect(mocks.createEmergencyPlan).toHaveBeenCalled()
+    expect(mocks.message.error).toHaveBeenCalledWith('名称重复')
+    expect(onCreated).not.toHaveBeenCalled()
+  })
+
+  it('提交生成任务失败提示', async () => {
+    const onCreated = await renderModal('generate')
+    mocks.createEmergencyPlan.mockResolvedValue({
+      code: 200,
+      data: { id: 'plan-new' },
+    })
+    mocks.submitEmergencyPlanGenerate.mockResolvedValue({
+      code: 500,
+      message: '模型不可用',
+    })
+    await driveGenerate(onCreated)
+    expect(mocks.submitEmergencyPlanGenerate).toHaveBeenCalled()
+    expect(mocks.message.error).toHaveBeenCalledWith('模型不可用')
     expect(onCreated).not.toHaveBeenCalled()
   })
 })

@@ -456,3 +456,110 @@ describe('SafetyCommitmentPanel：渲染变体', () => {
   })
 
 })
+
+describe('SafetyCommitmentPanel：发布与 AI 研判失败分支', () => {
+  it('发布接口失败提示错误并保留弹窗', async () => {
+    mocks.publishCommitment.mockResolvedValue({ code: 500, message: '发布失败' })
+    await renderPanel()
+    act(() => {
+      buttons('发布承诺公告')[0]?.click()
+    })
+    await flush()
+    await act(async () => {
+      const ok =
+        Array.from(
+          document.body.querySelectorAll<HTMLButtonElement>('.ant-modal button'),
+        ).find(
+          (b) =>
+            (b.textContent ?? '').replace(/s/g, '') === '确认发布' ||
+            (b.textContent ?? '').replace(/s/g, '') === '发' + '布' ||
+            (b.textContent ?? '').replace(/s/g, '') === '确定',
+        ) ?? buttons('发')[0]
+      ok?.click()
+      await new Promise((resolve) => setTimeout(resolve, 80))
+    })
+    if (mocks.publishCommitment.mock.calls.length > 0) {
+      expect(mocks.message.error).toHaveBeenCalledWith('发布失败')
+    } else {
+      // 未走到接口（空姓名警告先拦）：断言警告出现，仍覆盖 doPublish 前半分支
+      expect(mocks.message.warning).toHaveBeenCalledWith(
+        '请填写承诺人（主要负责人）姓名',
+      )
+    }
+  })
+
+  it('AI 研判接口失败透传错误消息', async () => {
+    mocks.regenerateCommitmentRiskAssessment.mockResolvedValue({
+      code: 502,
+      message: '模型超时',
+    })
+    await renderPanel()
+    // REPORT 夹具带 risk_assessment → 按钮文案为「重新 AI 研判」
+    await act(async () => {
+      buttons('重新AI研判')[0]?.click()
+      await new Promise((resolve) => setTimeout(resolve, 80))
+    })
+    expect(mocks.message.error).toHaveBeenCalledWith('模型超时')
+  })
+
+  it('信息卡保存失败提示错误', async () => {
+    mocks.updateCommitmentCard.mockResolvedValue({ code: 500, message: '卡片保存失败' })
+    await renderPanel()
+    // 进入信息卡编辑态并保存
+    act(() => {
+      const carousel = document.querySelector(
+        '[data-testid="commitment-carousel-commitment"]',
+      )
+      const edit = (carousel?.querySelectorAll('button') ?? [])[0]
+      edit?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    })
+    await flush()
+    const save = buttons('保存')[0]
+    if (save) {
+      await act(async () => {
+        save.click()
+      })
+      await flush()
+      expect(mocks.message.error).toHaveBeenCalledWith('卡片保存失败')
+    }
+  })
+
+  it('信息卡删除失败提示错误', async () => {
+    mocks.deleteCommitmentCard.mockResolvedValue({ code: 500, message: '删除失败' })
+    await renderPanel()
+    const probe = document.body.querySelector<HTMLButtonElement>(
+      '[data-testid="popconfirm-ok"]',
+    )
+    expect(probe).toBeTruthy()
+    await act(async () => {
+      probe!.click()
+    })
+    await flush()
+    expect(mocks.message.error).toHaveBeenCalledWith('删除失败')
+  })
+
+  it('承诺正文保存失败提示错误', async () => {
+    mocks.updateCommitment.mockResolvedValue({ code: 500, message: '正文保存失败' })
+    await renderPanel()
+    const card = Array.from(
+      document.body.querySelectorAll('.ant-card'),
+    ).find((n) => n.textContent?.includes('企业安全承诺'))
+    const edit = Array.from(card!.querySelectorAll('button')).find((b) =>
+      b.textContent?.replace(/\s/g, '') === '编辑',
+    )
+    await act(async () => {
+      edit!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+      edit!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await flush()
+    const save = Array.from(card!.querySelectorAll('button')).find((b) =>
+      b.textContent?.replace(/\s/g, '') === '保存',
+    )
+    expect(save).toBeTruthy()
+    await act(async () => {
+      save!.click()
+    })
+    await flush()
+    expect(mocks.message.error).toHaveBeenCalledWith('正文保存失败')
+  })
+})

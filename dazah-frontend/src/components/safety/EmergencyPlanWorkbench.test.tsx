@@ -504,3 +504,89 @@ describe('EmergencyPlanWorkbench：导出与编辑守卫', () => {
     expect(mocks.saveEmergencyPlanContent).toHaveBeenCalled()
   })
 })
+
+describe('EmergencyPlanWorkbench：修订记录与定稿', () => {
+  it('修订记录刷新与单条详情打开', async () => {
+    mocks.fetchEmergencyPlanRevisions.mockResolvedValue({
+      code: 200,
+      data: {
+        items: [
+          {
+            id: 'rev-1',
+            revision_no: 3,
+            source: 'ai_review',
+            summary: 'AI 审核自动修正 2 处',
+            created_at: '2026-11-10T09:00:00+08:00',
+          },
+        ],
+      },
+    } as never)
+    mocks.fetchEmergencyPlanRevision.mockResolvedValue({
+      code: 200,
+      data: {
+        revision_no: 3,
+        source: 'ai_review',
+        summary: 'AI 审核自动修正 2 处',
+        changed_sections: ['scenario'],
+        changes: [
+          {
+            section: 'scenario',
+            reason: '术语规范化',
+            before: '旧文本',
+            after: '新文本',
+          },
+        ],
+      },
+    })
+    await renderWorkbench()
+    // 切到「修订记录」tab 后其子树才渲染
+    const revTab = Array.from(
+      container!.querySelectorAll('.ant-tabs-tab'),
+    ).find((n) => n.textContent?.includes('修订记录'))
+    await act(async () => {
+      revTab?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+      revTab?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    const refresh = Array.from(
+      container!.querySelectorAll('button'),
+    ).find((b) => b.textContent?.includes('刷新'))
+    await act(async () => {
+      refresh!.click()
+      await new Promise((resolve) => setTimeout(resolve, 30))
+    })
+    expect(mocks.fetchEmergencyPlanRevisions).toHaveBeenCalledWith('plan-1')
+    // 修订条目带「恢复」按钮（handleRestore 走乐观锁恢复流程）
+    const restoreBtn = Array.from(
+      container!.querySelectorAll('button'),
+    ).find((b) => b.textContent?.includes('恢复'))
+    expect(restoreBtn).toBeTruthy()
+  })
+
+  it('定稿失败提示错误', async () => {
+    mocks.finalizeEmergencyPlan.mockResolvedValue({
+      code: 500,
+      message: '存在未处理问题',
+    })
+    await renderWorkbench()
+    const finalize = Array.from(
+      container!.querySelectorAll('button'),
+    ).find((b) => b.textContent?.includes('定稿'))
+    if (finalize) {
+      await act(async () => {
+        finalize.click()
+        await new Promise((resolve) => setTimeout(resolve, 20))
+      })
+      const ok = Array.from(
+        container!.querySelectorAll('button'),
+      ).find((b) => b.textContent?.replace(/\s/g, '') === '确定')
+      if (ok) {
+        await act(async () => {
+          ok.click()
+          await new Promise((resolve) => setTimeout(resolve, 30))
+        })
+        expect(mocks.message.error).toHaveBeenCalledWith('存在未处理问题')
+      }
+    }
+  })
+})

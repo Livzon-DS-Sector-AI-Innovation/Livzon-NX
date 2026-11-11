@@ -1150,7 +1150,6 @@ async def test_chat_flow_submit_seeded_state(
         initiator_sign_keys,
     )
 
-    pushed: list[str] = []
 
     async def _stub_raw_card(*_a: Any, **_k: Any) -> str | None:
         return "om_seeded"
@@ -1175,10 +1174,13 @@ async def test_chat_flow_submit_seeded_state(
     permit_type = "blind_plate"
     values = base_form_values(permit_type, None)
     values["work_description"] = "播种提交测试"
-    values["type_data"] = { "blind_action": "堵盲板", "equipment_pipe_name": "R101 循环水管线" }
+    values["type_data"] = {
+        "blind_action": "堵盲板",
+        "equipment_pipe_name": "R101 循环水管线",
+    }
     values["planned_start"] = "2026-11-12 08:00"
     values["planned_end"] = "2026-11-12 18:00"
-    values["persons"] = [{ "role": "work_leader", "name": "播种人" }]
+    values["persons"] = [{"role": "work_leader", "name": "播种人"}]
     # 审批节点指派：安全员意见节点指派给另一个测试用户
     assignee = User(
         id=uuid4(), name=f"{_MARK}审批人{uuid4().hex[:6]}",
