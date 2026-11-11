@@ -245,12 +245,16 @@ async def test_poll_once_success(
     monkeypatch.setattr(
         poller,
         "get_settings",
-        lambda: type("S", (), {
-            "SIGN_RELAY_GATEWAY_BASE": "http://relay",
-            "SIGN_RELAY_KEY": "k",
-            "SIGN_RELAY_POLL_SECONDS": 10,
-            "SIGN_RELAY_GATEWAY_ENABLED": True,
-        })(),
+        lambda: type(
+            "S",
+            (),
+            {
+                "SIGN_RELAY_GATEWAY_BASE": "http://relay",
+                "SIGN_RELAY_KEY": "k",
+                "SIGN_RELAY_POLL_SECONDS": 10,
+                "SIGN_RELAY_GATEWAY_ENABLED": True,
+            },
+        )(),
     )
 
     class _Resp:
@@ -271,6 +275,7 @@ async def test_poll_once_success(
             return _Resp()
 
     monkeypatch.setattr(poller.httpx, "AsyncClient", lambda **kwargs: _Client())
+
     async def _ok(item: dict[str, Any]) -> bool:
         return True
 
@@ -285,11 +290,15 @@ async def test_poll_once_http_fail(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         poller,
         "get_settings",
-        lambda: type("S", (), {
-            "SIGN_RELAY_GATEWAY_BASE": "http://relay",
-            "SIGN_RELAY_KEY": "k",
-            "SIGN_RELAY_POLL_SECONDS": 10,
-        })(),
+        lambda: type(
+            "S",
+            (),
+            {
+                "SIGN_RELAY_GATEWAY_BASE": "http://relay",
+                "SIGN_RELAY_KEY": "k",
+                "SIGN_RELAY_POLL_SECONDS": 10,
+            },
+        )(),
     )
 
     class _Resp:
@@ -320,11 +329,15 @@ async def test_poll_once_process_exception(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setattr(
         poller,
         "get_settings",
-        lambda: type("S", (), {
-            "SIGN_RELAY_GATEWAY_BASE": "http://r",
-            "SIGN_RELAY_KEY": "k",
-            "SIGN_RELAY_POLL_SECONDS": 10,
-        })(),
+        lambda: type(
+            "S",
+            (),
+            {
+                "SIGN_RELAY_GATEWAY_BASE": "http://r",
+                "SIGN_RELAY_KEY": "k",
+                "SIGN_RELAY_POLL_SECONDS": 10,
+            },
+        )(),
     )
 
     class _Resp:
@@ -369,11 +382,15 @@ async def test_sign_relay_loop_cancels(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         poller,
         "get_settings",
-        lambda: type("S", (), {
-            "SIGN_RELAY_GATEWAY_BASE": "http://r",
-            "SIGN_RELAY_KEY": "k",
-            "SIGN_RELAY_POLL_SECONDS": 10,
-        })(),
+        lambda: type(
+            "S",
+            (),
+            {
+                "SIGN_RELAY_GATEWAY_BASE": "http://r",
+                "SIGN_RELAY_KEY": "k",
+                "SIGN_RELAY_POLL_SECONDS": 10,
+            },
+        )(),
     )
 
     async def _noop_poll() -> int:
@@ -383,6 +400,119 @@ async def test_sign_relay_loop_cancels(monkeypatch: pytest.MonkeyPatch) -> None:
 
     task = asyncio.create_task(poller.sign_relay_loop())
     await asyncio.sleep(0.05)
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+
+
+async def test_relay_submit_bad_body_and_missing_params(
+    relay_client: AsyncClient | None,
+) -> None:
+    """提交体非法 JSON / 缺参数 → 400。"""
+    assert relay_client is not None
+    async with relay_client as ac:
+        bad = await ac.post("/api/v1/safety/sign-relay", content="not-a-json")
+        assert bad.status_code == 400
+
+        missing = await ac.post(
+            "/api/v1/safety/sign-relay", json={"token": "", "image": ""}
+        )
+        assert missing.status_code == 400
+
+
+async def test_relay_pull_discards_unparseable_entries(
+    relay_client: AsyncClient | None,
+) -> None:
+    """收件箱存在无法解析条目时丢弃并返回空批。"""
+    assert relay_client is not None
+    from app.core.redis import redis_client
+    from app.modules.safety.api.sign_relay_public import _INBOX_KEY
+
+    await redis_client.rpush(_INBOX_KEY, "{not-json")  # type: ignore[misc]
+    async with relay_client as ac:
+        pull = await ac.post(
+            "/api/v1/safety/sign-relay/pull",
+            headers={"X-Relay-Key": "relay-key-test"},
+        )
+        assert pull.status_code == 200
+        assert pull.json()["data"]["items"] == []
+        # 收件箱应被清空（坏条目已弹出丢弃）
+        assert await redis_client.llen(_INBOX_KEY) == 0
+
+
+async def test_poll_once_empty_items(monkeypatch: pytest.MonkeyPatch) -> None:
+    """网关返回空批 → 0。"""
+    from app.modules.safety import sign_relay_poller as poller
+
+    monkeypatch.setattr(
+        poller,
+        "get_settings",
+        lambda: type(
+            "S",
+            (),
+            {
+                "SIGN_RELAY_GATEWAY_BASE": "http://relay",
+                "SIGN_RELAY_KEY": "k",
+                "SIGN_RELAY_POLL_SECONDS": 10,
+            },
+        )(),
+    )
+
+    class _Resp:
+        status_code = 200
+        text = ""
+
+        def json(self) -> dict:
+            return {"data": {"items": []}}
+
+    class _Client:
+        async def __aenter__(self) -> _Client:
+            return self
+
+        async def __aexit__(self, *args: object) -> None:
+            pass
+
+        async def post(self, url: str, **kwargs: object) -> _Resp:
+            return _Resp()
+
+    monkeypatch.setattr(poller.httpx, "AsyncClient", lambda **kwargs: _Client())
+    assert await poller.poll_once() == 0
+
+
+async def test_sign_relay_loop_poll_exception_and_cancel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """poll_once 抛错不阻断循环（记日志后继续 sleep），再取消退出。"""
+    import asyncio
+
+    from app.modules.safety import sign_relay_poller as poller
+
+    monkeypatch.setattr(
+        poller,
+        "get_settings",
+        lambda: type(
+            "S",
+            (),
+            {
+                "SIGN_RELAY_GATEWAY_BASE": "http://r",
+                "SIGN_RELAY_KEY": "k",
+                "SIGN_RELAY_POLL_SECONDS": 10,
+            },
+        )(),
+    )
+    calls = {"n": 0}
+
+    async def _boom_poll() -> int:
+        calls["n"] += 1
+        raise RuntimeError("poll down")
+
+    monkeypatch.setattr(poller, "poll_once", _boom_poll)
+    task = asyncio.create_task(poller.sign_relay_loop())
+    # 等待异常分支执行后进入 sleep
+    await asyncio.sleep(0.1)
+    assert calls["n"] >= 1
     task.cancel()
     try:
         await task

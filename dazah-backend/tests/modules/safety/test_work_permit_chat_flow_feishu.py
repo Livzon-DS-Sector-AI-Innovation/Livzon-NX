@@ -125,12 +125,12 @@ def test_step_cards_carry_module_and_act() -> None:
 
     # ② 人员选人 + 外部人员手工录入
     person_names = _form_names("hot_work", 2)
-    assert any(
-        n.startswith("person__") for n in person_names
-    ), "人员步应含通讯录选人组件"
-    assert any(
-        n.startswith("person_ext_cert__") for n in person_names
-    ), "人员步应支持外部人员证件号录入"
+    assert any(n.startswith("person__") for n in person_names), (
+        "人员步应含通讯录选人组件"
+    )
+    assert any(n.startswith("person_ext_cert__") for n in person_names), (
+        "人员步应支持外部人员证件号录入"
+    )
     # ④ 风险辨识：下拉多选（与动火方式一致）
     step4_card = forms.build_step_card(
         "hot_work", 4, forms.base_form_values("hot_work", None), "ou-x"
@@ -141,24 +141,21 @@ def test_step_cards_carry_module_and_act() -> None:
     risk_selects = [
         el
         for el in step4_form["elements"]
-        if el.get("name") == "risk"
-        and el.get("tag") == "multi_select_static"
+        if el.get("name") == "risk" and el.get("tag") == "multi_select_static"
     ]
     assert risk_selects, "风险辨识应为下拉多选"
-    assert len(risk_selects[0].get("options") or []) >= 20, (
-        "风险辨识下拉应含全部选项"
-    )
+    assert len(risk_selects[0].get("options") or []) >= 20, "风险辨识下拉应含全部选项"
     # ⑤ 措施逐行是/否 + 下划线填空
     measure_names = _form_names("hot_work", 5)
     assert any(n.startswith("m__") for n in measure_names), "安全措施应逐行选择"
-    assert any(
-        n.startswith("f__hw_disconnect_pipes__") for n in measure_names
-    ), "下划线条文应附数量填空"
+    assert any(n.startswith("f__hw_disconnect_pipes__") for n in measure_names), (
+        "下划线条文应附数量填空"
+    )
     # ⑥ 审批人选人
     assign_names = _form_names("hot_work", 6)
-    assert any(
-        n.startswith("assign_") for n in assign_names
-    ), "审批人指派步应含选人组件"
+    assert any(n.startswith("assign_") for n in assign_names), (
+        "审批人指派步应含选人组件"
+    )
 
 
 def test_all_selects_have_options() -> None:
@@ -175,8 +172,7 @@ def test_all_selects_have_options() -> None:
                 for field in element["elements"]:
                     if str(field.get("tag", "")).endswith("select_static"):
                         assert field.get("options"), (
-                            f"{code} 第{step}步下拉 "
-                            f"{field.get('name')} 无选项"
+                            f"{code} 第{step}步下拉 {field.get('name')} 无选项"
                         )
 
 
@@ -187,9 +183,7 @@ def test_summary_card_sign_gating_and_default_button() -> None:
         for key in ("initiator", "briefer", "briefer_receiver")
     }
 
-    unsigned = forms.build_summary_card(
-        "blind_plate", "none", values, {}, urls
-    )
+    unsigned = forms.build_summary_card("blind_plate", "none", values, {}, urls)
     button_values = _all_button_values(unsigned)
     assert any(v.get("act") == "use_default_sign" for v in button_values), (
         "未签名行应提供「用我的默认签名」按钮"
@@ -221,12 +215,9 @@ def test_reject_and_gas_cards_carry_act() -> None:
         and v.get("node_id") == "nid-1"
         for v in reject_values
     )
-    gas_values = _all_button_values(
-        forms.build_gas_card("pid-2", "SX-20261109-001")
-    )
+    gas_values = _all_button_values(forms.build_gas_card("pid-2", "SX-20261109-001"))
     assert any(
-        v.get("module") == "wp_chat" and v.get("act") == "gas_save"
-        for v in gas_values
+        v.get("module") == "wp_chat" and v.get("act") == "gas_save" for v in gas_values
     )
 
 
@@ -312,11 +303,19 @@ class _StubFlow:
     async def cancel(self, permit_type: str) -> dict[str, Any]:
         return _card("已取消")
 
-    async def use_default_sign(
-        self, permit_type: str, sign_key: str
-    ) -> dict[str, Any]:
+    async def use_default_sign(self, permit_type: str, sign_key: str) -> dict[str, Any]:
         self.calls.append(("use_default_sign", permit_type, sign_key))
         return _card("已签名")
+
+    async def set_level(self, permit_type: str, level: str) -> dict[str, Any]:
+        self.calls.append(("set_level", permit_type, level))
+        return _card(f"级别-{level}")
+
+    async def toggle_check(
+        self, permit_type: str, field: str, key: str
+    ) -> dict[str, Any]:
+        self.calls.append(("toggle_check", permit_type, field, key))
+        return _card(f"勾选-{key}")
 
     async def my_gas_permits(self) -> list[Any]:
         return []
@@ -489,8 +488,9 @@ async def test_handler_reject_submit_requires_opinion(
     async def _fake_update(message_id: str, card: dict[str, Any]) -> None:
         patched.append(message_id)
 
-    async def _fake_dm(open_id: str, title: str, content: str,
-                       elements=None, id_type: str = "open_id") -> bool:
+    async def _fake_dm(
+        open_id: str, title: str, content: str, elements=None, id_type: str = "open_id"
+    ) -> bool:
         dm_errors.append(content)
         return True
 
@@ -712,8 +712,9 @@ async def test_heavy_error_sends_dm_and_keeps_original_card(
     async def _fake_update(message_id: str, card: dict[str, Any]) -> None:
         patched.append(message_id)
 
-    async def _fake_dm(open_id: str, title: str, content: str,
-                       elements=None, id_type: str = "open_id") -> bool:
+    async def _fake_dm(
+        open_id: str, title: str, content: str, elements=None, id_type: str = "open_id"
+    ) -> bool:
         dm_errors.append(content)
         return True
 
@@ -736,9 +737,7 @@ async def test_heavy_error_sends_dm_and_keeps_original_card(
         "ou-op",
         "un-op",
         {"permit_id": str(uuid4()), "node_id": str(uuid4())},
-        _card_event(
-            {"module": "wp_chat", "act": "approve"}, message_id="om_keep"
-        ),
+        _card_event({"module": "wp_chat", "act": "approve"}, message_id="om_keep"),
     )
     assert patched == [], "失败时不得 PATCH 原消息"
     assert dm_errors and "手写签名" in dm_errors[0]
@@ -786,9 +785,7 @@ async def test_next_stage_unassigned_nodes_fall_back_creator(
         return confirm_node
 
     monkeypatch.setattr(notify, "_pending_node", _fake_pending_node)
-    recipient, elements, _title = await notify._next_stage_elements(
-        db_session, permit
-    )
+    recipient, elements, _title = await notify._next_stage_elements(db_session, permit)
     assert recipient == creator_id
     assert "同意" in json.dumps(elements, ensure_ascii=False)
 
@@ -805,9 +802,7 @@ async def test_next_stage_unassigned_nodes_fall_back_creator(
         return verify_node
 
     monkeypatch.setattr(notify, "_verify_node", _fake_verify_node)
-    recipient, elements, _title = await notify._next_stage_elements(
-        db_session, permit
-    )
+    recipient, elements, _title = await notify._next_stage_elements(db_session, permit)
     assert recipient == creator_id
     assert "确认开工" in json.dumps(elements, ensure_ascii=False)
 
@@ -830,9 +825,7 @@ async def _cleanup_chat_flow(db: AsyncSession) -> None:
         await db.execute(
             delete(WorkPermitNode).where(WorkPermitNode.permit_id.in_(permit_ids))
         )
-        await db.execute(
-            delete(WorkPermit).where(WorkPermit.id.in_(permit_ids))
-        )
+        await db.execute(delete(WorkPermit).where(WorkPermit.id.in_(permit_ids)))
     await db.execute(
         delete(WorkPermitApproverConfig).where(
             WorkPermitApproverConfig.permit_type == "blind_plate",
@@ -1139,13 +1132,14 @@ async def test_commitment_notify_test_endpoint(
     await _cleanup_chat_flow(db_session)
 
 
-
 class TestChatFlowHelpers:
     """ChatFlowService 辅助函数直测（模块级纯函数 + 简单 DB mock）。"""
+
     def _make_service(self, db: Any = None) -> Any:
         from app.modules.safety.service.work_permit_chat_flow import (
             ChatFlowService,
         )
+
         return ChatFlowService(db or object(), open_id="ou-h")
 
     async def test_user_by_feishu_id_direct(self) -> None:
@@ -1222,9 +1216,11 @@ class TestChatFlowHelpers:
         )
 
         cert = SimpleNamespace(
-            id="c9", certificate_no="DJ-9",
+            id="c9",
+            certificate_no="DJ-9",
             certificate_category="electrician",
-            expiry_date=None, status="valid",
+            expiry_date=None,
+            status="valid",
         )
         snap = _cert_snapshot(cert)
         assert snap["certificate_id"] == "c9"
@@ -1238,6 +1234,7 @@ class TestChatFlowHelpers:
         values: dict[str, Any] = {"assignments": {}}
         await svc._resolve_assignment_names(values)
         assert values["assignments"] == {}
+
 
 async def test_chat_flow_step1_warnings_paths(
     db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
@@ -1262,16 +1259,25 @@ async def test_chat_flow_step1_warnings_paths(
     # 缺时间 → None（不校验）
     assert await svc._step1_warnings("hot_work", {}) is None
     # 倒序 → 错误消息
-    msg = await svc._step1_warnings("hot_work", {
-        "planned_start": "2026-11-01 18:00",
-        "planned_end": "2026-11-01 08:00",
-    })
+    msg = await svc._step1_warnings(
+        "hot_work",
+        {
+            "planned_start": "2026-11-01 18:00",
+            "planned_end": "2026-11-01 08:00",
+        },
+    )
     assert msg is not None and "晚于" in msg
     # 正常 → None
-    assert await svc._step1_warnings("hot_work", {
-        "planned_start": "2026-11-01 08:00",
-        "planned_end": "2026-11-01 18:00",
-    }) is None
+    assert (
+        await svc._step1_warnings(
+            "hot_work",
+            {
+                "planned_start": "2026-11-01 08:00",
+                "planned_end": "2026-11-01 18:00",
+            },
+        )
+        is None
+    )
 
 
 async def test_chat_flow_service_real_steps(
@@ -1316,6 +1322,7 @@ async def test_chat_flow_service_real_steps(
     await db_session.delete(user)
     await db_session.flush()
 
+
 async def test_chat_flow_submit_seeded_state(
     db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1331,7 +1338,6 @@ async def test_chat_flow_submit_seeded_state(
         ChatFlowService,
         initiator_sign_keys,
     )
-
 
     async def _stub_raw_card(*_a: Any, **_k: Any) -> str | None:
         return "om_seeded"
@@ -1365,8 +1371,10 @@ async def test_chat_flow_submit_seeded_state(
     values["persons"] = [{"role": "work_leader", "name": "播种人"}]
     # 审批节点指派：安全员意见节点指派给另一个测试用户
     assignee = User(
-        id=uuid4(), name=f"{_MARK}审批人{uuid4().hex[:6]}",
-        role="user", status="active",
+        id=uuid4(),
+        name=f"{_MARK}审批人{uuid4().hex[:6]}",
+        role="user",
+        status="active",
         feishu_open_id=f"ou-assign-{uuid4().hex[:8]}",
     )
     db_session.add(assignee)
@@ -1395,9 +1403,7 @@ async def test_chat_flow_submit_seeded_state(
         assert receipt
         permit = (
             await db_session.scalars(
-                select(WorkPermit).where(
-                    WorkPermit.work_description == "播种提交测试"
-                )
+                select(WorkPermit).where(WorkPermit.work_description == "播种提交测试")
             )
         ).first()
         assert permit is not None, "提交后应真实建票"
@@ -1405,3 +1411,846 @@ async def test_chat_flow_submit_seeded_state(
         await service.clear_state(permit_type)
     finally:
         await cache_delete(f"wp_form:{user.feishu_open_id}:{permit_type}")
+
+
+# ── CI 缺口定向补测（chat_flow 辅助路径 / notify / card_forms / signatures）──
+
+
+class _RecDB:
+    """按次返回预设 result 的假会话；记录 commit/rollback。"""
+
+    def __init__(self, results: list[Any]) -> None:
+        self._results = list(results)
+        self.commits = 0
+        self.rollbacks = 0
+
+    async def execute(self, *_a: Any, **_kw: Any) -> Any:
+        from types import SimpleNamespace
+
+        item = self._results.pop(0) if self._results else None
+        if item is None:
+            return SimpleNamespace(scalar_one_or_none=lambda: None)
+        return item
+
+    async def commit(self) -> None:
+        self.commits += 1
+
+    async def rollback(self) -> None:
+        self.rollbacks += 1
+
+
+def _result(value: Any) -> Any:
+    from types import SimpleNamespace
+
+    return SimpleNamespace(scalar_one_or_none=lambda: value)
+
+
+class TestChatFlowGapCoverage:
+    """chat_flow 未覆盖分支：人员合并/状态文案/推送/回执/merge 表单值。"""
+
+    def _svc(self, db: Any = None) -> Any:
+        from app.modules.safety.service.work_permit_chat_flow import (
+            ChatFlowService,
+        )
+
+        return ChatFlowService(db or object(), open_id="ou-h")
+
+    async def test_ensure_user_open_id_writeback(self) -> None:
+        """open_id 变化时回写；commit 失败回滚不阻断。"""
+        from types import SimpleNamespace
+
+        user = SimpleNamespace(id="u1", name="张三", feishu_open_id="ou-old")
+        db = _RecDB([_result(user)])
+        svc = self._svc(db)
+        got = await svc.ensure_user()
+        assert got is user
+        assert user.feishu_open_id == "ou-h"
+        assert db.commits == 1
+
+        # commit 抛错：回滚后仍返回用户
+        user2 = SimpleNamespace(id="u2", name="李", feishu_open_id="ou-old")
+
+        class _FailDB(_RecDB):
+            async def commit(self) -> None:
+                raise RuntimeError("commit down")
+
+        fail_db = _FailDB([_result(user2)])
+        svc2 = self._svc(fail_db)
+        got2 = await svc2.ensure_user()
+        assert got2 is user2
+        assert fail_db.rollbacks == 1
+
+    async def test_user_by_feishu_id_fallbacks(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """库内未命中 → 通讯录 tenant_user_id / 姓名兜底。"""
+        from types import SimpleNamespace
+
+        from app.modules.safety.service import work_permit_chat_flow as cf
+
+        user_by_name = SimpleNamespace(id="u-name", name="王五")
+        svc = self._svc(_RecDB([None, None, _result(user_by_name)]))
+
+        async def _info(open_id: str) -> tuple[str, str]:
+            return ("王五", "t-9")
+
+        monkeypatch.setattr(cf, "feishu_user_info", _info)
+        found = await svc._user_by_feishu_id("ou-x")
+        assert found is user_by_name
+
+        # tenant_user_id 命中工号
+        user_by_uid = SimpleNamespace(id="u-uid", name="赵六")
+        svc2 = self._svc(_RecDB([None, _result(user_by_uid)]))
+        found2 = await svc2._user_by_feishu_id("ou-y")
+        assert found2 is user_by_uid
+
+        # 通讯录无任何信息 → None
+        async def _empty(open_id: str) -> tuple[str, str]:
+            return ("", "")
+
+        monkeypatch.setattr(cf, "feishu_user_info", _empty)
+        svc3 = self._svc(_RecDB([None]))
+        assert await svc3._user_by_feishu_id("ou-z") is None
+
+    async def test_certificate_for_user_none(self) -> None:
+        svc = self._svc(_RecDB([None]))
+        assert await svc._certificate_for_user("u1", "worker") is None
+
+    async def test_merge_persons_all_branches(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """第②步人员合并四分支：选人命中/未命中走通讯录/外部/保留。"""
+        from types import SimpleNamespace
+
+        from app.modules.safety.service import work_permit_chat_flow as cf
+
+        svc = self._svc(_RecDB([]))
+        found_user = SimpleNamespace(id="u-found", name="张三")
+        cert_by_name = SimpleNamespace(
+            id="c-name",
+            certificate_no="DJ-N",
+            certificate_category="electrician",
+            expiry_date=None,
+            status="valid",
+        )
+        userinfo: dict[str, tuple[str, str]] = {
+            "ou-worker": ("李四", ""),
+            "ou-receiver": ("", ""),
+        }
+
+        async def _info(open_id: str) -> tuple[str, str]:
+            return userinfo.get(open_id, ("", ""))
+
+        async def _by_feishu(feishu_id: str) -> Any:
+            return found_user if feishu_id == "ou-leader" else None
+
+        async def _cert_by_name(name: str, role: str) -> Any:
+            return cert_by_name if name == "李四" else None
+
+        async def _cert_for_user(user_id: Any, role: str) -> Any:
+            return None
+
+        monkeypatch.setattr(cf, "feishu_user_info", _info)
+        svc._user_by_feishu_id = _by_feishu  # type: ignore[method-assign]
+        svc._certificate_by_name = _cert_by_name  # type: ignore[method-assign]
+        svc._certificate_for_user = _cert_for_user  # type: ignore[method-assign]
+
+        values: dict[str, Any] = {
+            "persons": [{"role": "process_guardian", "name": "老成员"}]
+        }
+        form_value = {
+            "person__work_leader": "ou-leader",
+            "person__worker": ["ou-worker"],
+            "person__guardian": "",
+            "person_ext_name__guardian": "王五",
+            "person_ext_cert__guardian": "T-88",
+            "person__briefer": "ou-leader",
+            "person__briefer_receiver": "ou-receiver",
+        }
+        await svc._merge_persons("hot_work", values, form_value)
+        by_role = {p["role"]: p for p in values["persons"]}
+        assert by_role["work_leader"]["user_id"] == "u-found"
+        assert by_role["worker"]["name"] == "李四"
+        assert by_role["worker"]["certificate_no"] == "DJ-N"
+        assert by_role["guardian"]["external"] == "true"
+        assert by_role["guardian"]["certificate_no"] == "T-88"
+        assert by_role["process_guardian"]["name"] == "老成员"
+        assert by_role["briefer_receiver"]["name"] == "ou-receiver"
+        assert values["person_sign_names"]["work_leader"] == "张三"
+
+    async def test_set_level_expired_and_success(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from app.modules.safety.service import work_permit_chat_flow as cf
+
+        async def _no_state(_key: str) -> str | None:
+            return None
+
+        monkeypatch.setattr(cf, "cache_get", _no_state)
+        svc = self._svc()
+        with pytest.raises(AppException) as exc:
+            await svc.set_level("hot_work", "grade1")
+        assert exc.value.status_code == 410
+
+        saved: list[tuple[str, Any]] = []
+
+        async def _state(_key: str) -> str:
+            return json.dumps({"type": "hot_work", "step": 1, "values": {}})
+
+        async def _save(key: str, payload: str, ex: int = 0) -> None:
+            saved.append((key, payload))
+
+        monkeypatch.setattr(cf, "cache_get", _state)
+        monkeypatch.setattr(cf, "cache_set", _save)
+        card = await svc.set_level("hot_work", "grade1")
+        assert card
+        assert saved and "grade1" in saved[0][1]
+
+    async def test_step1_warnings_limit_exceeded(
+        self,
+        db_session: AsyncSession,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from app.modules.safety.service.work_permit_chat_flow import (
+            ChatFlowService,
+        )
+
+        async def _settings(db: Any) -> dict[str, Any]:
+            return {}
+
+        async def _hours(settings: dict, ptype: str, level: str) -> float | None:
+            return 1.0
+
+        monkeypatch.setattr(
+            "app.modules.safety.service.work_permit.get_runtime_settings",
+            _settings,
+        )
+        monkeypatch.setattr(
+            "app.modules.safety.service.work_permit._validity_hours", _hours
+        )
+        svc = ChatFlowService(db_session, open_id="ou-h")
+        values = {
+            "planned_start": "2026-11-01 08:00",
+            "planned_end": "2026-11-01 10:00",
+            "level": "grade2",
+        }
+        warn = await svc._step1_warnings("hot_work", values)
+        assert warn is not None and "超过" in warn
+
+    def test_missing_approvers_paths(self) -> None:
+        from app.modules.safety.service.work_permit_templates import (
+            get_template,
+        )
+
+        svc = self._svc()
+        template = get_template("hot_work")
+        approve_keys = [
+            str(n["key"]) for n in template.nodes if str(n.get("kind")) == "approve"
+        ]
+        assert approve_keys, "hot_work 应有审批节点"
+        # 第一个节点已指派、第二个走默认、其余缺失
+        values: dict[str, Any] = {
+            "level": "grade2",
+            "assignments": {approve_keys[0]: "ou-1"},
+            "approver_defaults": (
+                {approve_keys[1]: "默认审批人"} if len(approve_keys) > 1 else {}
+            ),
+        }
+        missing = svc._missing_approvers("hot_work", values)
+        assert isinstance(missing, list)
+        # 全部指派 → 空
+        values_full: dict[str, Any] = {
+            "level": "grade2",
+            "assignments": {k: f"ou-{i}" for i, k in enumerate(approve_keys)},
+        }
+        assert svc._missing_approvers("hot_work", values_full) == []
+
+    async def test_progress_text_all_statuses(self) -> None:
+        from types import SimpleNamespace
+
+        from app.modules.safety.service.work_permit_templates import (
+            PERMIT_STATUS_ACTIVE,
+            PERMIT_STATUS_APPROVED,
+            PERMIT_STATUS_COMPLETED,
+            PERMIT_STATUS_PENDING,
+        )
+
+        svc = self._svc()
+        node = SimpleNamespace(node_name="安全部审批")
+        pending = SimpleNamespace(
+            status=PERMIT_STATUS_PENDING, id=uuid4(), approval_round=1
+        )
+        svc_pending = self._svc(_RecDB([_result(node)]))
+        assert "下一节点" in await svc_pending._progress_text(pending)
+
+        svc_no_node = self._svc(_RecDB([None]))
+        assert "审批已推进" in await svc_no_node._progress_text(pending)
+
+        cases = {
+            PERMIT_STATUS_APPROVED: "等待验票",
+            PERMIT_STATUS_ACTIVE: "已开工",
+            PERMIT_STATUS_COMPLETED: "已完工",
+            "unknown": "",
+        }
+        for status, expect in cases.items():
+            permit = SimpleNamespace(status=status)
+            text = await svc._progress_text(permit)
+            assert expect in text, f"{status} 应包含 {expect}"
+
+    async def test_notify_creator_rejected_paths(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from types import SimpleNamespace
+
+        from app.modules.safety.service import work_permit_notify as notify
+
+        calls: list[tuple[Any, str]] = []
+
+        async def _notify(db: Any, permit: Any, *, title: str, extra: str) -> None:
+            calls.append((permit, title))
+
+        permit = SimpleNamespace(permit_no="DH-1")
+        monkeypatch.setattr(notify, "notify_status_change", _notify)
+        svc = self._svc()
+        await svc._notify_creator_rejected(permit, "材料不齐")
+        assert calls and calls[0][1] == "已被驳回"
+
+        async def _boom(db: Any, permit: Any, *, title: str, extra: str) -> None:
+            raise RuntimeError("notify down")
+
+        monkeypatch.setattr(notify, "notify_status_change", _boom)
+        # 通知失败不抛错（仅记录日志）
+        await svc._notify_creator_rejected(permit, "再次驳回")
+
+    def test_merge_form_values_step1_and_type_fields(self) -> None:
+        from app.modules.safety.service.work_permit_chat_flow import (
+            _merge_form_values,
+        )
+
+        values: dict[str, Any] = {}
+        form_value = {
+            "apply_department": "一车间",
+            "work_description": "更换阀门",
+            "planned_start_date": "2026-11-01",
+            "planned_start_time": "08:30",
+            "planned_end_date": 1793000000000,  # 毫秒时间戳
+            "planned_end_time": "17:00",
+            "hot_work_location": "罐区 T-101",
+            "hot_work_methods": ["焊接", "气割"],
+        }
+        _merge_form_values("hot_work", 1, values, form_value)
+        assert values["apply_department"] == "一车间"
+        assert values["planned_start"] == "2026-11-01 08:30"
+        assert values["planned_end"].endswith(" 17:00")
+        assert values["type_data"]["hot_work_methods"] == ["焊接", "气割"]
+
+        # 逐行 tf__ 形态 + 字符串单选覆盖列表
+        values2: dict[str, Any] = {"level": "grade2"}
+        form2 = {
+            "tf__hot_work_methods__焊接": "yes",
+            "tf__hot_work_methods__明火": "no",
+            "hot_work_methods": "焊接",
+        }
+        _merge_form_values("hot_work", 1, values2, form2)
+        assert values2["type_data"]["hot_work_methods"] == ["焊接"]
+
+    def test_merge_form_values_step3_gas(self) -> None:
+        from app.modules.safety.service.work_permit_chat_flow import (
+            _merge_form_values,
+        )
+
+        values: dict[str, Any] = {}
+        form_value = {
+            "gas_co": "12",
+            "gas_time_date": "2026-11-02",
+            "gas_time_time": "09:15",
+        }
+        _merge_form_values("hot_work", 3, values, form_value)
+        assert values["gas"]["gas_co"] == "12"
+        assert values["gas"]["gas_time"] == "2026-11-02 09:15"
+
+    def test_merge_form_values_step4_risk_forms(self) -> None:
+        from app.modules.safety.service.work_permit_chat_flow import (
+            _merge_form_values,
+        )
+
+        values: dict[str, Any] = {}
+        _merge_form_values("hot_work", 4, values, {"risk": ["火灾", "触电"]})
+        assert values["risk"] == ["火灾", "触电"]
+
+        values2: dict[str, Any] = {}
+        _merge_form_values("hot_work", 4, values2, {"risk": "火灾、高处坠落"})
+        assert values2["risk"] == ["火灾", "高处坠落"]
+
+        values3: dict[str, Any] = {}
+        _merge_form_values(
+            "hot_work",
+            4,
+            values3,
+            {"risk__火灾": "yes", "risk__触电": "no"},
+        )
+        assert values3["risk"] == ["火灾"]
+
+    def test_merge_form_values_step5_measures_and_step6_assign(self) -> None:
+        from app.modules.safety.service.work_permit_chat_flow import (
+            _merge_form_values,
+        )
+
+        values: dict[str, Any] = {}
+        _merge_form_values(
+            "hot_work",
+            5,
+            values,
+            {
+                "m__fire_ext": "yes",
+                "m__gas_check": "no",
+                "f__fire_ext__count": " 2 ",
+            },
+        )
+        assert values["measures"] == ["fire_ext"]
+        assert values["measure_fills"] == {"fire_ext": {"count": "2"}}
+
+        values6: dict[str, Any] = {}
+        _merge_form_values(
+            "hot_work",
+            6,
+            values6,
+            {
+                "assign_safety_officer": ["ou-approver"],
+                "assign_workshop_leader": "  ",
+                "assign_safety_dept": "ou-dept",
+            },
+        )
+        assert values6["assignments"] == {
+            "safety_officer": "ou-approver",
+            "safety_dept": "ou-dept",
+        }
+
+    def test_build_create_payload_iso_and_persons(self) -> None:
+        from app.modules.safety.service.work_permit_chat_flow import (
+            build_create_payload,
+        )
+
+        values = {
+            "apply_department": "一车间",
+            "planned_start": "2026-11-01T08:00",  # ISO 兜底解析
+            "planned_end": "2026-11-01T17:00",
+            "persons": [
+                {"role": "worker", "name": "王五", "certificate_no": "T-9"},
+                {"role": "guardian", "name": ""},
+            ],
+        }
+        payload = build_create_payload("hot_work", "grade2", values)
+        assert payload.persons[0].certificate_no == "T-9"
+        assert len(payload.persons) == 1, "无名人员应过滤"
+
+    async def test_feishu_user_info_mocked(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from app.modules.safety.feishu import client as feishu_client
+        from app.modules.safety.service import work_permit_chat_flow as cf
+
+        class _Resp:
+            def __init__(self, payload: dict) -> None:
+                self._payload = payload
+
+            def json(self) -> dict:
+                return self._payload
+
+        class _HTTP:
+            def __init__(self, payload: dict) -> None:
+                self._payload = payload
+
+            async def __aenter__(self) -> _HTTP:
+                return self
+
+            async def __aexit__(self, *args: object) -> None:
+                pass
+
+            async def get(self, url: str, **kwargs: object) -> _Resp:
+                return _Resp(self._payload)
+
+        async def _client() -> Any:
+            return object()
+
+        async def _token(client: Any) -> str:
+            return "t-token"
+
+        monkeypatch.setattr(feishu_client, "get_safety_feishu_client", _client)
+        monkeypatch.setattr(feishu_client, "get_safety_tenant_token", _token)
+
+        ok_payload = {
+            "code": 0,
+            "data": {"user": {"name": "张三", "user_id": "t-1"}},
+        }
+        monkeypatch.setattr("httpx.AsyncClient", lambda **kw: _HTTP(ok_payload))
+        assert await cf.feishu_user_info("ou-ok") == ("张三", "t-1")
+
+        err_payload = {"code": 999, "msg": "no permission"}
+        monkeypatch.setattr("httpx.AsyncClient", lambda **kw: _HTTP(err_payload))
+        assert await cf.feishu_user_info("ou-err") == ("", "")
+
+        async def _broken_client() -> Any:
+            raise RuntimeError("feishu down")
+
+        monkeypatch.setattr(feishu_client, "get_safety_feishu_client", _broken_client)
+        assert await cf.feishu_user_info("ou-ex") == ("", "")
+
+    async def test_push_flow_after_action(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from types import SimpleNamespace
+
+        from app.modules.safety.service import work_permit_notify as notify
+
+        pushed: list[tuple[Any, Any]] = []
+
+        async def _push(db: Any, permit_id: Any) -> None:
+            pushed.append((db, permit_id))
+
+        monkeypatch.setattr(notify, "push_approval_card_for_next_node", _push)
+        svc = self._svc()
+        permit = SimpleNamespace(id=uuid4())
+        await svc._push_flow_after_action(permit)
+        assert pushed and pushed[0][1] == permit.id
+
+
+async def test_handler_set_level_and_toggle(
+    stub_flow: type, stub_session: None
+) -> None:
+    from app.modules.safety.feishu.work_permit_chat_handler import (
+        handle_wp_chat_card_action,
+    )
+
+    resp = await handle_wp_chat_card_action(
+        _card_event({"module": "wp_chat", "act": "set_level", "level": "grade1"})
+    )
+    assert resp is not None
+    flow = stub_flow.instances[-1]
+    set_calls = [c for c in flow.calls if c[0] == "set_level"]
+    assert set_calls and set_calls[0][2] == "grade1"
+
+    resp2 = await handle_wp_chat_card_action(
+        _card_event({"module": "wp_chat", "act": "toggle_measure", "key": "m-1"})
+    )
+    assert resp2 is not None
+    flow2 = stub_flow.instances[-1]
+    toggle_calls = [c for c in flow2.calls if c[0] == "toggle_check"]
+    assert toggle_calls and toggle_calls[0][3] == "m-1"
+
+
+def _gap_permit(status: str) -> Any:
+    """notify 用 SimpleNamespace 票据（_ticket_markdown 全字段）。"""
+    from types import SimpleNamespace
+
+    return SimpleNamespace(
+        id=uuid4(),
+        permit_no="DH-TEST-1",
+        permit_type="hot_work",
+        permit_level="grade2",
+        status=status,
+        apply_department="一车间",
+        apply_time=None,
+        work_description="补测作业",
+        work_location="罐区",
+        work_unit="检修班",
+        planned_start_time=None,
+        planned_end_time=None,
+        type_data={},
+        persons=[],
+        risk_identifications=[],
+        safety_measures=[],
+        related_legacy_no_text="",
+        created_by=uuid4(),
+        approval_round=1,
+    )
+
+
+class TestNotifyGapCoverage:
+    """work_permit_notify 未覆盖分支：下一环节构建/验收卡/审批卡刷新。"""
+
+    async def test_next_stage_pending_no_node(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from app.modules.safety.service import work_permit_notify as notify
+        from app.modules.safety.service.work_permit_templates import (
+            PERMIT_STATUS_PENDING,
+        )
+
+        async def _no_records(db: Any, permit: Any) -> str:
+            return ""
+
+        async def _no_node(db: Any, permit: Any) -> Any:
+            return None
+
+        monkeypatch.setattr(notify, "_sign_records_markdown", _no_records)
+        monkeypatch.setattr(notify, "_pending_node", _no_node)
+        recipient, elements, title = await notify._next_stage_elements(
+            object(), _gap_permit(PERMIT_STATUS_PENDING)
+        )
+        assert recipient is None and elements == [] and title == ""
+
+    async def test_next_stage_pending_unassigned(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from types import SimpleNamespace
+
+        from app.modules.safety.service import work_permit_notify as notify
+        from app.modules.safety.service.work_permit_templates import (
+            PERMIT_STATUS_PENDING,
+        )
+
+        async def _no_records(db: Any, permit: Any) -> str:
+            return ""
+
+        node = SimpleNamespace(
+            id=uuid4(),
+            assigned_approver_id=None,
+            node_kind="approve",
+            node_name="安全部",
+        )
+
+        async def _node(db: Any, permit: Any) -> Any:
+            return node
+
+        async def _signed(db: Any, permit: Any, n: Any) -> bool:
+            return False
+
+        async def _hint(db: Any, user_id: Any) -> str:
+            return "_已签过名，可默认沿用_"
+
+        async def _sign_url(permit: Any, n: Any) -> str:
+            return "https://s/sign"
+
+        monkeypatch.setattr(notify, "_sign_records_markdown", _no_records)
+        monkeypatch.setattr(notify, "_pending_node", _node)
+        monkeypatch.setattr(notify, "_node_signed", _signed)
+        monkeypatch.setattr(notify, "_default_sign_hint", _hint)
+        monkeypatch.setattr(notify, "_node_sign_url", _sign_url)
+        permit = _gap_permit(PERMIT_STATUS_PENDING)
+        recipient, elements, title = await notify._next_stage_elements(object(), permit)
+        # approve 节点未指派 → 跳过
+        assert recipient is None and elements == []
+
+        node.node_kind = "confirm"
+        recipient2, elements2, _ = await notify._next_stage_elements(object(), permit)
+        # confirm 未指派 → 创建人处理（卡片带签名链接与提示）
+        assert recipient2 == permit.created_by and elements2
+        joined = json.dumps(elements2, ensure_ascii=False)
+        assert "手写签名" in joined and "已签过名" in joined
+
+    async def test_next_stage_completed_paths(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from app.modules.safety.service import work_permit_notify as notify
+        from app.modules.safety.service.work_permit_templates import (
+            PERMIT_STATUS_COMPLETED,
+        )
+
+        async def _no_records(db: Any, permit: Any) -> str:
+            return ""
+
+        async def _no_url(permit_id: Any) -> str:
+            return ""
+
+        async def _ok_url(permit_id: Any) -> str:
+            return "http://dl/1"
+
+        monkeypatch.setattr(notify, "_sign_records_markdown", _no_records)
+        monkeypatch.setattr(notify, "_download_url", _no_url)
+
+        permit = _gap_permit(PERMIT_STATUS_COMPLETED)
+        permit.created_by = None
+        recipient, elements, _ = await notify._next_stage_elements(object(), permit)
+        assert recipient is None and elements == []
+
+        # 创建人存在但下载链接为空 → 仍返回空
+        permit.created_by = uuid4()
+        recipient2, elements2, _ = await notify._next_stage_elements(object(), permit)
+        assert recipient2 is None and elements2 == []
+
+        # 下载链接可用 → 返回带下载按钮的卡片
+        monkeypatch.setattr(notify, "_download_url", _ok_url)
+        recipient3, elements3, _ = await notify._next_stage_elements(object(), permit)
+        assert recipient3 == permit.created_by
+        assert "下载 PDF" in json.dumps(elements3, ensure_ascii=False)
+
+    async def test_accept_stage_elements_paths(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from app.modules.safety.service import work_permit_notify as notify
+        from app.modules.safety.service.work_permit_templates import (
+            PERMIT_STATUS_ACTIVE,
+        )
+
+        async def _no_target(db: Any, permit: Any) -> Any:
+            return None
+
+        monkeypatch.setattr(notify, "_accept_target", _no_target)
+        permit = _gap_permit(PERMIT_STATUS_ACTIVE)
+        recipient, elements, sign_url = await notify._accept_stage_elements(
+            object(), permit, [], with_gas=True
+        )
+        assert recipient is None and elements == [] and sign_url == ""
+
+        target = uuid4()
+
+        async def _target(db: Any, permit: Any) -> Any:
+            return target
+
+        monkeypatch.setattr(notify, "_accept_target", _target)
+        recipient2, elements2, _ = await notify._accept_stage_elements(
+            object(), permit, [], with_gas=True
+        )
+        assert recipient2 == target
+        # hot_work 复检周期 60 分钟 → 卡片带复检提示 + 完工验收按钮
+        joined = json.dumps(elements2, ensure_ascii=False)
+        assert "复检周期 60 分钟" in joined
+        assert "完工验收" in joined
+
+    async def test_refresh_or_push_updates_cached_card(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from app.modules.safety.service import work_permit_notify as notify
+        from app.modules.safety.service.work_permit_templates import (
+            PERMIT_STATUS_PENDING,
+        )
+
+        permit = _gap_permit(PERMIT_STATUS_PENDING)
+        node = type("N", (), {"assigned_approver_id": uuid4()})()
+
+        async def _enabled(db: Any) -> bool:
+            return True
+
+        async def _resolve(db: Any, ref: Any) -> Any:
+            return permit
+
+        async def _node(db: Any, permit: Any) -> Any:
+            return node
+
+        async def _union(db: Any, user_id: Any) -> str:
+            return "on-1"
+
+        async def _cached(union_id: str, permit_id: Any) -> str:
+            return "msg-1"
+
+        async def _stage(db: Any, p: Any) -> tuple[Any, list, str]:
+            return (uuid4(), [{"tag": "md"}], "标题")
+
+        updated: list[tuple[str, dict]] = []
+
+        async def _update(message_id: str, card: dict) -> None:
+            updated.append((message_id, card))
+
+        monkeypatch.setattr(notify, "_permit_notify_enabled", _enabled)
+        monkeypatch.setattr(notify, "_resolve_permit", _resolve)
+        monkeypatch.setattr(notify, "_pending_node", _node)
+        monkeypatch.setattr(notify, "_recipient_union_id", _union)
+        monkeypatch.setattr(notify, "_cached_approval_card_id", _cached)
+        monkeypatch.setattr(notify, "_next_stage_elements", _stage)
+        monkeypatch.setattr(
+            "app.modules.safety.feishu.notification.update_card", _update
+        )
+        await notify.refresh_or_push_approval_card(object(), permit)
+        assert updated and updated[0][0] == "msg-1"
+
+
+class TestCardFormsGapCoverage:
+    """card_forms 未覆盖：默认级别/步骤卡既有人员/票面备注与外部人员/汇总签名行。"""
+
+    def test_default_level_empty(self) -> None:
+        assert forms.default_level(()) == "none"
+
+    def test_build_step_card_keeps_existing_person(self) -> None:
+        card = forms.build_step_card(
+            "hot_work",
+            2,
+            {
+                "persons": [
+                    {
+                        "role": "work_leader",
+                        "name": "张三",
+                        "certificate_no": "DJ-1",
+                    }
+                ]
+            },
+            "ou-h",
+        )
+        text = json.dumps(card, ensure_ascii=False)
+        assert "张三" in text
+        assert "DJ-1" in text
+
+    def test_ticket_document_note_and_persons(self) -> None:
+        md = forms.ticket_document_markdown(
+            "hot_work",
+            {
+                "measures_note": "备用灭火器 2 具",
+                "persons": [
+                    {
+                        "role": "worker",
+                        "name": "王五",
+                        "certificate_no": "T-9",
+                    },
+                    {
+                        "role": "guardian",
+                        "name": "赵六",
+                        "external": "true",
+                    },
+                ],
+                "measures": [],
+                "risk": [],
+                "type_data": {},
+            },
+        )
+        assert "备用灭火器 2 具" in md
+        assert "王五" in md and "T-9" in md
+        assert "赵六" in md and "外部人员" in md
+
+    def test_build_summary_card_signer_names(self) -> None:
+        card = forms.build_summary_card(
+            "hot_work",
+            "grade2",
+            {
+                "person_sign_names": {
+                    "work_leader": "张三",
+                    "briefer": "李四",
+                },
+                "persons": [],
+                "measures": [],
+                "risk": [],
+                "type_data": {},
+            },
+            sign_status={"initiator": "done"},
+            sign_urls={},
+        )
+        text = json.dumps(card, ensure_ascii=False)
+        assert "张三" in text and "李四" in text
+        assert "已签名" in text
+
+
+class TestSignaturesGapCoverage:
+    """work_permit_signatures 未覆盖分支：网关链接/非法 PNG 魔数。"""
+
+    def test_build_sign_url_gateway(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from types import SimpleNamespace
+
+        from app.modules.safety.service import work_permit_signatures as sig
+
+        settings = SimpleNamespace(
+            SIGN_RELAY_GATEWAY_BASE="https://relay.example.com/",
+            FRONTEND_URL="http://fe",
+            BACKEND_PUBLIC_URL="http://be",
+        )
+        monkeypatch.setattr(sig, "get_settings", lambda: settings)
+        url = sig.build_sign_url("tok-1")
+        assert url == "https://relay.example.com/api/v1/safety/sign-relay/tok-1"
+
+    def test_decode_signature_rejects_non_png(self) -> None:
+        import base64
+
+        from app.modules.safety.service import (
+            work_permit_signatures as sig,
+        )
+
+        gif = base64.b64encode(b"GIF89a" + b"x" * 16).decode()
+        assert sig.decode_signature_data_url(f"data:image/png;base64,{gif}") is None
