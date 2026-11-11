@@ -41,14 +41,20 @@ def expected_jobs(scopes: dict[str, bool]) -> dict[str, bool]:
         "frontend-build": frontend,
         "frontend-unit": frontend,
         "frontend-coverage": frontend,
-        "frontend-image-verify": frontend,
+        "frontend-image-verify": _enabled(
+            scopes, "frontend_image_changed", "shared_changed"
+        ),
         "frontend-e2e": frontend,
         "backend-quality": backend,
         "backend-migrations": backend,
         "backend-integration": backend,
         "backend-coverage": backend,
-        "backend-image-verify": backend,
-        "backend-dev-image-verify": backend,
+        "backend-image-verify": _enabled(
+            scopes, "backend_image_changed", "shared_changed"
+        ),
+        "backend-dev-image-verify": _enabled(
+            scopes, "backend_image_changed", "shared_changed"
+        ),
         "hermes-quality": hermes,
         "hermes-contract": contract,
     }
@@ -115,6 +121,8 @@ def main() -> int:
         "backend_changed": _boolean("BACKEND_CHANGED"),
         "hermes_changed": _boolean("HERMES_CHANGED"),
         "docker_changed": _boolean("DOCKER_CHANGED"),
+        "frontend_image_changed": _boolean("FRONTEND_IMAGE_CHANGED"),
+        "backend_image_changed": _boolean("BACKEND_IMAGE_CHANGED"),
         "shared_changed": _boolean("SHARED_CHANGED"),
         "docs_only": _boolean("DOCS_ONLY"),
     }

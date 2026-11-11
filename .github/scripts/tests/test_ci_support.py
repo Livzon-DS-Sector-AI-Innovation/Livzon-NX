@@ -21,6 +21,20 @@ SPEC.loader.exec_module(support)
 
 
 class SupportTests(unittest.TestCase):
+    def test_coverage_install_uses_only_locked_reporting_group(self):
+        with patch.object(support, "run_phase", return_value=0) as run:
+            self.assertEqual(support.install_project("coverage"), 0)
+        self.assertEqual(
+            run.call_args.args,
+            (
+                "coverage-install",
+                "dependencies",
+                ["uv", "sync", "--frozen", "--only-group", "ci-coverage"],
+            ),
+        )
+        self.assertEqual(run.call_args.kwargs["cwd"], support.ROOT / "dazah-backend")
+        self.assertTrue(run.call_args.kwargs["install"])
+
     def test_install_is_frozen_bounded_and_does_not_repeat_failed_commands(self):
         for project in ("backend", "hermes"):
             with (

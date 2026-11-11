@@ -20,6 +20,23 @@ shards = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(shards)
 
 
+def test_weighted_partition_balances_slow_files_without_splitting_them(monkeypatch):
+    inventory = [
+        f"test_{index}.py::test_{case}" for index in range(8) for case in range(2)
+    ]
+    weights = {f"test_{index}.py": float(8 - index) for index in range(8)}
+    monkeypatch.setattr(shards, "TEST_FILE_SECONDS", weights)
+    plan = shards.partition(inventory)
+    totals = [
+        sum(weights[file] for file in {node.split("::", 1)[0] for node in group})
+        for group in plan
+    ]
+    assert totals == [9, 9, 9, 9]
+    assert set.union(*plan) == set(inventory)
+    assert sum(map(len, plan)) == len(inventory)
+    assert plan == shards.partition(inventory[::-1])
+
+
 def test_pytest_runs_each_file_once_in_original_order(tmp_path: Path) -> None:
     expected = []
     for index in range(8):

@@ -94,8 +94,12 @@ def run_phase(
 
 
 def install_project(project: str) -> int:
-    directory = ROOT / {"backend": "dazah-backend", "hermes": "Hermes-Lite"}[project]
-    command = ["uv", "sync", "--frozen", "--extra", "dev"]
+    directory = ROOT / ("Hermes-Lite" if project == "hermes" else "dazah-backend")
+    command = ["uv", "sync", "--frozen"]
+    if project == "coverage":
+        command += ["--only-group", "ci-coverage"]
+    else:
+        command += ["--extra", "dev"]
     if project == "backend":
         command += ["--group", "dev"]
     return run_phase(
@@ -179,7 +183,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="action", required=True)
     install_parser = subparsers.add_parser("install")
-    install_parser.add_argument("project", choices=("backend", "hermes"))
+    install_parser.add_argument("project", choices=("backend", "hermes", "coverage"))
     check = subparsers.add_parser("preflight")
     check.add_argument("kind", choices=("tools", "backend"))
     subparsers.add_parser("summarize")

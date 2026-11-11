@@ -30,6 +30,38 @@ def results(value: str = "success") -> dict[str, str]:
 
 
 class GateTests(unittest.TestCase):
+    def test_image_jobs_follow_packaging_scope_and_reject_unexpected_skips(self):
+        jobs = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]
+        for job, flag in (
+            ("frontend-image-verify", "frontend_image_changed"),
+            ("backend-image-verify", "backend_image_changed"),
+            ("backend-dev-image-verify", "backend_image_changed"),
+        ):
+            self.assertEqual(
+                jobs[job]["if"],
+                "${{ needs.change-scope.outputs." + flag + " == 'true' }}",
+            )
+            for scope in (flag, "shared_changed"):
+                for result in ("", "skipped", "failure", "cancelled", "success"):
+                    checks = ci_gate.evaluate({scope: True}, {**results(), job: result})
+                    check = next(c for c in checks if c.job == job)
+                    self.assertEqual(check.ok, result == "success")
+        checks = ci_gate.evaluate(
+            {"frontend_changed": True, "backend_changed": True},
+            {
+                **results(),
+                **dict.fromkeys(
+                    (
+                        "frontend-image-verify",
+                        "backend-image-verify",
+                        "backend-dev-image-verify",
+                    ),
+                    "skipped",
+                ),
+            },
+        )
+        self.assertTrue(all(c.ok for c in checks))
+
     def test_backend_builds_use_authenticated_action_and_separate_layer_caches(self):
         jobs = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))["jobs"]
         for job, filename, scope, suffix in (
@@ -227,6 +259,14 @@ class GateTests(unittest.TestCase):
         self.assertEqual(integration["services"], migrations["services"])
         self.assertEqual(set(integration["services"]), {"postgres", "redis"})
         self.assertNotIn("services", coverage)
+        self.assertIn(
+            "python3 .github/scripts/ci_support.py install coverage",
+            [s.get("run") for s in coverage["steps"]],
+        )
+        self.assertNotIn(
+            "python3 .github/scripts/ci_support.py install backend",
+            [s.get("run") for s in coverage["steps"]],
+        )
         self.assertEqual(coverage["needs"], ["change-scope", "backend-integration"])
         for job in (migrations, integration, coverage):
             self.assertNotIn("continue-on-error", job)
@@ -272,8 +312,6 @@ class GateTests(unittest.TestCase):
             "backend-migrations",
             "backend-integration",
             "backend-coverage",
-            "backend-image-verify",
-            "backend-dev-image-verify",
         ):
             for scope in ("backend_changed", "shared_changed"):
                 for result in ("skipped", "failure", "cancelled", "", "success"):
@@ -288,8 +326,8 @@ class GateTests(unittest.TestCase):
                         self.assertTrue(check.expected)
                         self.assertEqual(check.ok, result == "success")
 
-    def test_frontend_image_is_required_for_frontend_and_shared_changes(self) -> None:
-        for scope in ("frontend_changed", "shared_changed"):
+    def test_frontend_image_is_required_for_image_and_shared_changes(self) -> None:
+        for scope in ("frontend_image_changed", "shared_changed"):
             for result in ("skipped", "failure", "cancelled", "", "success"):
                 with self.subTest(scope=scope, result=result):
                     job_results = results()
@@ -509,7 +547,7 @@ class GateTests(unittest.TestCase):
             "frontend-coverage",
             "frontend-e2e",
         ):
-            self.assertEqual(jobs[job]["if"], jobs["frontend-image-verify"]["if"])
+            self.assertEqual(jobs[job]["if"], jobs["frontend-quality"]["if"])
             for scope in ("frontend_changed", "shared_changed"):
                 for result in ("skipped", "failure", "cancelled", "", "success"):
                     with self.subTest(job=job, scope=scope, result=result):

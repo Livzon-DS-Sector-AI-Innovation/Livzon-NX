@@ -14,6 +14,8 @@ OUTPUT_NAMES = (
     "backend_changed",
     "hermes_changed",
     "docker_changed",
+    "frontend_image_changed",
+    "backend_image_changed",
     "shared_changed",
     "docs_only",
 )
@@ -58,7 +60,9 @@ def origin_main_head() -> str | None:
     return _git("rev-parse", "origin/main").decode("utf-8").strip()
 
 
-def collect_changed_paths(base: str | None, head: str | None) -> set[str]:
+def collect_changed_paths(
+    base: str | None, head: str | None, *, diff_filter: str = "ACMRD"
+) -> set[str]:
     """Return changed paths, failing safe to the complete tree for an unknown base."""
     resolved_head = resolve_head(head)
     if revision_exists(base):
@@ -68,7 +72,8 @@ def collect_changed_paths(base: str | None, head: str | None) -> set[str]:
             "diff",
             "--name-only",
             "-z",
-            "--diff-filter=ACMRD",
+            f"--diff-filter={diff_filter}",
+            "--no-renames",
             base or "",
             resolved_head,
         )
@@ -88,21 +93,24 @@ def collect_changed_paths(base: str | None, head: str | None) -> set[str]:
                 "diff",
                 "--name-only",
                 "-z",
-                "--diff-filter=ACMRD",
+                f"--diff-filter={diff_filter}",
+                "--no-renames",
                 resolved_base,
                 resolved_head,
             )
         else:
             output = _git("ls-tree", "-r", "--name-only", "-z", resolved_head)
     return {
-        item.decode("utf-8").replace("\\", "/")
-        for item in output.split(b"\0")
-        if item
+        item.decode("utf-8").replace("\\", "/") for item in output.split(b"\0") if item
     }
 
 
 def is_documentation(path: str) -> bool:
     normalized = path.lower()
+    if normalized.startswith(
+        ("dazah-frontend/src/", "dazah-frontend/public/", "dazah-backend/app/")
+    ):
+        return False
     return normalized.startswith("docs/") or normalized.endswith(
         (".md", ".mdx", ".rst")
     )
@@ -118,9 +126,47 @@ def is_docker_path(path: str) -> bool:
     }
 
 
-def classify_paths(paths: set[str]) -> dict[str, bool]:
+def image_changed(paths: set[str], layout_paths: set[str], project: str) -> bool:
+    for path in paths:
+        prefix = project + "/"
+        if not path.startswith(prefix):
+            continue
+        relative = path.removeprefix(prefix)
+        name = PurePosixPath(relative).name
+        if (
+            relative.startswith(("tests/", "e2e/"))
+            or ".test." in name
+            or ".spec." in name
+        ):
+            continue
+        if project == "dazah-frontend" and relative.startswith("src/"):
+            if (
+                path in layout_paths
+                or name.split(".", 1)[0] in {"instrumentation", "middleware", "proxy"}
+                or PurePosixPath(name).suffix
+                not in {".ts", ".tsx", ".js", ".jsx", ".css", ".scss", ".sass"}
+            ):
+                return True
+        elif project == "dazah-backend" and relative.startswith("app/"):
+            if (
+                path in layout_paths
+                or relative in {"app/main.py", "app/__init__.py", "app/core/config.py"}
+                or PurePosixPath(name).suffix != ".py"
+            ):
+                return True
+        else:
+            # Dependencies, build/startup scripts, assets, migrations and unknown
+            # project configuration keep their image validation.
+            return True
+    return False
+
+
+def classify_paths(
+    paths: set[str], *, layout_paths: set[str] | None = None
+) -> dict[str, bool]:
     code_paths = {
-        path for path in paths
+        path
+        for path in paths
         if not is_documentation(path) and path not in REPOSITORY_METADATA
     }
     shared = any(
@@ -135,10 +181,12 @@ def classify_paths(paths: set[str]) -> dict[str, bool]:
         "backend_changed": any(
             path.startswith("dazah-backend/") for path in code_paths
         ),
-        "hermes_changed": any(
-            path.startswith("Hermes-Lite/") for path in code_paths
-        ),
+        "hermes_changed": any(path.startswith("Hermes-Lite/") for path in code_paths),
         "docker_changed": any(is_docker_path(path) for path in code_paths),
+        "frontend_image_changed": shared
+        or image_changed(code_paths, layout_paths or set(), "dazah-frontend"),
+        "backend_image_changed": shared
+        or image_changed(code_paths, layout_paths or set(), "dazah-backend"),
         "shared_changed": shared,
         "docs_only": bool(paths) and all(is_documentation(path) for path in paths),
     }
@@ -163,14 +211,17 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     paths = collect_changed_paths(args.base, args.head)
+    layout_paths = collect_changed_paths(args.base, args.head, diff_filter="AD")
     # A manual run is an explicit full verification, including on main itself.
     if os.getenv("GITHUB_EVENT_NAME") == "workflow_dispatch":
         paths = {
             item.decode("utf-8")
-            for item in _git("ls-tree", "-r", "--name-only", "-z", resolve_head(args.head)).split(b"\0")
+            for item in _git(
+                "ls-tree", "-r", "--name-only", "-z", resolve_head(args.head)
+            ).split(b"\0")
             if item
         }
-    scopes = classify_paths(paths)
+    scopes = classify_paths(paths, layout_paths=layout_paths)
     write_outputs(scopes, args.github_output)
     print(json.dumps({"paths": sorted(paths), **scopes}, ensure_ascii=False, indent=2))
     return 0

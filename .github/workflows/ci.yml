@@ -35,6 +35,8 @@ jobs:
       backend_changed: ${{ steps.scope.outputs.backend_changed }}
       hermes_changed: ${{ steps.scope.outputs.hermes_changed }}
       docker_changed: ${{ steps.scope.outputs.docker_changed }}
+      frontend_image_changed: ${{ steps.scope.outputs.frontend_image_changed }}
+      backend_image_changed: ${{ steps.scope.outputs.backend_image_changed }}
       shared_changed: ${{ steps.scope.outputs.shared_changed }}
       docs_only: ${{ steps.scope.outputs.docs_only }}
     steps:
@@ -452,9 +454,7 @@ jobs:
   frontend-image-verify:
     name: Frontend Image Verify
     needs: change-scope
-    if: >-
-      ${{ needs.change-scope.outputs.frontend_changed == 'true' ||
-          needs.change-scope.outputs.shared_changed == 'true' }}
+    if: ${{ needs.change-scope.outputs.frontend_image_changed == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     outputs:
@@ -687,8 +687,7 @@ jobs:
           python3 .github/scripts/ci_support.py run --phase toolchain --category environment --
           python3 .github/scripts/ci_support.py preflight tools
 
-      - &backend_test_dependencies
-        name: Install backend dependencies
+      - name: Install backend dependencies
         run: python3 .github/scripts/ci_support.py install backend
 
       - name: Verify shipped frontend page inventory
@@ -905,7 +904,8 @@ jobs:
       - *backend_test_python
       - *backend_test_uv
       - *backend_test_toolchain
-      - *backend_test_dependencies
+      - name: Install coverage reporting dependencies
+        run: python3 .github/scripts/ci_support.py install coverage
 
       - name: Download backend shard reports
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -934,9 +934,7 @@ jobs:
   backend-image-verify:
     name: Backend Production Image Verify
     needs: change-scope
-    if: >-
-      ${{ needs.change-scope.outputs.backend_changed == 'true' ||
-          needs.change-scope.outputs.shared_changed == 'true' }}
+    if: ${{ needs.change-scope.outputs.backend_image_changed == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     outputs: &docker_cache_outputs
@@ -1155,9 +1153,7 @@ jobs:
   backend-dev-image-verify:
     name: Backend Development Image Verify
     needs: change-scope
-    if: >-
-      ${{ needs.change-scope.outputs.backend_changed == 'true' ||
-          needs.change-scope.outputs.shared_changed == 'true' }}
+    if: ${{ needs.change-scope.outputs.backend_image_changed == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     outputs: *docker_cache_outputs
@@ -1407,6 +1403,8 @@ jobs:
           BACKEND_CHANGED: ${{ needs.change-scope.outputs.backend_changed }}
           HERMES_CHANGED: ${{ needs.change-scope.outputs.hermes_changed }}
           DOCKER_CHANGED: ${{ needs.change-scope.outputs.docker_changed }}
+          FRONTEND_IMAGE_CHANGED: ${{ needs.change-scope.outputs.frontend_image_changed }}
+          BACKEND_IMAGE_CHANGED: ${{ needs.change-scope.outputs.backend_image_changed }}
           SHARED_CHANGED: ${{ needs.change-scope.outputs.shared_changed }}
           DOCS_ONLY: ${{ needs.change-scope.outputs.docs_only }}
           CHANGE_SCOPE_RESULT: ${{ needs.change-scope.result }}

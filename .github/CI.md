@@ -65,6 +65,8 @@ flowchart LR
 - `backend_changed`
 - `hermes_changed`
 - `docker_changed`
+- `frontend_image_changed`
+- `backend_image_changed`
 - `shared_changed`
 - `docs_only`
 
@@ -80,6 +82,11 @@ Repository Policy、Source Security 和 CI Gate。`.github` Workflow、根配置
 不等待范围计算。`Repository Policy` 运行仓库脚本回归，检查每个 `AGENTS.md` 都有
 同目录 `CLAUDE.md` 导入桥接，并按 `.ci/test-impact-policy.toml` 检查生产变更是否
 附有对应测试。三项检查均为 CI Gate 必需项。
+
+普通业务源文件修改按所属项目执行构建、测试和覆盖率检查。对应镜像在依赖、
+构建或启动配置、脚本、静态资源、后端迁移、运行入口、源文件新增/删除/移动时验证。
+纯测试文件变更不触发镜像；shared 或无法识别的根目录变更保守执行两种镜像验证。
+手动全量运行也执行镜像检查。CI Gate 使用相同的镜像范围标记判断是否允许跳过。
 
 ## 检查内容
 
@@ -141,8 +148,9 @@ upgrade、模型漂移、FastAPI import 和 OpenAPI 漂移检查。
 
 `Backend Integration` 四片并行运行原全量 Pytest。各片使用独立的 PostgreSQL 17
 和 Redis 8，在本片测试库迁移和菜单目录初始化成功后执行测试。同一文件的用例留在同一片并保留
-原有收集顺序。分片权重使用一次成功 CI 的 JUnit 耗时，其他文件按用例数估算。
-[历史运行 42756118132](https://github.com/Livzon-DS-Sector-AI-Innovation/Livzon-NX/actions/runs/42756118132)
+原有收集顺序。分片权重使用成功运行的四份 JUnit 报告，记录累计至少一秒的文件；
+其他文件按报告中较短用例的平均耗时估算，每例 0.021 秒。
+[权重来源 42948663467](https://github.com/Livzon-DS-Sector-AI-Innovation/Livzon-NX/actions/runs/42948663467)
 
 `Backend Coverage` 核对四份清单的全量收集结果一致，并验证所有用例 ID 恰好完成
 一次。它合并原始分支覆盖率数据，生成 `coverage.xml`，执行 60% 行、33.5% 分支和
@@ -150,11 +158,16 @@ upgrade、模型漂移、FastAPI import 和 OpenAPI 漂移检查。
 覆盖率报告。迁移与契约、四片测试和覆盖率汇总都成功后，`CI Gate` 才能通过。
 本地 `ci.sh integration` 仍提供单进程全量验证入口。
 
+汇总任务通过 `uv sync --frozen --only-group ci-coverage` 安装锁文件中的
+Coverage.py、Pytest、greenlet 及其依赖。它读取原始覆盖率和源码生成报告，不加载业务
+运行环境。全套业务依赖由四个集成分片安装并执行。全量清单核对、分支数据校验、
+60% 行、33.5% 分支和 80% 变更行门槛继续在汇总任务执行。
+
 `Backend Production Image Verify` 和 `Backend Development Image Verify` 各在
 自己的 runner 构建一个镜像，使用 `${GITHUB_SHA}` 标记并沿用独立 Buildx/GHA 缓存。
 两边都以 app 用户验证 Chromium 渲染和中文 DOCX 转 PDF。交付镜像还生成完整漏洞
 报告并阻塞有修复版本的 High/Critical 漏洞，随后使用隔离 Docker network 和临时
-PostgreSQL/Redis 验证迁移、容器启动和 `/health`。两个任务都必须通过 CI Gate。
+PostgreSQL/Redis 验证迁移、容器启动和 `/health`。镜像范围适用时，两个任务都必须通过 CI Gate。
 
 系统依赖下载统一读取 `docker/apt-download.conf`：每个失败请求最多重试 3 次，
 HTTP/HTTPS 连接和数据超时均为 30 秒，省略翻译索引；索引刷新失败时返回失败，

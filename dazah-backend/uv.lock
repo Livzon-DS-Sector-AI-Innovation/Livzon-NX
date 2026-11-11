@@ -767,6 +767,11 @@ dev = [
 ]
 
 [package.dev-dependencies]
+ci-coverage = [
+    { name = "coverage" },
+    { name = "greenlet" },
+    { name = "pytest" },
+]
 dev = [
     { name = "mypy" },
     { name = "pytest" },
@@ -825,6 +830,11 @@ requires-dist = [
 provides-extras = ["dev"]
 
 [package.metadata.requires-dev]
+ci-coverage = [
+    { name = "coverage" },
+    { name = "greenlet" },
+    { name = "pytest" },
+]
 dev = [
     { name = "mypy", specifier = ">=2.1.0" },
     { name = "pytest", specifier = ">=9.0.3" },
