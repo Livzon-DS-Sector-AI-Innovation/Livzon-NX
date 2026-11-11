@@ -539,6 +539,8 @@ def _sensitive_actions(
     explicit_actions = {
         # 应急处置卡：删除/撤销已发布的处置卡属于破坏性动作
         "safety:emergency-accident:emergency-card": ("delete",),
+        # 安全承诺：删除滚动信息卡（承诺信息/重大危险源信息）属于破坏性动作
+        "safety:safety-commitment": ("delete",),
         # 目标责任与绩效：删除年度目标/进度记录属于破坏性动作
         "safety:governance:target-performance": ("delete",),
         # 安全设施台账：删除设施台账属于破坏性动作
@@ -613,6 +615,8 @@ def _sensitive_actions(
         "registration:fees:inspection-contacts": ("delete",),
         "registration:knowledge": ("delete", "sensitive_export"),
         "registration:registration-settings": ("delete",),
+        # 行政管理：飞书设置页停用数据入口属于破坏性动作
+        "admin:feishu-settings": ("delete",),
         "production:overview": ("delete", "sync_config"),
         "production:plan:sales-plan": ("delete", "sync_config"),
         "production:plan:scheduling": (
@@ -2255,6 +2259,127 @@ PAGE_API_BINDINGS += _module_api_bindings(
             "/emergency-plans/{plan_id}/file",
             (_EMERGENCY_MGMT_PAGE,),
             "operate",
+            None,
+            "not_applicable",
+        ),
+        # ---- 应急预案 AI 工作台 ----
+        (
+            "GET",
+            "/emergency-plans/ai/options",
+            (_EMERGENCY_MGMT_PAGE,),
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "POST",
+            "/emergency-plans/{plan_id}/ai/generate",
+            (_EMERGENCY_MGMT_PAGE,),
+            "operate",
+            None,
+            "not_applicable",
+        ),
+        (
+            "POST",
+            "/emergency-plans/{plan_id}/ai/review",
+            (_EMERGENCY_MGMT_PAGE,),
+            "operate",
+            None,
+            "not_applicable",
+        ),
+        (
+            "POST",
+            "/emergency-plans/{plan_id}/ai/import",
+            (_EMERGENCY_MGMT_PAGE,),
+            "operate",
+            None,
+            "not_applicable",
+        ),
+        (
+            "GET",
+            "/emergency-plans/{plan_id}/ai/job",
+            (_EMERGENCY_MGMT_PAGE,),
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "POST",
+            "/emergency-plans/{plan_id}/ai/chat",
+            (_EMERGENCY_MGMT_PAGE,),
+            "operate",
+            None,
+            "not_applicable",
+        ),
+        (
+            "GET",
+            "/emergency-plans/{plan_id}/ai/messages",
+            (_EMERGENCY_MGMT_PAGE,),
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "GET",
+            "/emergency-plans/{plan_id}/content",
+            (_EMERGENCY_MGMT_PAGE,),
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "PUT",
+            "/emergency-plans/{plan_id}/content",
+            (_EMERGENCY_MGMT_PAGE,),
+            "operate",
+            None,
+            "not_applicable",
+        ),
+        (
+            "GET",
+            "/emergency-plans/{plan_id}/content/checks",
+            (_EMERGENCY_MGMT_PAGE,),
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "POST",
+            "/emergency-plans/{plan_id}/finalize",
+            (_EMERGENCY_MGMT_PAGE,),
+            "operate",
+            None,
+            "not_applicable",
+        ),
+        (
+            "GET",
+            "/emergency-plans/{plan_id}/revisions",
+            (_EMERGENCY_MGMT_PAGE,),
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "GET",
+            "/emergency-plans/{plan_id}/revisions/{revision_no}",
+            (_EMERGENCY_MGMT_PAGE,),
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "POST",
+            "/emergency-plans/{plan_id}/revisions/{revision_no}/restore",
+            (_EMERGENCY_MGMT_PAGE,),
+            "operate",
+            None,
+            "not_applicable",
+        ),
+        (
+            "GET",
+            "/emergency-plans/{plan_id}/export-docx",
+            (_EMERGENCY_MGMT_PAGE,),
+            "query",
             None,
             "not_applicable",
         ),
@@ -6275,12 +6400,21 @@ def _hr_api_bindings() -> tuple[PageApiBinding, ...]:
             "/annual-training-plans/{plan_id}/export",
             "/annual-training-plan-attachments/{attachment_id}/download",
             "/annual-training-plan-attachments/{attachment_id}/preview",
-            "/plan-attachment-sections/{section_id}/preview",
         ),
         annual_plan,
         permission="operate",
         sensitive_action="sensitive_export",
         scope_adapter="hr.training_department",
+    )
+    # 附件条目预览：培训资料页（签到表）"选择培训附件内容"弹窗按条目解析附件清单，
+    # 与年度计划页共用同一端点，需同时登记两个页面上下文，否则培训资料页调用 403
+    add(
+        "GET",
+        "/plan-attachment-sections/{section_id}/preview",
+        annual_plan + sign_in,
+        "operate",
+        "sensitive_export",
+        "hr.training_department",
     )
     add_many(
         "POST",
@@ -7491,5 +7625,106 @@ PAGE_API_BINDINGS += _module_api_bindings(
             None,
             "not_applicable",
         ),
+        (
+            "GET",
+            "/work-permits/{permit_id}/download",
+            (_WORK_PERMITS_PAGE,),
+            "query",
+            None,
+            "not_applicable",
+        ),
+    ],
+)
+
+# ── 安全承诺（应急〔2018〕74号 承诺公告制度）──
+# 日报读取/历史查看与信息卡列表随页面查询权限放行；编辑企业状态、
+# 发布承诺公告、AI 研判与信息卡增改归操作权限，删除信息卡是已登记的
+# 破坏性动作。
+_SAFETY_COMMITMENT_PAGE = "safety:safety-commitment"
+PAGE_API_BINDINGS += _module_api_bindings(
+    "safety",
+    [
+        ("GET", "/safety-commitments/today", (_SAFETY_COMMITMENT_PAGE,),
+         "query", None, "not_applicable"),
+        ("GET", "/safety-commitments/list", (_SAFETY_COMMITMENT_PAGE,),
+         "query", None, "not_applicable"),
+        ("GET", "/safety-commitments/by-date/{report_date}",
+         (_SAFETY_COMMITMENT_PAGE,), "query", None, "not_applicable"),
+        ("PUT", "/safety-commitments/{report_id}",
+         (_SAFETY_COMMITMENT_PAGE,), "operate", None, "not_applicable"),
+        ("POST", "/safety-commitments/{report_id}/publish",
+         (_SAFETY_COMMITMENT_PAGE,), "operate", None, "not_applicable"),
+        ("POST", "/safety-commitments/{report_id}/risk-assessment",
+         (_SAFETY_COMMITMENT_PAGE,), "operate", None, "not_applicable"),
+        ("GET", "/safety-commitment-cards", (_SAFETY_COMMITMENT_PAGE,),
+         "query", None, "not_applicable"),
+        ("POST", "/safety-commitment-cards", (_SAFETY_COMMITMENT_PAGE,),
+         "operate", None, "not_applicable"),
+        ("PUT", "/safety-commitment-cards/{card_id}",
+         (_SAFETY_COMMITMENT_PAGE,), "operate", None, "not_applicable"),
+        ("DELETE", "/safety-commitment-cards/{card_id}",
+         (_SAFETY_COMMITMENT_PAGE,), "operate", "delete", "not_applicable"),
+    ],
+)
+
+
+# ── 行政管理：烟酒礼品管理（飞书只读镜像 + 仪表台） ──
+# 镜像页读取端点按「物品清单/领用记录」两个页面放行（controller 另校验 URL
+# 中的 page_key 必须是这两个已登记页面之一）；仪表台统计归仪表台页；凭证、
+# 数据入口、同步与页面绑定维护归「飞书设置」页，写操作挂 sync_config，
+# 停用数据入口挂 delete。
+_ADMIN_TOBACCO_GIFT_DASHBOARD = "admin:tobacco-gift:dashboard"
+_ADMIN_TOBACCO_GIFT_TABLE_PAGES = (
+    "admin:tobacco-gift:items",
+    "admin:tobacco-gift:records",
+)
+_ADMIN_FEISHU_SETTINGS = ("admin:feishu-settings",)
+_ADMIN_ALL_PAGES = (
+    _ADMIN_TOBACCO_GIFT_DASHBOARD,
+    *_ADMIN_TOBACCO_GIFT_TABLE_PAGES,
+    *_ADMIN_FEISHU_SETTINGS,
+)
+PAGE_API_BINDINGS += _module_api_bindings(
+    "administration",
+    [
+        ("GET", "/", _ADMIN_ALL_PAGES, "query", None, "not_applicable"),
+        ("GET", "/feishu-config", _ADMIN_FEISHU_SETTINGS,
+         "query", None, "not_applicable"),
+        ("PUT", "/feishu-config", _ADMIN_FEISHU_SETTINGS,
+         "operate", "sync_config", "not_applicable"),
+        ("POST", "/feishu-config/test", _ADMIN_FEISHU_SETTINGS,
+         "operate", "sync_config", "not_applicable"),
+        ("GET", "/feishu-read/roots", _ADMIN_FEISHU_SETTINGS,
+         "query", None, "not_applicable"),
+        ("POST", "/feishu-read/roots", _ADMIN_FEISHU_SETTINGS,
+         "operate", "sync_config", "not_applicable"),
+        ("DELETE", "/feishu-read/roots/{root_id}", _ADMIN_FEISHU_SETTINGS,
+         "operate", "delete", "not_applicable"),
+        ("POST", "/feishu-read/roots/{root_id}/discover", _ADMIN_FEISHU_SETTINGS,
+         "operate", "sync_config", "not_applicable"),
+        ("GET", "/feishu-read/resources", _ADMIN_FEISHU_SETTINGS,
+         "query", None, "not_applicable"),
+        ("POST", "/feishu-read/resources/{resource_id}/sync",
+         _ADMIN_FEISHU_SETTINGS, "operate", "sync_config", "not_applicable"),
+        ("PUT", "/feishu-read/page-bindings/{page_key}", _ADMIN_FEISHU_SETTINGS,
+         "operate", "sync_config", "not_applicable"),
+        # 绑定配置回显：设置页维护「页面数据表映射」时要读取两个镜像页的绑定
+        # （仓储同款：material_pages + settings_page）；仅此路由包含设置页。
+        ("GET", "/page-data/{page_key}",
+         (*_ADMIN_TOBACCO_GIFT_TABLE_PAGES, *_ADMIN_FEISHU_SETTINGS),
+         "query", None, "not_applicable"),
+        ("GET", "/page-data/{page_key}/{binding_id}/records",
+         _ADMIN_TOBACCO_GIFT_TABLE_PAGES, "query", None, "not_applicable"),
+        (
+            "GET",
+            "/page-data/{page_key}/{binding_id}/record/{record_id}"
+            "/attachments/{field_id}/{file_token}",
+            _ADMIN_TOBACCO_GIFT_TABLE_PAGES,
+            "query",
+            None,
+            "not_applicable",
+        ),
+        ("GET", "/tobacco-gift/dashboard-stats", (_ADMIN_TOBACCO_GIFT_DASHBOARD,),
+         "query", None, "not_applicable"),
     ],
 )

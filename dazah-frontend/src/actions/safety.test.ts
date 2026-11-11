@@ -280,6 +280,8 @@ describe("safety feishu settings actions", () => {
       fire_expiry_notify_milestones: [30, 15, 7],
       permit_notify_enabled: false,
       cert_expiry_notify_enabled: false,
+      commitment_notify_enabled: false,
+      commitment_push_time: "08:30",
     };
     await saveSafetyFeishuSettings(payload);
     expect(fetchMock).toHaveBeenCalledWith(

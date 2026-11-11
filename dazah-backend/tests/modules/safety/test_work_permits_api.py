@@ -74,6 +74,7 @@ async def users(db_session: AsyncSession) -> dict[str, User]:
         role="user",
         status="active",
         feishu_open_id=f"ou-wp-test-{uuid4().hex[:12]}",
+        feishu_union_id=f"un-wp-test-{uuid4().hex[:12]}",
     )
     admin = User(
         id=uuid4(),

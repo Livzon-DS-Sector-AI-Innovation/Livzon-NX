@@ -54,6 +54,8 @@ vi.mock('antd', async () => {
     )
   const Text = ({ children, style }: Props) => createElement('span', { style }, children)
   const Title = ({ children, style }: Props) => createElement('h1', { style }, children)
+  const Select = ({ placeholder }: Props) =>
+    createElement('div', { 'data-select': 'tags', 'data-placeholder': placeholder }, placeholder)
 
   return {
     Alert: Box,
@@ -71,6 +73,7 @@ vi.mock('antd', async () => {
     Input: Object.assign(Box, { Password: Box }),
     InputNumber: Box,
     Modal: Box,
+    Select,
     Space: Object.assign(Box, { Compact: Box }),
     Switch: Box,
     Tag: Text,
@@ -100,5 +103,16 @@ describe('FeishuSettingsPage', () => {
 
     expect(markup).toContain('留空则保持当前 Secret 不变')
     expect(markup).toContain('加密存储')
+  })
+
+  it('渲染安全承诺填报配置卡（开关/推送时间/人员与群/测试发送）', () => {
+    const markup = renderToStaticMarkup(<FeishuSettingsPage initialSettings={null} initialWsStatus={null} />)
+
+    expect(markup).toContain('安全承诺填报')
+    expect(markup).toContain('启用每日填报推送')
+    expect(markup).toContain('推送时间')
+    expect(markup).toContain('填报人员')
+    expect(markup).toContain('承诺公告推送群')
+    expect(markup).toContain('发送测试填报卡')
   })
 })

@@ -1,6 +1,10 @@
 import { moduleMenus, type SubMenuItem } from '@/lib/menu-config'
 
-export type FeishuModuleCode = 'production' | 'energy' | 'warehouse'
+export type FeishuModuleCode =
+  | 'administration'
+  | 'production'
+  | 'energy'
+  | 'warehouse'
 
 export type FeishuConfig = {
   id?: string | null
@@ -106,10 +110,9 @@ function mappedMenuTargets(moduleCode: FeishuModuleCode): FeishuMappedMenuTarget
       const isConfigPage = item.key === 'feishu-config' || item.path.endsWith('/feishu-config')
       const isNavigablePage = Boolean(item.path && item.path !== '#' && !item.disabled && !isConfigPage)
 
-      if (isNavigablePage) {
-        // feishuPageKey 为空串表示显式不映射（如 AI 分析/设置页），跳过；
-        // 否则优先用显式 key，再回退「模块.菜单链」拼接
-        if (item.feishuPageKey === '') return
+      if (isNavigablePage && item.feishuPageKey !== '') {
+        // feishuPageKey 为空串表示该页显式不映射（如 AI 分析/设置页/仪表台目录），
+        // 只跳过本页；子页面的映射不受影响。
         pages.push({
           label: labels.join(' / '),
           value: item.feishuPageKey || `${moduleCode}.${keys.map(normalizeKey).join('.')}`,
@@ -159,8 +162,13 @@ export function getFeishuMappedMenuTarget(
   })[0]
 }
 
+/** 基于平台通用只读镜像服务的模块，走 `/feishu-read/*` 路由族。 */
+function usesReadMirrorRoutes(moduleCode: FeishuModuleCode): boolean {
+  return moduleCode === 'production' || moduleCode === 'administration'
+}
+
 function rootsPath(moduleCode: FeishuModuleCode) {
-  return moduleCode === 'production' ? '/feishu-read/roots' : '/feishu/roots'
+  return usesReadMirrorRoutes(moduleCode) ? '/feishu-read/roots' : '/feishu/roots'
 }
 
 function normalizeResource(item: Record<string, unknown>): FeishuResource {
@@ -229,7 +237,7 @@ export const feishuDataSourceApi = {
   },
 
   listResources: async (moduleCode: FeishuModuleCode): Promise<FeishuResource[]> => {
-    const path = moduleCode === 'production'
+    const path = usesReadMirrorRoutes(moduleCode)
       ? '/feishu-read/resources'
       : moduleCode === 'warehouse' ? '/feishu/tables' : '/sources'
     const items = (await api<Array<Record<string, unknown>>>(moduleCode, path)) ?? []
@@ -241,7 +249,7 @@ export const feishuDataSourceApi = {
       await api(moduleCode, '/sync-runs', { method: 'POST', body: JSON.stringify({ force: true }) })
       return
     }
-    const path = moduleCode === 'production'
+    const path = usesReadMirrorRoutes(moduleCode)
       ? `/feishu-read/resources/${resourceId}/sync`
       : `/feishu/tables/${resourceId}/sync`
     await api(moduleCode, path, { method: 'POST' })
@@ -283,7 +291,7 @@ export const feishuDataSourceApi = {
   },
 
   saveBindings: async (moduleCode: FeishuModuleCode, pageKey: string, bindings: FeishuPageBinding[]) => {
-    const path = moduleCode === 'production'
+    const path = usesReadMirrorRoutes(moduleCode)
       ? `/feishu-read/page-bindings/${encodeURIComponent(pageKey)}`
       : `/page-data/${encodeURIComponent(pageKey)}`
     const normalized = moduleCode === 'warehouse'

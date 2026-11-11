@@ -8,10 +8,11 @@ import {
   SecurityScanOutlined,
   SendOutlined,
 } from '@ant-design/icons'
-import { App, Button, Card, Input, Space, Switch, Tabs, Tag, Typography } from 'antd'
+import { App, Button, Card, Input, Select, Space, Switch, Tabs, Tag, Typography } from 'antd'
 
 import {
   getSafetyFeishuSettings,
+  testCommitmentNotify,
   testFireExpiryNotify,
   testHazardDueNotify,
   testRadarNotify,
@@ -105,6 +106,11 @@ export default function FeishuSettingsPage({
       initialSettings?.cert_expiry_notify_chat_ids ?? [],
     cert_expiry_notify_user_ids:
       initialSettings?.cert_expiry_notify_user_ids ?? [],
+    commitment_notify_enabled:
+      initialSettings?.commitment_notify_enabled ?? false,
+    commitment_push_time: initialSettings?.commitment_push_time || '08:30',
+    commitment_chat_ids: initialSettings?.commitment_chat_ids ?? [],
+    commitment_user_ids: initialSettings?.commitment_user_ids ?? [],
     is_enabled: initialSettings?.is_enabled ?? true,
   })
   const [notifyChatIdsText, setNotifyChatIdsText] = useState(
@@ -154,9 +160,68 @@ export default function FeishuSettingsPage({
   const [certMilestonesText, setCertMilestonesText] = useState(
     (initialSettings?.cert_expiry_notify_milestones ?? [30, 15, 7]).join(',')
   )
+  // 安全承诺填报：人员（open_id）/ 公告群（chat_id）选择器的远程候选项
+  const [commitmentTesting, setCommitmentTesting] = useState(false)
+  const [personOptions, setPersonOptions] = useState<
+    { label: string; value: string }[]
+  >([])
+  const [chatOptions, setChatOptions] = useState<
+    { label: string; value: string }[]
+  >([])
   const [wsStatus, setWsStatus] = useState<WsStatus | null>(
     (initialWsStatus as WsStatus | null) ?? null
   )
+
+  /** 远程搜索人员：只把已绑定飞书的人员作为可选项（value = open_id）。 */
+  const searchPersonnel = useCallback(async (keyword: string) => {
+    const query = new URLSearchParams({ limit: '50' })
+    if (keyword.trim()) query.set('keyword', keyword.trim())
+    try {
+      const res = await fetch(`/api/v1/identity/personnel?${query.toString()}`)
+      if (!res.ok) return
+      const body = (await res.json()) as {
+        data?: {
+          items?: {
+            name?: string
+            department_name?: string | null
+            feishu_open_id?: string | null
+          }[]
+        }
+      }
+      const items = body.data?.items ?? []
+      setPersonOptions(
+        items
+          .filter((item) => item.feishu_open_id)
+          .map((item) => ({
+            label: `${item.name ?? ''}${item.department_name ? `（${item.department_name}）` : ''}`,
+            value: String(item.feishu_open_id),
+          }))
+      )
+    } catch {
+      // 搜索失败保持手动粘贴 open_id 的能力
+    }
+  }, [])
+
+  /** 远程加载机器人所在群（value = chat_id）。 */
+  const loadChats = useCallback(async () => {
+    try {
+      const res = await fetch('/api/v1/safety/scheduled-tasks/feishu-chats')
+      if (!res.ok) return
+      const body = (await res.json()) as {
+        data?: { chat_id?: string; name?: string }[]
+      }
+      setChatOptions(
+        (body.data ?? [])
+          .filter((item) => item.chat_id)
+          .map((item) => ({
+            label: item.name ? `${item.name}` : String(item.chat_id),
+            value: String(item.chat_id),
+          }))
+      )
+    } catch {
+      // 加载失败保持手动粘贴 chat_id 的能力
+    }
+  }, [])
 
   /** 把多行/逗号分隔的目标输入解析为数组。 */
   const parseIds = (text: string) =>
@@ -192,6 +257,10 @@ export default function FeishuSettingsPage({
         .filter((n) => Number.isInteger(n) && n >= 0 && n <= 365),
       cert_expiry_notify_chat_ids: parseIds(certChatIdsText),
       cert_expiry_notify_user_ids: parseIds(certUserIdsText),
+      commitment_notify_enabled: form.commitment_notify_enabled,
+      commitment_push_time: form.commitment_push_time,
+      commitment_chat_ids: form.commitment_chat_ids,
+      commitment_user_ids: form.commitment_user_ids,
     }),
     [form, notifyChatIdsText, notifyUserIdsText, dueChatIdsText, dueUserIdsText, milestonesText, fireChatIdsText, fireUserIdsText, fireMilestonesText]
   )
@@ -307,6 +376,35 @@ export default function FeishuSettingsPage({
       setNotifyTesting(false)
     }
   }, [buildDuePayload, form.app_id, message])
+
+  const handleTestCommitment = useCallback(async () => {
+    if (!form.app_id.trim()) {
+      message.warning('请先填写飞书应用 App ID')
+      return
+    }
+    if ((form.commitment_user_ids ?? []).length === 0) {
+      message.warning('请先选择至少一名填报人员')
+      return
+    }
+    setCommitmentTesting(true)
+    try {
+      // 先保存当前填报配置，再向第一个填报人员发样例卡
+      const saveRes = await saveSafetyFeishuSettings(buildDuePayload())
+      if (saveRes.code !== 200) {
+        message.error(saveRes.message || '保存配置失败')
+        return
+      }
+      setSettings(saveRes.data ?? null)
+      const res = await testCommitmentNotify()
+      if (res.code === 200 && res.data?.success) {
+        message.success(res.data.message || '测试卡片已发送')
+      } else {
+        message.error(res.data?.message || res.message || '测试发送失败')
+      }
+    } finally {
+      setCommitmentTesting(false)
+    }
+  }, [buildDuePayload, form.app_id, form.commitment_user_ids, message])
 
   const handleTest = useCallback(async () => {
     setTesting(true)
@@ -754,6 +852,97 @@ export default function FeishuSettingsPage({
           <Typography.Text type="secondary">
             每天自动检查证件有效期，进入提醒节点才推送，同一证件同一节点只提醒一次。
           </Typography.Text>
+        </Space>
+      </Card>
+      <Card title="安全承诺填报（应急〔2018〕74号 每日承诺公告）">
+        <Space orientation="vertical" size={12} style={{ display: 'flex' }}>
+          <Space size={12} wrap>
+            <Typography.Text>启用每日填报推送</Typography.Text>
+            <Switch
+              aria-label="启用安全承诺填报推送"
+              checked={form.commitment_notify_enabled}
+              onChange={(checked) =>
+                setForm((current) => ({
+                  ...current,
+                  commitment_notify_enabled: checked,
+                }))
+              }
+            />
+            <Typography.Text type="secondary">
+              到达下方推送时间后，向填报人员推送当日「企业状态 + 承诺确认」
+              分步填报卡；同一自然日只推一次（非生产环境自动跳过）
+            </Typography.Text>
+          </Space>
+          <Space.Compact block>
+            <Button disabled style={{ cursor: 'default', width: 140 }}>
+              推送时间
+            </Button>
+            <Input
+              value={form.commitment_push_time}
+              placeholder="每天推送时间，格式 HH:mm（如 08:30）"
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  commitment_push_time: event.target.value,
+                }))
+              }
+            />
+          </Space.Compact>
+          <Space orientation="vertical" size={4} style={{ display: 'flex' }}>
+            <Typography.Text>填报人员（可搜索姓名，也可直接粘贴 open_id）</Typography.Text>
+            <Select
+              mode="tags"
+              showSearch
+              style={{ width: '100%' }}
+              placeholder="输入姓名搜索并选择填报人员；名单上的人员将收到每日填报卡片"
+              value={form.commitment_user_ids}
+              onSearch={(keyword) => void searchPersonnel(keyword)}
+              onFocus={() => void searchPersonnel('')}
+              options={personOptions}
+              onChange={(values) =>
+                setForm((current) => ({
+                  ...current,
+                  commitment_user_ids: values,
+                }))
+              }
+              notFoundContent="无匹配人员（可直接粘贴 open_id 回车）"
+            />
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              仅显示已绑定飞书账号的人员；人员填写后数据直接落库到当日安全承诺日报。
+            </Typography.Text>
+          </Space>
+          <Space orientation="vertical" size={4} style={{ display: 'flex' }}>
+            <Typography.Text>承诺公告推送群（发布后自动推送公告卡）</Typography.Text>
+            <Select
+              mode="tags"
+              showSearch
+              style={{ width: '100%' }}
+              placeholder="选择机器人所在的群，或直接粘贴 chat_id（oc_ 开头）"
+              value={form.commitment_chat_ids}
+              onFocus={() => void loadChats()}
+              options={chatOptions}
+              onChange={(values) =>
+                setForm((current) => ({
+                  ...current,
+                  commitment_chat_ids: values,
+                }))
+              }
+              notFoundContent="无匹配群聊（可直接粘贴 chat_id 回车）"
+            />
+          </Space>
+          <Typography.Text type="secondary">
+            需先把本应用的机器人拉进目标群。修改后先「保存配置」，再点「发送测试填报卡」验证；
+            承诺公告在「安全承诺」页面发布时自动推送到上方群。
+          </Typography.Text>
+          <div>
+            <Button
+              icon={<SendOutlined />}
+              onClick={() => void handleTestCommitment()}
+              loading={commitmentTesting}
+            >
+              发送测试填报卡
+            </Button>
+          </div>
         </Space>
       </Card>
       </Space>

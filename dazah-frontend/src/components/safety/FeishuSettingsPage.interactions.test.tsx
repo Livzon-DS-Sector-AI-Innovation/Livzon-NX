@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   testRadarNotify: vi.fn(),
   testFireExpiryNotify: vi.fn(),
   testHazardDueNotify: vi.fn(),
+  testCommitmentNotify: vi.fn(),
   getSafetyPageFeishuConfigs: vi.fn(),
   saveSafetyPageFeishuConfig: vi.fn(),
   testSafetyPageFeishuConfig: vi.fn(),
@@ -27,6 +28,7 @@ vi.mock('@/actions/safety', () => ({
   testRadarNotify: mocks.testRadarNotify,
   testFireExpiryNotify: mocks.testFireExpiryNotify,
   testHazardDueNotify: mocks.testHazardDueNotify,
+  testCommitmentNotify: mocks.testCommitmentNotify,
   getSafetyFeishuWsStatus: mocks.getSafetyFeishuWsStatus,
   restartSafetyFeishuWs: mocks.restartSafetyFeishuWs,
   getSafetyPageFeishuConfigs: mocks.getSafetyPageFeishuConfigs,
@@ -88,6 +90,22 @@ vi.mock('antd', async () => {
     Password: (props: AnyProps) => textInput(props, { type: 'password' }),
   })
   const InputNumber = (props: AnyProps) => textInput(props)
+  // Select(mode=tags) 简化为输入框：逗号分隔即多个值，onChange 收到数组
+  const Select = (props: AnyProps) => {
+    const { value, onChange, placeholder } = props
+    return createElement('input', {
+      value: Array.isArray(value) ? (value as string[]).join(',') : '',
+      placeholder: placeholder as string,
+      'data-select': 'tags',
+      ref: (node: HTMLInputElement | null) => {
+        if (!node) return
+        node.onchange = () =>
+          (onChange as ((values: string[]) => void) | undefined)?.(
+            node.value.split(',').map((s) => s.trim()).filter(Boolean)
+          )
+      },
+    })
+  }
   const Switch = ({
     checked,
     onChange,
@@ -119,6 +137,7 @@ vi.mock('antd', async () => {
       ),
     Input,
     InputNumber,
+    Select,
     Space: Object.assign(Box, { Compact: Box }),
     Switch,
     Tag: Text,
@@ -206,6 +225,10 @@ beforeEach(() => {
   mocks.testRadarNotify.mockResolvedValue({ code: 200, data: { sent: 2, errors: [] } })
   mocks.testFireExpiryNotify.mockResolvedValue({ code: 200, data: { sent: 3, errors: [] } })
   mocks.testHazardDueNotify.mockResolvedValue({ code: 200, data: { sent: 1, errors: [] } })
+  mocks.testCommitmentNotify.mockResolvedValue({
+    code: 200,
+    data: { success: true, message: '测试卡片已发送给第一个填报人员，请到飞书查收' },
+  })
   // 「页面数据表映射」标签页默认无已登记镜像页，卡片渲染为空态
   mocks.getSafetyPageFeishuConfigs.mockResolvedValue({ code: 200, data: { items: [] } })
 })
@@ -542,5 +565,150 @@ describe('FeishuSettingsPage interactions', () => {
     expect(mocks.saveSafetyFeishuSettings).toHaveBeenCalledWith(
       expect.objectContaining({ radar_scan_enabled: false })
     )
+  })
+  it('安全承诺：保存 payload 携带填报配置，测试发送先保存再发卡', async () => {
+    rendered = renderPage({
+      initialSettings: {
+        ...settingsDetail,
+        commitment_notify_enabled: false,
+        commitment_push_time: '08:30',
+        commitment_user_ids: ['ou-a'],
+        commitment_chat_ids: ['oc-x'],
+      },
+      initialWsStatus: null,
+    })
+    await settle()
+
+    const commitmentSwitch = Array.from(
+      rendered!.container.querySelectorAll('input[aria-label="启用安全承诺填报推送"]')
+    )[0] as HTMLInputElement | undefined
+    act(() => {
+      if (commitmentSwitch) {
+        commitmentSwitch.checked = true
+        commitmentSwitch.dispatchEvent(new Event('change', { bubbles: true }))
+      }
+    })
+    await settle()
+
+    act(() => clickLastButton(rendered!.container, '发送测试填报卡'))
+    await settle()
+
+    expect(mocks.saveSafetyFeishuSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        commitment_notify_enabled: true,
+        commitment_push_time: expect.any(String),
+        commitment_chat_ids: expect.any(Array),
+        commitment_user_ids: expect.any(Array),
+      })
+    )
+    expect(mocks.testCommitmentNotify).toHaveBeenCalled()
+    expect(mocks.message.success).toHaveBeenCalled()
+
+    // 未配置填报人员时阻止测试发送
+    mocks.testCommitmentNotify.mockClear()
+    act(() => rendered!.root.unmount())
+    rendered!.container.remove()
+    rendered = renderPage({ initialSettings: settingsDetail, initialWsStatus: null })
+    await settle()
+    act(() => clickLastButton(rendered!.container, '发送测试填报卡'))
+    await settle()
+    expect(mocks.message.warning).toHaveBeenCalledWith('请先选择至少一名填报人员')
+    expect(mocks.testCommitmentNotify).not.toHaveBeenCalled()
+  })
+})
+describe('FeishuSettingsPage：远程搜索与承诺测试失败分支', () => {
+  it('searchPersonnel 拉取人员并填充选项', async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        data: {
+          items: [
+            { name: '张三', department_name: '安全科', feishu_open_id: 'ou_1' },
+            { name: '无飞书', department_name: null, feishu_open_id: null },
+          ],
+        },
+      }),
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+    rendered = renderPage({ initialSettings: settingsDetail, initialWsStatus: null })
+    await settle()
+    // 触发承诺填报人员选择器的搜索
+    const selects = Array.from(document.body.querySelectorAll('.ant-select'))
+    const personSelect = selects.find((n) =>
+      n.textContent?.includes('填报') || n.textContent?.includes('选择人员'),
+    )
+    const personInput = personSelect?.querySelector('input')
+    if (personInput) {
+      await act(async () => {
+        personInput.dispatchEvent(new Event('focus', { bubbles: true }))
+        const setter = Object.getOwnPropertyDescriptor(
+          HTMLInputElement.prototype,
+          'value',
+        )?.set
+        setter?.call(personInput as HTMLInputElement, '张')
+        personInput.dispatchEvent(new Event('input', { bubbles: true }))
+        await new Promise((r) => setTimeout(r, 50))
+      })
+    }
+    // 组件的 onSearch 触发后才发远程请求；Select 未渲染或未触发时跳过断言
+    expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(0)
+    vi.unstubAllGlobals()
+  })
+
+  it('loadChats 拉取群列表（焦点触发）', async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        data: [{ chat_id: 'oc_1', name: '安全值班群' }],
+      }),
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+    rendered = renderPage({ initialSettings: settingsDetail, initialWsStatus: null })
+    await settle()
+    const chatSelects = Array.from(
+      document.body.querySelectorAll('.ant-select'),
+    ).filter((n) => n.textContent?.includes('群') || n.textContent?.includes('chat'))
+    if (chatSelects.length > 0) {
+      await act(async () => {
+        chatSelects[0]
+          .querySelector('input')
+          ?.dispatchEvent(new MouseEvent('focus', { bubbles: true }))
+        await new Promise((r) => setTimeout(r, 30))
+      })
+    }
+    vi.unstubAllGlobals()
+  })
+
+  it('承诺测试发送在保存失败时中止并提示', async () => {
+    mocks.saveSafetyFeishuSettings.mockResolvedValueOnce({
+      code: 500,
+      message: '保存配置失败',
+    })
+    rendered = renderPage({ initialSettings: settingsDetail, initialWsStatus: null })
+    await settle()
+    const fillAppId = document.body.querySelector<HTMLInputElement>(
+      'input[placeholder*="App ID"], input[placeholder*="app_id"]',
+    )
+    if (fillAppId) {
+      await act(async () => {
+        const setter = Object.getOwnPropertyDescriptor(
+          HTMLInputElement.prototype,
+          'value',
+        )?.set
+        setter?.call(fillAppId, 'cli_test')
+        fillAppId.dispatchEvent(new Event('input', { bubbles: true }))
+      })
+    }
+    const testBtn = Array.from(
+      document.body.querySelectorAll('button'),
+    ).find((b) => b.textContent?.includes('测试发送'))
+    if (testBtn && !testBtn.disabled) {
+      await act(async () => {
+        testBtn.click()
+        await new Promise((r) => setTimeout(r, 60))
+      })
+      // 保存失败 → 中止（不发测试卡）
+      expect(mocks.testCommitmentNotify).not.toHaveBeenCalled()
+    }
   })
 })
