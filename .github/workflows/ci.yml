@@ -848,7 +848,17 @@ jobs:
     steps:
       - *backend_test_checkout
       - *backend_test_python
-      - *backend_test_uv
+      - name: Set up uv
+        id: uv
+        uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: dazah-backend/uv.lock
+          cache-suffix: backend-integration
+          # Keep pre-built wheels so a cache hit avoids re-downloading large packages.
+          prune-cache: false
 
       - name: uv cache ${{ steps.uv.outputs.cache-hit }}
         run: echo "Recorded uv cache status for this shard."
