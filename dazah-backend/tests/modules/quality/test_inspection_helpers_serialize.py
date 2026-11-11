@@ -1,6 +1,26 @@
 from __future__ import annotations
 
-from app.modules.quality.service.inspection_helpers import _smart_normalize_value
+import pytest
+
+from app.modules.quality.service.inspection_helpers import (
+    _get_link_record_ids,
+    _smart_normalize_value,
+)
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        (["rec_1", None, 2], ["rec_1", "2"]),
+        ({"link_record_ids": ["rec_1", None, 2]}, ["rec_1", "2"]),
+        ({"link_record_ids": "rec_1"}, []),
+        (None, []),
+    ],
+)
+def test_link_record_ids_accept_both_feishu_shapes(
+    value: object, expected: list[str]
+) -> None:
+    assert _get_link_record_ids({"fields": {"relation": value}}, "relation") == expected
 
 
 def test_attachment_list_keeps_clickable_structure() -> None:
