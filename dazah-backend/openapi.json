@@ -1091,6 +1091,463 @@
         "title": "ActionResponse",
         "type": "object"
       },
+      "AdministrationFeishuBindingItem": {
+        "properties": {
+          "is_default": {
+            "default": false,
+            "title": "Is Default",
+            "type": "boolean"
+          },
+          "is_enabled": {
+            "default": true,
+            "title": "Is Enabled",
+            "type": "boolean"
+          },
+          "resource_id": {
+            "format": "uuid",
+            "title": "Resource Id",
+            "type": "string"
+          },
+          "sort_order": {
+            "default": 0,
+            "title": "Sort Order",
+            "type": "integer"
+          },
+          "tab_name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Tab Name",
+            "type": "string"
+          },
+          "visible_field_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Visible Field Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "resource_id",
+          "tab_name"
+        ],
+        "title": "AdministrationFeishuBindingItem",
+        "type": "object"
+      },
+      "AdministrationFeishuBindingReplace": {
+        "properties": {
+          "bindings": {
+            "items": {
+              "$ref": "#/components/schemas/AdministrationFeishuBindingItem"
+            },
+            "title": "Bindings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "bindings"
+        ],
+        "title": "AdministrationFeishuBindingReplace",
+        "type": "object"
+      },
+      "AdministrationFeishuConfigInput": {
+        "description": "保存飞书应用配置；``app_secret`` 留空表示保持当前 Secret 不变。",
+        "properties": {
+          "app_id": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "App Id",
+            "type": "string"
+          },
+          "app_secret": {
+            "default": "",
+            "maxLength": 200,
+            "title": "App Secret",
+            "type": "string"
+          },
+          "config_name": {
+            "default": "行政管理飞书配置",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Config Name",
+            "type": "string"
+          },
+          "daily_sync_time": {
+            "default": "02:00",
+            "pattern": "^\\d{2}:\\d{2}$",
+            "title": "Daily Sync Time",
+            "type": "string"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "is_active": {
+            "default": true,
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark"
+          },
+          "timezone": {
+            "default": "Asia/Shanghai",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Timezone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "app_id"
+        ],
+        "title": "AdministrationFeishuConfigInput",
+        "type": "object"
+      },
+      "AdministrationFeishuConfigResponse": {
+        "description": "飞书应用配置回显，绝不返回 Secret 明文。",
+        "properties": {
+          "app_id": {
+            "title": "App Id",
+            "type": "string"
+          },
+          "app_secret_configured": {
+            "title": "App Secret Configured",
+            "type": "boolean"
+          },
+          "app_secret_masked": {
+            "default": "",
+            "title": "App Secret Masked",
+            "type": "string"
+          },
+          "config_name": {
+            "title": "Config Name",
+            "type": "string"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "daily_sync_time": {
+            "title": "Daily Sync Time",
+            "type": "string"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark"
+          },
+          "timezone": {
+            "title": "Timezone",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "config_name",
+          "app_id",
+          "timezone",
+          "daily_sync_time",
+          "is_active",
+          "app_secret_configured"
+        ],
+        "title": "AdministrationFeishuConfigResponse",
+        "type": "object"
+      },
+      "AdministrationFeishuConnectivityResult": {
+        "properties": {
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/AdministrationFeishuConnectivityStep"
+            },
+            "title": "Steps",
+            "type": "array"
+          }
+        },
+        "required": [
+          "ok",
+          "steps"
+        ],
+        "title": "AdministrationFeishuConnectivityResult",
+        "type": "object"
+      },
+      "AdministrationFeishuConnectivityStep": {
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "status",
+          "message"
+        ],
+        "title": "AdministrationFeishuConnectivityStep",
+        "type": "object"
+      },
+      "AdministrationFeishuResource": {
+        "properties": {
+          "app_token": {
+            "title": "App Token",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "last_complete_sync_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Complete Sync At"
+          },
+          "source_path": {
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "title": "Source Path",
+            "type": "array"
+          },
+          "source_root_id": {
+            "format": "uuid",
+            "title": "Source Root Id",
+            "type": "string"
+          },
+          "sync_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sync Error"
+          },
+          "sync_status": {
+            "title": "Sync Status",
+            "type": "string"
+          },
+          "table_id": {
+            "title": "Table Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "source_root_id",
+          "app_token",
+          "table_id",
+          "title",
+          "sync_status"
+        ],
+        "title": "AdministrationFeishuResource",
+        "type": "object"
+      },
+      "AdministrationFeishuSourceRoot": {
+        "properties": {
+          "config_id": {
+            "format": "uuid",
+            "title": "Config Id",
+            "type": "string"
+          },
+          "discovery_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discovery Error"
+          },
+          "discovery_status": {
+            "title": "Discovery Status",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "last_discovered_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Discovered At"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "root_token": {
+            "title": "Root Token",
+            "type": "string"
+          },
+          "source_type": {
+            "title": "Source Type",
+            "type": "string"
+          },
+          "source_url": {
+            "title": "Source Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "config_id",
+          "name",
+          "source_type",
+          "source_url",
+          "root_token",
+          "is_active",
+          "discovery_status"
+        ],
+        "title": "AdministrationFeishuSourceRoot",
+        "type": "object"
+      },
+      "AdministrationFeishuSourceRootInput": {
+        "properties": {
+          "name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "source_type": {
+            "pattern": "^(wiki|base)$",
+            "title": "Source Type",
+            "type": "string"
+          },
+          "source_url": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Source Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "source_type",
+          "source_url"
+        ],
+        "title": "AdministrationFeishuSourceRootInput",
+        "type": "object"
+      },
+      "AdministrationFeishuSyncResult": {
+        "properties": {
+          "record_count": {
+            "title": "Record Count",
+            "type": "integer"
+          },
+          "resource_id": {
+            "title": "Resource Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "resource_id",
+          "record_count"
+        ],
+        "title": "AdministrationFeishuSyncResult",
+        "type": "object"
+      },
       "AgencySummary": {
         "description": "按付款方汇总。",
         "properties": {
@@ -3858,6 +4315,142 @@
         "title": "ApiResponseEnvelope[ActionResponse]",
         "type": "object"
       },
+      "ApiResponseEnvelope_AdministrationFeishuConfigResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/AdministrationFeishuConfigResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[AdministrationFeishuConfigResponse]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_AdministrationFeishuConnectivityResult_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/AdministrationFeishuConnectivityResult"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[AdministrationFeishuConnectivityResult]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_AdministrationFeishuSourceRoot_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/AdministrationFeishuSourceRoot"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[AdministrationFeishuSourceRoot]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_AdministrationFeishuSyncResult_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/AdministrationFeishuSyncResult"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[AdministrationFeishuSyncResult]",
+        "type": "object"
+      },
       "ApiResponseEnvelope_AgentToolCatalogEntry_": {
         "properties": {
           "code": {
@@ -6068,6 +6661,210 @@
         "title": "ApiResponseEnvelope[EmergencyMgmtStatsResponse]",
         "type": "object"
       },
+      "ApiResponseEnvelope_EmergencyPlanAiOptions_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/EmergencyPlanAiOptions"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[EmergencyPlanAiOptions]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_EmergencyPlanChatMessageListResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/EmergencyPlanChatMessageListResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[EmergencyPlanChatMessageListResponse]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_EmergencyPlanChecksResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/EmergencyPlanChecksResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[EmergencyPlanChecksResponse]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_EmergencyPlanContentResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/EmergencyPlanContentResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[EmergencyPlanContentResponse]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_EmergencyPlanJobStatus_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/EmergencyPlanJobStatus"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[EmergencyPlanJobStatus]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_EmergencyPlanJobSubmitted_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/EmergencyPlanJobSubmitted"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[EmergencyPlanJobSubmitted]",
+        "type": "object"
+      },
       "ApiResponseEnvelope_EmergencyPlanListResponse_": {
         "properties": {
           "code": {
@@ -6134,6 +6931,74 @@
           "data"
         ],
         "title": "ApiResponseEnvelope[EmergencyPlanResponse]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_EmergencyPlanRevisionDetail_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/EmergencyPlanRevisionDetail"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[EmergencyPlanRevisionDetail]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_EmergencyPlanRevisionListResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/EmergencyPlanRevisionListResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[EmergencyPlanRevisionListResponse]",
         "type": "object"
       },
       "ApiResponseEnvelope_EmergencySupplyListResponse_": {
@@ -8177,6 +9042,40 @@
         "title": "ApiResponseEnvelope[ReturnRecallOut]",
         "type": "object"
       },
+      "ApiResponseEnvelope_RiskAssessmentResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/RiskAssessmentResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[RiskAssessmentResponse]",
+        "type": "object"
+      },
       "ApiResponseEnvelope_SafetyAgreementImportResultResponse_": {
         "properties": {
           "code": {
@@ -8209,6 +9108,142 @@
           "data"
         ],
         "title": "ApiResponseEnvelope[SafetyAgreementImportResultResponse]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_SafetyCommitmentCardItem_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/SafetyCommitmentCardItem"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[SafetyCommitmentCardItem]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_SafetyCommitmentCardListResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/SafetyCommitmentCardListResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[SafetyCommitmentCardListResponse]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_SafetyCommitmentReportItem_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/SafetyCommitmentReportItem"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[SafetyCommitmentReportItem]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_SafetyCommitmentReportResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/SafetyCommitmentReportResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[SafetyCommitmentReportResponse]",
         "type": "object"
       },
       "ApiResponseEnvelope_SafetyDutyAssessmentImportResultResponse_": {
@@ -9027,6 +10062,40 @@
         "title": "ApiResponseEnvelope[SupplierOut]",
         "type": "object"
       },
+      "ApiResponseEnvelope_TobaccoGiftDashboardStats_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/TobaccoGiftDashboardStats"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[TobaccoGiftDashboardStats]",
+        "type": "object"
+      },
       "ApiResponseEnvelope_TrainingConflictCheckResponse_": {
         "properties": {
           "code": {
@@ -9537,6 +10606,82 @@
           "data"
         ],
         "title": "ApiResponseEnvelope[dict[str, Any]]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_list_AdministrationFeishuResource__": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/AdministrationFeishuResource"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[list[AdministrationFeishuResource]]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_list_AdministrationFeishuSourceRoot__": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/AdministrationFeishuSourceRoot"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[list[AdministrationFeishuSourceRoot]]",
         "type": "object"
       },
       "ApiResponseEnvelope_list_AgentToolCatalogEntry__": {
@@ -11133,6 +12278,44 @@
           "data"
         ],
         "title": "ApiResponseEnvelope[list[ReturnRecallOut]]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_list_SafetyCommitmentReportItem__": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/SafetyCommitmentReportItem"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[list[SafetyCommitmentReportItem]]",
         "type": "object"
       },
       "ApiResponseEnvelope_list_SupplierOut__": {
@@ -15225,6 +16408,20 @@
           "file"
         ],
         "title": "Body_import_document_catalog_excel_api_v1_quality_document_catalog_import_post",
+        "type": "object"
+      },
+      "Body_import_emergency_plan_docx_api_v1_safety_emergency_plans__plan_id__ai_import_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_import_emergency_plan_docx_api_v1_safety_emergency_plans__plan_id__ai_import_post",
         "type": "object"
       },
       "Body_import_equipments_api_v1_equipment_equipments_import_post": {
@@ -22648,6 +23845,60 @@
           "messages"
         ],
         "title": "ChatRequest",
+        "type": "object"
+      },
+      "CheckIssue": {
+        "properties": {
+          "code": {
+            "description": "规则编码",
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "description": "问题说明",
+            "title": "Message",
+            "type": "string"
+          },
+          "quote": {
+            "default": "",
+            "description": "原文片段",
+            "title": "Quote",
+            "type": "string"
+          },
+          "replacement": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "可确定修正的替换文本",
+            "title": "Replacement"
+          },
+          "section": {
+            "description": "所在章节标识或 cover/organization",
+            "title": "Section",
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ],
+            "title": "Severity",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "severity",
+          "section",
+          "message"
+        ],
+        "title": "CheckIssue",
         "type": "object"
       },
       "CheckType": {
@@ -36956,6 +38207,304 @@
         "title": "EmergencyMgmtStatsResponse",
         "type": "object"
       },
+      "EmergencyPlanAiOptions": {
+        "properties": {
+          "accident_types": {
+            "items": {
+              "$ref": "#/components/schemas/OptionValue"
+            },
+            "title": "Accident Types",
+            "type": "array"
+          },
+          "buildings": {
+            "items": {
+              "$ref": "#/components/schemas/OptionBuilding"
+            },
+            "title": "Buildings",
+            "type": "array"
+          },
+          "chemicals": {
+            "items": {
+              "$ref": "#/components/schemas/OptionChemical"
+            },
+            "title": "Chemicals",
+            "type": "array"
+          },
+          "default_company": {
+            "title": "Default Company",
+            "type": "string"
+          },
+          "default_organization": {
+            "$ref": "#/components/schemas/PlanOrganization"
+          },
+          "default_workshop_organization": {
+            "$ref": "#/components/schemas/WorkshopOrganization"
+          },
+          "levels": {
+            "items": {
+              "$ref": "#/components/schemas/OptionValue"
+            },
+            "title": "Levels",
+            "type": "array"
+          },
+          "recent_organization": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlanOrganization"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "recent_workshop_organization": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkshopOrganization"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "chemicals",
+          "buildings",
+          "accident_types",
+          "levels",
+          "default_company",
+          "default_organization",
+          "default_workshop_organization"
+        ],
+        "title": "EmergencyPlanAiOptions",
+        "type": "object"
+      },
+      "EmergencyPlanChatMessage": {
+        "properties": {
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "revision_no": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revision No"
+          },
+          "role": {
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "role",
+          "content",
+          "created_at"
+        ],
+        "title": "EmergencyPlanChatMessage",
+        "type": "object"
+      },
+      "EmergencyPlanChatMessageListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/EmergencyPlanChatMessage"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "EmergencyPlanChatMessageListResponse",
+        "type": "object"
+      },
+      "EmergencyPlanChatRequest": {
+        "properties": {
+          "message": {
+            "description": "用户指令",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Message",
+            "type": "string"
+          },
+          "section": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "聚焦章节",
+            "title": "Section"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "title": "EmergencyPlanChatRequest",
+        "type": "object"
+      },
+      "EmergencyPlanChecksResponse": {
+        "properties": {
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/CheckIssue"
+            },
+            "title": "Issues",
+            "type": "array"
+          }
+        },
+        "required": [
+          "issues"
+        ],
+        "title": "EmergencyPlanChecksResponse",
+        "type": "object"
+      },
+      "EmergencyPlanContentResponse": {
+        "properties": {
+          "ai_generated": {
+            "title": "Ai Generated",
+            "type": "boolean"
+          },
+          "content": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmergencyPlanDocument"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "content_status": {
+            "enum": [
+              "empty",
+              "draft",
+              "reviewed",
+              "finalized"
+            ],
+            "title": "Content Status",
+            "type": "string"
+          },
+          "content_updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content Updated At"
+          },
+          "job": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmergencyPlanJobStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_review": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmergencyPlanReviewReport"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_reviewed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Reviewed At"
+          },
+          "plan_id": {
+            "format": "uuid",
+            "title": "Plan Id",
+            "type": "string"
+          },
+          "plan_name": {
+            "title": "Plan Name",
+            "type": "string"
+          },
+          "revision_no": {
+            "title": "Revision No",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "plan_id",
+          "plan_name",
+          "content_status",
+          "revision_no",
+          "ai_generated"
+        ],
+        "title": "EmergencyPlanContentResponse",
+        "type": "object"
+      },
+      "EmergencyPlanContentUpdate": {
+        "properties": {
+          "base_revision_no": {
+            "description": "编辑所基于的修订号",
+            "minimum": 0.0,
+            "title": "Base Revision No",
+            "type": "integer"
+          },
+          "content": {
+            "$ref": "#/components/schemas/EmergencyPlanDocument"
+          },
+          "summary": {
+            "default": "人工编辑",
+            "maxLength": 200,
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "content",
+          "base_revision_no"
+        ],
+        "title": "EmergencyPlanContentUpdate",
+        "type": "object"
+      },
       "EmergencyPlanCreate": {
         "properties": {
           "department": {
@@ -37033,6 +38582,232 @@
         "title": "EmergencyPlanCreate",
         "type": "object"
       },
+      "EmergencyPlanDocument": {
+        "properties": {
+          "chapters": {
+            "items": {
+              "$ref": "#/components/schemas/PlanChapter"
+            },
+            "maxItems": 30,
+            "title": "Chapters",
+            "type": "array"
+          },
+          "cover": {
+            "$ref": "#/components/schemas/PlanCover"
+          },
+          "organization": {
+            "$ref": "#/components/schemas/PlanOrganization"
+          },
+          "preface": {
+            "default": "",
+            "description": "引言",
+            "maxLength": 6000,
+            "title": "Preface",
+            "type": "string"
+          },
+          "schema_version": {
+            "default": 1,
+            "maximum": 1.0,
+            "minimum": 1.0,
+            "title": "Schema Version",
+            "type": "integer"
+          },
+          "workshop_organization": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkshopOrganization"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "EmergencyPlanDocument",
+        "type": "object"
+      },
+      "EmergencyPlanGenerateRequest": {
+        "properties": {
+          "accident_type": {
+            "description": "事故类型",
+            "maxLength": 30,
+            "minLength": 1,
+            "title": "Accident Type",
+            "type": "string"
+          },
+          "archive_department": {
+            "default": "",
+            "maxLength": 100,
+            "title": "Archive Department",
+            "type": "string"
+          },
+          "company": {
+            "default": "",
+            "description": "公司名称",
+            "maxLength": 120,
+            "title": "Company",
+            "type": "string"
+          },
+          "drill_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "演练日期",
+            "title": "Drill Date"
+          },
+          "level": {
+            "default": "company",
+            "description": "预案级别",
+            "enum": [
+              "company",
+              "workshop"
+            ],
+            "title": "Level",
+            "type": "string"
+          },
+          "location": {
+            "description": "事故场所",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Location",
+            "type": "string"
+          },
+          "location_detail": {
+            "default": "",
+            "description": "具体位置",
+            "maxLength": 300,
+            "title": "Location Detail",
+            "type": "string"
+          },
+          "organization": {
+            "$ref": "#/components/schemas/PlanOrganization"
+          },
+          "participating_departments": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20,
+            "title": "Participating Departments",
+            "type": "array"
+          },
+          "scenario_requirements": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Scenario Requirements",
+            "type": "string"
+          },
+          "start_time": {
+            "default": "14:00",
+            "description": "情景起始时刻 HH:MM",
+            "pattern": "^([01]?\\d|2[0-3]):[0-5]\\d$",
+            "title": "Start Time",
+            "type": "string"
+          },
+          "substances": {
+            "items": {
+              "$ref": "#/components/schemas/GenerateSubstance"
+            },
+            "maxItems": 5,
+            "title": "Substances",
+            "type": "array"
+          },
+          "workshop_organization": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkshopOrganization"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "accident_type",
+          "location"
+        ],
+        "title": "EmergencyPlanGenerateRequest",
+        "type": "object"
+      },
+      "EmergencyPlanJobStatus": {
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "generate",
+                  "review",
+                  "import"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "message": {
+            "default": "",
+            "title": "Message",
+            "type": "string"
+          },
+          "progress": {
+            "default": "",
+            "title": "Progress",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "running",
+              "completed",
+              "failed",
+              "interrupted"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "state"
+        ],
+        "title": "EmergencyPlanJobStatus",
+        "type": "object"
+      },
+      "EmergencyPlanJobSubmitted": {
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "generate",
+              "review",
+              "import"
+            ],
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "kind"
+        ],
+        "title": "EmergencyPlanJobSubmitted",
+        "type": "object"
+      },
       "EmergencyPlanListResponse": {
         "properties": {
           "items": {
@@ -37066,6 +38841,12 @@
       },
       "EmergencyPlanResponse": {
         "properties": {
+          "content_status": {
+            "default": "empty",
+            "description": "AI 工作台正文状态: empty/draft/reviewed/finalized",
+            "title": "Content Status",
+            "type": "string"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -37099,6 +38880,19 @@
               }
             ],
             "title": "Issued At"
+          },
+          "last_reviewed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "最近一次 AI 审核时间",
+            "title": "Last Reviewed At"
           },
           "name": {
             "title": "Name",
@@ -37152,6 +38946,196 @@
           "updated_at"
         ],
         "title": "EmergencyPlanResponse",
+        "type": "object"
+      },
+      "EmergencyPlanReviewReport": {
+        "properties": {
+          "dimensions": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewDimension"
+            },
+            "title": "Dimensions",
+            "type": "array"
+          },
+          "fixed_count": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Fixed Count",
+            "type": "integer"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewIssue"
+            },
+            "title": "Issues",
+            "type": "array"
+          },
+          "needs_human_count": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Needs Human Count",
+            "type": "integer"
+          },
+          "reviewed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewed At"
+          },
+          "rounds": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Rounds",
+            "type": "integer"
+          },
+          "score": {
+            "default": 0,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Score",
+            "type": "integer"
+          },
+          "summary": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "title": "EmergencyPlanReviewReport",
+        "type": "object"
+      },
+      "EmergencyPlanRevisionDetail": {
+        "properties": {
+          "changed_sections": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Changed Sections",
+            "type": "array"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/RevisionChange"
+            },
+            "title": "Changes",
+            "type": "array"
+          },
+          "content": {
+            "$ref": "#/components/schemas/EmergencyPlanDocument"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "revision_no": {
+            "title": "Revision No",
+            "type": "integer"
+          },
+          "source": {
+            "enum": [
+              "ai_generate",
+              "ai_fix",
+              "ai_chat",
+              "user_edit",
+              "import",
+              "restore"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "revision_no",
+          "source",
+          "summary",
+          "created_at",
+          "content"
+        ],
+        "title": "EmergencyPlanRevisionDetail",
+        "type": "object"
+      },
+      "EmergencyPlanRevisionListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/EmergencyPlanRevisionSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "EmergencyPlanRevisionListResponse",
+        "type": "object"
+      },
+      "EmergencyPlanRevisionSummary": {
+        "properties": {
+          "changed_sections": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Changed Sections",
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "revision_no": {
+            "title": "Revision No",
+            "type": "integer"
+          },
+          "source": {
+            "enum": [
+              "ai_generate",
+              "ai_fix",
+              "ai_chat",
+              "user_edit",
+              "import",
+              "restore"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "revision_no",
+          "source",
+          "summary",
+          "created_at"
+        ],
+        "title": "EmergencyPlanRevisionSummary",
         "type": "object"
       },
       "EmergencyPlanUpdate": {
@@ -47663,6 +49647,35 @@
           "total"
         ],
         "title": "GeneralAuditLogPage",
+        "type": "object"
+      },
+      "GenerateSubstance": {
+        "properties": {
+          "chemical_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "危化品档案 ID",
+            "title": "Chemical Id"
+          },
+          "name": {
+            "description": "物质名称",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "GenerateSubstance",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -62525,6 +64538,81 @@
         "title": "OperationResult",
         "type": "object"
       },
+      "OptionBuilding": {
+        "properties": {
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "category"
+        ],
+        "title": "OptionBuilding",
+        "type": "object"
+      },
+      "OptionChemical": {
+        "properties": {
+          "cas_no": {
+            "title": "Cas No",
+            "type": "string"
+          },
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "has_msds": {
+            "title": "Has Msds",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "cas_no",
+          "category",
+          "has_msds"
+        ],
+        "title": "OptionChemical",
+        "type": "object"
+      },
+      "OptionValue": {
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value",
+          "label"
+        ],
+        "title": "OptionValue",
+        "type": "object"
+      },
       "OralExamExportRequest": {
         "properties": {
           "assessor": {
@@ -62788,6 +64876,43 @@
           }
         },
         "title": "OralExamQuestionItem",
+        "type": "object"
+      },
+      "OrgGroup": {
+        "properties": {
+          "duties": {
+            "default": "",
+            "description": "小组职责",
+            "maxLength": 3000,
+            "title": "Duties",
+            "type": "string"
+          },
+          "leader": {
+            "default": "",
+            "description": "组长",
+            "maxLength": 200,
+            "title": "Leader",
+            "type": "string"
+          },
+          "members": {
+            "default": "",
+            "description": "成员",
+            "maxLength": 1000,
+            "title": "Members",
+            "type": "string"
+          },
+          "name": {
+            "description": "小组名称",
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "OrgGroup",
         "type": "object"
       },
       "OverLimitChemicalItem": {
@@ -65648,6 +67773,125 @@
           "source_kind"
         ],
         "title": "PlanAttachmentSectionResponse",
+        "type": "object"
+      },
+      "PlanChapter": {
+        "properties": {
+          "content": {
+            "default": "",
+            "description": "章节正文",
+            "maxLength": 40000,
+            "title": "Content",
+            "type": "string"
+          },
+          "key": {
+            "description": "章节标识",
+            "pattern": "^[a-z0-9_]{1,40}$",
+            "title": "Key",
+            "type": "string"
+          },
+          "title": {
+            "description": "章节标题",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "title"
+        ],
+        "title": "PlanChapter",
+        "type": "object"
+      },
+      "PlanCover": {
+        "properties": {
+          "archive_date": {
+            "default": "",
+            "description": "建档时间",
+            "maxLength": 60,
+            "title": "Archive Date",
+            "type": "string"
+          },
+          "archive_department": {
+            "default": "",
+            "description": "建档部门",
+            "maxLength": 100,
+            "title": "Archive Department",
+            "type": "string"
+          },
+          "company": {
+            "default": "",
+            "description": "公司名称",
+            "maxLength": 120,
+            "title": "Company",
+            "type": "string"
+          },
+          "drill_date": {
+            "default": "",
+            "description": "演练/实施时间",
+            "maxLength": 60,
+            "title": "Drill Date",
+            "type": "string"
+          },
+          "level": {
+            "default": "",
+            "description": "级别，如 公司级",
+            "maxLength": 30,
+            "title": "Level",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "description": "预案标题",
+            "maxLength": 200,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "title": "PlanCover",
+        "type": "object"
+      },
+      "PlanOrganization": {
+        "properties": {
+          "commander": {
+            "default": "",
+            "description": "总指挥",
+            "maxLength": 100,
+            "title": "Commander",
+            "type": "string"
+          },
+          "commander_duties": {
+            "default": "",
+            "maxLength": 3000,
+            "title": "Commander Duties",
+            "type": "string"
+          },
+          "deputy_commanders": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 5,
+            "title": "Deputy Commanders",
+            "type": "array"
+          },
+          "deputy_duties": {
+            "default": "",
+            "maxLength": 3000,
+            "title": "Deputy Duties",
+            "type": "string"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/OrgGroup"
+            },
+            "maxItems": 20,
+            "title": "Groups",
+            "type": "array"
+          }
+        },
+        "title": "PlanOrganization",
         "type": "object"
       },
       "PlanTrackingRecordCreate": {
@@ -75218,6 +77462,156 @@
         "title": "ReturnRecallResponse",
         "type": "object"
       },
+      "ReviewDimension": {
+        "properties": {
+          "name": {
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "note": {
+            "default": "",
+            "maxLength": 500,
+            "title": "Note",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "ok",
+              "warn",
+              "error"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "status"
+        ],
+        "title": "ReviewDimension",
+        "type": "object"
+      },
+      "ReviewIssue": {
+        "properties": {
+          "after": {
+            "default": "",
+            "maxLength": 4000,
+            "title": "After",
+            "type": "string"
+          },
+          "before": {
+            "default": "",
+            "maxLength": 4000,
+            "title": "Before",
+            "type": "string"
+          },
+          "category": {
+            "enum": [
+              "contradiction",
+              "technical",
+              "compliance",
+              "completeness",
+              "typo",
+              "format"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "id": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "problem": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Problem",
+            "type": "string"
+          },
+          "quote": {
+            "default": "",
+            "maxLength": 1000,
+            "title": "Quote",
+            "type": "string"
+          },
+          "section": {
+            "default": "",
+            "maxLength": 60,
+            "title": "Section",
+            "type": "string"
+          },
+          "severity": {
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ],
+            "title": "Severity",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "rule",
+              "ai"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "fixed",
+              "needs_human",
+              "unresolved",
+              "info"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "source",
+          "severity",
+          "category",
+          "problem",
+          "status"
+        ],
+        "title": "ReviewIssue",
+        "type": "object"
+      },
+      "RevisionChange": {
+        "properties": {
+          "after": {
+            "default": "",
+            "maxLength": 4000,
+            "title": "After",
+            "type": "string"
+          },
+          "before": {
+            "default": "",
+            "maxLength": 4000,
+            "title": "Before",
+            "type": "string"
+          },
+          "reason": {
+            "default": "",
+            "maxLength": 1000,
+            "title": "Reason",
+            "type": "string"
+          },
+          "section": {
+            "default": "",
+            "maxLength": 60,
+            "title": "Section",
+            "type": "string"
+          }
+        },
+        "title": "RevisionChange",
+        "type": "object"
+      },
       "RevisionResponse": {
         "additionalProperties": false,
         "properties": {
@@ -75289,6 +77683,35 @@
         ],
         "title": "RevisionType",
         "type": "string"
+      },
+      "RiskAssessmentResponse": {
+        "description": "AI 风险研判结果。",
+        "properties": {
+          "message": {
+            "default": "",
+            "title": "Message",
+            "type": "string"
+          },
+          "report": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SafetyCommitmentReportItem"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "success": {
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "success"
+        ],
+        "title": "RiskAssessmentResponse",
+        "type": "object"
       },
       "RoleCreate": {
         "description": "创建角色请求",
@@ -76226,6 +78649,321 @@
           }
         },
         "title": "SafetyCheckUpdate",
+        "type": "object"
+      },
+      "SafetyCommitmentCardCreateRequest": {
+        "properties": {
+          "card_type": {
+            "enum": [
+              "commitment",
+              "major_hazard"
+            ],
+            "title": "Card Type",
+            "type": "string"
+          },
+          "content": {
+            "default": "",
+            "maxLength": 20000,
+            "title": "Content",
+            "type": "string"
+          },
+          "sort_order": {
+            "default": 0,
+            "title": "Sort Order",
+            "type": "integer"
+          },
+          "title": {
+            "default": "",
+            "maxLength": 100,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "card_type"
+        ],
+        "title": "SafetyCommitmentCardCreateRequest",
+        "type": "object"
+      },
+      "SafetyCommitmentCardItem": {
+        "description": "安全承诺页滚动信息卡。",
+        "properties": {
+          "card_type": {
+            "enum": [
+              "commitment",
+              "major_hazard"
+            ],
+            "title": "Card Type",
+            "type": "string"
+          },
+          "content": {
+            "default": "",
+            "title": "Content",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "sort_order": {
+            "default": 0,
+            "title": "Sort Order",
+            "type": "integer"
+          },
+          "title": {
+            "default": "",
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "id",
+          "card_type"
+        ],
+        "title": "SafetyCommitmentCardItem",
+        "type": "object"
+      },
+      "SafetyCommitmentCardListResponse": {
+        "properties": {
+          "cards": {
+            "items": {
+              "$ref": "#/components/schemas/SafetyCommitmentCardItem"
+            },
+            "title": "Cards",
+            "type": "array"
+          }
+        },
+        "title": "SafetyCommitmentCardListResponse",
+        "type": "object"
+      },
+      "SafetyCommitmentCardUpdateRequest": {
+        "properties": {
+          "content": {
+            "anyOf": [
+              {
+                "maxLength": 20000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content"
+          },
+          "sort_order": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sort Order"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "title": "SafetyCommitmentCardUpdateRequest",
+        "type": "object"
+      },
+      "SafetyCommitmentPublishRequest": {
+        "description": "发布当日承诺公告。",
+        "properties": {
+          "publisher_name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Publisher Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "publisher_name"
+        ],
+        "title": "SafetyCommitmentPublishRequest",
+        "type": "object"
+      },
+      "SafetyCommitmentReportItem": {
+        "description": "安全承诺日报（企业状态 + AI 研判 + 承诺公告正文）。",
+        "properties": {
+          "commitment_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commitment Text"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "enterprise_status": {
+            "additionalProperties": true,
+            "title": "Enterprise Status",
+            "type": "object"
+          },
+          "fill_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fill Source"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "publisher_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Publisher Name"
+          },
+          "report_date": {
+            "format": "date",
+            "title": "Report Date",
+            "type": "string"
+          },
+          "risk_assessment": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Risk Assessment"
+          },
+          "status": {
+            "default": "draft",
+            "title": "Status",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "id",
+          "report_date"
+        ],
+        "title": "SafetyCommitmentReportItem",
+        "type": "object"
+      },
+      "SafetyCommitmentReportResponse": {
+        "properties": {
+          "created_today": {
+            "default": false,
+            "title": "Created Today",
+            "type": "boolean"
+          },
+          "report": {
+            "$ref": "#/components/schemas/SafetyCommitmentReportItem"
+          }
+        },
+        "required": [
+          "report"
+        ],
+        "title": "SafetyCommitmentReportResponse",
+        "type": "object"
+      },
+      "SafetyCommitmentUpdateRequest": {
+        "description": "编辑企业状态 / 承诺公告正文。",
+        "properties": {
+          "commitment_text": {
+            "anyOf": [
+              {
+                "maxLength": 20000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commitment Text"
+          },
+          "enterprise_status": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enterprise Status"
+          }
+        },
+        "title": "SafetyCommitmentUpdateRequest",
         "type": "object"
       },
       "SafetyDutyAssessmentCreate": {
@@ -77474,6 +80212,30 @@
               "type": "string"
             },
             "title": "Cert Expiry Notify User Ids",
+            "type": "array"
+          },
+          "commitment_chat_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Commitment Chat Ids",
+            "type": "array"
+          },
+          "commitment_notify_enabled": {
+            "default": false,
+            "title": "Commitment Notify Enabled",
+            "type": "boolean"
+          },
+          "commitment_push_time": {
+            "default": "08:30",
+            "title": "Commitment Push Time",
+            "type": "string"
+          },
+          "commitment_user_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Commitment User Ids",
             "type": "array"
           },
           "fire_expiry_notify_chat_ids": {
@@ -85082,6 +87844,120 @@
           "issues"
         ],
         "title": "TemplateDraftResponse",
+        "type": "object"
+      },
+      "TobaccoGiftChartItem": {
+        "description": "柱状图单根柱子：维度名称 + 数值（数量或金额）。",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "name",
+          "value"
+        ],
+        "title": "TobaccoGiftChartItem",
+        "type": "object"
+      },
+      "TobaccoGiftDashboardStats": {
+        "description": "烟酒礼品仪表台统计（数据来自本地飞书镜像，未绑定或未同步时为 0/空）。\n\n口径与行政侧飞书仪表盘一致（2026-11-09 用真实数据核对）：\n物品品类/总价/总数取自物品清单全表；已领用物品总数只计状态为\n「已领用」的领用单；领取分析/员工统计计入全部未作废领用单。",
+        "properties": {
+          "inventory_by_item": {
+            "description": "物品库存情况：按物品的物品总数",
+            "items": {
+              "$ref": "#/components/schemas/TobaccoGiftChartItem"
+            },
+            "title": "Inventory By Item",
+            "type": "array"
+          },
+          "inventory_synced_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "物品清单最近一次完整同步时间",
+            "title": "Inventory Synced At"
+          },
+          "item_categories": {
+            "description": "物品品类：物品清单记录数",
+            "title": "Item Categories",
+            "type": "integer"
+          },
+          "item_total_count": {
+            "description": "物品总数：Σ物品总数",
+            "title": "Item Total Count",
+            "type": "number"
+          },
+          "item_total_value": {
+            "description": "物品总价：Σ总金额（元）",
+            "title": "Item Total Value",
+            "type": "number"
+          },
+          "requisition_by_employee": {
+            "description": "员工领用统计：未作废领用单按申请人的领用数量",
+            "items": {
+              "$ref": "#/components/schemas/TobaccoGiftChartItem"
+            },
+            "title": "Requisition By Employee",
+            "type": "array"
+          },
+          "requisition_by_item": {
+            "description": "物品领取分析：未作废领用单按物品的领用数量",
+            "items": {
+              "$ref": "#/components/schemas/TobaccoGiftChartItem"
+            },
+            "title": "Requisition By Item",
+            "type": "array"
+          },
+          "requisition_synced_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "领用记录最近一次完整同步时间",
+            "title": "Requisition Synced At"
+          },
+          "requisitioned_total": {
+            "description": "已领用物品总数：已领用单的领用数量合计",
+            "title": "Requisitioned Total",
+            "type": "number"
+          },
+          "value_by_item": {
+            "description": "领用物品总价分布：按物品的总金额（元）",
+            "items": {
+              "$ref": "#/components/schemas/TobaccoGiftChartItem"
+            },
+            "title": "Value By Item",
+            "type": "array"
+          }
+        },
+        "required": [
+          "item_categories",
+          "item_total_value",
+          "item_total_count",
+          "requisitioned_total",
+          "inventory_by_item",
+          "requisition_by_item",
+          "value_by_item",
+          "requisition_by_employee"
+        ],
+        "title": "TobaccoGiftDashboardStats",
         "type": "object"
       },
       "TokenResponse": {
@@ -93394,6 +96270,31 @@
             "title": "Cert Expiry Notify User Ids",
             "type": "array"
           },
+          "commitment_chat_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Commitment Chat Ids",
+            "type": "array"
+          },
+          "commitment_notify_enabled": {
+            "default": false,
+            "title": "Commitment Notify Enabled",
+            "type": "boolean"
+          },
+          "commitment_push_time": {
+            "default": "08:30",
+            "maxLength": 5,
+            "title": "Commitment Push Time",
+            "type": "string"
+          },
+          "commitment_user_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Commitment User Ids",
+            "type": "array"
+          },
           "fire_expiry_notify_chat_ids": {
             "items": {
               "type": "string"
@@ -101693,6 +104594,41 @@
         "title": "WorkshopCreateRequest",
         "type": "object"
       },
+      "WorkshopOrganization": {
+        "properties": {
+          "commander": {
+            "default": "",
+            "description": "总指挥",
+            "maxLength": 100,
+            "title": "Commander",
+            "type": "string"
+          },
+          "department": {
+            "default": "",
+            "description": "车间/部门",
+            "maxLength": 100,
+            "title": "Department",
+            "type": "string"
+          },
+          "deputy_commander": {
+            "default": "",
+            "description": "副指挥",
+            "maxLength": 100,
+            "title": "Deputy Commander",
+            "type": "string"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/OrgGroup"
+            },
+            "maxItems": 20,
+            "title": "Groups",
+            "type": "array"
+          }
+        },
+        "title": "WorkshopOrganization",
+        "type": "object"
+      },
       "WorkshopUpdateRequest": {
         "description": "更新车间请求（改名/启停/维修群；代码不可改）",
         "properties": {
@@ -104518,6 +107454,885 @@
           }
         },
         "summary": "行政管理模块信息",
+        "tags": [
+          "行政管理"
+        ]
+      }
+    },
+    "/api/v1/administration/feishu-config": {
+      "get": {
+        "operationId": "get_feishu_config_api_v1_administration_feishu_config_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_AdministrationFeishuConfigResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "获取行政飞书配置",
+        "tags": [
+          "行政管理"
+        ]
+      },
+      "put": {
+        "operationId": "save_feishu_config_api_v1_administration_feishu_config_put",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdministrationFeishuConfigInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_AdministrationFeishuConfigResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "保存行政飞书配置",
+        "tags": [
+          "行政管理"
+        ]
+      }
+    },
+    "/api/v1/administration/feishu-config/test": {
+      "post": {
+        "operationId": "test_feishu_config_api_v1_administration_feishu_config_test_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/AdministrationFeishuConfigInput"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_AdministrationFeishuConnectivityResult_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "测试行政飞书连通性",
+        "tags": [
+          "行政管理"
+        ]
+      }
+    },
+    "/api/v1/administration/feishu-read/page-bindings/{page_key}": {
+      "put": {
+        "operationId": "replace_read_bindings_api_v1_administration_feishu_read_page_bindings__page_key__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "page_key",
+            "required": true,
+            "schema": {
+              "title": "Page Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdministrationFeishuBindingReplace"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "替换页面数据表绑定",
+        "tags": [
+          "行政管理"
+        ]
+      }
+    },
+    "/api/v1/administration/feishu-read/resources": {
+      "get": {
+        "operationId": "list_read_resources_api_v1_administration_feishu_read_resources_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_AdministrationFeishuResource__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "查询已发现的数据表",
+        "tags": [
+          "行政管理"
+        ]
+      }
+    },
+    "/api/v1/administration/feishu-read/resources/{resource_id}/sync": {
+      "post": {
+        "operationId": "sync_read_resource_api_v1_administration_feishu_read_resources__resource_id__sync_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "resource_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Resource Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_AdministrationFeishuSyncResult_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "同步数据表镜像",
+        "tags": [
+          "行政管理"
+        ]
+      }
+    },
+    "/api/v1/administration/feishu-read/roots": {
+      "get": {
+        "operationId": "list_read_roots_api_v1_administration_feishu_read_roots_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_AdministrationFeishuSourceRoot__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "查询行政飞书数据入口",
+        "tags": [
+          "行政管理"
+        ]
+      },
+      "post": {
+        "operationId": "create_read_root_api_v1_administration_feishu_read_roots_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AdministrationFeishuSourceRootInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_AdministrationFeishuSourceRoot_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "新增行政飞书数据入口",
+        "tags": [
+          "行政管理"
+        ]
+      }
+    },
+    "/api/v1/administration/feishu-read/roots/{root_id}": {
+      "delete": {
+        "operationId": "delete_read_root_api_v1_administration_feishu_read_roots__root_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "root_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Root Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "停用行政飞书数据入口",
+        "tags": [
+          "行政管理"
+        ]
+      }
+    },
+    "/api/v1/administration/feishu-read/roots/{root_id}/discover": {
+      "post": {
+        "operationId": "discover_read_root_api_v1_administration_feishu_read_roots__root_id__discover_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "root_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Root Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_AdministrationFeishuResource__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "发现行政飞书数据入口下的数据表",
+        "tags": [
+          "行政管理"
+        ]
+      }
+    },
+    "/api/v1/administration/page-data/{page_key}": {
+      "get": {
+        "operationId": "get_read_page_api_v1_administration_page_data__page_key__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "page_key",
+            "required": true,
+            "schema": {
+              "title": "Page Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "页面绑定数据",
+        "tags": [
+          "行政管理"
+        ]
+      }
+    },
+    "/api/v1/administration/page-data/{page_key}/{binding_id}/record/{record_id}/attachments/{field_id}/{file_token}": {
+      "get": {
+        "operationId": "download_read_attachment_api_v1_administration_page_data__page_key___binding_id__record__record_id__attachments__field_id___file_token__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "page_key",
+            "required": true,
+            "schema": {
+              "title": "Page Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "binding_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Binding Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "record_id",
+            "required": true,
+            "schema": {
+              "title": "Record Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "field_id",
+            "required": true,
+            "schema": {
+              "title": "Field Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "file_token",
+            "required": true,
+            "schema": {
+              "title": "File Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "下载记录附件",
+        "tags": [
+          "行政管理"
+        ]
+      }
+    },
+    "/api/v1/administration/page-data/{page_key}/{binding_id}/records": {
+      "get": {
+        "operationId": "get_read_page_records_api_v1_administration_page_data__page_key___binding_id__records_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "page_key",
+            "required": true,
+            "schema": {
+              "title": "Page Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "binding_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Binding Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "keyword",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Keyword"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "页面数据记录",
+        "tags": [
+          "行政管理"
+        ]
+      }
+    },
+    "/api/v1/administration/tobacco-gift/dashboard-stats": {
+      "get": {
+        "operationId": "get_tobacco_gift_dashboard_stats_api_v1_administration_tobacco_gift_dashboard_stats_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_TobaccoGiftDashboardStats_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "烟酒礼品仪表台统计",
         "tags": [
           "行政管理"
         ]
@@ -226230,6 +230045,55 @@
         ]
       }
     },
+    "/api/v1/safety/emergency-plans/ai/options": {
+      "get": {
+        "operationId": "get_emergency_plan_ai_options_api_v1_safety_emergency_plans_ai_options_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_EmergencyPlanAiOptions_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "AI 工作台向导选项（危化品/厂区建筑/事故类型/组织机构预填）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
     "/api/v1/safety/emergency-plans/{plan_id}": {
       "delete": {
         "operationId": "delete_emergency_plan_api_v1_safety_emergency_plans__plan_id__delete",
@@ -226413,6 +230277,630 @@
         ]
       }
     },
+    "/api/v1/safety/emergency-plans/{plan_id}/ai/chat": {
+      "post": {
+        "operationId": "chat_emergency_plan_stream_api_v1_safety_emergency_plans__plan_id__ai_chat_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Plan Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmergencyPlanChatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "应急预案 AI 对话（SSE；返回回复，修改补丁直接应用并生成修订）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/emergency-plans/{plan_id}/ai/generate": {
+      "post": {
+        "operationId": "submit_emergency_plan_generate_api_v1_safety_emergency_plans__plan_id__ai_generate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Plan Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmergencyPlanGenerateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_EmergencyPlanJobSubmitted_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "提交应急预案 AI 生成任务（后台执行）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/emergency-plans/{plan_id}/ai/import": {
+      "post": {
+        "operationId": "import_emergency_plan_docx_api_v1_safety_emergency_plans__plan_id__ai_import_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Plan Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_emergency_plan_docx_api_v1_safety_emergency_plans__plan_id__ai_import_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_EmergencyPlanContentResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "导入预案 docx（模板结构确定性解析，非模板自动走 AI 整理任务）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/emergency-plans/{plan_id}/ai/job": {
+      "get": {
+        "operationId": "get_emergency_plan_job_status_api_v1_safety_emergency_plans__plan_id__ai_job_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Plan Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_EmergencyPlanJobStatus_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "查询应急预案 AI 任务状态",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/emergency-plans/{plan_id}/ai/messages": {
+      "get": {
+        "operationId": "list_emergency_plan_chat_messages_api_v1_safety_emergency_plans__plan_id__ai_messages_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Plan Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_EmergencyPlanChatMessageListResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "应急预案 AI 对话历史",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/emergency-plans/{plan_id}/ai/review": {
+      "post": {
+        "operationId": "submit_emergency_plan_review_api_v1_safety_emergency_plans__plan_id__ai_review_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Plan Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_EmergencyPlanJobSubmitted_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "提交应急预案 AI 审核修正任务（后台执行）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/emergency-plans/{plan_id}/content": {
+      "get": {
+        "operationId": "get_emergency_plan_content_api_v1_safety_emergency_plans__plan_id__content_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Plan Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_EmergencyPlanContentResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "读取应急预案结构化正文",
+        "tags": [
+          "安全管理"
+        ]
+      },
+      "put": {
+        "operationId": "put_emergency_plan_content_api_v1_safety_emergency_plans__plan_id__content_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Plan Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmergencyPlanContentUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_EmergencyPlanContentResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "保存应急预案结构化正文（乐观锁，生成修订快照）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/emergency-plans/{plan_id}/content/checks": {
+      "get": {
+        "operationId": "check_emergency_plan_content_api_v1_safety_emergency_plans__plan_id__content_checks_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Plan Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_EmergencyPlanChecksResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "应急预案确定性校验（不调 AI）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/emergency-plans/{plan_id}/export-docx": {
+      "get": {
+        "operationId": "export_emergency_plan_docx_api_v1_safety_emergency_plans__plan_id__export_docx_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Plan Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "导出应急预案 Word（公司模板版式）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
     "/api/v1/safety/emergency-plans/{plan_id}/file": {
       "get": {
         "operationId": "download_emergency_plan_file_api_v1_safety_emergency_plans__plan_id__file_get",
@@ -226532,6 +231020,283 @@
           }
         },
         "summary": "上传预案文件",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/emergency-plans/{plan_id}/finalize": {
+      "post": {
+        "operationId": "finalize_emergency_plan_api_v1_safety_emergency_plans__plan_id__finalize_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Plan Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_EmergencyPlanContentResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "应急预案定稿（人工确认后归档状态）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/emergency-plans/{plan_id}/revisions": {
+      "get": {
+        "operationId": "list_emergency_plan_revisions_api_v1_safety_emergency_plans__plan_id__revisions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Plan Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_EmergencyPlanRevisionListResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "应急预案修订记录列表",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/emergency-plans/{plan_id}/revisions/{revision_no}": {
+      "get": {
+        "operationId": "get_emergency_plan_revision_api_v1_safety_emergency_plans__plan_id__revisions__revision_no__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Plan Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "revision_no",
+            "required": true,
+            "schema": {
+              "title": "Revision No",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_EmergencyPlanRevisionDetail_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "应急预案修订详情（含完整正文与修正日志）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/emergency-plans/{plan_id}/revisions/{revision_no}/restore": {
+      "post": {
+        "operationId": "restore_emergency_plan_revision_api_v1_safety_emergency_plans__plan_id__revisions__revision_no__restore_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "plan_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Plan Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "revision_no",
+            "required": true,
+            "schema": {
+              "title": "Revision No",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_EmergencyPlanContentResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "恢复应急预案到指定修订（生成新修订，可再次撤销）",
         "tags": [
           "安全管理"
         ]
@@ -227124,6 +231889,56 @@
           }
         },
         "summary": "测试安全模块飞书应用连接",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/feishu-settings/commitment-notify/test": {
+      "post": {
+        "description": "向已配置的第一个填报人员发送一张样例填报卡，验证推送通道。",
+        "operationId": "test_commitment_notify_api_v1_safety_feishu_settings_commitment_notify_test_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_dict_str__Any__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "测试安全承诺填报推送发送",
         "tags": [
           "安全管理"
         ]
@@ -238001,6 +242816,631 @@
         ]
       }
     },
+    "/api/v1/safety/safety-commitment-cards": {
+      "get": {
+        "operationId": "list_commitment_cards_api_v1_safety_safety_commitment_cards_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "card_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Card Type"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_SafetyCommitmentCardListResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "滚动信息卡列表（安全承诺信息 / 重大危险源信息）",
+        "tags": [
+          "安全管理"
+        ]
+      },
+      "post": {
+        "operationId": "create_commitment_card_api_v1_safety_safety_commitment_cards_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SafetyCommitmentCardCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_SafetyCommitmentCardItem_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "新增滚动信息卡",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/safety-commitment-cards/{card_id}": {
+      "delete": {
+        "operationId": "delete_commitment_card_api_v1_safety_safety_commitment_cards__card_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "card_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Card Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_NoneType_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "删除滚动信息卡（软删除）",
+        "tags": [
+          "安全管理"
+        ]
+      },
+      "put": {
+        "operationId": "update_commitment_card_api_v1_safety_safety_commitment_cards__card_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "card_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Card Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SafetyCommitmentCardUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_SafetyCommitmentCardItem_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "编辑滚动信息卡",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/safety-commitments/by-date/{report_date}": {
+      "get": {
+        "operationId": "get_commitment_by_date_api_v1_safety_safety_commitments_by_date__report_date__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "report_date",
+            "required": true,
+            "schema": {
+              "format": "date",
+              "title": "Report Date",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_SafetyCommitmentReportItem_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "按日期查看安全承诺日报（只读，不初始化）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/safety-commitments/list": {
+      "get": {
+        "operationId": "list_commitments_api_v1_safety_safety_commitments_list_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_SafetyCommitmentReportItem__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "安全承诺日报历史列表",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/safety-commitments/today": {
+      "get": {
+        "operationId": "get_today_commitment_api_v1_safety_safety_commitments_today_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_SafetyCommitmentReportResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "取当日安全承诺日报（不存在则惰性初始化并自动 AI 研判）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/safety-commitments/{report_id}": {
+      "put": {
+        "operationId": "update_commitment_api_v1_safety_safety_commitments__report_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "report_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Report Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SafetyCommitmentUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_SafetyCommitmentReportItem_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "编辑企业状态 / 企业安全承诺正文",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/safety-commitments/{report_id}/publish": {
+      "post": {
+        "operationId": "publish_commitment_api_v1_safety_safety_commitments__report_id__publish_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "report_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Report Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SafetyCommitmentPublishRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_SafetyCommitmentReportItem_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "发布当日承诺公告（主要负责人名义）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/safety-commitments/{report_id}/risk-assessment": {
+      "post": {
+        "operationId": "regenerate_risk_assessment_api_v1_safety_safety_commitments__report_id__risk_assessment_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "report_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Report Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_RiskAssessmentResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "（重新）生成当日 AI 风险研判",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
     "/api/v1/safety/safety-duty-assessments": {
       "get": {
         "operationId": "list_safety_duty_assessments_api_v1_safety_safety_duty_assessments_get",
@@ -245527,6 +250967,57 @@
         ]
       }
     },
+    "/api/v1/safety/work-permit-file/{token}": {
+      "get": {
+        "operationId": "download_work_permit_pdf_api_v1_safety_work_permit_file__token__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "下载票据 PDF（token 保护，审批结束后可用）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
     "/api/v1/safety/work-permit-settings": {
       "get": {
         "operationId": "get_work_permit_settings_api_v1_safety_work_permit_settings_get",
@@ -245628,6 +251119,111 @@
           }
         },
         "summary": "保存作业票运行参数（人员证件校验开关）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/work-permit-sign": {
+      "post": {
+        "operationId": "submit_work_permit_signature_api_v1_safety_work_permit_sign_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "提交手写签名 PNG（token 保护）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/work-permit-sign/{token}": {
+      "get": {
+        "operationId": "work_permit_sign_page_api_v1_safety_work_permit_sign__token__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "免登手写签名页（token 保护）",
         "tags": [
           "安全管理"
         ]
@@ -246553,6 +252149,63 @@
           }
         },
         "summary": "作废作业票",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/work-permits/{permit_id}/download": {
+      "get": {
+        "operationId": "download_work_permit_pdf_api_v1_safety_work_permits__permit_id__download_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "permit_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Permit Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "下载票据 PDF（含签名图，审批结束后可用）",
         "tags": [
           "安全管理"
         ]

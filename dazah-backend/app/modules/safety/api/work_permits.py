@@ -809,3 +809,43 @@ async def upsert_approver_config(
         config.updated_by = current_user.id
     await db.commit()
     return await list_approver_configs(db=db, current_user=current_user)
+
+
+@work_permits_router.get(
+    "/work-permits/{permit_id}/download",
+    response_model=None,
+    summary="下载票据 PDF（含签名图，审批结束后可用）",
+)
+async def download_work_permit_pdf(
+    permit_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser | None = Depends(get_current_user),
+) -> Response:
+    from urllib.parse import quote
+
+    if current_user is None:
+        raise AppException(status_code=401, message="请先登录")
+    permit = await permit_service.get_permit(db, permit_id)
+    if permit.status != "completed":
+        raise AppException(
+            status_code=409, message="作业票审批结束后可下载"
+        )
+    from app.modules.safety.service.work_permit_pdf import (
+        render_permit_pdf,
+    )
+
+    pdf_bytes = await render_permit_pdf(db, permit_id)
+    if pdf_bytes is None:
+        raise AppException(
+            status_code=503, message="PDF 渲染服务暂不可用"
+        )
+    filename = quote(permit.permit_no + ".pdf")
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": (
+                f"attachment; filename*=UTF-8''{filename}"
+            )
+        },
+    )

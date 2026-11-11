@@ -190,6 +190,8 @@ export const moduleMenus: ModuleMenu[] = [
     children: [
       // ── 安全总览（首页驾驶舱） ──
       { key: "overview", label: "安全总览", path: "/safety" },
+      // ── 安全承诺（应急〔2018〕74号 承诺公告制度） ──
+      { key: "safety-commitment", label: "安全承诺", path: "/safety/safety-commitment" },
       // ── 作业安全 ──
       {
         key: "ops-safety",
@@ -595,9 +597,38 @@ export const moduleMenus: ModuleMenu[] = [
     icon: "building",
     path: "/admin",
     children: [
+      {
+        key: "tobacco-gift",
+        label: "烟酒礼品管理",
+        path: "/admin/tobacco-gift",
+        dashboard: true,
+        feishuPageKey: "",
+        children: [
+          { key: "dashboard", label: "仪表台", path: "/admin/tobacco-gift", feishuPageKey: "" },
+          {
+            key: "items",
+            label: "物品清单",
+            path: "/admin/tobacco-gift/items",
+            feishuPageKey: "admin:tobacco-gift:items",
+          },
+          {
+            key: "records",
+            label: "领用记录",
+            path: "/admin/tobacco-gift/records",
+            feishuPageKey: "admin:tobacco-gift:records",
+          },
+        ],
+      },
       { key: "notice", label: "公告通知（开发中）", path: "/admin/notice", disabled: true },
       { key: "meeting", label: "会议管理（开发中）", path: "/admin/meeting", disabled: true },
       { key: "approval", label: "文件审批（开发中）", path: "/admin/approval", disabled: true },
+      {
+        key: "feishu-settings",
+        label: "飞书设置",
+        path: "/admin/settings/feishu",
+        placement: "bottom",
+        feishuPageKey: "",
+      },
     ],
   },
   {

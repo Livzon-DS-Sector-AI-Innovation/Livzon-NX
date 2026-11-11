@@ -209,6 +209,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     scheduler_registry.register_task(user_operation_retention_task)
 
+    from app.modules.administration.scheduled import (
+        AdministrationFeishuReadSyncGenerator,
+    )
     from app.modules.equipment.scheduled import (
         EquipmentHealthSnapshotGenerator,
         EquipmentMonthlyHealthReportGenerator,
@@ -275,6 +278,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     scheduler_registry.register_generator(WarehouseFeishuDailySyncGenerator())
     scheduler_registry.register_generator(WarehouseFeishuAnalysisGenerator())
     scheduler_registry.register_generator(QualityFeishuReadDailySyncGenerator())
+    scheduler_registry.register_generator(AdministrationFeishuReadSyncGenerator())
     scheduler_registry.register_generator(CertificateReminderGenerator())
     scheduler_registry.register_generator(ChangeActionPlanReminderGenerator())
     scheduler_registry.register_generator(TrendAlertEscalationGenerator())
@@ -352,6 +356,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         )
     except Exception:
         logger.exception("注册安全模块证件到期提醒调度任务失败")
+
+    # ── 安全模块安全承诺每日填报推送（每 15 分钟检查推送时间） ──
+    try:
+        from app.modules.safety.scheduled import SafetyCommitmentPushGenerator
+
+        scheduler_registry.register_generator(SafetyCommitmentPushGenerator())
+    except Exception:
+        logger.exception("注册安全模块安全承诺推送调度任务失败")
 
     # ── 法规跟踪三阶段流水线（00:10 抓取 / 02:00 AI 分析 / 10:00 推送） ──
     try:

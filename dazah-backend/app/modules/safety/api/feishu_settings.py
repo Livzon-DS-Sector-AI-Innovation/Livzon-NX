@@ -91,3 +91,38 @@ async def test_fire_expiry_notify(
 
     result = await fire_expiry_reminder.send_test_notification(db)
     return ApiResponseEnvelope(data=result)
+
+
+@feishu_settings_router.post(
+    "/feishu-settings/commitment-notify/test",
+    response_model=ApiResponseEnvelope[dict[str, Any]],
+    summary="测试安全承诺填报推送发送",
+)
+async def test_commitment_notify(
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser | None = Depends(get_current_user),
+) -> ApiResponseEnvelope[dict[str, Any]]:
+    """向已配置的第一个填报人员发送一张样例填报卡，验证推送通道。"""
+    from app.core.exceptions import AppException
+    from app.modules.safety.service.commitment_notify import (
+        get_commitment_settings,
+        send_test_fill_card,
+    )
+
+    settings = await get_commitment_settings(db)
+    if settings is None or not settings.commitment_notify_enabled:
+        raise AppException(message="请先启用安全承诺填报推送并保存配置")
+    user_ids = [uid for uid in (settings.commitment_user_ids or []) if uid]
+    if not user_ids:
+        raise AppException(message="请先保存安全承诺填报人员再测试发送")
+    ok = await send_test_fill_card(db, str(user_ids[0]))
+    return ApiResponseEnvelope(
+        data={
+            "success": ok,
+            "message": (
+                "测试卡片已发送给第一个填报人员，请到飞书查收"
+                if ok
+                else "测试卡片发送失败，请检查飞书配置与网络"
+            ),
+        }
+    )

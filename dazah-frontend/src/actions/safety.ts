@@ -5,6 +5,12 @@ import { revalidatePath } from 'next/cache'
 // 注意：以下 revalidatePath 调用指向的页面路径部分仍在开发中，待对应页面创建后将自动生效
 import { getAuthHeaders, getServerToken } from '@/lib/auth'
 import { SAFETY_FEISHU_SETTINGS_PAGE_KEY } from '@/lib/safety-page-tables'
+import {
+  SAFETY_COMMITMENT_PAGE_KEY,
+  type CommitmentCardType,
+  type SafetyCommitmentCard,
+  type SafetyCommitmentReport,
+} from '@/lib/safety-commitment'
 import type {
   Accident,
   AccidentFormData,
@@ -3689,10 +3695,11 @@ export async function uploadEmergencyPlanFile(id: string, file: File) {
   return data
 }
 
-export async function downloadEmergencyPlanFile(
-  id: string,
-  fileName?: string
-): Promise<void> {
+/** Server Action 在服务端执行，无法操作 DOM，因此返回 base64 与文件名，
+ * 由客户端组件组装 Blob 下载（同 fetchChemicalMsdsBytes 模式）。 */
+export async function fetchEmergencyPlanFileBytes(
+  id: string
+): Promise<{ base64: string; fileName: string }> {
   const headers = await getAuthHeaders()
   const response = await fetch(
     `${API_BASE}/safety/emergency-plans/${id}/file`,
@@ -3702,15 +3709,18 @@ export async function downloadEmergencyPlanFile(
     const text = await response.text()
     throw new Error(`预案下载失败 (${response.status}): ${text}`)
   }
-  const blob = await response.blob()
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = fileName || '应急预案'
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  URL.revokeObjectURL(url)
+  const disposition = response.headers.get('content-disposition') ?? ''
+  const match = /filename\*=utf-8''([^;]+)/i.exec(disposition)
+  const fileName = match
+    ? decodeURIComponent(match[1])
+    : decodeURIComponent(
+        /filename="?([^";]+)"?/i.exec(disposition)?.[1] ?? '应急预案'
+      )
+  const buffer = await response.arrayBuffer()
+  return {
+    base64: Buffer.from(buffer).toString('base64'),
+    fileName,
+  }
 }
 
 export async function getEmergencyDrills(
@@ -4322,4 +4332,372 @@ export async function importCertificates(
       message: '网络请求失败，无法连接到后端服务',
     } as ApiResponse<CertificateImportResultData>
   }
+}
+
+// ============ 安全承诺（应急〔2018〕74号 承诺公告制度） ============
+
+function commitmentHeaders(pageKey?: string): Record<string, string> {
+  return { 'X-Dazah-Page-Key': pageKey ?? SAFETY_COMMITMENT_PAGE_KEY }
+}
+
+function commitmentPage() {
+  revalidatePath('/safety/safety-commitment')
+}
+
+export async function getCommitmentToday(pageKey?: string) {
+  const res = await fetchApi<{
+    report: SafetyCommitmentReport
+    created_today: boolean
+  }>('/safety/safety-commitments/today', {
+    headers: commitmentHeaders(pageKey),
+  })
+  return res
+}
+
+export async function getCommitmentByDate(
+  date: string,
+  pageKey?: string
+) {
+  return fetchApi<{ report: SafetyCommitmentReport }>(
+    `/safety/safety-commitments/by-date/${date}`,
+    { headers: commitmentHeaders(pageKey) }
+  )
+}
+
+export async function listCommitments(
+  limit = 30,
+  pageKey?: string
+) {
+  return fetchApi<{ items: SafetyCommitmentReport[] }>(
+    `/safety/safety-commitments/list?limit=${limit}`,
+    { headers: commitmentHeaders(pageKey) }
+  )
+}
+
+export async function updateCommitment(
+  reportId: string,
+  data: {
+    enterprise_status?: Record<string, unknown>
+    commitment_text?: string
+  },
+  pageKey?: string
+) {
+  const res = await fetchApi<{ report: SafetyCommitmentReport }>(
+    `/safety/safety-commitments/${reportId}`,
+    {
+      method: 'PUT',
+      headers: {
+        ...commitmentHeaders(pageKey),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    }
+  )
+  if (res.code === 200) commitmentPage()
+  return res
+}
+
+export async function publishCommitment(
+  reportId: string,
+  publisherName: string,
+  pageKey?: string
+) {
+  const res = await fetchApi<{ report: SafetyCommitmentReport }>(
+    `/safety/safety-commitments/${reportId}/publish`,
+    {
+      method: 'POST',
+      headers: {
+        ...commitmentHeaders(pageKey),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ publisher_name: publisherName }),
+    }
+  )
+  if (res.code === 200) commitmentPage()
+  return res
+}
+
+export async function regenerateCommitmentRiskAssessment(
+  reportId: string,
+  pageKey?: string
+) {
+  const res = await fetchApi<{
+    success: boolean
+    message: string
+    report?: SafetyCommitmentReport
+  }>(`/safety/safety-commitments/${reportId}/risk-assessment`, {
+    method: 'POST',
+    headers: commitmentHeaders(pageKey),
+  })
+  if (res.code === 200) commitmentPage()
+  return res
+}
+
+export async function getCommitmentCards(
+  cardType?: CommitmentCardType,
+  pageKey?: string
+) {
+  const query = cardType ? `?card_type=${cardType}` : ''
+  return fetchApi<{ cards: SafetyCommitmentCard[] }>(
+    `/safety/safety-commitment-cards${query}`,
+    { headers: commitmentHeaders(pageKey) }
+  )
+}
+
+export async function createCommitmentCard(
+  data: {
+    card_type: CommitmentCardType
+    title: string
+    content: string
+    sort_order?: number
+  },
+  pageKey?: string
+) {
+  const res = await fetchApi<SafetyCommitmentCard>(
+    '/safety/safety-commitment-cards',
+    {
+      method: 'POST',
+      headers: {
+        ...commitmentHeaders(pageKey),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    }
+  )
+  if (res.code === 200) commitmentPage()
+  return res
+}
+
+export async function updateCommitmentCard(
+  cardId: string,
+  data: { title?: string; content?: string; sort_order?: number },
+  pageKey?: string
+) {
+  const res = await fetchApi<SafetyCommitmentCard>(
+    `/safety/safety-commitment-cards/${cardId}`,
+    {
+      method: 'PUT',
+      headers: {
+        ...commitmentHeaders(pageKey),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(data),
+    }
+  )
+  if (res.code === 200) commitmentPage()
+  return res
+}
+
+export async function deleteCommitmentCard(
+  cardId: string,
+  pageKey?: string
+) {
+  const res = await fetchApi<null>(
+    `/safety/safety-commitment-cards/${cardId}`,
+    { method: 'DELETE', headers: commitmentHeaders(pageKey) }
+  )
+  if (res.code === 200) commitmentPage()
+  return res
+}
+
+export async function testCommitmentNotify(pageKey?: string) {
+  const res = await fetchApi<{ success: boolean; message: string }>(
+    '/safety/feishu-settings/commitment-notify/test',
+    {
+      method: 'POST',
+      headers: {
+        'X-Dazah-Page-Key': pageKey ?? SAFETY_FEISHU_SETTINGS_PAGE_KEY,
+      },
+    }
+  )
+  return res
+}
+
+// ==================== 应急预案 AI 工作台 ====================
+
+export type EmergencyPlanDocumentData =
+  components['schemas']['EmergencyPlanDocument']
+export type EmergencyPlanGenerateParams =
+  components['schemas']['EmergencyPlanGenerateRequest']
+export type EmergencyPlanAiOptionsData =
+  components['schemas']['EmergencyPlanAiOptions']
+export type EmergencyPlanContentData =
+  components['schemas']['EmergencyPlanContentResponse']
+export type EmergencyPlanReviewData =
+  components['schemas']['EmergencyPlanReviewReport']
+export type EmergencyPlanRevisionSummaryData =
+  components['schemas']['EmergencyPlanRevisionSummary']
+export type EmergencyPlanRevisionDetailData =
+  components['schemas']['EmergencyPlanRevisionDetail']
+export type EmergencyPlanCheckIssue = components['schemas']['CheckIssue']
+export type EmergencyPlanJobStatusData =
+  components['schemas']['EmergencyPlanJobStatus']
+export type EmergencyPlanChatMessageData =
+  components['schemas']['EmergencyPlanChatMessage']
+
+export async function fetchEmergencyPlanAiOptions(): Promise<
+  ApiResponse<EmergencyPlanAiOptionsData>
+> {
+  return fetchApi<EmergencyPlanAiOptionsData>(
+    '/safety/emergency-plans/ai/options',
+    {
+      headers: { 'X-Dazah-Page-Key': 'safety:emergency-accident:emergency-mgmt' },
+    }
+  )
+}
+
+export async function submitEmergencyPlanGenerate(
+  planId: string,
+  params: EmergencyPlanGenerateParams
+): Promise<ApiResponse<{ job_id: string; kind: string }>> {
+  const res = await fetchApi<{ job_id: string; kind: string }>(
+    `/safety/emergency-plans/${planId}/ai/generate`,
+    {
+      method: 'POST',
+      body: JSON.stringify(params),
+      headers: { 'Content-Type': 'application/json' },
+    }
+  )
+  revalidatePath('/safety/emergency-mgmt')
+  return res
+}
+
+export async function submitEmergencyPlanReview(
+  planId: string
+): Promise<ApiResponse<{ job_id: string; kind: string }>> {
+  const res = await fetchApi<{ job_id: string; kind: string }>(
+    `/safety/emergency-plans/${planId}/ai/review`,
+    { method: 'POST' }
+  )
+  return res
+}
+
+export async function importEmergencyPlanDocx(
+  planId: string,
+  file: File
+): Promise<ApiResponse<EmergencyPlanContentData>> {
+  const formData = new FormData()
+  formData.append('file', file)
+  const headers = await getAuthHeaders()
+  const response = await fetch(
+    `${API_BASE}/safety/emergency-plans/${planId}/ai/import`,
+    { method: 'POST', body: formData, headers }
+  )
+  if (!response.ok) {
+    const text = await response.text()
+    return { code: response.status, message: text } as ApiResponse<EmergencyPlanContentData>
+  }
+  const data = (await response.json()) as ApiResponse<EmergencyPlanContentData>
+  revalidatePath('/safety/emergency-mgmt')
+  return data
+}
+
+export async function fetchEmergencyPlanContent(
+  planId: string
+): Promise<ApiResponse<EmergencyPlanContentData>> {
+  return fetchApi<EmergencyPlanContentData>(
+    `/safety/emergency-plans/${planId}/content`
+  )
+}
+
+export async function saveEmergencyPlanContent(
+  planId: string,
+  content: EmergencyPlanDocumentData,
+  baseRevisionNo: number,
+  summary = '人工编辑'
+): Promise<ApiResponse<EmergencyPlanContentData>> {
+  return fetchApi<EmergencyPlanContentData>(
+    `/safety/emergency-plans/${planId}/content`,
+    {
+      method: 'PUT',
+      body: JSON.stringify({ content, base_revision_no: baseRevisionNo, summary }),
+      headers: { 'Content-Type': 'application/json' },
+    }
+  )
+}
+
+export async function fetchEmergencyPlanChecks(
+  planId: string
+): Promise<ApiResponse<{ issues: EmergencyPlanCheckIssue[] }>> {
+  return fetchApi<{ issues: EmergencyPlanCheckIssue[] }>(
+    `/safety/emergency-plans/${planId}/content/checks`
+  )
+}
+
+export async function finalizeEmergencyPlan(
+  planId: string
+): Promise<ApiResponse<EmergencyPlanContentData>> {
+  const res = await fetchApi<EmergencyPlanContentData>(
+    `/safety/emergency-plans/${planId}/finalize`,
+    { method: 'POST' }
+  )
+  revalidatePath('/safety/emergency-mgmt')
+  return res
+}
+
+export async function fetchEmergencyPlanRevisions(
+  planId: string
+): Promise<ApiResponse<{ items: EmergencyPlanRevisionSummaryData[] }>> {
+  return fetchApi<{ items: EmergencyPlanRevisionSummaryData[] }>(
+    `/safety/emergency-plans/${planId}/revisions`
+  )
+}
+
+export async function fetchEmergencyPlanRevision(
+  planId: string,
+  revisionNo: number
+): Promise<ApiResponse<EmergencyPlanRevisionDetailData>> {
+  return fetchApi<EmergencyPlanRevisionDetailData>(
+    `/safety/emergency-plans/${planId}/revisions/${revisionNo}`
+  )
+}
+
+export async function restoreEmergencyPlanRevision(
+  planId: string,
+  revisionNo: number
+): Promise<ApiResponse<EmergencyPlanContentData>> {
+  return fetchApi<EmergencyPlanContentData>(
+    `/safety/emergency-plans/${planId}/revisions/${revisionNo}/restore`,
+    { method: 'POST' }
+  )
+}
+
+export async function fetchEmergencyPlanJobStatus(
+  planId: string
+): Promise<ApiResponse<EmergencyPlanJobStatusData>> {
+  return fetchApi<EmergencyPlanJobStatusData>(
+    `/safety/emergency-plans/${planId}/ai/job`
+  )
+}
+
+export async function fetchEmergencyPlanChatMessages(
+  planId: string
+): Promise<ApiResponse<{ items: EmergencyPlanChatMessageData[] }>> {
+  return fetchApi<{ items: EmergencyPlanChatMessageData[] }>(
+    `/safety/emergency-plans/${planId}/ai/messages`
+  )
+}
+
+/** 导出预案 Word：返回 base64 由客户端组装下载（Server Action 不能操作 DOM）。 */
+export async function fetchEmergencyPlanDocxBytes(
+  planId: string
+): Promise<{ base64: string; fileName: string }> {
+  const headers = await getAuthHeaders()
+  const response = await fetch(
+    `${API_BASE}/safety/emergency-plans/${planId}/export-docx`,
+    { headers }
+  )
+  if (!response.ok) {
+    const text = await response.text()
+    throw new Error(`预案导出失败 (${response.status}): ${text}`)
+  }
+  const disposition = response.headers.get('content-disposition') ?? ''
+  const utf8Match = /filename\*=utf-8''([^;]+)/i.exec(disposition)
+  const fileName = utf8Match
+    ? decodeURIComponent(utf8Match[1])
+    : decodeURIComponent(
+        /filename="?([^";]+)"?/i.exec(disposition)?.[1] ?? '应急预案.docx'
+      )
+  const buffer = await response.arrayBuffer()
+  return { base64: Buffer.from(buffer).toString('base64'), fileName }
 }
