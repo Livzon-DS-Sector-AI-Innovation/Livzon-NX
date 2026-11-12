@@ -4,6 +4,7 @@ const permitsPath = '/api/v1/safety/work-permits'
 const certificatesPath = '/api/v1/safety/work-certificates'
 const permitsKey = 'safety:ops-safety:work-permits'
 const certificatesKey = 'safety:ops-safety:work-certificates'
+const hazardIdentificationsPath = '/api/v1/safety/hazard-identifications'
 const assetsKey = 'equipment:assets'
 
 const workshops = [
@@ -26,6 +27,11 @@ const certificates = [
   { id: '31000000-0000-4000-8000-000000000004', person_name: '到期证件测试员', certificate_no: 'E2E-CERT-001', certificate_category: '焊接与热切割作业', status: 'expiring', days_to_expiry: 12, files: [] },
   { id: '31000000-0000-4000-8000-000000000005', person_name: '过期证件测试员', certificate_no: 'E2E-CERT-002', certificate_category: '焊接与热切割作业', status: 'expired', days_to_expiry: -5, files: [] },
 ]
+const hazardRecord = {
+  id: '31000000-0000-4000-8000-000000000006', hazard_id_no: 'HI-E2E-001',
+  department: '危险源测试车间', position: '测试岗位',
+  overall_status: 'completed', ai_node_progress: 'completed',
+}
 const decisions = new Map()
 const decisionAttempts = new Map()
 
@@ -46,8 +52,10 @@ export async function handleCriticalBusiness(request, response, token, baseUser)
     return true
   }
   const canReview = token.startsWith('critical-safety-reviewer-')
+  const isHazardLedgerAdmin = token.startsWith('critical-safety-ledger-admin-')
   const read = ['access', 'query']
   if (path === '/api/v1/identity/me') {
+    if (isHazardLedgerAdmin) return reply(baseUser)
     const moduleCode = equipment ? 'equipment' : 'safety'
     return reply({ ...baseUser, id: token, role: 'user', roles: [], module_codes: [moduleCode],
       page_permission_rollouts: { [moduleCode]: 'enforced' },
@@ -72,6 +80,14 @@ export async function handleCriticalBusiness(request, response, token, baseUser)
         name: equipmentNames[workshop], status: '在用', importance: 'B', category_ids: [], location_id: 'test-location',
       }], 200, 'success', { total: 1, page: 1, page_size: 20 })
     }
+    return false
+  }
+
+  if (isHazardLedgerAdmin) {
+    if (path === hazardIdentificationsPath) return reply([hazardRecord], 200, 'success', { total: 1, page: 1, page_size: 20 })
+    if (path === `${hazardIdentificationsPath}/filter-options`) return reply({ departments: [], positions: [] })
+    if (path === `${hazardIdentificationsPath}/ledger-stats`) return reply({ total: 1, level_1: 0, level_2: 0, level_3: 0, level_4: 0 })
+    if (path === `${hazardIdentificationsPath}/${hazardRecord.id}`) return reply(hazardRecord)
     return false
   }
 
