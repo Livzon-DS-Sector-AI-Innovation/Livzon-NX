@@ -268,18 +268,16 @@ _HOT_WORK_MEASURES: tuple[dict[str, object], ...] = (
     _m(
         "hw_gas_cylinders",
         (
+            # 按《新版作业票》文档原文（含原文"乙换气瓶"写法）
             "乙炔气瓶直立放置，已采取防倾倒措施并安装防回火装置；"
-            "乙炔气瓶、氧气瓶与火源间的距离不应小于10m，"
+            "乙换气瓶、氧气瓶与火源间的距离不应小于10m，"
             "两气瓶相互间距不应小于5m"
         ),
         group="施工作业风险防范",
     ),
     _m(
         "hw_jha_done",
-        (
-            "已开展作业危害分析，制定相应的安全风险管控措施，"
-            "交叉作业已明确协调人"
-        ),
+        ("已开展作业危害分析，制定相应的安全风险管控措施，交叉作业已明确协调人"),
         group="施工作业风险防范",
     ),
     _m(
@@ -432,10 +430,7 @@ _BLIND_PLATE_MEASURES: tuple[dict[str, object], ...] = (
     ),
     _m(
         "bp_corrosion_ppe",
-        (
-            "在强腐蚀性介质的管道、设备上作业时，"
-            "作业人员已采取防止酸碱化学灼伤的措施"
-        ),
+        ("在强腐蚀性介质的管道、设备上作业时，作业人员已采取防止酸碱化学灼伤的措施"),
     ),
     _m(
         "bp_scald_protection",
@@ -512,10 +507,7 @@ _LIFTING_MEASURES: tuple[dict[str, object], ...] = (
     _m("dz_ppe", "作业人员已按规定佩戴个体防护装备"),
     _m(
         "dz_tools_checked",
-        (
-            "已对起重吊装设备、钢丝绳、揽风绳、链条、吊钩等各种机具"
-            "进行检查，安全可靠"
-        ),
+        ("已对起重吊装设备、钢丝绳、揽风绳、链条、吊钩等各种机具进行检查，安全可靠"),
     ),
     _m(
         "dz_signals_agreed",
@@ -650,10 +642,7 @@ _TEMP_ELECTRICITY_MEASURES: tuple[dict[str, object], ...] = (
 _EXCAVATION_MEASURES: tuple[dict[str, object], ...] = (
     _m(
         "dt_cables_confirmed",
-        (
-            "地下电力电缆、通信电（光）缆、局域网络电（光）缆已确认，"
-            "保护措施已落实"
-        ),
+        ("地下电力电缆、通信电（光）缆、局域网络电（光）缆已确认，保护措施已落实"),
     ),
     _m(
         "dt_pipes_confirmed",
@@ -677,10 +666,7 @@ _EXCAVATION_MEASURES: tuple[dict[str, object], ...] = (
     ),
     _m(
         "dt_night_lighting",
-        (
-            "现场夜间有充足照明：A.36V、24V、12V防水型灯；"
-            "B.36V、24V、12V防爆型灯"
-        ),
+        ("现场夜间有充足照明：A.36V、24V、12V防水型灯；B.36V、24V、12V防爆型灯"),
     ),
     _m(
         "dt_ppe",
@@ -845,6 +831,11 @@ _ROAD_BREAKING_TYPE_FIELDS: tuple[dict[str, object], ...] = (
         "label": "断路原因",
         "type": "textarea",
         "required": True,
+    },
+    {
+        "key": "road_sketch_note",
+        "label": "断路地段示意图及相关说明",
+        "type": "textarea",
     },
     {
         "key": "related_units",
@@ -1112,8 +1103,7 @@ _PERMIT_TYPES: tuple[PermitTypeTemplate, ...] = (
 PERMIT_TEMPLATES: dict[str, PermitTypeTemplate] = {t.code: t for t in _PERMIT_TYPES}
 
 PERMIT_TYPE_OPTIONS: list[dict[str, str]] = [
-    {"value": t.code, "label": t.name, "no_prefix": t.no_prefix}
-    for t in _PERMIT_TYPES
+    {"value": t.code, "label": t.name, "no_prefix": t.no_prefix} for t in _PERMIT_TYPES
 ]
 
 

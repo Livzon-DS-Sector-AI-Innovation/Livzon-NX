@@ -785,8 +785,11 @@ export async function fetchDeviationReportRecords(params?: {
   return fetchFeishuDeviationReportRecords(params)
 }
 
-export async function fetchFeishuDeviationReportRecord(recordId: string): Promise<FeishuDeviationReportRecordItem> {
-  const res = await fetch(`/api/v1/quality/deviation-report-records/${recordId}`)
+export async function fetchFeishuDeviationReportRecord(
+  recordId: string, pageKey?: 'quality:deviations:deviation-workbench',
+): Promise<FeishuDeviationReportRecordItem> {
+  const options = pageKey ? { headers: { 'X-Dazah-Page-Key': pageKey } } : undefined
+  const res = await fetch(`/api/v1/quality/deviation-report-records/${recordId}`, options)
   if (!res.ok) throw await parseError(res)
   const json = await res.json()
   const item = json.data as FeishuDeviationReportRecordItem

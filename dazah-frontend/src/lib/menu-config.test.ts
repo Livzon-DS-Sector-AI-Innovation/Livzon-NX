@@ -12,6 +12,36 @@ import {
 } from './menu-config'
 
 describe('page permission menu boundary', () => {
+  it.each([
+    ['/hr/employee-fill', 'hr:employee-management:profile'],
+    ['/hr/recruitment/candidate-1', 'hr:recruitment'],
+    ['/quality/capas/new', 'quality:capas:capa-ledger'],
+    ['/quality/deviations/record-1/ai', 'quality:deviations:deviation-ledger'],
+    ['/registration/review/domestic-completed', 'registration:project:declaration-progress:domestic-completed'],
+    ['/registration/review/unknown', undefined],
+    ['/registration/validation-audit/task-1/extra', undefined],
+    ['/registration/dossier-writer/item-1', 'registration:dossier-writer'],
+    ['/warehouse/raw-material', 'warehouse:materials:raw-summary'],
+    ['/production/batches', 'production:overview'],
+    ['/production/batches/workshop/201-3/scheduling', 'production:batches:workshop-201-3'],
+    ['/production/pressure/audit', 'production:pressure'],
+  ])('resolves %s to its owning page', (path, pageKey) => {
+    expect(getPageKeyByPath(path)).toBe(pageKey)
+  })
+
+  it('requires a dedicated dossier grant for the menu and deep link', () => {
+    const declarationGrant: PageAccessSummary = {
+      page_key: 'registration:project:declaration-progress:international-planned-in-progress',
+      module_code: 'registration',
+      permissions: ['access', 'query'],
+    }
+    const path = '/registration/dossier-writer'
+    expect(getPostLoginPath({ page_permissions: [declarationGrant] }, path)).not.toBe(path)
+    const dossierGrant = { ...declarationGrant, page_key: 'registration:dossier-writer' }
+    expect(getPostLoginPath({ page_permissions: [dossierGrant] }, path)).toBe(path)
+    expect(getAuthorizedPageMenus(undefined, [dossierGrant])[0]?.children.map((item) => item.path)).toEqual([path])
+  })
+
   it('names the energy landing page consistently without changing its permission key', () => {
     expect(moduleMenus.find(menu => menu.moduleCode === 'energy')?.children.find(item => item.path === '/energy')?.label).toBe('能源仪表盘')
     expect(getPageKeyByPath('/energy')).toBe('energy:ledger-overview')

@@ -149,7 +149,7 @@ async def test_regulation_query_uses_owning_module_public_api(monkeypatch):
     assert payload == result.model_dump(mode="json")
 
 
-def test_registration_bindings_cover_all_business_pages():
+def test_registration_tools_cover_reviewed_registration_pages():
     from app.modules.agent.tool_registration import ensure_agent_tools_registered
     from app.modules.agent.tools import tool_registry
     from app.platform.identity.page_policy import PAGES_BY_MODULE
@@ -159,7 +159,10 @@ def test_registration_bindings_cover_all_business_pages():
     expected = {
         p.page_key
         for p in PAGES_BY_MODULE["registration"]
-        if "settings" not in p.page_key
+        if p.page_key not in {
+            "registration:registration-settings",
+            "registration:dossier-writer",
+        }
     }
     assert len(specs) == 9
     assert len(expected) == 20

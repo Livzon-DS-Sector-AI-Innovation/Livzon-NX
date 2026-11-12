@@ -8,7 +8,6 @@ import { createRole, deleteRole, updateRole } from '@/actions/admin'
 import { RoleManager } from './RoleManager'
 
 vi.mock('@/actions/admin', () => ({ createRole: vi.fn(), updateRole: vi.fn(), deleteRole: vi.fn() }))
-vi.mock('./RolePagePermissionsDrawer', () => ({ RolePagePermissionsDrawer: () => null }))
 
 it.each(['light', 'dark'])('validates and saves the new role form in %s mode', async (appearance) => {
   const host = document.createElement('div')
@@ -26,7 +25,7 @@ it.each(['light', 'dark'])('validates and saves the new role form in %s mode', a
   const reload = vi.spyOn(window.location, 'reload').mockImplementation(() => {})
   const render = (roles: React.ComponentProps<typeof RoleManager>['initialRoles']) => root.render(
     <ConfigProvider theme={{ algorithm: appearance === 'dark' ? theme.darkAlgorithm : theme.defaultAlgorithm }}>
-      <App><RoleManager initialDepartments={[]} initialRoles={roles} /></App>
+      <App><RoleManager initialRoles={roles} /></App>
     </ConfigProvider>,
   )
   vi.mocked(createRole).mockReset()
@@ -94,7 +93,7 @@ it('retains failed edits and shows the saved role without a document reload', as
   document.body.append(host)
   const root = createRoot(host)
   const reload = vi.spyOn(window.location, 'reload').mockImplementation(() => {})
-  const render = (item: typeof role) => root.render(<App><RoleManager initialDepartments={[]} initialRoles={[item]} /></App>)
+  const render = (item: typeof role) => root.render(<App><RoleManager initialRoles={[item]} /></App>)
   const roleRow = () => host.querySelector('tr[data-row-key="role-1"]')
   const click = (label: string) => act(async () => {
     Array.from(document.querySelectorAll('button')).find(button => button.textContent?.replace(/\s/g, '') === label)!.click()
@@ -143,7 +142,7 @@ it.each(['light', 'dark'])('shows 20 roles per page and recovers after deleting 
   const rows = () => Array.from(host.querySelectorAll('tbody tr[data-row-key]'))
   const render = (items: typeof roles) => root.render(
     <ConfigProvider theme={{ algorithm: appearance === 'dark' ? theme.darkAlgorithm : theme.defaultAlgorithm }}>
-      <App><RoleManager initialDepartments={[]} initialRoles={items} /></App>
+      <App><RoleManager initialRoles={items} /></App>
     </ConfigProvider>,
   )
   vi.mocked(deleteRole).mockClear()
@@ -183,7 +182,7 @@ describe('role operation availability', () => {
     ['custom_role', false, '原有职责说明'],
     ['quality_qc', false, '原有职责说明'],
   ])('shows the unified description only for editable built-in roles: %s, built-in: %s', (code, isSystem, expected) => {
-    const html = renderToStaticMarkup(<App><RoleManager initialDepartments={[]} initialRoles={[
+    const html = renderToStaticMarkup(<App><RoleManager initialRoles={[
       { id: 'role-1', code, name: '测试角色', description: '原有职责说明', is_system: isSystem, permissions: [] },
     ]} /></App>)
     const container = document.createElement('div')
@@ -205,7 +204,7 @@ describe('role operation availability', () => {
     }
     const html = renderToStaticMarkup(
       <ConfigProvider theme={{ algorithm: appearance === 'dark' ? theme.darkAlgorithm : theme.defaultAlgorithm }}>
-        <App><RoleManager initialDepartments={[]} initialRoles={[role]} /></App>
+        <App><RoleManager initialRoles={[role]} /></App>
       </ConfigProvider>,
     )
     const container = document.createElement('div')
@@ -222,7 +221,7 @@ describe('role operation availability', () => {
       expect(cells[index].getAttribute('title')).toBe(value)
     }
     expect(cells[3].textContent).toBe('7')
-    expect(cells[5].querySelectorAll('button')).toHaveLength(3)
+    expect(cells[5].querySelectorAll('a, button')).toHaveLength(3)
   })
 
   it.each([
@@ -233,7 +232,7 @@ describe('role operation availability', () => {
     ['material_qa', true, '系统内置', 'ant-tag-gold'],
     ['custom_role', false, '自定义', 'ant-tag-green'],
   ])('distinguishes the role type by code and color: %s, built-in: %s', (code, isSystem, label, colorClass) => {
-    const html = renderToStaticMarkup(<App><RoleManager initialDepartments={[]} initialRoles={[
+    const html = renderToStaticMarkup(<App><RoleManager initialRoles={[
       { id: 'role-1', code, name: '测试角色', is_system: isSystem, permissions: [] },
     ]} /></App>)
     const container = document.createElement('div')
@@ -256,13 +255,16 @@ describe('role operation availability', () => {
     ['ordinary_admin', true, true],
     ['ordinary_admin', false, true],
   ])('protects operations by role code: %s, built-in: %s', (code, isSystem, disabled) => {
-    const html = renderToStaticMarkup(<App><RoleManager initialDepartments={[]} initialRoles={[
+    const html = renderToStaticMarkup(<App><RoleManager initialRoles={[
       { id: 'role-1', code, name: '测试角色', is_system: isSystem, permissions: [] },
     ]} /></App>)
     const container = document.createElement('div')
     container.innerHTML = html
     const buttons = Array.from(container.querySelectorAll<HTMLButtonElement>('tbody button'))
-    expect(buttons.map(button => button.textContent?.replace(/\s/g, ''))).toEqual(['页面权限', '编辑信息', '删除'])
+    expect(buttons.map(button => button.textContent?.replace(/\s/g, ''))).toEqual(disabled
+      ? ['页面权限', '编辑信息', '删除'] : ['编辑信息', '删除'])
+    expect(container.querySelector('tbody a')?.getAttribute('href')).toBe(disabled
+      ? undefined : '/system/roles/role-1/page-permissions')
     for (const button of buttons) expect(button.disabled).toBe(disabled)
   })
 })

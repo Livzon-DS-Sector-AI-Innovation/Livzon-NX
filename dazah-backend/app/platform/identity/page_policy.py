@@ -16,6 +16,7 @@ from starlette.routing import BaseRoute, Mount, Route
 from app.platform.identity.integration_gaps import IntegrationGaps
 from app.platform.identity.menu_seed_data import SEED_MENUS
 from app.platform.identity.page_lifecycle import page_lifecycle_errors
+from app.platform.identity.page_route_catalog import load_reviewed_route_aliases
 from app.platform.identity.quality_api_contract import QUALITY_REVIEWED_API_ROUTES
 
 PAGE_PERMISSION_ORDER = ("access", "query", "operate")
@@ -297,6 +298,12 @@ def collect_http_route_catalog(
     return catalog
 
 
+def _api_prefixes(module_code: str) -> tuple[str, ...]:
+    if module_code == "registration":
+        return ("/api/v1/registration", "/api/v1/dossier-writer")
+    return (f"/api/v1/{module_code}",)
+
+
 @dataclass(frozen=True)
 class ApiRouteCatalog:
     routes: tuple[tuple[str, str], ...] | None
@@ -304,11 +311,13 @@ class ApiRouteCatalog:
     def for_module(self, module_code: str) -> list[tuple[str, str]] | None:
         if self.routes is None:
             return None
-        prefix = f"/api/v1/{module_code}"
+        prefixes = _api_prefixes(module_code)
         return sorted(
             (method, path)
             for method, path in self.routes
-            if path == prefix or path.startswith(prefix + "/")
+            if any(
+                path == prefix or path.startswith(prefix + "/") for prefix in prefixes
+            )
         )
 
 
@@ -323,11 +332,14 @@ def api_route_catalog(module_code: str) -> list[tuple[str, str]] | None:
 
 
 def api_bindings_for_module(module_code: str) -> tuple[PageApiBinding, ...]:
-    prefix = f"/api/v1/{module_code}"
+    prefixes = _api_prefixes(module_code)
     return tuple(
         item
         for item in PAGE_API_BINDINGS
-        if item.route_path == prefix or item.route_path.startswith(prefix + "/")
+        if any(
+            item.route_path == prefix or item.route_path.startswith(prefix + "/")
+            for prefix in prefixes
+        )
     )
 
 
@@ -335,6 +347,10 @@ def _api_binding_errors(binding: PageApiBinding) -> list[str]:
     errors: list[str] = []
     parts = binding.route_path.split("/")
     module_code = parts[3] if len(parts) >= 4 and parts[1:3] == ["api", "v1"] else None
+    if module_code == "dossier-writer":
+        module_code = "registration"
+        if binding.page_keys != ("registration:dossier-writer",):
+            errors.append("申报资料接口必须绑定独立撰写页面")
     if module_code not in PAGES_BY_MODULE:
         errors.append("业务模块未登记")
     if binding.method not in {
@@ -612,6 +628,7 @@ def _sensitive_actions(
         "hr:hr-settings:hr-settings-dept-mapping": ("delete",),
         "hr:hr-settings:hr-settings-dept-scopes": ("delete",),
         "registration:authorization-letter": ("delete", "sensitive_export"),
+        "registration:dossier-writer": ("delete", "sensitive_export", "sync_config"),
         "registration:fees:inspection-contacts": ("delete",),
         "registration:knowledge": ("delete", "sensitive_export"),
         "registration:registration-settings": ("delete",),
@@ -897,23 +914,28 @@ PAGE_ROUTE_ALIASES = {
     ),
     "/registration/fees": "registration:fees:fee-ledger",
 }
-PAGE_ROUTE_PREFIX_ALIASES = {
-    "/registration/reference-standard": (
-        "registration:project:declaration-progress:international-planned-in-progress"
-    ),
-    "/registration/supplementary-reply": (
-        "registration:project:declaration-progress:international-planned-in-progress"
-    ),
-    "/registration/validation-audit": (
-        "registration:project:declaration-progress:international-planned-in-progress"
-    ),
-    "/registration/review": (
-        "registration:project:declaration-progress:international-planned-in-progress"
-    ),
-    "/registration/dossier-writer": (
-        "registration:project:declaration-progress:international-planned-in-progress"
-    ),
-}
+REVIEWED_ROUTE_ALIASES = load_reviewed_route_aliases()
+
+
+def _page_template_pattern(route: str) -> re.Pattern[str]:
+    parts: list[str] = []
+    for segment in route.strip("/").split("/"):
+        if segment.startswith("[[...") and segment.endswith("]]"):
+            parts.append("(?:/.*)?")
+        elif segment.startswith("[...") and segment.endswith("]"):
+            parts.append("/.+")
+        elif segment.startswith("[") and segment.endswith("]"):
+            parts.append("/[^/]+")
+        else:
+            parts.append("/" + re.escape(segment))
+    return re.compile("".join(parts))
+
+
+_REVIEWED_DYNAMIC_ROUTE_ALIASES = tuple(
+    (_page_template_pattern(route), key)
+    for route, key in REVIEWED_ROUTE_ALIASES.items()
+    if "[" in route
+)
 
 
 # Discovery metadata for existing concrete-page renderers. This does not grant
@@ -930,6 +952,7 @@ FRONTEND_CONCRETE_PAGE_TEMPLATES = frozenset({
     "/registration/certificate-management/[sheetKey]",
     "/registration/declaration-progress/[sheetKey]",
     "/registration/project-ledger/[sheetKey]",
+    "/registration/review/[sheetKey]",
     "/warehouse/hardware/[slug]",
 })
 
@@ -954,27 +977,21 @@ def frontend_page_catalog_issues(
             route == prefix or route.startswith(prefix + "/") for prefix in prefixes
         ):
             continue
-        alias_key = PAGE_ROUTE_ALIASES.get(route)
+        alias_key = REVIEWED_ROUTE_ALIASES.get(route) or PAGE_ROUTE_ALIASES.get(route)
         if route in exact_routes or route in navigation_roots:
             continue
         if alias_key in page_keys:
             continue
         # A dynamic Next.js route can implement multiple explicitly registered
         # concrete pages (for example purchasing request categories).
-        parts: list[str] = []
-        for segment in route.strip("/").split("/"):
-            if segment.startswith("[[...") and segment.endswith("]]"):
-                parts.append("(?:/.*)?")
-            elif segment.startswith("[...") and segment.endswith("]"):
-                parts.append("/.+")
-            elif segment.startswith("[") and segment.endswith("]"):
-                parts.append("/[^/]+")
-            else:
-                parts.append("/" + re.escape(segment))
-        if route in FRONTEND_CONCRETE_PAGE_TEMPLATES and any(
-            re.fullmatch("".join(parts), path) for path in exact_routes
-        ):
-            continue
+        if route in FRONTEND_CONCRETE_PAGE_TEMPLATES:
+            pattern = _page_template_pattern(route)
+            if any(pattern.fullmatch(path) for path in exact_routes) or any(
+                key in page_keys and pattern.fullmatch(path)
+                for path, key in REVIEWED_ROUTE_ALIASES.items()
+                if "[" not in path
+            ):
+                continue
         gaps.add("页面", f"route:{route}", route, "前端页面尚未完成精确权限路由登记")
     return gaps
 
@@ -5902,6 +5919,51 @@ PAGE_API_BINDINGS += _warehouse_api_bindings()
 PAGE_API_BINDINGS += _registration_api_bindings()
 
 
+def _dossier_writer_api_bindings() -> tuple[PageApiBinding, ...]:
+    page = ("registration:dossier-writer",)
+    # Dossiers are plant-wide resources with an independent page grant.
+    routes = (
+        ("GET", "/products", "query", None),
+        ("GET", "/products/{dossier_id}", "query", None),
+        ("GET", "/products/{dossier_id}/chapters", "query", None),
+        ("GET", "/chapters/{chapter_id}", "query", None),
+        ("GET", "/chapters/{chapter_id}/assets", "query", None),
+        ("GET", "/chapters/{chapter_id}/preview", "query", None),
+        ("GET", "/chapters/{chapter_id}/docx-file", "query", None),
+        ("GET", "/chapters/{chapter_id}/fill-results", "query", None),
+        ("GET", "/chapters/{chapter_code}/field-mappings", "query", None),
+        ("GET", "/chapters/{chapter_code}/asset-categories", "query", None),
+        ("GET", "/chapters/{chapter_code}/appendix-slots", "query", None),
+        ("GET", "/products/{dossier_id}/download", "operate", "sensitive_export"),
+        ("POST", "/products", "operate", None),
+        ("PUT", "/products/{dossier_id}", "operate", None),
+        ("DELETE", "/products/{dossier_id}", "operate", "delete"),
+        ("POST", "/products/{dossier_id}/templates", "operate", None),
+        ("POST", "/products/{dossier_id}/parse", "operate", None),
+        ("POST", "/products/{dossier_id}/export", "operate", "sensitive_export"),
+        ("POST", "/products/{dossier_id}/match-assets", "operate", None),
+        ("POST", "/chapters/{chapter_id}/assets", "operate", None),
+        ("DELETE", "/assets/{asset_id}", "operate", "delete"),
+        ("PATCH", "/assets/{asset_id}", "operate", None),
+        ("POST", "/chapters/{chapter_id}/fill-fields", "operate", None),
+        ("POST", "/field-mappings/init-s6", "operate", "sync_config"),
+        ("POST", "/chapters/{chapter_id}/ai-preview", "operate", None),
+        ("POST", "/chapters/{chapter_id}/ai-confirm", "operate", None),
+        ("POST", "/assets/{asset_id}/split-preview", "operate", None),
+        ("POST", "/chapters/{chapter_id}/split-confirm", "operate", None),
+    )
+    return _module_api_bindings(
+        "dossier-writer",
+        [
+            (method, path, page, permission, action, "dossier_writer.global")
+            for method, path, permission, action in routes
+        ],
+    )
+
+
+PAGE_API_BINDINGS += _dossier_writer_api_bindings()
+
+
 def _hr_api_bindings() -> tuple[PageApiBinding, ...]:
     all_pages = tuple(page.page_key for page in PAGES_BY_MODULE["hr"])
     departments = ("hr:departments",)
@@ -6145,11 +6207,20 @@ def _hr_api_bindings() -> tuple[PageApiBinding, ...]:
             "/onboarding/names",
             "/onboarding/{record_id}",
             "/new/onboarding-records",
+        ),
+        onboarding,
+        scope_adapter="hr.employee_department",
+    )
+    add_many(
+        "GET",
+        (
             "/employees/{employee_id}/onboarding-evaluation",
             "/employees/{employee_id}/onboarding-training-record",
             "/employees/{employee_id}/prejob-training-plan",
         ),
-        onboarding,
+        profile,
+        permission="operate",
+        sensitive_action="sensitive_export",
         scope_adapter="hr.employee_department",
     )
     add(
@@ -7250,15 +7321,15 @@ def page_key_for_route(route_path: str) -> str | None:
         return None
     # Auxiliary forms belong to the ledger, never to its directory or siblings.
     if re.fullmatch(
-        r"/quality/deviations/(?:new|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})",
+        r"/quality/deviations/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
         normalized,
     ):
         return "quality:deviations:deviation-ledger"
-    alias = PAGE_ROUTE_ALIASES.get(normalized)
+    alias = REVIEWED_ROUTE_ALIASES.get(normalized) or PAGE_ROUTE_ALIASES.get(normalized)
     if alias is not None:
         return alias
-    for prefix, page_key in PAGE_ROUTE_PREFIX_ALIASES.items():
-        if normalized == prefix or normalized.startswith(prefix + "/"):
+    for pattern, page_key in _REVIEWED_DYNAMIC_ROUTE_ALIASES:
+        if pattern.fullmatch(normalized):
             return page_key
     candidates = [
         item

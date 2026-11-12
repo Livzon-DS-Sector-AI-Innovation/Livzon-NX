@@ -11,7 +11,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -58,11 +58,7 @@ async def _open_id_map(
     result = await db.execute(
         select(User.id, User.feishu_union_id).where(User.id.in_(ids))
     )
-    return {
-        row[0]: row[1]
-        for row in result.all()
-        if row[1]
-    }
+    return {row[0]: row[1] for row in result.all() if row[1]}
 
 
 def _permit_line(permit: WorkPermit) -> str:
@@ -147,9 +143,7 @@ async def notify_pending_node(
         open_map = await _open_id_map(db, [node.assigned_approver_id])
         open_id = open_map.get(node.assigned_approver_id)
         if not open_id:
-            logger.info(
-                "审批人未绑定飞书，跳过卡片: node=%s", node.node_key
-            )
+            logger.info("审批人未绑定飞书，跳过卡片: node=%s", node.node_key)
             return
         if node.node_kind in ("approve", "confirm"):
             content = (
@@ -160,10 +154,7 @@ async def notify_pending_node(
             )
             elements = _approval_buttons(permit.id, node.id, permit.permit_no)
         else:
-            content = (
-                f"{_permit_line(permit)}\n"
-                f"待您处理节点：**{node.node_name}**"
-            )
+            content = f"{_permit_line(permit)}\n待您处理节点：**{node.node_name}**"
             elements = []
         elements.extend(_detail_link(permit.id))
         await send_user_card(
@@ -259,9 +250,7 @@ async def notify_after_transition(
         logger.exception("作业票流转通知失败: %s", permit.permit_no)
 
 
-async def _pending_node(
-    db: AsyncSession, permit: WorkPermit
-) -> WorkPermitNode | None:
+async def _pending_node(db: AsyncSession, permit: WorkPermit) -> WorkPermitNode | None:
     result = await db.execute(
         select(WorkPermitNode).where(
             WorkPermitNode.permit_id == permit.id,
@@ -274,9 +263,7 @@ async def _pending_node(
     return result.scalar_one_or_none()
 
 
-async def _verify_node(
-    db: AsyncSession, permit: WorkPermit
-) -> WorkPermitNode | None:
+async def _verify_node(db: AsyncSession, permit: WorkPermit) -> WorkPermitNode | None:
     result = await db.execute(
         select(WorkPermitNode).where(
             WorkPermitNode.permit_id == permit.id,
@@ -305,12 +292,9 @@ async def notify_gas_due(
         user_ids = [
             p.get("user_id")
             for p in (permit.persons or [])
-            if p.get("role") in ("guardian", "work_leader")
-            and p.get("user_id")
+            if p.get("role") in ("guardian", "work_leader") and p.get("user_id")
         ]
-        open_map = await _open_id_map(
-            db, [UUID(str(uid)) for uid in user_ids]
-        )
+        open_map = await _open_id_map(db, [UUID(str(uid)) for uid in user_ids])
         if not open_map:
             return
         state = "已超期，请立即停止作业并复检" if overdue else "即将到期，请安排复检"
@@ -349,16 +333,12 @@ async def send_raw_card(open_id: str, card: dict[str, Any]) -> str | None:
     return await _send_card(open_id, card, "open_id")
 
 
-async def send_raw_card_by_union_id(
-    union_id: str, card: dict[str, Any]
-) -> str | None:
+async def send_raw_card_by_union_id(union_id: str, card: dict[str, Any]) -> str | None:
     """按 union_id 发送卡片（跨应用一致，推荐用于 DB 查出的用户）。"""
     return await _send_card(union_id, card, "union_id")
 
 
-async def _send_card(
-    receive_id: str, card: dict[str, Any], id_type: str
-) -> str | None:
+async def _send_card(receive_id: str, card: dict[str, Any], id_type: str) -> str | None:
     try:
         if not receive_id:
             return None
@@ -490,9 +470,7 @@ async def _resolve_permit(
 ) -> WorkPermit | None:
     if isinstance(permit_or_id, WorkPermit):
         return permit_or_id
-    result = await db.execute(
-        select(WorkPermit).where(WorkPermit.id == permit_or_id)
-    )
+    result = await db.execute(select(WorkPermit).where(WorkPermit.id == permit_or_id))
     return result.scalar_one_or_none()
 
 
@@ -530,9 +508,7 @@ async def _next_stage_elements(
             if hint:
                 elements.append(_md(hint))
             else:
-                elements.append(
-                    _md("_首次审批请点「🖊 手写签名」，之后可默认沿用_")
-                )
+                elements.append(_md("_首次审批请点「🖊 手写签名」，之后可默认沿用_"))
         actions: list[dict[str, Any]] = []
         sign_url = await _node_sign_url(permit, node)
         if sign_url:
@@ -572,9 +548,7 @@ async def _next_stage_elements(
             ]
         )
         # 卡片 2.0 不支持 action 容器（200861），按钮平铺
-        elements.insert(
-            0, _md(f"🔔 **待您处理：{node.node_name}**")
-        )
+        elements.insert(0, _md(f"🔔 **待您处理：{node.node_name}**"))
         elements.extend(actions)
         return (
             recipient,
@@ -621,7 +595,32 @@ async def _next_stage_elements(
         )
 
     if permit.status == PERMIT_STATUS_ACTIVE:
-        return await _accept_stage_elements(db, permit, base, with_gas=True)
+        # 作业中：卡片即"活的气体检测记录表"——历史记录 + 录入表单 +
+        # 完工验收，每次复检提交后原地 PATCH 追加一行
+        elements = list(base)
+        elements.append(_md(await _gas_records_markdown(db, permit)))
+        elements.append(_hr())
+        elements.extend(_gas_form_elements(permit))
+        elements.append(_hr())
+        elements.append(
+            {
+                "tag": "button",
+                "text": {"tag": "plain_text", "content": "完工验收"},
+                "type": "primary",
+                "value": {
+                    "module": "wp_chat",
+                    "act": "accept",
+                    "permit_id": str(permit.id),
+                    "permit_no": permit.permit_no,
+                },
+            }
+        )
+        recipient = await _accept_target(db, permit)
+        return (
+            recipient,
+            elements,
+            f"作业票 · 作业中气体检测（{permit.permit_no}）",
+        )
 
     if permit.status == PERMIT_STATUS_COMPLETED:
         if permit.created_by is None:
@@ -696,9 +695,7 @@ async def _accept_target(db: AsyncSession, permit: WorkPermit) -> UUID | None:
     return permit.created_by
 
 
-async def _accept_node(
-    db: AsyncSession, permit: WorkPermit
-) -> WorkPermitNode | None:
+async def _accept_node(db: AsyncSession, permit: WorkPermit) -> WorkPermitNode | None:
     result = await db.execute(
         select(WorkPermitNode)
         .where(
@@ -713,9 +710,7 @@ async def _accept_node(
     return result.scalar_one_or_none()
 
 
-async def _sign_records_markdown(
-    db: AsyncSession, permit: WorkPermit
-) -> str:
+async def _sign_records_markdown(db: AsyncSession, permit: WorkPermit) -> str:
     """签字记录（逐节点：状态、签字人、时间、是否留手写签名）。
 
     最终卡/审批卡都展示，验收时可核对每一级是谁签的。
@@ -766,6 +761,175 @@ async def _sign_records_markdown(
     return "\n".join(lines)
 
 
+async def _gas_records_markdown(db: AsyncSession, permit: WorkPermit) -> str:
+    """作业期间气体检测记录表 + 下次复检时间（超期红字警示）。"""
+
+    from app.modules.safety.models import WorkPermitGasAnalysis
+
+    rows = (
+        (
+            await db.execute(
+                select(WorkPermitGasAnalysis)
+                .where(
+                    WorkPermitGasAnalysis.permit_id == permit.id,
+                    WorkPermitGasAnalysis.is_deleted.is_(False),
+                )
+                .order_by(WorkPermitGasAnalysis.sampled_at)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    cycle = _gas_cycle_for(permit)
+    header = (
+        f"**气体检测记录**（复检周期 {cycle} 分钟）" if cycle else "**气体检测记录**"
+    )
+    lines = [header]
+    for i, r in enumerate(rows, start=1):
+        tag = "（作业前）" if str(r.phase) == "pre_work" else ""
+        items_txt = "；".join(
+            f"{it.get('name')}={it.get('value') or '-'}" for it in (r.items or [])
+        )
+        lines.append(
+            f"{i}. {r.sampled_at:%m-%d %H:%M}{tag} "
+            f"{r.analysis_point or ''}｜{items_txt}｜"
+            f"分析人 {r.analyst_name or '—'}"
+        )
+    if not rows:
+        lines.append("_暂无记录，请在下方表单填写检测结果_")
+
+    # 下次复检时间 = 最近一次采样（无记录则取开工时间）+ 周期
+    if cycle:
+        base_time = rows[-1].sampled_at if rows else permit.actual_start_time
+        if base_time is not None:
+            if base_time.tzinfo is not None:
+                base_time = base_time.replace(tzinfo=None)
+            due = base_time + timedelta(minutes=cycle)
+            if datetime.now() > due:
+                lines.append(
+                    f"⚠️ **复检已超期**（应不晚于 {due:%m-%d %H:%M}），"
+                    "请立即停止作业并复检"
+                )
+            else:
+                lines.append(f"⏰ 下次复检不晚于 {due:%m-%d %H:%M}")
+    return "\n".join(lines)
+
+
+def _gas_form_elements(permit: WorkPermit) -> list[dict[str, Any]]:
+    """作业中卡片内嵌的复检录入表单（日期时间选择 + 提交按钮）。"""
+    from app.modules.safety.service.work_permit_card_forms import (
+        _btn,
+        _dt_picker,
+        form_submit_name,
+    )
+
+    elements: list[dict[str, Any]] = [_md("**填写本次复检结果**（时间点选择器选择）")]
+    elements.extend(_dt_picker("gas_time", "取样分析时间"))
+    for name, label, placeholder in (
+        ("gas_point", "分析部位", "如：釜内"),
+        ("gas_name", "代表性气体", "如：可燃气体"),
+        ("gas_value", "分析结果", "如：0"),
+        ("gas_analyst", "分析人", "姓名"),
+    ):
+        elements.append(
+            {
+                "tag": "input",
+                "name": name,
+                "placeholder": {"tag": "plain_text", "content": placeholder},
+                "width": "default",
+                "label": {"tag": "plain_text", "content": label},
+            }
+        )
+    submit = _btn(
+        "提交本次复检",
+        {
+            "module": "wp_chat",
+            "act": "gas_save",
+            "permit_id": str(permit.id),
+            "permit_no": permit.permit_no,
+        },
+        type_="primary",
+        form_submit=True,
+    )
+    submit["name"] = form_submit_name("gas_save", str(permit.id))
+    elements.append({"tag": "form", "name": "wp_gas_form", "elements": [submit]})
+    return elements
+
+
+async def refresh_active_gas_card(
+    db: AsyncSession, permit_id: UUID, operator_open_id: str | None = None
+) -> bool:
+    """复检提交后：PATCH 作业中卡片原地追加记录行。
+
+    优先 PATCH 该作业票已推送卡片（验收人缓存）；操作人不同或无缓存时，
+    给操作人补发一张最新卡片。返回是否已让用户看到更新后的记录表。
+    """
+    from app.modules.safety.feishu.notification import update_card
+    from app.platform.identity.models import User
+
+    permit = await _resolve_permit(db, permit_id)
+    if permit is None or permit.status != PERMIT_STATUS_ACTIVE:
+        return False
+    _, elements, title = await _next_stage_elements(db, permit)
+    if not elements:
+        return False
+
+    operator_union: str | None = None
+    if operator_open_id:
+        row = (
+            await db.execute(
+                select(User.feishu_union_id).where(
+                    User.feishu_open_id == operator_open_id
+                )
+            )
+        ).scalar_one_or_none()
+        operator_union = row or None
+
+    recipient_union = (
+        await _recipient_union_id(db, recipient)
+        if (recipient := await _accept_target(db, permit)) is not None
+        else None
+    )
+    # 操作人恰是当前卡片持有人：原地 PATCH
+    if operator_union and operator_union == recipient_union:
+        cached = await _cached_approval_card_id(operator_union, permit.id)
+        if cached:
+            await update_card(
+                cached, _card_for(elements, title=title or "作业票 · 作业中")
+            )
+            return True
+    # 其他情况：给操作人补发最新卡片
+    if operator_union:
+        await send_raw_card_by_union_id(
+            operator_union, _card_for(elements, title=title or "作业票 · 作业中")
+        )
+        return True
+    return False
+
+
+async def active_gas_card(db: AsyncSession, permit: WorkPermit) -> dict[str, Any]:
+    """作业中"活的气体检测记录卡"（发「复检」列表与推送共用）。"""
+    base: list[dict[str, Any]] = [_md(_ticket_markdown(permit)), _hr()]
+    base.append(_md(await _gas_records_markdown(db, permit)))
+    base.append(_hr())
+    base.extend(_gas_form_elements(permit))
+    base.append(_hr())
+    base.append(
+        {
+            "tag": "button",
+            "text": {"tag": "plain_text", "content": "完工验收"},
+            "type": "primary",
+            "value": {
+                "module": "wp_chat",
+                "act": "accept",
+                "permit_id": str(permit.id),
+                "permit_no": permit.permit_no,
+            },
+        }
+    )
+    return _card_for(base, title=f"作业票 · 作业中气体检测（{permit.permit_no}）")
+
+
 async def _node_signed(
     db: AsyncSession, permit: WorkPermit, node: WorkPermitNode
 ) -> bool:
@@ -799,9 +963,7 @@ async def _recipient_union_id(db: AsyncSession, user_id: UUID) -> str | None:
     return open_map.get(user_id)
 
 
-async def _cached_approval_card_id(
-    union_id: str, permit_id: UUID
-) -> str | None:
+async def _cached_approval_card_id(union_id: str, permit_id: UUID) -> str | None:
     from app.core.redis import cache_get
 
     return await cache_get(f"wp_approval_card:{union_id}:{permit_id}")
@@ -923,5 +1085,3 @@ async def _download_url(permit_id: UUID) -> str:
         f"{public_base_url()}/api/v1/safety/work-permit-file/"
         f"{create_download_token(permit_id)}"
     )
-
-

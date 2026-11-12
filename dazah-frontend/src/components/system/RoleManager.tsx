@@ -1,33 +1,41 @@
 "use client"
 
 import { useState } from "react"
+import Link, { useLinkStatus } from "next/link"
 import { App, Button, Drawer, Form, Input, Popconfirm, Table, Tag } from "antd"
 import { PlusOutlined } from "@ant-design/icons"
 import type { PermissionItem, RoleItem } from "@/lib/api/client/admin"
-import type { DepartmentItem } from "@/lib/api/server/admin"
 import type { MenuFlatItem } from "@/lib/menu-tree"
 import { createRole, deleteRole, updateRole } from "@/actions/admin"
 import {
   ROLE_CODE_MAX_LENGTH, ROLE_NAME_MAX_LENGTH, roleCodeError, roleNameError, trimRoleWhitespace,
 } from "@/lib/role-creation"
 import type { components } from "@/types/generated/schema"
-import { RolePagePermissionsDrawer } from "./RolePagePermissionsDrawer"
+import { rolePagePermissionsPath, type PermissionWorkbenchOrigin } from "@/lib/rolePagePermissionsPath"
 import { roleTagColor } from "@/lib/role-tag"
+import styles from "./RolePagePermissionsWorkbench.module.css"
 
 type RoleFormValues = components["schemas"]["RoleCreateRequest"]
+
+function PagePermissionLinkLabel() {
+  const { pending } = useLinkStatus()
+  return <span className={styles.openLinkLabel}>
+    页面权限
+    {pending && <span className={styles.openProgress} role="status" aria-label="正在打开页面权限" />}
+  </span>
+}
 
 interface RoleManagerProps {
   initialRoles: RoleItem[]
   initialPermissions?: PermissionItem[]
   initialMenus?: MenuFlatItem[]
-  initialDepartments: DepartmentItem[]
+  origin?: PermissionWorkbenchOrigin
 }
 
-export function RoleManager({ initialRoles: roles, initialDepartments }: RoleManagerProps) {
+export function RoleManager({ initialRoles: roles, origin }: RoleManagerProps) {
   const { message } = App.useApp()
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [editing, setEditing] = useState<RoleItem | "new" | null>(null)
-  const [pageRole, setPageRole] = useState<RoleItem | null>(null)
   const [saving, setSaving] = useState(false)
   const [form] = Form.useForm<RoleFormValues>()
   const creating = editing === "new"
@@ -100,9 +108,11 @@ export function RoleManager({ initialRoles: roles, initialDepartments }: RoleMan
           role.is_system && role.code !== "super_admin" && role.code !== "ordinary_admin"
             ? "系统内置角色，可编辑" : description },
       { title: "操作", key: "actions", width: 240, fixed: "right", render: (_: unknown, role: RoleItem) => <div className="flex min-w-max gap-2">
-        <Button size="small" disabled={role.code === "super_admin" || role.code === "ordinary_admin"} onClick={() => setPageRole(role)}>
-          页面权限
-        </Button>
+        {role.code === "super_admin" || role.code === "ordinary_admin"
+          ? <Button size="small" disabled>页面权限</Button>
+          : <Link className={styles.openLink} href={rolePagePermissionsPath(role.id, origin)}>
+              <PagePermissionLinkLabel />
+            </Link>}
         <Button size="small" disabled={role.code === "super_admin" || role.code === "ordinary_admin"} onClick={() => openEdit(role)}>编辑信息</Button>
         <Popconfirm title={`确认删除角色“${role.name}”？`} description="删除后，该角色将不再为用户提供授权。"
           disabled={role.code === "super_admin" || role.code === "ordinary_admin"} onConfirm={() => remove(role)}>
@@ -134,7 +144,5 @@ export function RoleManager({ initialRoles: roles, initialDepartments }: RoleMan
         <Form.Item name="description" label="职责说明"><Input.TextArea rows={3} /></Form.Item>
       </Form>
     </Drawer>
-    <RolePagePermissionsDrawer role={pageRole} departments={initialDepartments}
-      open={Boolean(pageRole)} onClose={() => setPageRole(null)} />
   </div>
 }

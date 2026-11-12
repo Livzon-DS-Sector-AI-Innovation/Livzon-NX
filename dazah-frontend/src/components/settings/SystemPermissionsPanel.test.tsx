@@ -9,8 +9,10 @@ describe('system permissions settings entry', () => {
       '/system/dept-roles',
       '/system/permission-verification',
     ])
-    expect(SYSTEM_PERMISSION_PAGES.find((page) => page.href === '/system/dept-roles')?.description)
-      .toBe('按部门查询用户，筛选并勾选需要应用角色的人员。')
+    expect(SYSTEM_PERMISSION_PAGES.find((page) => page.href === '/system/dept-roles')).toMatchObject({
+      title: '角色映射',
+      description: '搜索用户或按部门查询，为所选用户批量分配角色。',
+    })
   })
 
   it('keeps page-level permission guidance visible at the system entry', () => {

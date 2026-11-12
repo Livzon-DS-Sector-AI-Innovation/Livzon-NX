@@ -34,7 +34,10 @@ export default function TrainingLedgerNewClient() {
     form.setFieldValue('employee_number', undefined)
     setEmployees([])
     if (!dept) return
-    fetchEmployees({ department: dept, page_size: 100 })
+    fetchEmployees({ department: dept, page_size: 100 }, {
+      cache: 'no-store',
+      headers: { 'X-Dazah-Page-Key': 'hr:employee-management:profile' },
+    })
       .then((res) => {
         setEmployees(res.data || [])
       })

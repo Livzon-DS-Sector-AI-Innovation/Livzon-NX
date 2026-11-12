@@ -5,11 +5,12 @@ import { afterEach, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   push: vi.fn(), create: vi.fn(),
+  fetchEmployees: vi.fn(async () => ({ data: [{ employee_number: 'E01', name: '测试人员' }] })),
   message: { success: vi.fn(), warning: vi.fn(), error: vi.fn() },
   form: { setFieldValue: vi.fn(), resetFields: vi.fn() },
 }))
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mocks.push }) }))
-vi.mock('@/lib/api/hr', () => ({ fetchEmployees: async () => ({ data: [{ employee_number: 'E01', name: '测试人员' }] }) }))
+vi.mock('@/lib/api/hr', () => ({ fetchEmployees: mocks.fetchEmployees }))
 vi.mock('@/lib/api/client/hr', () => ({
   fetchTrainingDepartments: async () => ['测试部门'],
   fetchAnnualTrainingPlans: async () => ({ data: [
@@ -47,6 +48,10 @@ it.each([false, true])('navigates to the employee ledger after create or duplica
   try {
     await act(async () => root.render(<TrainingLedgerNewClient />))
     await act(async () => container.querySelector('button')?.click())
+    expect(mocks.fetchEmployees).toHaveBeenCalledWith({ department: '测试部门', page_size: 100 }, {
+      cache: 'no-store',
+      headers: { 'X-Dazah-Page-Key': 'hr:employee-management:profile' },
+    })
     await act(async () => container.querySelector('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })))
     expect(mocks.create).toHaveBeenCalledWith({ employee_number: 'E01', employee_name: '测试人员' })
     expect(mocks.push).toHaveBeenCalledWith('/hr/training/ledger?employee_number=E01')
