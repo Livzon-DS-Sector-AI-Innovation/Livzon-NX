@@ -27203,7 +27203,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/safety/sign-relay": {
+    "/api/v1/safety/sign-relay/": {
         parameters: {
             query?: never;
             header?: never;
@@ -27213,7 +27213,7 @@ export interface paths {
         get?: never;
         put?: never;
         /** 手写签名中转提交（暂存收件箱，等待内网拉取） */
-        post: operations["sign_relay_submit_api_v1_safety_sign_relay_post"];
+        post: operations["sign_relay_submit_api_v1_safety_sign_relay__post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -142861,7 +142861,7 @@ export interface operations {
             };
         };
     };
-    sign_relay_submit_api_v1_safety_sign_relay_post: {
+    sign_relay_submit_api_v1_safety_sign_relay__post: {
         parameters: {
             query?: never;
             header?: never;
