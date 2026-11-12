@@ -124,13 +124,30 @@ def test_step_cards_carry_module_and_act() -> None:
         ]
 
     # ② 人员选人 + 外部人员手工录入
-    person_names = _form_names("hot_work", 2)
-    assert any(n.startswith("person__") for n in person_names), (
-        "人员步应含通讯录选人组件"
+    # 人员阶段：每岗位一卡，下拉**全量加载**证书名单（可滚动选中）
+
+    roster = [
+        {"id": f"c-{i}", "name": f"人员{i}", "no": f"N-{i}",
+         "cat": "electrician", "cat_label": "电工作业",
+         "expiry": "2027-01-01"}
+        for i in range(1, 4)
+    ]
+    values_p = forms.base_form_values("hot_work", None)
+    values_p["cert_roster"] = roster
+    card_p = forms.build_step_card(
+        "hot_work", 2, values_p, "ou-x", person_role_idx=0
     )
-    assert any(n.startswith("person_ext_cert__") for n in person_names), (
-        "人员步应支持外部人员证件号录入"
+    p_form = [el for el in card_p["body"]["elements"] if el.get("tag") == "form"][0]
+    p_select = [
+        el for el in p_form["elements"] if el.get("tag") == "select_static"
+    ][0]
+    assert p_select["name"] == "person__work_leader"
+    assert len(p_select["options"]) == len(roster), "证书名单应全量加载"
+    assert any(n.startswith("person_ext_cert__work_leader") for n in
+               [el.get("name") for el in p_form["elements"]]), (
+        "应支持外部人员证件号录入"
     )
+    _form_names("hot_work", 2)
     # ④ 风险辨识：下拉多选（与动火方式一致）
     step4_card = forms.build_step_card(
         "hot_work", 4, forms.base_form_values("hot_work", None), "ou-x"
@@ -292,6 +309,7 @@ class _StubFlow:
         form_value: dict[str, Any],
         *,
         message_id: str = "",
+        person_role_idx: int | None = None,
     ) -> dict[str, Any]:
         self.calls.append(("save_step", permit_type, step, form_value, message_id))
         return _card("下一步")
@@ -365,17 +383,28 @@ async def test_handler_ignores_foreign_module_and_noop() -> None:
     assert noop is None
 
 
-async def test_handler_menu_returns_card() -> None:
+async def test_handler_menu_returns_card(
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
     from app.modules.safety.feishu.work_permit_chat_handler import (
         handle_wp_chat_card_action,
     )
 
+    patched: list[str] = []
+
+    async def _fake_update(message_id: str, card: dict[str, Any]) -> None:
+        patched.append(json.dumps(card, ensure_ascii=False))
+
+    monkeypatch.setattr(
+        "app.modules.safety.feishu.notification.update_card", _fake_update
+    )
     resp = await handle_wp_chat_card_action(
-        _card_event({"module": "wp_chat", "act": "menu"})
+        _card_event({"module": "wp_chat", "act": "menu"}, message_id="om_menu")
     )
     assert resp is not None
-    assert resp["card"]["type"] == "raw"
-    assert "作业票办理" in json.dumps(resp["card"]["data"], ensure_ascii=False)
+    assert resp["toast"]["content"] == "正在处理…"
+    await asyncio.sleep(0.1)
+    assert patched and "作业票办理" in patched[0]
 
 
 async def test_handler_fast_step_save_passes_form_and_message(
@@ -398,8 +427,8 @@ async def test_handler_fast_step_save_passes_form_and_message(
             message_id="om_step9",
         )
     )
-    assert resp is not None
-    assert "下一步" in json.dumps(resp["card"]["data"], ensure_ascii=False)
+    assert resp is not None and resp["toast"]["content"] == "正在处理…"
+    await asyncio.sleep(0.1)
     flow = stub_flow.instances[-1]
     assert flow.calls == [
         ("save_step", "blind_plate", 1, {"apply_department": "一车间"}, "om_step9")
@@ -424,8 +453,8 @@ async def test_handler_use_default_sign_returns_signed_card(
             }
         )
     )
-    assert resp is not None
-    assert "已签名" in json.dumps(resp["card"]["data"], ensure_ascii=False)
+    assert resp is not None and resp["toast"]["content"] == "正在处理…"
+    await asyncio.sleep(0.1)
     assert stub_flow.instances[-1].calls == [
         ("use_default_sign", "blind_plate", "initiator")
     ]
@@ -659,10 +688,10 @@ async def test_handler_parses_form_submit_name(
     }
     resp = await handler.handle_wp_chat_card_action(event)
     assert resp is not None
+    await asyncio.sleep(0.1)  # 后台任务执行完再断言
     assert stub_flow.instances[-1].calls == [
         ("save_step", "hot_work", 1, {"apply_department": "一车间"}, "om_1")
     ]
-    await asyncio.sleep(0.1)  # 让后台 PATCH 任务执行
     assert patched == ["om_1"], "成功后应 PATCH 原卡"
 
 
@@ -1923,7 +1952,8 @@ async def test_handler_set_level_and_toggle(
     resp = await handle_wp_chat_card_action(
         _card_event({"module": "wp_chat", "act": "set_level", "level": "grade1"})
     )
-    assert resp is not None
+    assert resp is not None and resp["toast"]["content"] == "正在处理…"
+    await asyncio.sleep(0.1)
     flow = stub_flow.instances[-1]
     set_calls = [c for c in flow.calls if c[0] == "set_level"]
     assert set_calls and set_calls[0][2] == "grade1"
@@ -1932,6 +1962,7 @@ async def test_handler_set_level_and_toggle(
         _card_event({"module": "wp_chat", "act": "toggle_measure", "key": "m-1"})
     )
     assert resp2 is not None
+    await asyncio.sleep(0.1)
     flow2 = stub_flow.instances[-1]
     toggle_calls = [c for c in flow2.calls if c[0] == "toggle_check"]
     assert toggle_calls and toggle_calls[0][3] == "m-1"
