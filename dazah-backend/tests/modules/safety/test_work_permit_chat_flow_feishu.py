@@ -1519,63 +1519,61 @@ class TestChatFlowGapCoverage:
     async def test_merge_persons_all_branches(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """第②步人员合并四分支：选人命中/未命中走通讯录/外部/保留。"""
+        """第②步人员合并：证书命中/列表形态/非法id兜底/外部/保留。"""
+        from datetime import date
         from types import SimpleNamespace
 
-        from app.modules.safety.service import work_permit_chat_flow as cf
-
-        svc = self._svc(_RecDB([]))
-        found_user = SimpleNamespace(id="u-found", name="张三")
-        cert_by_name = SimpleNamespace(
-            id="c-name",
-            certificate_no="DJ-N",
+        cert1 = SimpleNamespace(
+            id="c-1",
+            person_name="张三",
+            certificate_no="DJ-1",
+            certificate_category="electrician",
+            expiry_date=date(2027, 1, 1),
+            status="valid",
+            identity_user_id="u-1",
+        )
+        cert2 = SimpleNamespace(
+            id="c-2",
+            person_name="李四",
+            certificate_no="DJ-2",
             certificate_category="electrician",
             expiry_date=None,
             status="valid",
+            identity_user_id=None,
         )
-        userinfo: dict[str, tuple[str, str]] = {
-            "ou-worker": ("李四", ""),
-            "ou-receiver": ("", ""),
-        }
-
-        async def _info(open_id: str) -> tuple[str, str]:
-            return userinfo.get(open_id, ("", ""))
-
-        async def _by_feishu(feishu_id: str) -> Any:
-            return found_user if feishu_id == "ou-leader" else None
-
-        async def _cert_by_name(name: str, role: str) -> Any:
-            return cert_by_name if name == "李四" else None
-
-        async def _cert_for_user(user_id: Any, role: str) -> Any:
-            return None
-
-        monkeypatch.setattr(cf, "feishu_user_info", _info)
-        svc._user_by_feishu_id = _by_feishu  # type: ignore[method-assign]
-        svc._certificate_by_name = _cert_by_name  # type: ignore[method-assign]
-        svc._certificate_for_user = _cert_for_user  # type: ignore[method-assign]
+        svc = self._svc(_RecDB([_result(cert1), _result(cert2)]))
 
         values: dict[str, Any] = {
             "persons": [{"role": "process_guardian", "name": "老成员"}]
         }
         form_value = {
-            "person__work_leader": "ou-leader",
-            "person__worker": ["ou-worker"],
+            # 证书名单选人：value = 证件记录 id
+            "person__work_leader": "0196c9d0-0000-7000-8000-000000000001",
+            "person__worker": ["0196c9d0-0000-7000-8000-000000000002"],
             "person__guardian": "",
             "person_ext_name__guardian": "王五",
             "person_ext_cert__guardian": "T-88",
-            "person__briefer": "ou-leader",
-            "person__briefer_receiver": "ou-receiver",
+            "person__briefer": "not-a-uuid",
+            "person__briefer_receiver": "（证书名单为空，请填下方外部人员）",
         }
         await svc._merge_persons("hot_work", values, form_value)
         by_role = {p["role"]: p for p in values["persons"]}
-        assert by_role["work_leader"]["user_id"] == "u-found"
+        # 证书命中：姓名/证号/类别随证带出，绑定账号时带 user_id
+        assert by_role["work_leader"]["name"] == "张三"
+        assert by_role["work_leader"]["certificate_no"] == "DJ-1"
+        assert by_role["work_leader"]["user_id"] == "u-1"
+        # 列表形态 + 未绑定账号（无 user_id）
         assert by_role["worker"]["name"] == "李四"
-        assert by_role["worker"]["certificate_no"] == "DJ-N"
+        assert by_role["worker"]["certificate_no"] == "DJ-2"
+        assert "user_id" not in by_role["worker"]
+        # 外部人员
         assert by_role["guardian"]["external"] == "true"
         assert by_role["guardian"]["certificate_no"] == "T-88"
+        # 非法 id → 姓名兜底
+        assert by_role["briefer"]["name"] == "not-a-uuid"
+        # 空提示值 → 无选人且无外部 → 保留原有成员
         assert by_role["process_guardian"]["name"] == "老成员"
-        assert by_role["briefer_receiver"]["name"] == "ou-receiver"
+        assert "briefer_receiver" not in by_role
         assert values["person_sign_names"]["work_leader"] == "张三"
 
     async def test_set_level_expired_and_success(
