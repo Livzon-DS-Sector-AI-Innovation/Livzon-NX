@@ -60,6 +60,7 @@ _FAST_ACTS = frozenset(
         "set_level",
         "search_role",
         "choose_cert",
+        "person_prev",
         "clear_search",
     }
 )
