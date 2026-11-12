@@ -19,8 +19,9 @@ const contractRecord = {
 }
 
 test.describe('采购合同汇总', () => {
-  test('支持搜索合同、展示卡片并打开详情抽屉', async ({ page }) => {
+  test('支持搜索合同、展示卡片并打开详情抽屉', async ({ context, page }) => {
     test.setTimeout(60_000)
+    await context.addCookies([{ name: 'auth_token', value: 'e2e-admin', url: 'http://127.0.0.1:3200' }])
 
     await page.route((url) => url.href.includes('/api/v1/procurement/contracts'), async (route) => {
       const url = new URL(route.request().url())

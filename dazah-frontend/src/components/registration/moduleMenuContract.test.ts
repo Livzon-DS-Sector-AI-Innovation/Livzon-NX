@@ -11,7 +11,7 @@ describe('registration migrated menu contract', () => {
     ])
   })
 
-  it('matches the registration landing page at the top level', () => {
+  it('lists the top-level registration menu entries in order', () => {
     const registration = moduleMenus.find((menu) => menu.moduleCode === 'registration')
 
     expect(registration?.children.map((item) => item.label)).toEqual([
@@ -21,8 +21,11 @@ describe('registration migrated menu contract', () => {
       '法规跟踪',
       '注册费用',
       '注册知识库',
+      '申报资料撰写',
       '注册设置',
     ])
+    expect(registration?.children.find((item) => item.key === 'dossier-writer')?.path)
+      .toBe('/registration/dossier-writer')
   })
 
   it('keeps the existing secondary menu trees', () => {

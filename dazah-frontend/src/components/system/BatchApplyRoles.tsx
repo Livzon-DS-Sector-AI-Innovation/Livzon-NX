@@ -145,9 +145,8 @@ export function BatchApplyRoles({ role, roles, departmentId, departmentName, onR
           setKeyword(value.trim())
           refresh()
       }} />
-      {error && (role
-        ? <PlatformNotice type="error" title={error} action={<Button onClick={refresh}>重试</Button>} />
-        : <Space wrap><span role="alert">{error}</span><Button onClick={refresh}>重试搜索</Button></Space>)}
+      {error && <PlatformNotice type="error" title={error} showRulesLink={!!role}
+        action={<Button onClick={refresh}>{role ? "重试" : "重试搜索"}</Button>} />}
       {!error && <Table<AdminUserItem> rowKey="id" size="small" loading={loading} dataSource={users}
         locale={{ emptyText: loading ? "正在查询用户" : "未找到符合条件的用户" }}
         scroll={{ x: 560 }} columns={[

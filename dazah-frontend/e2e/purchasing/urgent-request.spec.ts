@@ -1,7 +1,8 @@
 import { expect, test } from '@playwright/test'
 
 test.describe('加急采购申请', () => {
-  test('初始不预置类型，可添加类型分组和附件说明', async ({ page }) => {
+  test('初始不预置类型，可添加类型分组和附件说明', async ({ context, page }) => {
+    await context.addCookies([{ name: 'auth_token', value: 'e2e-admin', url: 'http://127.0.0.1:3200' }])
     await page.goto('/purchasing/request/urgent', { waitUntil: 'domcontentloaded' })
 
     await expect(page.getByRole('heading', { name: '加急单采购申请' })).toBeVisible()

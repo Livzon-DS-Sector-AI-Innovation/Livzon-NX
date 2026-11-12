@@ -1,8 +1,9 @@
 import { expect, test } from '@playwright/test'
 
 test.describe('采购发票识别', () => {
-  test('页面展示上传限制和识别结果表格', async ({ page }) => {
+  test('页面展示上传限制和识别结果表格', async ({ context, page }) => {
     test.setTimeout(60_000)
+    await context.addCookies([{ name: 'auth_token', value: 'e2e-admin', url: 'http://127.0.0.1:3200' }])
 
     await page.route('**/api/v1/procurement/invoices/recognition-records**', async (route) => {
       await route.fulfill({

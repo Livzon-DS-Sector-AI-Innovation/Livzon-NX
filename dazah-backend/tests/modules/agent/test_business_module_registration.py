@@ -192,14 +192,16 @@ async def test_module_coverage_http_projects_new_providers_and_rejects_non_admin
         assert modules["warehouse"]["coverage_percent"] == 100.0
         assert modules["warehouse"]["registered_count"] == 7
         assert all(page["enabled_count"] > 0 for page in modules["warehouse"]["pages"])
-        assert modules["registration"]["state"] == "integrated"
-        assert modules["registration"]["covered_pages"] == 20
-        assert modules["registration"]["total_pages"] == 20
-        assert modules["registration"]["coverage_percent"] == 100.0
-        assert modules["registration"]["registered_count"] == 9
-        assert all(
-            page["enabled_count"] > 0 for page in modules["registration"]["pages"]
-        )
+        registration = modules["registration"]
+        assert registration["state"] == "partial"
+        assert registration["covered_pages"] == 20
+        assert registration["total_pages"] == 21
+        assert registration["coverage_percent"] == 95.2
+        assert registration["registered_count"] == 9
+        assert {
+            page["page_key"] for page in registration["pages"]
+            if page["enabled_count"] == 0
+        } == {"registration:dossier-writer"}
         assert modules["quality"]["state"] == "integrated"
         assert modules["quality"]["covered_pages"] == 59
         assert modules["quality"]["total_pages"] == 59

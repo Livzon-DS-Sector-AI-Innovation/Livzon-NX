@@ -147,7 +147,7 @@ it('confirms individual role combinations and preserves only failed assignments 
 it('reports initial user list failures and distinguishes empty results after retry', async () => {
   mocks.list.mockRejectedValueOnce(new Error('需要 identity:admin 权限')).mockResolvedValueOnce({ items: [], total: 0 })
   await showUserSearch()
-  expect(host.querySelector('[role="alert"]')?.textContent).toBe('需要 identity:admin 权限')
+  expect(host.querySelector('[data-platform-notice="error"]')?.textContent).toContain('需要 identity:admin 权限')
   expect(button('批量分配角色').disabled).toBe(true)
   await act(async () => button('重试搜索').click())
   expect(host.textContent).toContain('未找到符合条件的用户')
