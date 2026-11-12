@@ -52,7 +52,7 @@ async function fetchWorkbenchRecord(id: string): Promise<DeviationAiWorkbenchRec
   } catch {
     // 本地不存在该偏差，回退飞书报告记录
   }
-  const record = await fetchFeishuDeviationReportRecord(id)
+  const record = await fetchFeishuDeviationReportRecord(id, 'quality:deviations:deviation-workbench')
   return toWorkbenchRecordFromReport(record)
 }
 

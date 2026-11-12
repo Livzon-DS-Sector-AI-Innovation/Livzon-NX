@@ -1,4 +1,5 @@
 import { registrationCertificateSheets } from "./registration-certificate"
+import reviewedPageRouteAliases from "./page-route-aliases.json"
 import { registrationDeclarationProgressSheets } from "./registration-declaration-progress"
 import { registrationProjectLedgerSheets } from "./registration-project-ledger"
 import { warehouseHardwarePages } from "./warehouse-hardware-pages"
@@ -406,6 +407,7 @@ export const moduleMenus: ModuleMenu[] = [
         ],
       },
       { key: "knowledge", label: "注册知识库", path: "/registration/knowledge" },
+      { key: "dossier-writer", label: "申报资料撰写", path: "/registration/dossier-writer" },
       { key: "registration-settings", label: "注册设置", path: "/registration/settings" },
     ],
   },
@@ -1177,12 +1179,19 @@ const pageRoutePrefixAliases: Record<string, string> = {
   "/equipment/inspection": "equipment:inspection",
   "/equipment/spare-parts": "equipment:spare-parts",
   "/equipment/personnel": "equipment:personnel",
-  "/registration/reference-standard": "registration:project:declaration-progress:international-planned-in-progress",
-  "/registration/supplementary-reply": "registration:project:declaration-progress:international-planned-in-progress",
-  "/registration/validation-audit": "registration:project:declaration-progress:international-planned-in-progress",
-  "/registration/review": "registration:project:declaration-progress:international-planned-in-progress",
-  "/registration/dossier-writer": "registration:project:declaration-progress:international-planned-in-progress",
 }
+
+const reviewedAliases = new Map(Object.entries(reviewedPageRouteAliases))
+const dynamicAliases = Array.from(reviewedAliases)
+  .filter(([route]) => route.includes('['))
+  .map(([route, key]) => ({
+    key,
+    pattern: new RegExp('^' + route.split('/').map((segment) =>
+      /^\[[a-zA-Z][a-zA-Z0-9]*\]$/.test(segment)
+        ? '[^/]+'
+        : segment.replace(/[.*+?^\${}()|[\]\\]/g, '\\$&'),
+    ).join('/') + '$'),
+  }))
 
 export function getPageKeyByPath(pathname: string): string | undefined {
   const normalized = pathname.replace(/\/$/, "") || "/"
@@ -1193,11 +1202,13 @@ export function getPageKeyByPath(pathname: string): string | undefined {
     (path) => normalized === path || normalized.startsWith(`${path}/`),
   )) return undefined
   // Only reviewed auxiliary forms inherit the ledger page; sibling pages do not.
-  if (/^\/quality\/deviations\/(?:new|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.test(normalized)) {
+  if (/^\/quality\/deviations\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(normalized)) {
     return 'quality:deviations:deviation-ledger'
   }
-  const alias = pageRouteAliases[normalized]
+  const alias = reviewedAliases.get(normalized) ?? pageRouteAliases[normalized]
   if (alias) return alias
+  const dynamicAlias = dynamicAliases.find(({ pattern }) => pattern.test(normalized))
+  if (dynamicAlias) return dynamicAlias.key
   const prefixAlias = Object.entries(pageRoutePrefixAliases).find(([prefix]) =>
     normalized === prefix || normalized.startsWith(`${prefix}/`),
   )

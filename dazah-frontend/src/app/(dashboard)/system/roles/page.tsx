@@ -1,13 +1,10 @@
-import { serverFetchDepartments, serverFetchRoles } from "@/lib/api/server/admin"
+import { serverFetchRoles } from "@/lib/api/server/admin"
 import { RoleManager } from "@/components/system/RoleManager"
 
 export const dynamic = "force-dynamic"
 
 export default async function RolesPage() {
-  const [roles, departments] = await Promise.all([
-    serverFetchRoles(),
-    serverFetchDepartments(),
-  ])
+  const roles = await serverFetchRoles()
 
   return (
     <div className="space-y-4">
@@ -17,10 +14,7 @@ export default async function RolesPage() {
           创建、编辑角色，并按菜单页面配置访问、查询、普通操作、附加高风险操作与数据范围。
         </p>
       </div>
-      <RoleManager
-        initialRoles={roles}
-        initialDepartments={departments}
-      />
+      <RoleManager initialRoles={roles} />
     </div>
   )
 }

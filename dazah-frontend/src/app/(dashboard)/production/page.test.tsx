@@ -411,6 +411,61 @@ describe('ProductionHomePage (fermentation board)', () => {
     expect(inputValues).toContain('2026-09-07 10:00')
   })
 
+  it('tags in-progress and yield-pending rows in the history drawer', async () => {
+    // 确认移种预建的未放罐记录（全空）与已放罐未录产量记录不再被误读为丢数据
+    actions.getFermentationBatchActuals.mockResolvedValue({
+      code: 200,
+      data: [
+        {
+          id: 'a-done',
+          tank_no: '303A',
+          batch_no: 'FA26231',
+          dump_date: '2026-09-08',
+          yield_kg: 100,
+          remark: null,
+        },
+        {
+          id: 'a-pending',
+          tank_no: '302A',
+          batch_no: 'FA26233',
+          dump_date: '2026-09-09',
+          yield_kg: null,
+          remark: null,
+        },
+        {
+          id: 'a-running',
+          tank_no: '304A',
+          batch_no: 'FA26235',
+          dump_date: null,
+          yield_kg: null,
+          remark: null,
+        },
+      ],
+    })
+    await render()
+    const historyBtn = Array.from(container.querySelectorAll('button')).find((b) =>
+      b.textContent?.includes('历史数据'),
+    ) as HTMLElement
+    await act(async () => {
+      historyBtn.click()
+      await new Promise((r) => setTimeout(r, 120))
+    })
+    const drawerText = document.body.textContent || ''
+    // 说明文字：未放罐批次的处理指引
+    expect(drawerText).toContain('放罐后请编辑该行补录放罐时间与产量')
+    // 标签挂在对应批次行：未放罐行仍是最后（放罐日期排序），可编辑入口保留
+    const rows = Array.from(
+      document.body.querySelectorAll('.ant-drawer tbody tr'),
+    )
+    const rowText = (batch: string) =>
+      rows.find((r) => r.textContent?.includes(batch))?.textContent ?? ''
+    expect(rowText('FA26235')).toContain('未放罐')
+    expect(rowText('FA26233')).toContain('待录产量')
+    // 已完成记录无状态标签
+    expect(rowText('FA26231')).not.toContain('未放罐')
+    expect(rowText('FA26231')).not.toContain('待录产量')
+  })
+
   it('renders recent planned batches and the alert ticker', async () => {
     await render()
     const text = (container.textContent || '') + (document.body.textContent || '')

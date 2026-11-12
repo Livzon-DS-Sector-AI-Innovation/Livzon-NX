@@ -68,7 +68,11 @@ from app.modules.hr.onboarding_evaluation_document_generator import (
     generate_onboarding_evaluation,
 )
 from app.modules.hr.oral_exam_document_generator import generate_oral_exam_result
-from app.modules.hr.page_access import EMPLOYEE_PAGE_KEY, employee_page_scope
+from app.modules.hr.page_access import (
+    EMPLOYEE_PAGE_KEY,
+    assert_employee_department,
+    employee_page_scope,
+)
 from app.modules.hr.plan_tracking_api import router as plan_tracking_router
 from app.modules.hr.position_training_api import router as position_training_router
 from app.modules.hr.position_training_mapping_api import (
@@ -1279,19 +1283,21 @@ async def create_employee(
     )
 
 
-@router.post("/employees/public-create", summary="扫码公开创建员工")
+@router.post("/employees/public-create", summary="扫码创建员工档案")
 async def create_employee_public(
     payload: EmployeePublicCreate,
     service: EmployeeService = Depends(get_employee_service),
     db: AsyncSession = Depends(get_db),
 ) -> Any:
-    """扫码填写表单后公开创建员工档案（不需要登录）。
+    """在员工档案授权范围内通过扫码表单创建员工档案。
 
     工号留空，状态默认"在职"。按姓名去重，已存在则返回提示。
     """
     from app.modules.hr.models import Employee
     from app.modules.hr.repository import EmployeeRepository
 
+    scope = await employee_page_scope(db)
+    assert_employee_department(scope, payload.department, payload.sub_department)
     emp_repo = EmployeeRepository(db)
     existing = await emp_repo.get_by_name(payload.name)
     if existing:
@@ -1312,7 +1318,7 @@ async def create_employee_public(
             await emp_repo.update(result)
     except Exception:
         # 员工已创建、仅飞书同步失败：不回滚建档，异常详情只进日志，
-        # 不把原始异常文本暴露给免登录调用方
+        # 不把原始异常文本暴露给调用方
         logger.exception("public 建档后的飞书同步失败")
         sync_status = "failed"
 
@@ -5779,12 +5785,17 @@ async def delete_candidate(
 # ─── Recruitment Onboarding Routes ───
 
 
-@router.get("/onboarding/names", summary="获取入职姓名列表（公开）")
+@router.get("/onboarding/names", summary="获取授权范围内的入职姓名列表")
 async def get_onboarding_names(
+    db: AsyncSession = Depends(get_db),
     service: RecruitmentOnboardingService = Depends(get_recruitment_onboarding_service),
+    current_user: CurrentUser = None,
 ) -> Any:
-    """获取飞书入职信息表中的所有姓名，供扫码填写时选择。"""
-    items, _ = await service.list_onboarding(page=1, page_size=500)
+    """获取授权部门内的入职姓名，供扫码填写时选择。"""
+    scope = await _resolve_visible_scope(db, current_user)
+    items, _ = await service.list_onboarding(
+        page=1, page_size=500, dept_alias_set=scope
+    )
     names = [item.get("name", "") for item in items if item.get("name")]
     return success_response(data=names)
 

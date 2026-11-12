@@ -9,11 +9,13 @@ from httpx import ASGITransport, AsyncClient
 
 from app.core.database import get_db
 from app.platform.identity import deps, page_policy, rbac_api
+from app.platform.identity.menu_seed_data import SEED_MENUS
 from app.platform.identity.page_permission_repository import (
     ActiveMenuPage,
     PagePermissionRepository,
 )
 from app.platform.identity.page_permissions import PagePermissionService
+from app.platform.identity.rbac import _flatten_seed_menus
 from app.platform.identity.schemas import EffectivePageGrantOut, PageDataScopeInput
 
 
@@ -38,9 +40,73 @@ def test_reviewed_modules_have_complete_runtime_page_api_bindings() -> None:
         page for page in page_policy.PAGE_DEFINITIONS
         if page.module_code in reviewed
     ]
-    assert len(pages) == 238
+    assert len(pages) == 239
     for module_code in reviewed:
         assert page_policy.page_api_catalog_gaps(module_code) == []
+
+
+@pytest.mark.asyncio
+async def test_requested_modules_pass_full_integration_check(monkeypatch):
+    from app.main import app
+
+    assert app.routes
+    menus = [
+        ActiveMenuPage(
+            key=node["key"], name=node["name"], route_path=node["path"],
+            root_key=node["key"].split(":", 1)[0],
+        )
+        for node in _flatten_seed_menus(SEED_MENUS)
+        if not node["children"] and not node["disabled"] and node["path"]
+    ]
+    monkeypatch.setattr(
+        PagePermissionRepository,
+        "active_menu_page_catalog",
+        AsyncMock(return_value=menus),
+    )
+    modules = ["hr", "quality", "registration", "warehouse", "production"]
+    result = await PagePermissionService().integration_gaps_for_modules(
+        None, module_codes=modules
+    )
+    assert result == dict.fromkeys(modules, [])
+
+
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        ("/hr/employee-fill", "hr:employee-management:profile"),
+        ("/quality/deviations/record-1/ai", "quality:deviations:deviation-ledger"),
+        (
+            "/registration/review/domestic-completed",
+            "registration:project:declaration-progress:domestic-completed",
+        ),
+        ("/registration/review/new-sheet", None),
+        ("/registration/validation-audit/task-1/extra", None),
+        ("/registration/dossier-writer/record-1", "registration:dossier-writer"),
+        ("/warehouse/raw-material", "warehouse:materials:raw-summary"),
+        (
+            "/production/batches/workshop/201-3/scheduling",
+            "production:batches:workshop-201-3",
+        ),
+    ],
+)
+def test_reviewed_aliases_resolve_to_business_page_keys(path, expected):
+    assert page_policy.page_key_for_route(path) == expected
+
+
+def test_legacy_registration_review_links_preserve_sheet_scope():
+    for page in page_policy.PAGES_BY_MODULE["registration"]:
+        if page.route_path.startswith("/registration/declaration-progress/"):
+            sheet = page.route_path.rsplit("/", 1)[1]
+            assert page_policy.page_key_for_route(f"/registration/review/{sheet}") == (
+                page.page_key
+            )
+
+
+def test_new_workshop_child_still_reports_an_integration_gap():
+    route = "/production/batches/workshop/201-3/new-stage"
+    gaps = page_policy.frontend_page_catalog_issues("production", [route]).messages()
+    assert len(gaps) == 1
+    assert route in gaps[0]
 
 
 @pytest.mark.asyncio

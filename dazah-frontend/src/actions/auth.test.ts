@@ -2,22 +2,30 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   fetch: vi.fn(), setCookie: vi.fn(), getCookie: vi.fn(), deleteCookie: vi.fn(),
+  getAuthHeaders: vi.fn(),
   redirect: vi.fn(() => { throw new Error('NEXT_REDIRECT') }),
 }))
 vi.mock('next/headers', () => ({ cookies: async () => ({ set: mocks.setCookie, get: mocks.getCookie, delete: mocks.deleteCookie }) }))
 vi.mock('next/navigation', () => ({ redirect: mocks.redirect }))
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
-vi.mock('@/lib/auth', () => ({ getAuthHeaders: async () => ({ Authorization: 'Bearer synthetic', 'X-Forwarded-For': '198.51.100.23' }) }))
+vi.mock('@/lib/auth', () => ({ getAuthHeaders: mocks.getAuthHeaders }))
 
 import { getCurrentUser, loginWithPassword, logout } from './auth'
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mocks.getAuthHeaders.mockResolvedValue({ Authorization: 'Bearer synthetic', 'X-Forwarded-For': '198.51.100.23' })
   vi.stubEnv('NODE_ENV', 'production')
   vi.stubEnv('API_BASE_URL', 'http://trusted.test:8000')
   vi.stubGlobal('fetch', mocks.fetch)
 })
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs() })
+
+it('skips the current-user request when the browser has no session credential', async () => {
+  mocks.getAuthHeaders.mockResolvedValue({ 'X-Forwarded-For': '198.51.100.23' })
+  expect(await getCurrentUser()).toBeNull()
+  expect(mocks.fetch).not.toHaveBeenCalled()
+})
 
 it('never retries a password against another host after a connection failure', async () => {
   mocks.fetch.mockRejectedValue(new Error('connection failed'))

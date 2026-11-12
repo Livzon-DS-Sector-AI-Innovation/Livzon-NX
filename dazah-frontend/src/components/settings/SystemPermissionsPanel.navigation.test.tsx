@@ -7,7 +7,7 @@ import { expect, it, vi } from 'vitest'
 vi.mock('@/components/system', () => ({
   RoleManager: () => <div>角色设置内容</div>,
   UserRoleManager: () => <div>用户角色内容</div>,
-  DeptRoleMapper: () => <div>部门映射内容</div>,
+    DeptRoleMapper: () => <div>角色映射内容</div>,
   PermissionVerification: () => <div>权限检查内容</div>,
 }))
 
@@ -37,7 +37,10 @@ it('switches between authorization and checks without exposing menu management',
     const nav = host.querySelector('nav[aria-label="权限管理子导航"]')
     expect(nav?.textContent).toContain('角色管理')
     expect(nav?.textContent).toContain('用户角色')
-    expect(nav?.textContent).toContain('部门角色映射')
+    const roleMapping = Array.from(nav!.querySelectorAll('button')).find((button) => button.textContent?.trim() === '角色映射')!
+    await act(async () => roleMapping.click())
+    expect(roleMapping.getAttribute('aria-current')).toBe('page')
+    expect(host.textContent).toContain('角色映射内容')
     const userRoles = Array.from(nav!.querySelectorAll<HTMLButtonElement>('button')).find((button) => button.textContent?.includes('用户角色'))!
     await act(async () => userRoles.click())
     expect(userRoles.getAttribute('aria-current')).toBe('page')

@@ -19,6 +19,7 @@ import { TopNav } from "./TopNav"
 import { Sidebar } from "./Sidebar"
 import { PageNavigation } from "./PageNavigation"
 import type { User } from "@/types/user"
+import { isSystemAdministrator } from "@/lib/administrator-role"
 import { useAuthStore } from "@/stores/auth"
 
 interface AppShellProps {
@@ -81,6 +82,10 @@ export function AppShell({ children, user }: AppShellProps) {
       pageGrant?.permissions?.includes("access") &&
       !pageGrant.permissions.includes("query"),
   )
+
+  if (/^\/system\/roles\/[^/]+\/page-permissions$/.test(pathname) && isSystemAdministrator(user)) {
+    return <main className="h-dvh overflow-hidden">{children}</main>
+  }
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">

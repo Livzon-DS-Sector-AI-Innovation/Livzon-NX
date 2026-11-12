@@ -43,9 +43,9 @@ async function fetchBackend(path: string, options?: RequestInit) {
 
 export async function getCurrentUser(): Promise<User | null> {
   try {
-    const res = await fetchBackend('/api/v1/identity/me', {
-      headers: await getAuthHeaders(),
-    })
+    const headers = await getAuthHeaders()
+    if (!headers.Authorization) return null
+    const res = await fetchBackend('/api/v1/identity/me', { headers })
     if (!res.ok) return null
     const json = await res.json()
     return json.data ?? null

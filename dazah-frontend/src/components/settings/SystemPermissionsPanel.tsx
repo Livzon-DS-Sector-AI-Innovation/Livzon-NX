@@ -34,8 +34,8 @@ export const SYSTEM_PERMISSION_PAGES = [
   },
   {
     href: '/system/dept-roles',
-    title: '部门角色映射',
-    description: '按部门查询用户，筛选并勾选需要应用角色的人员。',
+    title: '角色映射',
+    description: '搜索用户或按部门查询，为所选用户批量分配角色。',
   },
   {
     href: '/system/permission-verification',
@@ -108,7 +108,7 @@ export default function SystemPermissionsPanel({
             icon: <SafetyCertificateOutlined />,
             children: (
               <PermissionTabContent description={SYSTEM_PERMISSION_PAGES[0].description}>
-                <RoleManager initialRoles={roles} initialDepartments={departments} />
+                <RoleManager initialRoles={roles} origin="settings" />
               </PermissionTabContent>
             ),
           },
@@ -124,7 +124,7 @@ export default function SystemPermissionsPanel({
           },
           {
             key: '/system/dept-roles',
-            label: '部门角色映射',
+            label: SYSTEM_PERMISSION_PAGES[2].title,
             icon: <TeamOutlined />,
             children: (
               <PermissionTabContent description={SYSTEM_PERMISSION_PAGES[2].description}>

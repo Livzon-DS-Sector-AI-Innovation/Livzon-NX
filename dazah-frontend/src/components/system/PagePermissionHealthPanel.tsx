@@ -5,10 +5,9 @@ import { App, Button, Card, Empty, Select, Space, Statistic, Table, Tag, Typogra
 import Alert from "@/components/shared/PlatformNotice"
 import { EditOutlined, ReloadOutlined, ToolOutlined } from "@ant-design/icons"
 import { getPagePermissionHealth, remediatePagePermissionHealth, type PagePermissionHealthOut } from "@/actions/admin"
-import { getPermissionDepartments, getUsers, type UserManagementItem } from "@/actions/users"
-import { fetchRoles, type RoleItem } from "@/lib/api/client/admin"
-import type { DepartmentItem } from "@/lib/api/server/admin"
-import { RolePagePermissionsDrawer } from "./RolePagePermissionsDrawer"
+import { getUsers, type UserManagementItem } from "@/actions/users"
+import { useRouter } from "next/navigation"
+import { rolePagePermissionsPath } from "@/lib/rolePagePermissionsPath"
 import ModulePermissionsDrawer from "@/components/settings/ModulePermissionsDrawer"
 import { getPermissionModuleName } from "@/lib/menu-config"
 
@@ -21,6 +20,7 @@ const issueLabels: Record<string, string> = {
 
 export function PagePermissionHealthPanel() {
   const { message, modal } = App.useApp()
+  const router = useRouter()
   const [result, setResult] = useState<PagePermissionHealthOut>()
   const [loading, setLoading] = useState(false)
   const [fixing, setFixing] = useState<string>()
@@ -28,9 +28,7 @@ export function PagePermissionHealthPanel() {
   const [issueCode, setIssueCode] = useState("all")
   const [targetType, setTargetType] = useState("all")
   const [moduleCode, setModuleCode] = useState("all")
-  const [roleTarget, setRoleTarget] = useState<RoleItem | null>(null)
   const [userTarget, setUserTarget] = useState<UserManagementItem | null>(null)
-  const [departments, setDepartments] = useState<DepartmentItem[]>([])
   const load = async () => {
     setLoading(true)
     try { setResult(await getPagePermissionHealth()) }
@@ -53,19 +51,15 @@ export function PagePermissionHealthPanel() {
   )).sort(), [result])
 
   const openEditor = async (item: HealthIssue) => {
+    if (item.target_type === "role") {
+      router.push(rolePagePermissionsPath(item.target_id, "health", item.page_key))
+      return
+    }
     try {
-      if (item.target_type === "role") {
-        const [roles, nextDepartments] = await Promise.all([fetchRoles(), getPermissionDepartments()])
-        const role = roles.find((entry) => entry.id === item.target_id)
-        if (!role) throw new Error("角色已不存在，请重新检查")
-        setDepartments(nextDepartments)
-        setRoleTarget(role)
-      } else {
-        const response = await getUsers({ keyword: item.target_name, status: "active", limit: 50 })
-        const user = response.items.find((entry) => entry.id === item.target_id)
-        if (!user) throw new Error("用户已不存在，请重新检查")
-        setUserTarget(user)
-      }
+      const response = await getUsers({ keyword: item.target_name, status: "active", limit: 50 })
+      const user = response.items.find((entry) => entry.id === item.target_id)
+      if (!user) throw new Error("用户已不存在，请重新检查")
+      setUserTarget(user)
     } catch (error) {
       message.error(error instanceof Error ? error.message : "授权编辑器加载失败")
     }
@@ -145,8 +139,6 @@ export function PagePermissionHealthPanel() {
               loading={fixing === key} onClick={() => fixIssue(item)}>修复</Button>}</Space>
         } },
       ]} />
-    <RolePagePermissionsDrawer role={roleTarget} departments={departments} open={Boolean(roleTarget)}
-      onClose={() => { setRoleTarget(null); void load() }} />
     <ModulePermissionsDrawer user={userTarget} open={Boolean(userTarget)}
       onClose={() => { setUserTarget(null); void load() }} />
   </Card>

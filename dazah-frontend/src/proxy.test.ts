@@ -5,7 +5,13 @@ import { proxy } from './proxy'
 vi.mock('@/lib/server-api', () => ({ getServerApiBaseUrl: () => 'http://backend.test' }))
 afterEach(() => vi.unstubAllGlobals())
 
-it.each([undefined, 'expired-fixture'])('设备页未登录或会话失效时仅检查身份并进入登录页：%s', async token => {
+function sessionRequest(url: string, init: ConstructorParameters<typeof NextRequest>[1] = {}) {
+  const headers = new Headers(init.headers)
+  headers.set('cookie', 'auth_token=session-fixture')
+  return new NextRequest(url, { ...init, headers })
+}
+
+it.each([undefined, 'expired-fixture'])('设备页未登录或会话失效时进入登录页：%s', async token => {
   const fetchMock = vi.fn().mockResolvedValue(new Response('{}', { status: 401 }))
   vi.stubGlobal('fetch', fetchMock)
   const response = await proxy(new NextRequest('https://frontend.test/equipment?workshop=201-1&module=assets', {
@@ -14,8 +20,13 @@ it.each([undefined, 'expired-fixture'])('设备页未登录或会话失效时仅
   const location = new URL(response.headers.get('location') || '')
   expect(location.pathname).toBe('/login')
   expect(location.searchParams.get('next')).toBe('/equipment?workshop=201-1&module=assets')
-  expect(fetchMock).toHaveBeenCalledOnce()
-  expect(fetchMock.mock.calls[0][0]).toBe('http://backend.test/api/v1/identity/me')
+  if (token) {
+    expect(fetchMock).toHaveBeenCalledOnce()
+    expect(fetchMock.mock.calls[0][0]).toBe('http://backend.test/api/v1/identity/me')
+    expect(new Headers(fetchMock.mock.calls[0][1].headers).get('Authorization')).toBe(`Bearer ${token}`)
+  } else {
+    expect(fetchMock).not.toHaveBeenCalled()
+  }
   expect(response.headers.get('x-middleware-next')).toBeNull()
 })
 
@@ -38,12 +49,12 @@ it('从设备工作台 URL 提取权限上下文，并忽略客户端伪造的�
     ],
   } }))))
   const root = 'https://frontend.test/equipment'
-  const allowed = await proxy(new NextRequest(`${root}?module=assets`, {
+  const allowed = await proxy(sessionRequest(`${root}?module=assets`, {
     headers: { 'X-Dazah-Equipment-Module': 'maintenance' },
   }))
   expect(allowed.headers.get('x-middleware-request-x-dazah-equipment-module')).toBe('assets')
   expect(allowed.headers.get('x-middleware-request-x-dazah-page-path')).toBe('/equipment')
-  const denied = await proxy(new NextRequest(`${root}?module=maintenance`, {
+  const denied = await proxy(sessionRequest(`${root}?module=maintenance`, {
     headers: { 'X-Dazah-Equipment-Module': 'assets' },
   }))
   expect(denied.status).toBe(403)
@@ -65,24 +76,24 @@ function qualityMe(pageKey: string, permissions = ['access', 'query', 'operate']
 
 it('renders the deviation dashboard using its saved ledger grant', async () => {
   qualityMe('quality:deviations:deviation-ledger')
-  const result = await proxy(new NextRequest('http://frontend.test/quality/deviations'))
+  const result = await proxy(sessionRequest('http://frontend.test/quality/deviations'))
   expect(result.headers.get('x-middleware-next')).toBe('1')
   expect(result.headers.get('x-middleware-request-x-dazah-page-path')).toBe('/quality/deviations')
-  expect((await proxy(new NextRequest('http://frontend.test/quality/deviations/records'))).status).toBe(403)
+  expect((await proxy(sessionRequest('http://frontend.test/quality/deviations/records'))).status).toBe(403)
 })
 
 it('directs a partially authorized directory to its queryable child without granting dashboard data', async () => {
   qualityMe('quality:deviations:deviation-records')
-  const result = await proxy(new NextRequest('http://frontend.test/quality/deviations'))
+  const result = await proxy(sessionRequest('http://frontend.test/quality/deviations'))
   expect(result.headers.get('location')).toBe('http://frontend.test/quality/deviations/records')
-  expect((await proxy(new NextRequest('http://frontend.test/quality/deviations', { method: 'POST' }))).status).toBe(403)
+  expect((await proxy(sessionRequest('http://frontend.test/quality/deviations', { method: 'POST' }))).status).toBe(403)
 })
 
 it('does not turn directory visibility or access-only grants into query authorization', async () => {
   qualityMe('quality:deviations:deviation-ledger', ['access'])
-  expect((await proxy(new NextRequest('http://frontend.test/quality/deviations'))).status).toBe(403)
+  expect((await proxy(sessionRequest('http://frontend.test/quality/deviations'))).status).toBe(403)
   qualityMe('quality:capas:capa-ledger')
-  expect((await proxy(new NextRequest('http://frontend.test/quality/deviations'))).status).toBe(403)
+  expect((await proxy(sessionRequest('http://frontend.test/quality/deviations'))).status).toBe(403)
 })
 
 function me(permissions: string[], status = 'enforced', role = 'user') {
@@ -94,11 +105,11 @@ function me(permissions: string[], status = 'enforced', role = 'user') {
 
 it('blocks unauthorized and access-only pages before Server Components can execute', async () => {
   me([])
-  const denied = await proxy(new NextRequest('http://frontend.test/hr/profile'))
+  const denied = await proxy(sessionRequest('http://frontend.test/hr/profile'))
   expect(denied.status).toBe(403)
   expect(denied.headers.get('x-middleware-next')).toBeNull()
   me(['access'])
-  const accessOnly = await proxy(new NextRequest('http://frontend.test/hr/profile'))
+  const accessOnly = await proxy(sessionRequest('http://frontend.test/hr/profile'))
   expect(accessOnly.status).toBe(403)
   expect(await accessOnly.text()).toContain('尚未获得查询数据权限')
 })
@@ -111,27 +122,27 @@ it('strips a URL token without accepting it as a session', async () => {
 
 it('lets a query-authorized page render with server-supplied context', async () => {
   me(['access', 'query'])
-  const response = await proxy(new NextRequest('http://frontend.test/hr/profile'))
+  const response = await proxy(sessionRequest('http://frontend.test/hr/profile'))
   expect(response.headers.get('x-middleware-next')).toBe('1')
   expect(response.headers.get('x-middleware-request-x-dazah-page-path')).toBe('/hr/profile')
 })
 
 it('derives module landing from an authorized child and enforces saved grants in draft status', async () => {
   me(['access', 'query'])
-  expect((await proxy(new NextRequest('http://frontend.test/hr'))).headers.get('location'))
+  expect((await proxy(sessionRequest('http://frontend.test/hr'))).headers.get('location'))
     .toBe('http://frontend.test/hr/employee-management')
   me([], 'draft')
-  expect((await proxy(new NextRequest('http://frontend.test/hr/profile'))).status).toBe(403)
+  expect((await proxy(sessionRequest('http://frontend.test/hr/profile'))).status).toBe(403)
 })
 
 it('fails closed when authorization cannot be checked', async () => {
   vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
-  expect((await proxy(new NextRequest('http://frontend.test/hr/profile'))).status).toBe(503)
+  expect((await proxy(sessionRequest('http://frontend.test/hr/profile'))).status).toBe(503)
 })
 
 it('allows the system administrator to render without explicit page grants', async () => {
   me([], 'enforced', 'admin')
-  expect((await proxy(new NextRequest('http://frontend.test/hr/profile'))).headers.get('x-middleware-next')).toBe('1')
+  expect((await proxy(sessionRequest('http://frontend.test/hr/profile'))).headers.get('x-middleware-next')).toBe('1')
 })
 
 it('lets an enforced module root render when its overview entry is authorized', async () => {
@@ -143,7 +154,7 @@ it('lets an enforced module root render when its overview entry is authorized', 
       { page_key: 'production:overview', module_code: 'production', permissions: ['access', 'query'] },
     ],
   } }))))
-  const response = await proxy(new NextRequest('http://frontend.test/production'))
+  const response = await proxy(sessionRequest('http://frontend.test/production'))
   expect(response.headers.get('x-middleware-next')).toBe('1')
   expect(response.headers.get('location')).toBeNull()
 })
@@ -157,7 +168,7 @@ it('redirects an enforced module root without an overview grant to the first aut
       { page_key: 'production:batches:workshop-201-2', module_code: 'production', permissions: ['access', 'query'] },
     ],
   } }))))
-  const response = await proxy(new NextRequest('http://frontend.test/production'))
+  const response = await proxy(sessionRequest('http://frontend.test/production'))
   expect(response.headers.get('location')).toBe('http://frontend.test/production/batches/workshop/201-2')
 })
 
@@ -169,7 +180,7 @@ it.each([
     data: { role: 'admin', roles },
   }), { status: 200 }))
   vi.stubGlobal('fetch', fetchMock)
-  const response = await proxy(new NextRequest('http://frontend.test/settings'))
+  const response = await proxy(sessionRequest('http://frontend.test/settings'))
   expect(response.status).toBe(expectedStatus)
   expect(fetchMock).toHaveBeenCalledOnce()
 })
@@ -178,5 +189,5 @@ it('blocks direct access to system permission pages for ordinary administrators'
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
     data: { role: 'admin', roles: ['ordinary_admin'] },
   }))))
-  expect((await proxy(new NextRequest('http://frontend.test/system/roles'))).status).toBe(403)
+  expect((await proxy(sessionRequest('http://frontend.test/system/roles'))).status).toBe(403)
 })

@@ -52,6 +52,16 @@ describe('system permission server actions', () => {
     }))
   })
 
+  it('loads the current role baseline without caching a previous version', async () => {
+    const data = { role_id: 'role-1', grant_version: 8, grants: [], definitions: [] }
+    const request = vi.fn().mockResolvedValue(new Response(JSON.stringify({ data })))
+    vi.stubGlobal('fetch', request)
+    await expect(adminActions.getRolePagePermissions('role-1')).resolves.toEqual(data)
+    expect(request).toHaveBeenCalledWith(expect.stringContaining('/roles/role-1/page-permissions'), expect.objectContaining({
+      cache: 'no-store', headers: expect.objectContaining({ Authorization: 'Bearer system-admin-token' }),
+    }))
+  })
+
   it.each([
     [403, '仅系统管理员可以分配系统管理员角色'],
     [409, '授权版本冲突'],

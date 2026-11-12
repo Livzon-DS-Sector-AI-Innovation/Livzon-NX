@@ -466,6 +466,7 @@ _LEGACY_SEED_MENUS: list[dict[str, Any]] = [
                 ],
             ),
             _n("knowledge", "注册知识库", "/registration/knowledge"),
+            _n("dossier-writer", "申报资料撰写", "/registration/dossier-writer"),
             _n("registration-settings", "注册设置", "/registration/settings"),
         ],
     ),

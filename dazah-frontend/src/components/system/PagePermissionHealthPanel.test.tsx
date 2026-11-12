@@ -4,7 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
-  health: vi.fn(), remediate: vi.fn(), roles: vi.fn(), departments: vi.fn(), users: vi.fn(),
+  health: vi.fn(), remediate: vi.fn(), navigate: vi.fn(), users: vi.fn(),
   confirm: vi.fn(),
   message: { error: vi.fn(), warning: vi.fn(), success: vi.fn() },
 }))
@@ -13,14 +13,9 @@ vi.mock('@/actions/admin', () => ({
   remediatePagePermissionHealth: mocks.remediate,
 }))
 vi.mock('@/actions/users', () => ({
-  getPermissionDepartments: mocks.departments,
   getUsers: mocks.users,
 }))
-vi.mock('@/lib/api/client/admin', () => ({ fetchRoles: mocks.roles }))
-vi.mock('./RolePagePermissionsDrawer', () => ({
-  RolePagePermissionsDrawer: ({ open }: { open: boolean }) =>
-    open ? createElement('div', { 'data-testid': 'role-editor' }) : null,
-}))
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mocks.navigate }) }))
 vi.mock('@/components/settings/ModulePermissionsDrawer', () => ({
   default: ({ open }: { open: boolean }) =>
     open ? createElement('div', { 'data-testid': 'user-editor' }) : null,
@@ -56,8 +51,6 @@ beforeEach(() => {
     checked_at: '2026-09-16T08:00:00Z', issue_count: 2,
     error_count: 1, warning_count: 1, issues,
   })
-  mocks.roles.mockResolvedValue([{ id: 'role-1', name: '人事角色', code: 'hr', permissions: [] }])
-  mocks.departments.mockResolvedValue([])
   mocks.users.mockResolvedValue({ items: [{ id: 'user-1', name: '张三' }] })
 })
 afterEach(async () => {
@@ -111,8 +104,7 @@ it('shows health findings and opens the matching role or user editor', async () 
   await act(async () => {
     rowFor('部门已失效').querySelector<HTMLButtonElement>('button')!.click()
   })
-  expect(mocks.roles).toHaveBeenCalled()
-  expect(document.querySelector('[data-testid="role-editor"]')).toBeTruthy()
+  expect(mocks.navigate).toHaveBeenCalledWith('/system/roles/role-1/page-permissions?from=health&page=hr%3Aprofile')
 
   await act(async () => {
     rowFor('与角色基线相同').querySelector<HTMLButtonElement>('button')!.click()
@@ -150,7 +142,6 @@ it('warns and opens the editor when invalid departments need manual repair', asy
   await act(async () => confirmation.onOk())
 
   expect(mocks.message.warning).toHaveBeenCalledWith('需重新选择授权部门')
-  expect(mocks.roles).toHaveBeenCalled()
-  expect(document.querySelector('[data-testid="role-editor"]')).toBeTruthy()
+  expect(mocks.navigate).toHaveBeenCalledWith('/system/roles/role-1/page-permissions?from=health&page=hr%3Aprofile')
   expect(mocks.health).toHaveBeenCalledTimes(1)
 })

@@ -35,6 +35,15 @@ function pageGrant(permissions: Array<'access' | 'query' | 'operate'>): NonNulla
 
 describe('application shell permission boundary', () => {
   beforeEach(() => { session.pathname = '/purchasing/supplier' })
+  it('gives the protected permission workbench the full viewport', () => {
+    session.pathname = '/system/roles/test-role/page-permissions'
+    const html = renderToStaticMarkup(<AppShell user={makeUser({ role: 'admin' })}>页面权限基线配置</AppShell>)
+    expect(html).toContain('页面权限基线配置')
+    expect(html).not.toContain('<nav>')
+    expect(html).not.toContain('<aside>')
+    const denied = renderToStaticMarkup(<AppShell user={makeUser()}>页面权限基线配置</AppShell>)
+    expect(denied).not.toContain('页面权限基线配置')
+  })
   it('retains a compact mobile entry to the energy sidebar', () => {
     session.pathname = '/energy/reports'
     const html = renderToStaticMarkup(<AppShell user={makeUser({ role: 'admin' })}>能源报表</AppShell>)
