@@ -31,6 +31,8 @@ const RECORDS = [
     prepare_date: '2026-03-01',
     prepare_operator: [
       { name: '张三', open_id: 'ou_z', avatar_url: 'https://avatar/z.png' },
+      { name: '李四' },
+      { name: '', open_id: 'ou_empty' },
     ],
     glucose_batch: 'G-1',
   },
@@ -149,6 +151,46 @@ describe('SeedCulturePage (101-1) 林可台账', () => {
     })
     const lastCall = actions.getSeedCultures.mock.calls.at(-1)
     expect(lastCall?.[0]).toMatchObject({ page: 1, page_size: 200, product_name: '盐酸林可霉素', batch_no: 'SC-2026-01' })
+  })
+
+  it('renders unknown member fallback and text-valued person chips', async () => {
+    // 详情弹窗内：无头像 → 姓氏首字占位；open_id 无姓名 → 未知成员
+    actions.getSeedCultures.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: [
+        {
+          id: 'sc-mix',
+          batch_no: 'SC-MIX-01',
+          product_name: '盐酸林可霉素',
+          prepare_date: '2026-03-05',
+          prepare_operator: [
+            { name: '王五' },
+            { name: '', open_id: 'ou_empty' },
+          ],
+          // 历史文本形态：逗号姓名串（normalizePeople 字符串分支）
+          sterilization_operator: '赵六,钱七' as unknown as never,
+        },
+      ],
+    })
+    act(() => {
+      root.render(<App><SeedCulturePage /></App>)
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 60))
+    })
+    clickTab('盐酸林可霉素')
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    const detailBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('详情'))
+    expect(detailBtn).toBeTruthy()
+    await act(async () => { detailBtn!.click(); await new Promise((r) => setTimeout(r, 80)) })
+    const text = document.body.textContent || ''
+    expect(text).toContain('王五')
+    expect(text).toContain('未知成员')
+    expect(text).toContain('赵六')
+    expect(text).toContain('钱七')
   })
 
   it('creates a new record and submits person names as person refs', async () => {
@@ -284,7 +326,7 @@ describe('SeedCulturePage (101-1) 林可台账', () => {
     const personInput = Array.from(document.body.querySelectorAll('.ant-modal input')).find(
       (i) => i.closest('.ant-form-item')?.textContent?.includes('配制操作人/复核人'),
     ) as HTMLInputElement | undefined
-    expect(personInput?.value).toBe('张三')
+    expect(personInput?.value).toBe('张三,李四')
     const okBtn = Array.from(document.querySelectorAll('.ant-modal button')).find((b) => (b.textContent || '').replace(/\s/g, '') === '确认') as HTMLButtonElement | undefined
     await act(async () => { okBtn!.click(); await new Promise((r) => setTimeout(r, 120)) })
     expect(actions.updateSeedCulture).toHaveBeenCalledWith('sc-1', expect.objectContaining({ batch_no: 'SC-2026-01' }))
