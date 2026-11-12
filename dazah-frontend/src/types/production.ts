@@ -665,6 +665,8 @@ export interface BoardTank {
   dump_actual_at?: string | null
   /** 该罐当前批次展开批号列表（确认移种取首个为主批号） */
   batch_nos?: string[]
+  /** 倒罐对复合批号（确认移种/产量录入应提交的主批号，如 MV-26087/088） */
+  composite_batch_no?: string | null
   /** true = 倒罐目的罐（如他汀 301A），移种继承来源批，不提供确认移种 */
   turn_in?: boolean
   note: string | null
