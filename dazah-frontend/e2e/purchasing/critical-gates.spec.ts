@@ -17,7 +17,8 @@ test.describe('采购高风险操作门禁', () => {
     await expect(page.getByText('未获得当前菜单页面的访问权限。')).toBeVisible()
   })
 
-  test('驳回必须确认、填写原因，并显示后端失败', async ({ page }) => {
+  test('驳回必须确认、填写原因，并显示后端失败', async ({ context, page }) => {
+    await context.addCookies([{ name: 'auth_token', value: 'e2e-admin', url: 'http://127.0.0.1:3200' }])
     await page.goto('/purchasing/approval/hardware/hardware-warehouse')
 
     await expect(page.getByText('工程设备部')).toBeVisible()

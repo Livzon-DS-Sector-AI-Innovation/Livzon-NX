@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 const routeMocks = vi.hoisted(() => {
   const fallback = (name: string): unknown => {
+    if (name === 'serverFetchRoles') return [{ id: 'role-1', code: 'test_role', name: '测试角色', is_system: false, permissions: [] }]
     if (name.toLowerCase().includes('workbook')) return { sheets: [] }
     if (name.toLowerCase().includes('dashboard') || name.toLowerCase().includes('stats')) return {}
     if (name.toLowerCase().includes('config') || name.toLowerCase().includes('recipients')) return []
@@ -34,6 +35,14 @@ vi.mock('next/navigation', () => ({
 }))
 
 vi.mock('@/actions/hr', async (importOriginal) => routeMocks.moduleFactory(importOriginal))
+vi.mock('@/actions/admin', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/actions/admin')>(),
+  getRolePagePermissions: vi.fn(async (roleId: string) => ({ role_id: roleId, grant_version: 1, grants: [], definitions: [] })),
+}))
+vi.mock('@/actions/users', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/actions/users')>(),
+  getPermissionDepartments: vi.fn(async () => []),
+}))
 vi.mock('@/actions/quality', async (importOriginal) => routeMocks.moduleFactory(importOriginal))
 vi.mock('@/actions/quality-capa', async (importOriginal) => routeMocks.moduleFactory(importOriginal))
 vi.mock('@/actions/quality-change', async (importOriginal) => routeMocks.moduleFactory(importOriginal))
@@ -62,7 +71,7 @@ const routeLoaders = (import.meta as GlobImportMeta).glob(
 function routeProps(path: string): Record<string, unknown> {
   const params = {
     id: 'record-1', productId: 'product-1', productCode: 'LFT', group: 'raw', slug: 'summary',
-    planId: 'plan-1', sheetKey: 'projects', entityCode: 'candidate', category: 'urgent', step: '1',
+    planId: 'plan-1', sheetKey: 'projects', entityCode: 'candidate', category: 'urgent', step: '1', roleId: 'role-1',
   }
   return {
     params: Promise.resolve(params),

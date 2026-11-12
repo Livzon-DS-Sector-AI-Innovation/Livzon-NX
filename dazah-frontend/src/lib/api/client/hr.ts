@@ -165,7 +165,10 @@ export async function fetchOnboardingAttachmentContent(id: string, fileToken: st
 }
 
 export async function fetchOnboardingNames(): Promise<string[]> {
-  const res = await fetch('/api/v1/hr/onboarding/names', { cache: 'no-store' })
+  const res = await fetch('/api/v1/hr/onboarding/names', {
+    cache: 'no-store',
+    headers: { 'X-Dazah-Page-Key': 'hr:onboarding' },
+  })
   if (!res.ok) throw new Error('获取姓名列表失败')
   const data = await res.json()
   return data.data || []

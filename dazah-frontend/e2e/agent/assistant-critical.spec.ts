@@ -12,6 +12,10 @@ async function sendMessage(page: Page, message: string) {
 }
 
 test.describe('Livzon 助手关键交互', () => {
+  test.beforeEach(async ({ context }) => {
+    await context.addCookies([{ name: 'auth_token', value: 'e2e-admin', url: 'http://127.0.0.1:3200' }])
+  })
+
   test('展示 Agent 欢迎页并可从常用任务发起对话', async ({ page }) => {
     await openAssistant(page)
     await expect(page.getByRole('heading', { name: '你好，我是 Livzon 助手' })).toBeVisible()

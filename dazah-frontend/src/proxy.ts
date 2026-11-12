@@ -80,17 +80,19 @@ export async function proxy(request: NextRequest) {
   if (currentModule || isSystemSettingsPath(request.nextUrl.pathname)) {
     // This gate runs before the App Router evaluates any child Server Component.
     // Layout-only guards can render concurrently with protected data requests.
+    const login = new URL('/login', request.url)
+    login.searchParams.set('next', request.nextUrl.pathname + request.nextUrl.search)
+    const token = request.cookies.get('auth_token')?.value
+    if (!token) return NextResponse.redirect(login)
+
     let user: User | undefined
     try {
-      const authHeaders = new Headers()
-      const token = request.cookies.get('auth_token')?.value
-      if (token) authHeaders.set('Authorization', `Bearer ${token}`)
       const response = await fetch(`${getServerApiBaseUrl()}/api/v1/identity/me`, {
-        headers: authHeaders, cache: 'no-store', signal: AbortSignal.timeout(10000),
+        headers: { Authorization: `Bearer ${token}` },
+        cache: 'no-store',
+        signal: AbortSignal.timeout(10000),
       })
       if (response.status === 401) {
-        const login = new URL('/login', request.url)
-        login.searchParams.set('next', request.nextUrl.pathname + request.nextUrl.search)
         return NextResponse.redirect(login)
       }
       if (!response.ok) return denied('暂时无法验证页面权限，请稍后重试。', 503)

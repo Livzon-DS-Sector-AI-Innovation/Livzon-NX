@@ -24,8 +24,14 @@ def main() -> int:
             "No frontend pages were found; inventory was not written.", file=sys.stderr
         )
         return 1
+    alias_source = ROOT / "dazah-frontend/src/lib/page-route-aliases.json"
+    aliases = json.loads(alias_source.read_text(encoding="utf-8"))
     content = (
-        json.dumps({"version": 1, "routes": routes}, indent=2, ensure_ascii=False)
+        json.dumps(
+            {"version": 1, "routes": routes, "aliases": aliases},
+            indent=2,
+            ensure_ascii=False,
+        )
         + "\n"
     )
     if args.check:

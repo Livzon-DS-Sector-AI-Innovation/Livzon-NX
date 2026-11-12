@@ -69,8 +69,8 @@ async def test_module_coverage_http_inventory_disabled_and_admin_boundary(
         assert modules["equipment"]["covered_pages"] == 0
         # Native energy replaces the legacy workspace and retires the four
         # history pages；设备模块 45 个 workshop-叶页面退役 + 作业票/证件 2 个
-        # 新页面后总量相应增加
-        assert data["total_pages"] == 278
+        # 新页面及独立申报资料撰写页面计入盘点总量
+        assert data["total_pages"] == 279
         assert {"/energy/entry", "/energy/reports", "/energy/analysis"} <= {
             page["route_path"] for page in modules["energy"]["pages"]
         }
@@ -78,8 +78,15 @@ async def test_module_coverage_http_inventory_disabled_and_admin_boundary(
         assert modules["hr"]["registered_count"] == 16
         assert modules["hr"]["covered_pages"] == 17
         assert modules["hr"]["coverage_percent"] == 100.0
-        assert modules["registration"]["coverage_percent"] == 100.0
-        assert modules["registration"]["covered_pages"] == 20
+        registration = modules["registration"]
+        assert registration["coverage_percent"] == 95.2
+        assert registration["covered_pages"] == 20
+        assert registration["total_pages"] == 21
+        dossier_page = next(
+            page for page in registration["pages"]
+            if page["page_key"] == "registration:dossier-writer"
+        )
+        assert dossier_page["registered_count"] == 0
         assert modules["warehouse"]["coverage_percent"] == 100.0
         assert modules["warehouse"]["covered_pages"] == 47
         assert modules["production"]["coverage_percent"] == 95.5

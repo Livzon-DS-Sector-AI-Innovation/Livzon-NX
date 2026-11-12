@@ -11,6 +11,7 @@ async function selectAgentView(page: import('@playwright/test').Page, name: stri
 
 test.describe('Livzon Agent 治理台', () => {
   async function openAgentGovernance(page: import('@playwright/test').Page) {
+    await page.context().addCookies([{ name: 'auth_token', value: 'e2e-admin', url: 'http://127.0.0.1:3200' }])
     // The isolated frontend fixture has no Nginx; model its normal status endpoint.
     await page.route('**/__dazah_maintenance_status', route => route.fulfill({ status: 204 }))
     await page.goto('/settings')

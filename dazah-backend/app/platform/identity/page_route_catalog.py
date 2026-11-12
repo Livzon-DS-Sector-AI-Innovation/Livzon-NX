@@ -19,6 +19,11 @@ class PageRouteCatalogError(ValueError):
     """A missing or unreadable inventory must not produce a passing check."""
 
 
+def load_reviewed_route_aliases() -> dict[str, str]:
+    snapshot = json.loads(CATALOG_PATH.read_text(encoding="utf-8"))
+    return dict(snapshot["aliases"])
+
+
 def collect_frontend_page_routes(source: Path) -> list[str]:
     routes: set[str] = set()
 

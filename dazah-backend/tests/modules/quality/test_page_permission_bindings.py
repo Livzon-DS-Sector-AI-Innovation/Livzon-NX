@@ -87,7 +87,11 @@ def test_deviation_auxiliary_routes_do_not_authorize_sibling_pages():
         page_key_for_route(
             "/quality/deviations/00000000-0000-0000-0000-000000000001/ai"
         )
-        != DEVIATION_LEDGER_PAGE
+        == DEVIATION_LEDGER_PAGE
+    )
+    assert (
+        page_key_for_route("/quality/deviations/records/example/ai")
+        == "quality:deviations:deviation-records"
     )
 
 

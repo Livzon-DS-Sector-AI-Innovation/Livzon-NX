@@ -460,7 +460,8 @@ async def test_hr_email_and_recruitment_routes_cover_success_and_fallbacks(
         delete_onboarding=AsyncMock(),
     )
     monkeypatch.setattr(api, "_resolve_visible_scope", AsyncMock(return_value=None))
-    assert (await api.get_onboarding_names(onboarding_service))["data"] == ["张三"]
+    result = await api.get_onboarding_names(SimpleNamespace(), onboarding_service, user)
+    assert result["data"] == ["张三"]
     await api.list_onboarding_records(
         None, 1, 20, SimpleNamespace(), onboarding_service, user
     )

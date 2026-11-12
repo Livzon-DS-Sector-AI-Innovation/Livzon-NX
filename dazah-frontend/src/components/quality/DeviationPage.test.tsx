@@ -187,7 +187,7 @@ it('maps only reviewed auxiliary URLs to the ledger', () => {
   expect(getPageKeyByPath('/quality/deviations/new')).toBe(DEVIATION_LEDGER_PAGE)
   expect(getPageKeyByPath('/quality/deviations/00000000-0000-0000-0000-000000000001')).toBe(DEVIATION_LEDGER_PAGE)
   expect(getPageKeyByPath('/quality/deviations/records')).toBe('quality:deviations:deviation-records')
-  expect(getPageKeyByPath('/quality/deviations/00000000-0000-0000-0000-000000000001/ai')).not.toBe(DEVIATION_LEDGER_PAGE)
+  expect(getPageKeyByPath('/quality/deviations/00000000-0000-0000-0000-000000000001/ai')).toBe(DEVIATION_LEDGER_PAGE)
 })
 
 it('does not fetch a detail without query permission', async () => {
