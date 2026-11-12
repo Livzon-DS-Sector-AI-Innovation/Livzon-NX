@@ -1641,6 +1641,37 @@ def _statin_batch_timeline(
     return timeline
 
 
+def composite_batch_no_required(
+    rows: list[list[Any]],
+    product: str,
+    batch_no: str,
+) -> str | None:
+    """倒罐复合批校验：单批号属于倒罐对时返回必须使用的复合批号。
+
+    判定与录入下拉的复合选项同源（时间线倒罐目的罐 + 放罐时刻成对）：
+    该批在排产时间线中标注了倒罐、且同一（目的罐, 放罐时刻）存在兄弟批
+    时，现场只从大罐称一次总量，必须按复合批号（如 MV-26087/088）录一条。
+    非他汀产品、批号不在时间线、直放批或无兄弟批的倒罐批返回 None 不拦截；
+    复合批号本身（含 "/"）不在时间线键中，天然放行。
+    """
+    if product not in _STATIN_KEYWORD:
+        return None
+    timeline = _statin_batch_timeline(rows)
+    entry = timeline.get(batch_no)
+    if entry is None or not entry.get("turn_to") or not entry.get("dump"):
+        return None
+    siblings = sorted(
+        no
+        for no, item in timeline.items()
+        if no != batch_no
+        and item.get("turn_to") == entry["turn_to"]
+        and item.get("dump") == entry["dump"]
+    )
+    if not siblings:
+        return None
+    return _compact_statin_batch_nos([batch_no, *siblings])
+
+
 def _find_statin_period_block(
     rows: list[list[Any]], now: datetime, keyword: str
 ) -> dict[str, Any] | None:
@@ -1940,6 +1971,25 @@ def _statin_tanks(
             return round((now - inoculate).total_seconds() / 3600, 1)
         return None
 
+    # 倒罐对分组（与录入下拉复合选项同源）：确认移种发生在倒罐前的单罐行
+    # （如 303B: MV-26098），此时批号尚未合并，需带上对组复合批号供
+    # 前端提交复合记录，避免服务端单批号校验拒绝
+    pair_groups: dict[tuple[Any, Any], set[str]] = {}
+    for b in timeline_batches:
+        if b.get("turn_to") and b.get("dump"):
+            pair_groups.setdefault((b["turn_to"], b["dump"]), set()).add(
+                b["batch_no"]
+            )
+
+    def _pair_composite(batch_nos: list[str] | None) -> str | None:
+        members = set(batch_nos or [])
+        if len(members) >= 2:
+            return _compact_statin_batch_nos(sorted(members))
+        for group_members in pair_groups.values():
+            if members & group_members and len(group_members) > 1:
+                return _compact_statin_batch_nos(sorted(group_members))
+        return None
+
     tanks: list[dict[str, Any]] = []
     for tank_no in sorted(tank_nos):
         maint = maint_by_tank.get(tank_no)
@@ -1990,6 +2040,9 @@ def _statin_tanks(
                     ),
                     # 合并展示前的展开批号（actuals 匹配与确认移种主批号）
                     "batch_nos": [x["batch_no"] for x in running],
+                    "composite_batch_no": _pair_composite(
+                        [x["batch_no"] for x in running]
+                    ),
                     # 倒罐目的罐（301A）：移种继承来源批，不提供确认移种
                     "turn_in": seg["kind"] == "turn",
                     "inoculate_at": _iso(seg["inoculate"]),
@@ -2034,6 +2087,9 @@ def _statin_tanks(
                         [x["batch_no"] for x in dumping]
                     ),
                     "batch_nos": [x["batch_no"] for x in dumping],
+                    "composite_batch_no": _pair_composite(
+                        [x["batch_no"] for x in dumping]
+                    ),
                     "turn_in": False,
                     "inoculate_at": _iso(seg["inoculate"]),
                     "cultured_hours": _cultured(seg),
@@ -2060,6 +2116,9 @@ def _statin_tanks(
                 "status": "idle",
                 "batch_no": None,
                 "batch_nos": [x["batch_no"] for x in group],
+                "composite_batch_no": _pair_composite(
+                    [x["batch_no"] for x in group]
+                ),
                 "turn_in": seg["kind"] == "turn",
                 "inoculate_at": _iso(seg["start"]),
                 "inoculate_mark": None,
@@ -2104,6 +2163,9 @@ def _statin_tanks(
                         [s["batch_no"] for s in group]
                     ),
                     "batch_nos": [s["batch_no"] for s in group],
+                    "composite_batch_no": _pair_composite(
+                        [s["batch_no"] for s in group]
+                    ),
                     "turn_in": False,
                     "inoculate_at": _iso(seg["inoculate"]),
                     # 已放罐：培养时长冻结在放罐时刻（= 计划总周期）

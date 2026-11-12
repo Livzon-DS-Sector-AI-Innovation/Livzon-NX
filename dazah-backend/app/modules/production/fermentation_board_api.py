@@ -447,6 +447,22 @@ async def upsert_fermentation_batch_actual(
         )
     if not provided & (_FERM_FIELDS | {"extract_kg"}):
         raise HTTPException(status_code=400, detail="没有可保存的产量字段")
+    # 倒罐复合批防呆：他汀倒罐对现场只从大罐称一次总量，必须按复合批号
+    # 录一条；单批号提交直接拒绝并给出正确批号（判定在服务函数内，
+    # 非他汀产品/直放批/复合批号均放行）
+    archive = await board.load_latest_archive(db, product)
+    if archive:
+        required = board.composite_batch_no_required(
+            archive.rows, product, body.batch_no.strip()
+        )
+        if required:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"{body.batch_no.strip()} 属于倒罐复合批，"
+                    f"请按复合批号 {required} 录入一条总量"
+                ),
+            )
     item = await board.upsert_batch_actual(
         db,
         batch_no=body.batch_no.strip(),
