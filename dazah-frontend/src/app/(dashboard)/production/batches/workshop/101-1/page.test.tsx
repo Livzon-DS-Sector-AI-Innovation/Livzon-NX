@@ -244,6 +244,88 @@ describe('SeedCulturePage (101-1) 林可台账', () => {
     expect(String(lastCall?.[0].month)).toMatch(/^\d{4}-\d{2}$/)
   })
 
+  it('opens the record detail modal with person chips', async () => {
+    act(() => {
+      root.render(<App><SeedCulturePage /></App>)
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 60))
+    })
+    clickTab('盐酸林可霉素')
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    const detailBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('详情'))
+    expect(detailBtn).toBeTruthy()
+    await act(async () => { detailBtn!.click(); await new Promise((r) => setTimeout(r, 80)) })
+    const text = document.body.textContent || ''
+    expect(text).toContain('记录详情')
+    expect(text).toContain('SC-2026-01')
+    expect(text).toContain('配制操作人/复核人')
+  })
+
+  it('edits an existing record and pre-fills person names', async () => {
+    actions.updateSeedCulture.mockResolvedValue({ code: 200, message: 'updated', data: null })
+    act(() => {
+      root.render(<App><SeedCulturePage /></App>)
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 60))
+    })
+    clickTab('盐酸林可霉素')
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    const editBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('编辑'))
+    expect(editBtn).toBeTruthy()
+    await act(async () => { editBtn!.click(); await new Promise((r) => setTimeout(r, 60)) })
+    expect((document.body.textContent || '')).toContain('编辑记录')
+    // 人员字段回填为姓名串（数组归一）
+    const personInput = Array.from(document.body.querySelectorAll('.ant-modal input')).find(
+      (i) => i.closest('.ant-form-item')?.textContent?.includes('配制操作人/复核人'),
+    ) as HTMLInputElement | undefined
+    expect(personInput?.value).toBe('张三')
+    const okBtn = Array.from(document.querySelectorAll('.ant-modal button')).find((b) => (b.textContent || '').replace(/\s/g, '') === '确认') as HTMLButtonElement | undefined
+    await act(async () => { okBtn!.click(); await new Promise((r) => setTimeout(r, 120)) })
+    expect(actions.updateSeedCulture).toHaveBeenCalledWith('sc-1', expect.objectContaining({ batch_no: 'SC-2026-01' }))
+  })
+
+  it('cancels the create modal via the cancel button', async () => {
+    act(() => {
+      root.render(<App><SeedCulturePage /></App>)
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 60))
+    })
+    clickTab('盐酸林可霉素')
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 80))
+    })
+    const addBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('新建记录'))
+    await act(async () => { addBtn!.click(); await new Promise((r) => setTimeout(r, 60)) })
+    expect((document.body.textContent || '')).toContain('新建记录')
+    const cancelBtn = Array.from(document.querySelectorAll('.ant-modal button')).find((b) => (b.textContent || '').replace(/\s/g, '') === '取消') as HTMLButtonElement | undefined
+    expect(cancelBtn).toBeTruthy()
+    await act(async () => { cancelBtn!.click(); await new Promise((r) => setTimeout(r, 120)) })
+    // destroyOnHidden 会卸载弹窗内容
+    expect(document.body.querySelector('.ant-modal-content')).toBeNull()
+  })
+
+  it('shows an error state when the seed culture load rejects', async () => {
+    actions.getSeedCultures.mockRejectedValue(new Error('network'))
+    act(() => {
+      root.render(<App><SeedCulturePage /></App>)
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 60))
+    })
+    clickTab('盐酸林可霉素')
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 120))
+    })
+    expect(actions.getSeedCultures).toHaveBeenCalled()
+  })
+
   it('deletes a record after confirming the delete dialog', async () => {
     actions.deleteSeedCulture.mockResolvedValue({ code: 200, message: 'deleted', data: null })
     act(() => {
