@@ -97,6 +97,69 @@ def _publish_fixture(monkeypatch, grant):
 
 
 @pytest.mark.asyncio
+async def test_qr_employee_create_rejects_cross_department_before_write(monkeypatch):
+    actor = SimpleNamespace(id=uuid4(), role="user")
+    db = SimpleNamespace()
+    service = SimpleNamespace(_get_bitable=AsyncMock())
+    app = _app(db, actor, service)
+    _publish_fixture(monkeypatch, _grant(["own"]))
+    monkeypatch.setattr(
+        api, "employee_page_scope",
+        AsyncMock(return_value=DepartmentScope(department_names={"本部门"})),
+    )
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.post(
+            "/api/v1/hr/employees/public-create",
+            headers={"X-Dazah-Page-Path": "/hr/employee-fill"},
+            json={
+                "name": "测试员工",
+                "department": "本部门",
+                "sub_department": "其他部门",
+                "position": "测试岗位",
+                "hire_date": "2026-11-12",
+            },
+        )
+    assert response.status_code == 403
+    assert "部门范围" in response.json()["detail"]
+    service._get_bitable.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_employee_fill_names_require_onboarding_grant_and_scope(monkeypatch):
+    actor = SimpleNamespace(id=uuid4(), role="user")
+    db = SimpleNamespace()
+    app = _app(db, actor, None)
+    list_onboarding = AsyncMock(return_value=([{"name": "本部门员工"}], 1))
+    app.dependency_overrides[api.get_recruitment_onboarding_service] = lambda: (
+        SimpleNamespace(list_onboarding=list_onboarding)
+    )
+    monkeypatch.setattr(
+        api, "_resolve_visible_scope", AsyncMock(return_value={"本部门"})
+    )
+    grant = _grant(["own"], permissions=["access", "query"])
+    effective = AsyncMock(return_value=[grant])
+    monkeypatch.setattr(PagePermissionService, "effective_grants", effective)
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        path = "/api/v1/hr/onboarding/names"
+        headers = {"X-Dazah-Page-Key": "hr:onboarding"}
+        assert (await client.get(path, headers=headers)).status_code == 403
+        list_onboarding.assert_not_awaited()
+        effective.return_value = [
+            grant.model_copy(update={"page_key": "hr:onboarding"})
+        ]
+        response = await client.get(path, headers=headers)
+    assert response.status_code == 200
+    assert response.json()["data"] == ["本部门员工"]
+    list_onboarding.assert_awaited_once_with(
+        page=1, page_size=500, dept_alias_set={"本部门"}
+    )
+
+
+@pytest.mark.asyncio
 async def test_employee_http_crud_stats_and_sync_share_real_department_scope(
     db_session, monkeypatch
 ):

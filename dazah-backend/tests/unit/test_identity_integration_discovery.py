@@ -178,6 +178,9 @@ def test_generator_updates_inventory_and_rejects_a_stale_snapshot(
     generator = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(generator)
     source = tmp_path / "dazah-frontend/src/app"
+    aliases = source.parent / "lib/page-route-aliases.json"
+    aliases.parent.mkdir(parents=True)
+    aliases.write_text("{}", encoding="utf-8")
     target = tmp_path / "page_route_catalog.json"
     monkeypatch.setattr(generator, "ROOT", tmp_path)
     monkeypatch.setattr(generator, "CATALOG_PATH", target)
@@ -186,6 +189,14 @@ def test_generator_updates_inventory_and_rejects_a_stale_snapshot(
     assert generator.main() == 0
     monkeypatch.setattr(sys, "argv", ["generate-page-routes.py", "--check"])
     assert generator.main() == 0
+    aliases.write_text('{"/hr/report": "hr:recruitment"}', encoding="utf-8")
+    assert generator.main() == 1
+    monkeypatch.setattr(sys, "argv", ["generate-page-routes.py"])
+    assert generator.main() == 0
+    assert json.loads(target.read_text(encoding="utf-8"))["aliases"] == {
+        "/hr/report": "hr:recruitment"
+    }
+    monkeypatch.setattr(sys, "argv", ["generate-page-routes.py", "--check"])
     page(source, "(dashboard)/hr/second-report")
     assert generator.main() == 1
     assert json.loads(target.read_text(encoding="utf-8"))["routes"] == ["/hr/report"]

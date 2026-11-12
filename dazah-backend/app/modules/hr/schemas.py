@@ -349,7 +349,7 @@ class EmployeeCreate(EmployeeBase):
 
 
 class EmployeePublicCreate(BaseModel):
-    """扫码公开创建员工的请求体（工号留空，不需要登录）"""
+    """扫码创建员工档案的请求体，工号留空。"""
 
     # 基本信息（必填）
     name: str = Field(..., max_length=64, description="姓名")

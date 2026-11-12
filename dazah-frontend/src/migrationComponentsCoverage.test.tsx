@@ -121,7 +121,10 @@ vi.mock('react/jsx-dev-runtime', async () => {
     },
   }
 })
-vi.mock('next/link', () => ({ default: ({ children, ...props }: { children?: ReactNode } & Record<string, unknown>) => createElement('a', props, children) }))
+vi.mock('next/link', () => ({
+  default: ({ children, ...props }: { children?: ReactNode } & Record<string, unknown>) => createElement('a', props, children),
+  useLinkStatus: () => ({ pending: false }),
+}))
 vi.mock('next/image', () => ({ default: (props: Record<string, unknown>) => createElement('img', props) }))
 vi.mock('styled-jsx/style', () => ({ default: () => null }))
 vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ has: () => mocks.permissionAllowed, hasAny: () => mocks.permissionAllowed }) }))
@@ -1132,7 +1135,7 @@ describe('migrated component coverage', () => {
       initialRoles: [role, systemRole], initialPermissions: [
         { id: 'perm-1', code: 'quality.read', module: 'quality', action: 'read', name: '读取' },
         { id: 'perm-2', code: 'quality:edit', module: 'quality', action: 'edit', name: '编辑' },
-      ], initialMenus: menus as never, initialDepartments: departments,
+      ], initialMenus: menus as never,
     }))
     await settle()
     const roleButton = (text: string) => Array.from(roleView.container.querySelectorAll('button')).find((button) => button.textContent?.includes(text))

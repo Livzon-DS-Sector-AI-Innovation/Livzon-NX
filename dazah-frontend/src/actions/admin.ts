@@ -410,7 +410,7 @@ export async function exportPermissions(): Promise<{
 }
 
 export async function getRolePagePermissions(roleId: string) {
-  const res = await authedFetch(`/identity/admin/roles/${roleId}/page-permissions`)
+  const res = await authedFetch(`/identity/admin/roles/${encodeURIComponent(roleId)}/page-permissions`, { cache: "no-store" })
   return handleResponse(res) as Promise<RolePagePermissionsOut>
 }
 

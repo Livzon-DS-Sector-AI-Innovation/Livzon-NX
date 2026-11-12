@@ -153,7 +153,7 @@ include_business_router(
 )
 include_business_router(
     dossier_writer_router,
-    module_code="dossier_writer",
+    module_code="registration",
     prefix="/dossier-writer",
     tags=["申报资料撰写"],
 )

@@ -116,8 +116,10 @@ export class HrListReadError extends Error {
   }
 }
 
-async function readHrList<T extends { data: unknown[]; meta?: { total: number } }>(url: string, fallback: string): Promise<T> {
-  const response = await fetch(url, hrSettingsRequestOptions())
+async function readHrList<T extends { data: unknown[]; meta?: { total: number } }>(
+  url: string, fallback: string, options = hrSettingsRequestOptions(),
+): Promise<T> {
+  const response = await fetch(url, options)
   if (!response.ok) {
     // Do not expose upstream diagnostics or turn an expected HTTP failure into
     // a production Server Action exception with a redacted React message.
@@ -222,7 +224,9 @@ export async function fetchEmailConfig(): Promise<{
 export type EmployeeListQuery = NonNullable<paths['/api/v1/hr/employees']['get']['parameters']['query']>
 export type EmployeeFilterOptions = components['schemas']['EmployeeFilterOptions']
 
-export async function fetchEmployees(params?: EmployeeListQuery): Promise<EmployeeListResponse> {
+export async function fetchEmployees(
+  params?: EmployeeListQuery, options?: RequestInit,
+): Promise<EmployeeListResponse> {
   const searchParams = new URLSearchParams()
   if (params?.department) searchParams.set('department', params.department)
   if (params?.first_department) searchParams.set('first_department', params.first_department)
@@ -236,7 +240,7 @@ export async function fetchEmployees(params?: EmployeeListQuery): Promise<Employ
   searchParams.set('page', String(params?.page || 1))
   searchParams.set('page_size', String(params?.page_size || 20))
 
-  return readHrList(`/api/v1/hr/employees?${searchParams.toString()}`, '员工档案加载失败，请稍后重试')
+  return readHrList(`/api/v1/hr/employees?${searchParams.toString()}`, '员工档案加载失败，请稍后重试', options)
 }
 
 export async function fetchEmployeeFilterOptions(): Promise<EmployeeFilterOptions> {

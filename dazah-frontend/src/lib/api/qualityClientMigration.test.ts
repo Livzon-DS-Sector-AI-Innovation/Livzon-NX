@@ -106,6 +106,10 @@ describe('migrated quality client API coverage', () => {
     await quality.fetchFeishuDeviationReportRecords({ page: 2, page_size: 20 })
     await quality.fetchDeviationReportRecords({ page: 1, page_size: 10 })
     await quality.fetchFeishuDeviationReportRecord('record-1')
+    await quality.fetchFeishuDeviationReportRecord('record-1', 'quality:deviations:deviation-workbench')
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/v1/quality/deviation-report-records/record-1', {
+      headers: { 'X-Dazah-Page-Key': 'quality:deviations:deviation-workbench' },
+    })
     await quality.fetchFeishuDeviationInvestigationPushRecords({
       deviation_id: 'deviation-1',
       deviation_code: 'DEV-1',

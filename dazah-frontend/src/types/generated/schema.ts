@@ -5368,8 +5368,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * 扫码公开创建员工
-         * @description 扫码填写表单后公开创建员工档案（不需要登录）。
+         * 扫码创建员工档案
+         * @description 在员工档案授权范围内通过扫码表单创建员工档案。
          *
          *     工号留空，状态默认"在职"。按姓名去重，已存在则返回提示。
          */
@@ -6617,8 +6617,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * 获取入职姓名列表（公开）
-         * @description 获取飞书入职信息表中的所有姓名，供扫码填写时选择。
+         * 获取授权范围内的入职姓名列表
+         * @description 获取授权部门内的入职姓名，供扫码填写时选择。
          */
         get: operations["get_onboarding_names_api_v1_hr_onboarding_names_get"];
         put?: never;
@@ -46440,7 +46440,7 @@ export interface components {
         };
         /**
          * EmployeePublicCreate
-         * @description 扫码公开创建员工的请求体（工号留空，不需要登录）
+         * @description 扫码创建员工档案的请求体，工号留空。
          */
         EmployeePublicCreate: {
             /** Archive Number */

@@ -5,6 +5,8 @@ import { App as AntdApp } from 'antd'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }))
+
 vi.mock('@/actions/admin', () => ({
   createDeptRule: vi.fn(),
   createMenu: vi.fn(),
@@ -125,7 +127,7 @@ describe('system permissions settings pages', () => {
     expect(settingsHtml).not.toContain('数据范围')
     expect(settingsHtml).toContain('角色管理')
     expect(settingsHtml).toContain('用户角色')
-    expect(settingsHtml).toContain('部门角色映射')
+    expect(settingsHtml).toContain('角色映射')
     expect(settingsHtml).not.toContain('菜单管理')
     expect(settingsHtml).toContain('权限检查')
     expect(settingsHtml).toContain('质量管理员')
@@ -143,7 +145,6 @@ describe('system permissions settings pages', () => {
       initialRoles: roles,
       initialPermissions: [{ id: 'perm-1', code: 'quality.read', module: 'quality', action: 'read', name: '读取' }],
       initialMenus: menus,
-      initialDepartments: departments,
     }))
     expect(roleHtml).toContain('质量管理员')
     expect(roleHtml).toContain('ant-table-scroll-horizontal')
@@ -170,8 +171,8 @@ describe('system permissions settings pages', () => {
       initialRoles: roles,
       initialDepartments: departments,
     }))
-    expect(deptRoleHtml).toContain('查询部门用户')
-    expect(deptRoleHtml).toContain('已有角色')
+    expect(deptRoleHtml).toContain('搜索用户')
+    expect(deptRoleHtml).toContain('按部门查询')
     expect(deptRoleHtml).not.toContain('新增规则')
 
     const verificationHtml = renderInApp(React.createElement(PermissionVerification))

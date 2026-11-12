@@ -318,21 +318,46 @@ const server = createServer(async (request, response) => {
     }
   }
 
+  if (authorization === 'Bearer matrix-admin' && request.url === '/api/v1/identity/departments') {
+    response.end(JSON.stringify({ code: 200, data: [] }))
+    return
+  }
+
   if (authorization === 'Bearer matrix-admin' && request.url?.startsWith('/api/v1/identity/admin/roles')) {
+    if (request.url.endsWith('/page-permissions/preview')) {
+      response.end(JSON.stringify({ code: 200, data: {
+        role_id: 'role-matrix', grant_version: 1, member_count: 2, affected_user_count: 1,
+        expanded_user_count: 1, restricted_user_count: 0, mixed_user_count: 0, users_with_overrides: 0,
+      } }))
+      return
+    }
     if (request.url.endsWith('/page-permissions')) {
       if (request.method === 'PUT') {
         response.statusCode = 409
         response.end(JSON.stringify({ message: '授权版本冲突，请刷新后重试' }))
       } else {
-        response.end(JSON.stringify({ code: 200, data: { role_id: 'role-matrix', grant_version: 1, grants: [],
-          definitions: [
-            ['production', '生产批次'], ['equipment', '设备台账'], ['energy', '能源数据'],
-            ['safety', '安全检查'], ['research', '研发项目'], ['registration', '注册项目'],
-            ['quality', '偏差记录'], ['administration', '行政管理'], ['hr', '员工管理'],
-            ['warehouse', '库存清单'], ['procurement', '采购申请'],
-          ].map(([module_code, page_name]) => ({ module_code, page_name, page_key: `${module_code}:test`,
-            route_path: `/${module_code}/test`, supported_scope_types: ['not_applicable'], sensitive_actions: module_code === 'production'
-              ? [{ key: 'delete', name: '作废生产批次', description: '作废批次记录', category: 'destructive' }] : [] })),
+        const definitions = [
+          ['production', '生产批次'], ['equipment', '设备台账'], ['energy', '能源数据'],
+          ['safety', '安全检查'], ['research', '研发项目'], ['registration', '注册项目'],
+          ['quality', '偏差记录'], ['administration', '行政管理'], ['hr', '员工管理'],
+          ['warehouse', '库存清单'], ['procurement', '采购申请'],
+        ].map(([module_code, page_name]) => ({ module_code, page_name, page_key: `${module_code}:test`,
+          route_path: `/${module_code}/test`, supported_scope_types: ['not_applicable'], sensitive_actions: module_code === 'production'
+            ? [{ key: 'delete', name: '作废生产批次', description: '作废批次记录', category: 'destructive' }] : [] }))
+        const qualityPages = [
+          ['quality:deviations:ledger', '偏差记录', '/quality/deviations/ledger'],
+          ['quality:deviations:investigation', '偏差调查', '/quality/deviations/investigation'],
+          ['quality:inspection:results', '检验结果', '/quality/inspection/results'],
+        ].map(([page_key, page_name, route_path]) => ({
+          module_code: 'quality', page_key, page_name, route_path, supported_scope_types: ['all', 'department_tree'],
+          sensitive_actions: page_key.endsWith(':ledger')
+            ? [{ key: 'void', name: '作废偏差记录', description: '作废已登记的偏差记录', category: 'destructive' }] : [],
+        }))
+        await new Promise((resolve) => setTimeout(resolve, 600))
+        response.end(JSON.stringify({ code: 200, data: { role_id: 'role-matrix', grant_version: 1,
+          definitions: definitions.flatMap((definition) => definition.module_code === 'quality' ? qualityPages : [definition]),
+          grants: [{ page_key: 'quality:deviations:ledger', module_code: 'quality', source: 'role',
+            permissions: ['access', 'query'], data_scope: { scope_type: 'all' } }],
         } }))
       }
     } else {

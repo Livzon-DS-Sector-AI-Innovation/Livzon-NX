@@ -11,6 +11,7 @@ import type {
   ExportResult,
   PaginatedResponse,
 } from '@/types/dossier-writer'
+import { getUserErrorMessage } from '@/lib/user-error'
 
 interface ApiResponse<T> {
   code: number
@@ -29,12 +30,14 @@ export async function fetchProductDossiers(
   const res = await fetch(
     `/api/v1/dossier-writer/products?skip=${skip}&limit=${limit}`
   )
+  if (!res.ok) throw new Error(getUserErrorMessage(null, '获取资料列表失败', res.status))
   const json: ApiResponse<PaginatedResponse<ProductDossier>> = await res.json()
   return json.data
 }
 
 export async function fetchProductDossier(id: string): Promise<ProductDossier> {
   const res = await fetch(`/api/v1/dossier-writer/products/${id}`)
+  if (!res.ok) throw new Error(getUserErrorMessage(null, '获取资料失败', res.status))
   const json: ApiResponse<ProductDossier> = await res.json()
   return json.data
 }
@@ -65,14 +68,16 @@ export async function updateProductDossier(
     headers,
     body: JSON.stringify(data),
   })
+  if (!res.ok) throw new Error(getUserErrorMessage(null, '更新资料失败', res.status))
   const json: ApiResponse<ProductDossier> = await res.json()
   return json.data
 }
 
 export async function deleteProductDossier(id: string): Promise<void> {
-  await fetch(`/api/v1/dossier-writer/products/${id}`, {
+  const res = await fetch(`/api/v1/dossier-writer/products/${id}`, {
     method: 'DELETE',
   })
+  if (!res.ok) throw new Error(getUserErrorMessage(null, '删除资料失败', res.status))
 }
 
 // ====== Template Upload ======

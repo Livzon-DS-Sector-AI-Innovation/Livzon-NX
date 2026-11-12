@@ -3891,6 +3891,25 @@
         }
       }
     },
+    "registration:dossier-writer": {
+      "status": "active",
+      "module_code": "registration",
+      "route_path": "/registration/dossier-writer",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        },
+        "sync_config": {
+          "status": "active",
+          "category": "integration_admin"
+        }
+      }
+    },
     "registration:fees:fee-ledger": {
       "status": "active",
       "module_code": "registration",

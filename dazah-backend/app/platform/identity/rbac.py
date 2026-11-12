@@ -186,6 +186,7 @@ PREFIX_MODULE_MAP: dict[str, str] = {
     "/api/v1/hr": "hr",
     "/api/v1/research": "research",
     "/api/v1/registration": "registration",
+    "/api/v1/dossier-writer": "registration",
     "/api/v1/quality": "quality",
     "/api/v1/regulatory-tracker": "regulatory_tracker",
     "/api/v1/regulatory-documents": "regulatory_tracker",
