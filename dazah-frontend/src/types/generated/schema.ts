@@ -14367,6 +14367,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/production/seed-cultures/person-monthly": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 人员月度工作统计（月度绩效依据） */
+        get: operations["seed_culture_person_monthly_api_v1_production_seed_cultures_person_monthly_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/production/seed-cultures/{record_id}": {
         parameters: {
             query?: never;
@@ -57530,6 +57547,28 @@ export interface components {
          */
         PermitStatus: "draft" | "submitted" | "approved" | "rejected" | "in_progress" | "completed" | "archived";
         /**
+         * PersonRef
+         * @description 人员引用：飞书成员（open_id + 姓名 + 头像），兼容仅姓名的手工录入。
+         */
+        PersonRef: {
+            /**
+             * Avatar Url
+             * @description 头像 URL
+             */
+            avatar_url?: string | null;
+            /**
+             * Name
+             * @description 姓名
+             * @default
+             */
+            name: string;
+            /**
+             * Open Id
+             * @description 飞书 open_id
+             */
+            open_id?: string | null;
+        };
+        /**
          * PersonnelAddRequest
          * @description 添加人员请求 — 从 identity.users 选取
          */
@@ -64394,7 +64433,7 @@ export interface components {
              * Inoculation Operator
              * @description 接种人员/复核人
              */
-            inoculation_operator?: string | null;
+            inoculation_operator?: components["schemas"]["PersonRef"][] | null;
             /**
              * Merge Amino Nitrogen
              * @description 并瓶氨基氮
@@ -64419,7 +64458,7 @@ export interface components {
              * Merge Operator
              * @description 并瓶操作人/复核人
              */
-            merge_operator?: string | null;
+            merge_operator?: components["schemas"]["PersonRef"][] | null;
             /**
              * Merge Ph
              * @description 并瓶PH
@@ -64464,7 +64503,7 @@ export interface components {
              * Prepare Operator
              * @description 配制操作人/复核人
              */
-            prepare_operator?: string | null;
+            prepare_operator?: components["schemas"]["PersonRef"][] | null;
             /**
              * Product Name
              * @description 产品名称
@@ -64490,7 +64529,7 @@ export interface components {
              * Shaker Setup Operator
              * @description 上摇床摆东西人员
              */
-            shaker_setup_operator?: string | null;
+            shaker_setup_operator?: components["schemas"]["PersonRef"][] | null;
             /**
              * Shaker Start Date
              * @description 上摇床日期
@@ -64505,7 +64544,7 @@ export interface components {
              * Sterilization Operator
              * @description 种子消毒人员
              */
-            sterilization_operator?: string | null;
+            sterilization_operator?: components["schemas"]["PersonRef"][] | null;
             /**
              * Strain Tube No
              * @description 冻管菌号
@@ -64520,7 +64559,7 @@ export interface components {
              * Tank Setup Operator
              * @description 进罐摆东西人员
              */
-            tank_setup_operator?: string | null;
+            tank_setup_operator?: components["schemas"]["PersonRef"][] | null;
             /**
              * Tank Yield
              * @description 罐产
@@ -64540,7 +64579,7 @@ export interface components {
              * Workshop Inoculation Operator
              * @description 车间接种人员
              */
-            workshop_inoculation_operator?: string | null;
+            workshop_inoculation_operator?: components["schemas"]["PersonRef"][] | null;
         };
         /** SeedCultureUpdate */
         SeedCultureUpdate: {
@@ -64588,7 +64627,7 @@ export interface components {
              * Inoculation Operator
              * @description 接种人员/复核人
              */
-            inoculation_operator?: string | null;
+            inoculation_operator?: components["schemas"]["PersonRef"][] | null;
             /**
              * Merge Amino Nitrogen
              * @description 并瓶氨基氮
@@ -64613,7 +64652,7 @@ export interface components {
              * Merge Operator
              * @description 并瓶操作人/复核人
              */
-            merge_operator?: string | null;
+            merge_operator?: components["schemas"]["PersonRef"][] | null;
             /**
              * Merge Ph
              * @description 并瓶PH
@@ -64658,7 +64697,7 @@ export interface components {
              * Prepare Operator
              * @description 配制操作人/复核人
              */
-            prepare_operator?: string | null;
+            prepare_operator?: components["schemas"]["PersonRef"][] | null;
             /**
              * Product Name
              * @description 产品名称
@@ -64683,7 +64722,7 @@ export interface components {
              * Shaker Setup Operator
              * @description 上摇床摆东西人员
              */
-            shaker_setup_operator?: string | null;
+            shaker_setup_operator?: components["schemas"]["PersonRef"][] | null;
             /**
              * Shaker Start Date
              * @description 上摇床日期
@@ -64698,7 +64737,7 @@ export interface components {
              * Sterilization Operator
              * @description 种子消毒人员
              */
-            sterilization_operator?: string | null;
+            sterilization_operator?: components["schemas"]["PersonRef"][] | null;
             /**
              * Strain Tube No
              * @description 冻管菌号
@@ -64713,7 +64752,7 @@ export interface components {
              * Tank Setup Operator
              * @description 进罐摆东西人员
              */
-            tank_setup_operator?: string | null;
+            tank_setup_operator?: components["schemas"]["PersonRef"][] | null;
             /**
              * Tank Yield
              * @description 罐产
@@ -64733,7 +64772,7 @@ export interface components {
              * Workshop Inoculation Operator
              * @description 车间接种人员
              */
-            workshop_inoculation_operator?: string | null;
+            workshop_inoculation_operator?: components["schemas"]["PersonRef"][] | null;
         };
         /**
          * SendNoticeRequest
@@ -108916,6 +108955,42 @@ export interface operations {
                 "application/json": components["schemas"]["SeedCultureCreate"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    seed_culture_person_monthly_api_v1_production_seed_cultures_person_monthly_get: {
+        parameters: {
+            query: {
+                /** @description 统计月份 YYYY-MM */
+                month: string;
+                /** @description 产品名称 */
+                product_name?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

@@ -67407,6 +67407,43 @@
         "title": "PermitStatus",
         "type": "string"
       },
+      "PersonRef": {
+        "description": "人员引用：飞书成员（open_id + 姓名 + 头像），兼容仅姓名的手工录入。",
+        "properties": {
+          "avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "头像 URL",
+            "title": "Avatar Url"
+          },
+          "name": {
+            "default": "",
+            "description": "姓名",
+            "title": "Name",
+            "type": "string"
+          },
+          "open_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "飞书 open_id",
+            "title": "Open Id"
+          }
+        },
+        "title": "PersonRef",
+        "type": "object"
+      },
       "PersonnelAddRequest": {
         "description": "添加人员请求 — 从 identity.users 选取",
         "properties": {
@@ -82926,7 +82963,10 @@
           "inoculation_operator": {
             "anyOf": [
               {
-                "type": "string"
+                "items": {
+                  "$ref": "#/components/schemas/PersonRef"
+                },
+                "type": "array"
               },
               {
                 "type": "null"
@@ -82986,7 +83026,10 @@
           "merge_operator": {
             "anyOf": [
               {
-                "type": "string"
+                "items": {
+                  "$ref": "#/components/schemas/PersonRef"
+                },
+                "type": "array"
               },
               {
                 "type": "null"
@@ -83096,7 +83139,10 @@
           "prepare_operator": {
             "anyOf": [
               {
-                "type": "string"
+                "items": {
+                  "$ref": "#/components/schemas/PersonRef"
+                },
+                "type": "array"
               },
               {
                 "type": "null"
@@ -83150,7 +83196,10 @@
           "shaker_setup_operator": {
             "anyOf": [
               {
-                "type": "string"
+                "items": {
+                  "$ref": "#/components/schemas/PersonRef"
+                },
+                "type": "array"
               },
               {
                 "type": "null"
@@ -83187,7 +83236,10 @@
           "sterilization_operator": {
             "anyOf": [
               {
-                "type": "string"
+                "items": {
+                  "$ref": "#/components/schemas/PersonRef"
+                },
+                "type": "array"
               },
               {
                 "type": "null"
@@ -83223,7 +83275,10 @@
           "tank_setup_operator": {
             "anyOf": [
               {
-                "type": "string"
+                "items": {
+                  "$ref": "#/components/schemas/PersonRef"
+                },
+                "type": "array"
               },
               {
                 "type": "null"
@@ -83271,7 +83326,10 @@
           "workshop_inoculation_operator": {
             "anyOf": [
               {
-                "type": "string"
+                "items": {
+                  "$ref": "#/components/schemas/PersonRef"
+                },
+                "type": "array"
               },
               {
                 "type": "null"
@@ -83388,7 +83446,10 @@
           "inoculation_operator": {
             "anyOf": [
               {
-                "type": "string"
+                "items": {
+                  "$ref": "#/components/schemas/PersonRef"
+                },
+                "type": "array"
               },
               {
                 "type": "null"
@@ -83448,7 +83509,10 @@
           "merge_operator": {
             "anyOf": [
               {
-                "type": "string"
+                "items": {
+                  "$ref": "#/components/schemas/PersonRef"
+                },
+                "type": "array"
               },
               {
                 "type": "null"
@@ -83558,7 +83622,10 @@
           "prepare_operator": {
             "anyOf": [
               {
-                "type": "string"
+                "items": {
+                  "$ref": "#/components/schemas/PersonRef"
+                },
+                "type": "array"
               },
               {
                 "type": "null"
@@ -83618,7 +83685,10 @@
           "shaker_setup_operator": {
             "anyOf": [
               {
-                "type": "string"
+                "items": {
+                  "$ref": "#/components/schemas/PersonRef"
+                },
+                "type": "array"
               },
               {
                 "type": "null"
@@ -83655,7 +83725,10 @@
           "sterilization_operator": {
             "anyOf": [
               {
-                "type": "string"
+                "items": {
+                  "$ref": "#/components/schemas/PersonRef"
+                },
+                "type": "array"
               },
               {
                 "type": "null"
@@ -83691,7 +83764,10 @@
           "tank_setup_operator": {
             "anyOf": [
               {
-                "type": "string"
+                "items": {
+                  "$ref": "#/components/schemas/PersonRef"
+                },
+                "type": "array"
               },
               {
                 "type": "null"
@@ -83739,7 +83815,10 @@
           "workshop_inoculation_operator": {
             "anyOf": [
               {
-                "type": "string"
+                "items": {
+                  "$ref": "#/components/schemas/PersonRef"
+                },
+                "type": "array"
               },
               {
                 "type": "null"
@@ -177962,6 +178041,79 @@
           }
         },
         "summary": "创建种子培养记录",
+        "tags": [
+          "生产管理",
+          "生产管理 - 种子培养"
+        ]
+      }
+    },
+    "/api/v1/production/seed-cultures/person-monthly": {
+      "get": {
+        "operationId": "seed_culture_person_monthly_api_v1_production_seed_cultures_person_monthly_get",
+        "parameters": [
+          {
+            "description": "统计月份 YYYY-MM",
+            "in": "query",
+            "name": "month",
+            "required": true,
+            "schema": {
+              "description": "统计月份 YYYY-MM",
+              "title": "Month",
+              "type": "string"
+            }
+          },
+          {
+            "description": "产品名称",
+            "in": "query",
+            "name": "product_name",
+            "required": false,
+            "schema": {
+              "default": "盐酸林可霉素",
+              "description": "产品名称",
+              "title": "Product Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Seed Culture Person Monthly Api V1 Production Seed Cultures Person Monthly Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "人员月度工作统计（月度绩效依据）",
         "tags": [
           "生产管理",
           "生产管理 - 种子培养"
