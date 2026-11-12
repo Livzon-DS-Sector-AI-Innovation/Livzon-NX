@@ -105,14 +105,13 @@ describe('FeishuSettingsPage', () => {
     expect(markup).toContain('加密存储')
   })
 
-  it('渲染安全承诺填报配置卡（开关/推送时间/人员与群/测试发送）', () => {
+  it('渲染安全承诺填报配置卡（开关/推送时间/填报人员/测试发送）', () => {
     const markup = renderToStaticMarkup(<FeishuSettingsPage initialSettings={null} initialWsStatus={null} />)
 
     expect(markup).toContain('安全承诺填报')
     expect(markup).toContain('启用每日填报推送')
     expect(markup).toContain('推送时间')
     expect(markup).toContain('填报人员')
-    expect(markup).toContain('承诺公告推送群')
     expect(markup).toContain('发送测试填报卡')
   })
 })

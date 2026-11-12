@@ -27203,6 +27203,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/safety/sign-relay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 手写签名中转提交（暂存收件箱，等待内网拉取） */
+        post: operations["sign_relay_submit_api_v1_safety_sign_relay_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/sign-relay/pull": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 内网拉取暂存签名（共享密钥认证，拉取即清空） */
+        post: operations["sign_relay_pull_api_v1_safety_sign_relay_pull_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/sign-relay/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 手写签名中转页（公网网关渲染自包含手写板） */
+        get: operations["sign_relay_page_api_v1_safety_sign_relay__token__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/safety/special-operation-ledger": {
         parameters: {
             query?: never;
@@ -63236,8 +63287,6 @@ export interface components {
             cert_expiry_notify_milestones?: number[];
             /** Cert Expiry Notify User Ids */
             cert_expiry_notify_user_ids?: string[];
-            /** Commitment Chat Ids */
-            commitment_chat_ids?: string[];
             /**
              * Commitment Notify Enabled
              * @default false
@@ -69089,8 +69138,6 @@ export interface components {
             cert_expiry_notify_milestones?: number[];
             /** Cert Expiry Notify User Ids */
             cert_expiry_notify_user_ids?: string[];
-            /** Commitment Chat Ids */
-            commitment_chat_ids?: string[];
             /**
              * Commitment Notify Enabled
              * @default false
@@ -142814,6 +142861,88 @@ export interface operations {
             };
         };
     };
+    sign_relay_submit_api_v1_safety_sign_relay_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    sign_relay_pull_api_v1_safety_sign_relay_pull_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Relay-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sign_relay_page_api_v1_safety_sign_relay__token__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_special_operation_ledger_api_v1_safety_special_operation_ledger_get: {
         parameters: {
             query?: {
@@ -144783,9 +144912,7 @@ export interface operations {
             path: {
                 token: string;
             };
-            cookie?: {
-                auth_token?: string | null;
-            };
+            cookie?: never;
         };
         requestBody?: never;
         responses: {
@@ -144878,9 +145005,7 @@ export interface operations {
             query?: never;
             header?: never;
             path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
+            cookie?: never;
         };
         requestBody?: never;
         responses: {
@@ -144893,15 +145018,6 @@ export interface operations {
                     "application/json": unknown;
                 };
             };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
         };
     };
     work_permit_sign_page_api_v1_safety_work_permit_sign__token__get: {
@@ -144911,9 +145027,7 @@ export interface operations {
             path: {
                 token: string;
             };
-            cookie?: {
-                auth_token?: string | null;
-            };
+            cookie?: never;
         };
         requestBody?: never;
         responses: {

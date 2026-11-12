@@ -14,6 +14,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from unittest.mock import AsyncMock, patch
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -363,22 +364,27 @@ async def test_incremental_fetch_no_changes_returns_empty(
 async def test_incremental_fetch_keeps_today_records(
     db_session: AsyncSession,
 ) -> None:
-    """当天新录入记录（业务日期=当天零点，早于上次同步时刻）必须被拉取。
+    """白天同步也必须拉取「业务日期=当天」的新记录。
 
-    回归用例：飞书日期字段为当天零点时间戳，而 last_synced_at 是精确时刻。
-    若直接以同步时刻为水线比较，当天所有记录会被误判为旧数据漏拉；
-    业务日期水线应为「上次同步当天零点」。
+    回归用例（生产 2026-11-11 实测）：飞书日期字段是北京时间当天零点，
+    而 last_synced_at 是 UTC 时刻。修复前水线按 UTC 当天零点计算，等价
+    北京 08:00；08:00 之后同步时，当天 00:00 的记录会小于水线被误判为
+    旧数据。且第二路 last_modified_time 排序被飞书拒绝（InvalidSort），
+    没有任何兜底，导致白天录入的当天数据直到次日全量兜底才出现。
     """
     service = WarehouseService(db_session)
     service.feishu_client = AsyncMock()
     service._get_material_client = AsyncMock(
         side_effect=lambda _app_token: service.feishu_client
     )
-    watermark = datetime.now(UTC) - timedelta(minutes=10)
-    # 业务日期为当天零点（绝对早于 watermark 时刻），应被判定为新数据
+    # 北京时间 2026-11-11 16:27 的同步（UTC 08:27）
+    watermark = datetime(2026, 11, 11, 8, 27, tzinfo=UTC)
+    china_tz = ZoneInfo("Asia/Shanghai")
     today_ms = int(
-        datetime.combine(watermark.date(), datetime.min.time(), tzinfo=UTC).timestamp()
-        * 1000
+        datetime(2026, 11, 11, 0, 0, tzinfo=china_tz).timestamp() * 1000
+    )
+    yesterday_ms = int(
+        datetime(2026, 11, 10, 0, 0, tzinfo=china_tz).timestamp() * 1000
     )
     service.feishu_client.request = AsyncMock(
         side_effect=[
@@ -387,19 +393,16 @@ async def test_incremental_fetch_keeps_today_records(
                     {
                         "record_id": "rec-today",
                         "fields": {"入库日期": today_ms},
-                    }
-                ],
-                "has_more": False,
-            },
-            {
-                "items": [
+                    },
                     {
-                        "record_id": "rec-today-2",
-                        "fields": {"入库日期": today_ms},
-                    }
+                        "record_id": "rec-yesterday",
+                        "fields": {"入库日期": yesterday_ms},
+                    },
                 ],
                 "has_more": False,
             },
+            # 路二在飞书实际不可用（InvalidSort / 无 last_modified_time）
+            {"items": [], "has_more": False},
         ]
     )
 
@@ -411,7 +414,7 @@ async def test_incremental_fetch_keeps_today_records(
         last_synced_at=watermark,
     )
 
-    assert [item["record_id"] for item in items] == ["rec-today", "rec-today-2"]
+    assert [item["record_id"] for item in items] == ["rec-today"]
 
 
 async def test_incremental_fetch_second_route_error_tolerated(

@@ -37,9 +37,6 @@ from app.modules.safety.api.special_ops_personnel import special_ops_personnel_r
 from app.modules.safety.api.targets import safety_targets_router
 from app.modules.safety.api.trainings import trainings_router
 from app.modules.safety.api.work_certificates import work_certificates_router
-from app.modules.safety.api.work_permit_sign_public import (
-    work_permit_sign_public_router,
-)
 from app.modules.safety.api.work_permits import work_permits_router
 
 router = APIRouter()
@@ -74,5 +71,6 @@ router.include_router(special_ops_permits_router)
 router.include_router(special_ops_personnel_router)
 router.include_router(trainings_router)
 router.include_router(work_certificates_router)
-router.include_router(work_permit_sign_public_router)
+# work_permit_sign_public_router 为免登端点（HMAC token 保护），不能挂在
+# 带 require_module_view 依赖的业务路由下；在 api/router.py 顶层单独挂载
 router.include_router(work_permits_router)

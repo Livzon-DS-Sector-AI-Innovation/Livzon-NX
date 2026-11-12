@@ -180,7 +180,8 @@ export function SafetyCommitmentPanel({
     )
     setStatusSaving(false)
     if (res.code === 200 && res.data) {
-      setReport(res.data.report)
+      // 后端 PUT 返回的 data 即日报对象本身
+      setReport(res.data)
       setStatusEditing(false)
       message.success('企业状态已保存')
     } else {
@@ -198,7 +199,7 @@ export function SafetyCommitmentPanel({
     )
     setCommitmentSaving(false)
     if (res.code === 200 && res.data) {
-      setReport(res.data.report)
+      setReport(res.data)
       setCommitmentEditing(false)
       message.success('企业安全承诺已保存')
     } else {
@@ -230,7 +231,8 @@ export function SafetyCommitmentPanel({
     const res = await publishCommitment(report.id, name, PAGE_KEY)
     setPublishing(false)
     if (res.code === 200 && res.data) {
-      setReport(res.data.report)
+      // 后端 publish 返回的 data 即日报对象本身
+      setReport(res.data)
       setPublishOpen(false)
       message.success('承诺公告已发布')
     } else {
@@ -965,7 +967,6 @@ export function SafetyCommitmentPanel({
             依据《危险化学品企业安全风险研判与承诺公告制度》（应急〔2018〕74号），
             请确认当日装置、罐区、仓库处于安全运行状态，重大隐患已落实治理措施，
             主要风险得到有效管控后，以主要负责人名义发布当日承诺公告。
-            发布后将自动推送到飞书公告群（如已配置）。
           </Typography.Paragraph>
           <div>
             <Typography.Text strong>承诺人（主要负责人）</Typography.Text>

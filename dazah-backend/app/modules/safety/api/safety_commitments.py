@@ -25,9 +25,6 @@ from app.modules.safety.schemas.safety_commitment import (
 )
 from app.modules.safety.service import safety_commitment as commitment_service
 from app.modules.safety.service import safety_commitment_risk
-from app.modules.safety.service.commitment_notify import (
-    push_announcement_cards,
-)
 from app.shared.schemas import ApiResponseEnvelope
 
 safety_commitments_router = APIRouter()
@@ -129,8 +126,6 @@ async def publish_commitment(
         data.publisher_name,
         user_id=_current_user_id(current_user),
     )
-    # 发布后推公告卡到配置群；飞书未配置/失败不影响发布结果
-    await push_announcement_cards(db, item)
     return ApiResponseEnvelope[SafetyCommitmentReportItem](
         data=SafetyCommitmentReportItem(**item)
     )

@@ -210,6 +210,7 @@ PUBLIC_PATH_PREFIXES: tuple[str, ...] = (
     "/api/v1/safety/work-permit-sign/",
     "/api/v1/safety/work-permit-sign",
     "/api/v1/safety/work-permit-file/",
+    "/api/v1/safety/sign-relay/",
 )
 
 # identity 子路径策略：

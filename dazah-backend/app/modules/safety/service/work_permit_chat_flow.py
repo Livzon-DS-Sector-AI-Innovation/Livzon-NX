@@ -117,6 +117,15 @@ class ChatFlowService:
                 status_code=403,
                 message="当前飞书账号未绑定平台用户，请联系管理员绑定后使用",
             )
+        # 回写当前应用维度的 open_id（open_id 跨应用不通用；通讯录选人
+        # 回传的是本应用 open_id，回写后人员解析可直接命中）
+        if self.open_id and user.feishu_open_id != self.open_id:
+            user.feishu_open_id = self.open_id
+            try:
+                await self.db.commit()
+            except Exception:
+                logger.exception("回写飞书 open_id 失败: %s", user.id)
+                await self.db.rollback()
         self.user = user
         return user
 
@@ -153,6 +162,11 @@ class ChatFlowService:
         defaults = (default_row.values if default_row else None) or {}
         values = base_form_values(permit_type, defaults)
         values["level"] = _sanitize_level(permit_type, values.get("level"))
+        # 实施时间不沿用历史记忆（避免旧日期导致时长超有效期），
+        # 默认当天 08:00–17:00（选择器无默认值，状态里兜底）
+        today = datetime.now().strftime("%Y-%m-%d")
+        values["planned_start"] = f"{today} 08:00"
+        values["planned_end"] = f"{today} 17:00"
         state: dict[str, Any] = {
             "type": permit_type,
             "step": 1,
@@ -174,10 +188,42 @@ class ChatFlowService:
         if state is None:
             raise AppException(status_code=410, message="表单已过期，请重新发起")
         values = state.setdefault("values", {})
-        _merge_form_values(permit_type, step, values, form_value)
+        if step == 2:
+            # 人员步需查库（选人解析 + 证件自动关联），走异步合并
+            await self._merge_persons(permit_type, values, form_value)
+        else:
+            _merge_form_values(permit_type, step, values, form_value)
+        # 第①步就地校验（时间倒置/超有效期）：停留本步回卡提示，不抛错
+        if step == 1:
+            warn = await self._step1_warnings(permit_type, values)
+            if warn:
+                await self._save_state(state)
+                card = build_step_card(permit_type, 1, values, self.open_id)
+                card["body"]["elements"].insert(
+                    0, {"tag": "markdown", "content": f"⚠️ **{warn}**"}
+                )
+                return card
+        # 第⑥步就地校验：未指派且无默认审批人的节点，停留本步提示
+        if step == 6:
+            missing = self._missing_approvers(permit_type, values)
+            if missing:
+                await self._save_state(state)
+                card = build_step_card(permit_type, 6, values, self.open_id)
+                card["body"]["elements"].insert(
+                    0,
+                    {
+                        "tag": "markdown",
+                        "content": (
+                            "⚠️ **以下审批节点还没有审批人**："
+                            + "、".join(missing)
+                            + "。请从通讯录选择，或先在平台维护默认审批人。"
+                        ),
+                    },
+                )
+                return card
         next_s = next_step(permit_type, step)
-        # 最后一步（⑤ 汇总）即终点：直接返回汇总卡（next_step 对 5 才返回
-        # None，若只判 None 会导致第④步保存后落在占位卡"汇总生成中…"）
+        # 最后一步（汇总）即终点：直接返回汇总卡（next_step 对最末步才返回
+        # None，若只判 None 会导致倒数第二步保存后落在占位卡"汇总生成中…"）
         at_summary = next_s is None or next_s == steps_for(permit_type)[-1]
         state["step"] = next_s or step
         if at_summary and message_id:
@@ -245,7 +291,11 @@ class ChatFlowService:
         values["assignment_names"] = names
 
     async def _user_by_feishu_id(self, feishu_id: str) -> User | None:
-        """select_person 回传 id 兼容解析：open_id / union_id / 工号。"""
+        """select_person 回传 id 兼容解析：open_id / union_id / 工号。
+
+        通讯录选人回传的是本应用 open_id（跨应用不通用）；本库命中不到时
+        经飞书通讯录 API 取 tenant user_id / 姓名再匹配，避免显示 ou_id。
+        """
         from sqlalchemy import or_
 
         result = await self.db.execute(
@@ -260,7 +310,215 @@ class ChatFlowService:
             )
             .limit(1)
         )
-        return result.scalar_one_or_none()
+        user = result.scalar_one_or_none()
+        if user is not None:
+            return user
+        name, tenant_user_id = await feishu_user_info(feishu_id)
+        if tenant_user_id:
+            by_username = await self.db.execute(
+                select(User)
+                .where(
+                    User.username == tenant_user_id,
+                    User.is_deleted.is_(False),
+                )
+                .limit(1)
+            )
+            user = by_username.scalar_one_or_none()
+            if user is not None:
+                return user
+        if name:
+            by_name = await self.db.execute(
+                select(User)
+                .where(User.name == name, User.is_deleted.is_(False))
+                .limit(1)
+            )
+            return by_name.scalar_one_or_none()
+        return None
+
+    async def _merge_persons(
+        self,
+        permit_type: str,
+        values: dict[str, Any],
+        form_value: dict[str, Any],
+    ) -> None:
+        """第②步人员合并：通讯录选人（自动关联证件）+ 外部人员手工录入。"""
+        template = get_template(permit_type)
+        existing_map = {
+            str(p.get("role")): p for p in (values.get("persons") or [])
+        }
+        persons: list[dict[str, Any]] = []
+        for role in template.person_roles:
+            role_key = str(role["role"])
+            picked = form_value.get(f"person__{role_key}")
+            if isinstance(picked, (list, tuple)):
+                picked = picked[0] if picked else ""
+            picked_text = str(picked or "").strip()
+            ext_name = _optional(form_value.get(f"person_ext_name__{role_key}"))
+            ext_cert = _optional(form_value.get(f"person_ext_cert__{role_key}"))
+            prev = existing_map.get(role_key) or {}
+            if picked_text:
+                user = await self._user_by_feishu_id(picked_text)
+                if user is None:
+                    # 库内无匹配：用通讯录姓名显示（不再暴露 ou_id），
+                    # 并按姓名尝试关联证件
+                    contact_name, _tenant = await feishu_user_info(picked_text)
+                    display_name = contact_name or picked_text
+                    entry: dict[str, Any] = {"role": role_key, "name": display_name}
+                    if contact_name:
+                        cert = await self._certificate_by_name(
+                            contact_name, role_key
+                        )
+                        if cert is not None:
+                            entry.update(_cert_snapshot(cert))
+                    persons.append(entry)
+                    continue
+                entry = {
+                    "role": role_key,
+                    "name": user.name,
+                    "user_id": str(user.id),
+                }
+                cert = await self._certificate_for_user(user.id, role_key)
+                if cert is not None:
+                    entry.update(_cert_snapshot(cert))
+                persons.append(entry)
+            elif ext_name:
+                entry = {
+                    "role": role_key,
+                    "name": ext_name,
+                    "external": "true",
+                }
+                if ext_cert:
+                    entry["certificate_no"] = ext_cert
+                persons.append(entry)
+            elif prev:
+                persons.append(prev)
+        values["persons"] = persons
+        # 汇总签字行显示所选人员姓名
+        values["person_sign_names"] = {
+            str(p.get("role")): str(p.get("name") or "") for p in persons
+        }
+
+    async def _certificate_by_name(
+        self, person_name: str, role_key: str
+    ) -> Any:
+        """按姓名取有效证件（通讯录人员未绑定平台账号时的兜底关联）。"""
+        from app.modules.safety.models import SpecialWorkCertificate
+
+        result = await self.db.execute(
+            select(SpecialWorkCertificate)
+            .where(
+                SpecialWorkCertificate.person_name == person_name,
+                SpecialWorkCertificate.is_deleted.is_(False),
+                SpecialWorkCertificate.status.in_(("valid", "expiring")),
+            )
+            .order_by(SpecialWorkCertificate.expiry_date.desc())
+            .limit(1)
+        )
+        cert = result.scalar_one_or_none()
+        del role_key
+        return cert
+
+    async def _certificate_for_user(
+        self, user_id: Any, role_key: str
+    ) -> Any:
+        """取该用户有效特种作业证件（优先角色建议类别、最近到期）。"""
+        from app.modules.safety.models import SpecialWorkCertificate
+        from app.modules.safety.service.work_permit_templates import (
+            PERSON_ROLE_CERT_CATEGORIES,
+        )
+
+        categories = list(PERSON_ROLE_CERT_CATEGORIES.get(role_key) or ())
+        base_conditions = [
+            SpecialWorkCertificate.identity_user_id == user_id,
+            SpecialWorkCertificate.is_deleted.is_(False),
+            SpecialWorkCertificate.status.in_(("valid", "expiring")),
+        ]
+        for conds in (
+            base_conditions
+            + (
+                [
+                    SpecialWorkCertificate.certificate_category.in_(categories)
+                ]
+                if categories
+                else []
+            ),
+            base_conditions,
+        ):
+            result = await self.db.execute(
+                select(SpecialWorkCertificate)
+                .where(*conds)
+                .order_by(SpecialWorkCertificate.expiry_date.desc())
+                .limit(1)
+            )
+            cert = result.scalar_one_or_none()
+            if cert is not None:
+                return cert
+        return None
+
+    async def set_level(self, permit_type: str, level: str) -> dict[str, Any]:
+        """第①步级别按钮切换（重渲染当前步卡片）。"""
+        state = await self._load_state(permit_type)
+        if state is None:
+            raise AppException(status_code=410, message="表单已过期，请重新发起")
+        values = state.setdefault("values", {})
+        values["level"] = _sanitize_level(permit_type, level)
+        await self._save_state(state)
+        return build_step_card(
+            permit_type,
+            int(state.get("step") or 1),
+            values,
+            self.open_id,
+        )
+
+    async def _step1_warnings(
+        self, permit_type: str, values: dict[str, Any]
+    ) -> str | None:
+        """第①步就地校验：结束时间/实施时长（不抛错，回卡提示）。"""
+        from app.modules.safety.service import work_permit as permit_service
+
+        start = _parse_dt_strict(values.get("planned_start"))
+        end = _parse_dt_strict(values.get("planned_end"))
+        if start is None or end is None:
+            return None
+        if end <= start:
+            return "实施结束时间必须晚于开始时间，请重新选择时间"
+        settings = await permit_service.get_runtime_settings(self.db)
+        limit = await permit_service._validity_hours(
+            settings,
+            permit_type,
+            _sanitize_level(permit_type, values.get("level")),
+        )
+        if limit:
+            hours = (end - start).total_seconds() / 3600
+            if hours > limit:
+                return (
+                    f"实施时长 {hours:.1f}h 超过当前级别有效期 {limit:g}h，"
+                    "请缩短时间或调整级别"
+                )
+        return None
+
+    def _missing_approvers(
+        self, permit_type: str, values: dict[str, Any]
+    ) -> list[str]:
+        """第⑥步校验：既无指派也无默认审批人的 approve 节点名。"""
+        from app.modules.safety.service.work_permit_templates import (
+            active_nodes_for_level,
+        )
+
+        level = _sanitize_level(permit_type, values.get("level"))
+        assignments = values.get("assignments") or {}
+        defaults = values.get("approver_defaults") or {}
+        missing: list[str] = []
+        for node in active_nodes_for_level(permit_type, level):
+            if str(node.get("kind")) != "approve":
+                continue
+            key = str(node.get("key"))
+            if str(assignments.get(key) or "").strip():
+                continue
+            if str(defaults.get(key) or "").strip():
+                continue
+            missing.append(str(node.get("name")))
+        return missing
 
     async def toggle_check(
         self, permit_type: str, field: str, key: str
@@ -344,10 +602,8 @@ class ChatFlowService:
         )
 
     async def _sign_url(self, permit_type: str, sign_key: str) -> str:
-        from app.modules.safety.service.work_permit_notify import (
-            public_base_url,
-        )
         from app.modules.safety.service.work_permit_signatures import (
+            build_sign_url,
             create_sign_token,
         )
 
@@ -360,7 +616,7 @@ class ChatFlowService:
             signer_name=row_name_for(permit_type, sign_key),
             permit_type=permit_type,
         )
-        return f"{public_base_url()}/api/v1/safety/work-permit-sign/{token}"
+        return build_sign_url(token)
 
     async def bind_summary_message(
         self, permit_type: str, message_id: str
@@ -619,10 +875,12 @@ class ChatFlowService:
         )
         await self.db.commit()
         await self._push_flow_after_action(permit_obj)
+        # 回执告诉审批人"已推进到哪"，避免误以为没生效
+        progress = await self._progress_text(permit_obj)
         return build_receipt_card(
             permit_obj.permit_no,
             "已同意",
-            f"节点「{node.node_name}」已同意",
+            f"节点「{node.node_name}」已同意\n{progress}",
         )
 
     async def reject(
@@ -707,6 +965,38 @@ class ChatFlowService:
 
         await push_approval_card_for_next_node(self.db, permit_id)
 
+    async def _progress_text(self, permit: Any) -> str:
+        """回执进度文案：下一待办节点 / 等待验票 / 已完工。"""
+        from app.modules.safety.models import WorkPermitNode
+        from app.modules.safety.service.work_permit_templates import (
+            PERMIT_STATUS_ACTIVE,
+            PERMIT_STATUS_APPROVED,
+            PERMIT_STATUS_COMPLETED,
+            PERMIT_STATUS_PENDING,
+        )
+
+        if str(permit.status) == PERMIT_STATUS_PENDING:
+            node = (
+                await self.db.execute(
+                    select(WorkPermitNode).where(
+                        WorkPermitNode.permit_id == permit.id,
+                        WorkPermitNode.round == permit.approval_round,
+                        WorkPermitNode.status == "pending",
+                        WorkPermitNode.is_deleted.is_(False),
+                    )
+                )
+            ).scalar_one_or_none()
+            if node is not None:
+                return f"➡️ 下一节点：**{node.node_name}**（待办卡已推送）"
+            return "➡️ 审批已推进"
+        if str(permit.status) == PERMIT_STATUS_APPROVED:
+            return "✅ 全部签批完成，等待验票开工"
+        if str(permit.status) == PERMIT_STATUS_ACTIVE:
+            return "✅ 已开工，作业中；完工后需验收"
+        if str(permit.status) == PERMIT_STATUS_COMPLETED:
+            return "✅ 已完工，可下载 PDF 存档"
+        return ""
+
     async def _push_flow_after_action(self, permit: Any) -> None:
         from app.modules.safety.service.work_permit_notify import (
             push_approval_card_for_next_node,
@@ -732,6 +1022,70 @@ class ChatFlowService:
 
 
 # ── 模块级工具 ──
+
+
+def _parse_dt_strict(text: Any) -> datetime | None:
+    """严格解析 YYYY-MM-DD HH:MM（校验用，失败返回 None）。"""
+    value = str(text or "").strip()
+    for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M"):
+        try:
+            return datetime.strptime(value, fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def _cert_snapshot(cert: Any) -> dict[str, str]:
+    """证件行 → 人员快照字段（随票存档）。"""
+    return {
+        "certificate_id": str(cert.id),
+        "certificate_no": cert.certificate_no or "",
+        "certificate_category": cert.certificate_category,
+        "certificate_expiry": (
+            cert.expiry_date.isoformat() if cert.expiry_date else ""
+        ),
+        "certificate_status": cert.status,
+    }
+
+
+async def feishu_user_info(open_id: str) -> tuple[str, str]:
+    """经飞书通讯录取 (姓名, tenant user_id)；失败返回 ("", "")。
+
+    通讯录选人只回传本应用 open_id，库里通常存的是其他应用的 open_id，
+    直接查库会落到 ou_xxx 显示。此接口需要应用具备
+    ``contact:user.base:readonly`` 权限；无权限时静默降级。
+    """
+    import httpx
+
+    try:
+        from app.modules.safety.feishu.client import (
+            get_safety_feishu_client,
+            get_safety_tenant_token,
+        )
+
+        client = await get_safety_feishu_client()
+        token = await get_safety_tenant_token(client)
+        async with httpx.AsyncClient(timeout=8) as http:
+            resp = await http.get(
+                "https://open.feishu.cn/open-apis/contact/v3/users/"
+                f"{open_id}",
+                params={"user_id_type": "open_id"},
+                headers={"Authorization": f"Bearer {token}"},
+            )
+            payload = resp.json()
+        if payload.get("code") != 0:
+            logger.info(
+                "安全飞书通讯录查询未成功: open_id=%s code=%s msg=%s",
+                open_id,
+                payload.get("code"),
+                payload.get("msg"),
+            )
+            return "", ""
+        user = (payload.get("data") or {}).get("user") or {}
+        return str(user.get("name") or ""), str(user.get("user_id") or "")
+    except Exception:
+        logger.exception("安全飞书通讯录查询异常: %s", open_id)
+        return "", ""
 
 
 def select_user_by_open_id(open_id: str, union_id: str = "") -> Any:
@@ -851,13 +1205,22 @@ def build_create_payload(
 
     persons = []
     for person in values.get("persons") or []:
-        if person.get("name"):
-            persons.append(
-                {
-                    "role": person["role"],
-                    "name": person["name"],
-                }
-            )
+        if not person.get("name"):
+            continue
+        entry: dict[str, Any] = {
+            "role": person["role"],
+            "name": person["name"],
+        }
+        # 携带选人/证件快照（外部人员仅 name + certificate_no）
+        for key in (
+            "user_id",
+            "certificate_id",
+            "certificate_no",
+            "certificate_category",
+        ):
+            if person.get(key):
+                entry[key] = person[key]
+        persons.append(entry)
     measures: list[dict[str, Any]] = []
     selected = values.get("measures") or {}
     fills_map: dict[str, dict[str, str]] = values.get("measure_fills") or {}
@@ -922,7 +1285,9 @@ def _sanitize_level(permit_type: str, level: Any) -> str:
     if not template.levels:
         return "none"
     text = str(level or "").strip()
-    return text if text in template.levels else template.levels[0]
+    from app.modules.safety.service.work_permit_card_forms import default_level
+
+    return text if text in template.levels else default_level(template.levels)
 
 
 def _combine_dt(form_value: dict[str, Any], base: str) -> str | None:
@@ -995,29 +1360,41 @@ def _merge_form_values(
         else:
             # select 无默认值且用户未选时，保持/回退合法级别
             values["level"] = _sanitize_level(permit_type, values.get("level"))
-        # 票面差异字段（多选为列表，datetime 由日期时间组件组合，其余字符串）
+        # 票面差异字段：multi_select 逐行 tf__{key}__{opt} 组合为列表；
+        # datetime 由日期时间组件组合；其余字符串
+        td = values.setdefault("type_data", {})
         for field in template.type_fields:
             key = str(field["key"])
             if str(field.get("type")) == "datetime":
                 combined = _combine_dt(form_value, key)
                 if combined:
-                    values.setdefault("type_data", {})[key] = combined
+                    td[key] = combined
+                continue
+            if str(field.get("type")) == "multi_select":
+                # 兼容两种形态：下拉多选回传 key→list；逐行 tf__{key}__{opt}
+                picked = [
+                    name.split("__", 2)[2]
+                    for name, val in form_value.items()
+                    if name.startswith(f"tf__{key}__") and str(val) == "yes"
+                ]
+                raw_multi = form_value.get(key)
+                if isinstance(raw_multi, (list, tuple)):
+                    selected = [str(v) for v in raw_multi if str(v).strip()]
+                    if selected:
+                        picked = selected
+                elif isinstance(raw_multi, str) and raw_multi.strip():
+                    picked = [raw_multi.strip()]
+                if picked:
+                    td[key] = picked
                 continue
             if key in form_value:
                 raw = form_value[key]
-                td = values.setdefault("type_data", {})
                 if isinstance(raw, (list, tuple)):
                     td[key] = [str(item) for item in raw if str(item).strip()]
                 else:
                     td[key] = str(raw)
         return
     if step == 2:
-        persons: list[dict[str, str]] = []
-        for role in template.person_roles:
-            name = str(form_value.get(f"person_{role['role']}") or "").strip()
-            if name:
-                persons.append({"role": str(role["role"]), "name": name})
-        values["persons"] = persons
         return
     if step == 3:
         gas = {
@@ -1031,8 +1408,19 @@ def _merge_form_values(
         values["gas"] = gas
         return
     if step == 4:
-        # 风险辨识逐行：risk__{项}=涉及/不涉及（空表单不覆盖已填项）
+        # 风险辨识：下拉多选回传 key→list；兼容旧逐行 risk__{项} 形态
         if not form_value:
+            return
+        raw_risk = form_value.get("risk")
+        if isinstance(raw_risk, (list, tuple)):
+            picked = [str(item) for item in raw_risk if str(item).strip()]
+            if picked:
+                values["risk"] = picked
+                return
+        elif isinstance(raw_risk, str) and raw_risk.strip():
+            values["risk"] = [
+                item.strip() for item in raw_risk.split("、") if item.strip()
+            ]
             return
         values["risk"] = [
             name.removeprefix("risk__")

@@ -41,7 +41,6 @@ class SafetyFeishuAppSettingsDetail(BaseModel):
     cert_expiry_notify_user_ids: list[str] = Field(default_factory=list)
     commitment_notify_enabled: bool = False
     commitment_push_time: str = "08:30"
-    commitment_chat_ids: list[str] = Field(default_factory=list)
     commitment_user_ids: list[str] = Field(default_factory=list)
     is_enabled: bool = True
     knowledge_last_sync_status: str | None = None
@@ -92,7 +91,6 @@ class UpdateSafetyFeishuAppSettingsRequest(BaseModel):
     cert_expiry_notify_user_ids: list[str] = Field(default_factory=list)
     commitment_notify_enabled: bool = False
     commitment_push_time: str = Field(default="08:30", max_length=5)
-    commitment_chat_ids: list[str] = Field(default_factory=list)
     commitment_user_ids: list[str] = Field(default_factory=list)
     is_enabled: bool = True
 
