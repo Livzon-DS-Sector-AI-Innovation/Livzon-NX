@@ -108,7 +108,12 @@ async def test_ordinary_admin_keeps_business_access_but_cannot_open_system_setti
                 name="普通管理员", code="ordinary_admin", is_system=True
             )
             db.add(ordinary_role)
-        db.add_all([actor, target])
+        # 后备超管：使"最后一个系统管理员"守卫恒不触发——
+        # 本测试验证普通管理员的业务/系统权限边界，不应依赖
+        # 测试库中恰好存在其他活跃超管（全新库种子薄时会被
+        # 409 误拦，属对库状态的隐性依赖）
+        spare_admin = User(name="后备系统管理员", role="admin", status="active")
+        db.add_all([actor, target, spare_admin])
         await db.flush()
 
         app = FastAPI()
