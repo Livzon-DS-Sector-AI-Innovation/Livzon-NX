@@ -125,11 +125,25 @@ const CARDS = [
     sort_order: 0,
   },
   {
+    id: 'c-1b',
+    card_type: 'commitment',
+    title: '动火作业提示',
+    content: '当日动火作业须落实监火人与气体复检。',
+    sort_order: 1,
+  },
+  {
     id: 'c-2',
     card_type: 'major_hazard',
     title: '储罐区管控要点',
     content: '液位温度压力不超限。',
     sort_order: 0,
+  },
+  {
+    id: 'c-2b',
+    card_type: 'major_hazard',
+    title: '仓库管控要点',
+    content: '禁配物质分类分区存放，通风完好。',
+    sort_order: 1,
   },
 ]
 
@@ -191,7 +205,7 @@ afterEach(() => {
 })
 
 describe('SafetyCommitmentPanel', () => {
-  it('渲染企业状态数值、滚动信息卡与 AI 研判', async () => {
+  it('渲染企业状态数值、双列信息卡与 AI 研判', async () => {
     await renderPanel()
     const text = document.body.textContent ?? ''
     expect(text).toContain('企业状态')
@@ -203,12 +217,25 @@ describe('SafetyCommitmentPanel', () => {
     expect(text).toContain('当日有一处动火作业')
     expect(text).toContain('企业安全承诺')
     expect(text).toContain('秦刚')
-    // 轮播容器可横向滚动
-    const carousel = document.querySelector(
+    // 两个信息卡区块并排一行（各占一半等宽等高），
+    // 区块内信息卡纵向堆叠，溢出由播报式滚动展示。
+    const row = document.querySelector(
+      '[data-testid="commitment-info-row"]',
+    ) as HTMLElement | null
+    expect(row).not.toBeNull()
+    expect(row!.style.gridTemplateColumns).toBe('repeat(2, minmax(0, 1fr))')
+    const commitmentStack = document.querySelector(
       '[data-testid="commitment-carousel-commitment"]',
     ) as HTMLElement | null
-    expect(carousel).not.toBeNull()
-    expect(carousel!.style.overflowX).toBe('auto')
+    expect(commitmentStack).not.toBeNull()
+    // 播报滚动容器挂载，且夹具两张卡都在同一区块内
+    expect(commitmentStack!.querySelectorAll('.asc-host').length).toBe(1)
+    expect(commitmentStack!.textContent).toContain('动火作业提示')
+    const hazardStack = document.querySelector(
+      '[data-testid="commitment-carousel-major_hazard"]',
+    ) as HTMLElement | null
+    expect(hazardStack).not.toBeNull()
+    expect(hazardStack!.textContent).toContain('仓库管控要点')
   })
 
   it('编辑企业状态并保存', async () => {

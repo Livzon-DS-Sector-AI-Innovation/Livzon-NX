@@ -3,12 +3,13 @@
 /**
  * 安全承诺页（应急〔2018〕74号 承诺公告制度）。
  *
- * 布局：页头（日期/状态/操作）→ 企业状态（结构化编辑）→ 左右滚动信息卡
- * （安全承诺信息 / 重大危险源信息）→ AI 安全风险研判 → 企业安全承诺公告。
+ * 布局：页头（日期/状态/操作）→ 企业状态（结构化编辑，紧凑栅格）→ 信息卡
+ * 双列网格（安全承诺信息 / 重大危险源信息，内容溢出自动向上滚动播报，
+ * 悬停暂停）→ AI 安全风险研判 → 企业安全承诺公告。
  * 历史日期只读；写操作走 canOperate 权限。
  */
 
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   App,
   Button,
@@ -56,6 +57,76 @@ const RISK_LEVEL_COLOR: Record<string, string> = {
   中: 'gold',
   较高: 'orange',
   高: 'red',
+}
+
+/** 播报式滚动样式：内容溢出时自动向上循环，悬停/聚焦暂停（局部注入，仅本页）。 */
+const AUTO_SCROLL_CSS = `
+@keyframes commitment-scroll-up { from { transform: translateY(0); } to { transform: translateY(-50%); } }
+.asc-host { overflow: hidden; }
+.asc-host:hover .asc-inner, .asc-host:focus-within .asc-inner { animation-play-state: paused !important; }
+.asc-inner { will-change: transform; }
+`
+
+/** 内容超出固定高度时自动向上循环滚动（播报式）；未溢出则静止显示。 */
+function AutoScrollBox({
+  height,
+  flex,
+  paused,
+  children,
+}: {
+  height?: number
+  flex?: boolean
+  paused?: boolean
+  children: React.ReactNode
+}) {
+  const hostRef = useRef<HTMLDivElement | null>(null)
+  const innerRef = useRef<HTMLDivElement | null>(null)
+  const [scrollable, setScrollable] = useState(false)
+
+  useEffect(() => {
+    const check = () => {
+      const inner = innerRef.current
+      const host = hostRef.current
+      if (!inner || !host) return
+      setScrollable(inner.scrollHeight > host.clientHeight + 2)
+    }
+    check()
+    if (typeof ResizeObserver === 'undefined') return undefined
+    const observer = new ResizeObserver(check)
+    if (innerRef.current) observer.observe(innerRef.current)
+    if (hostRef.current) observer.observe(hostRef.current)
+    return () => observer.disconnect()
+  }, [children])
+
+  const active = scrollable && !paused
+  return (
+    <div
+      ref={hostRef}
+      className="asc-host"
+      style={
+        flex
+          ? { flex: 1, minHeight: 0, position: 'relative' }
+          : { height, position: 'relative' }
+      }
+    >
+      <div
+        ref={innerRef}
+        className="asc-inner"
+        style={active ? { animation: 'commitment-scroll-up 24s linear infinite' } : undefined}
+      >
+        <div>
+          {children}
+          <div style={{ height: 24 }} aria-hidden />
+        </div>
+        {active && (
+          <div aria-hidden>
+            {children}
+            <div style={{ height: 24 }} />
+          </div>
+        )}
+      </div>
+    </div>
+  )
 }
 
 type TriState = 'yes' | 'no' | 'unknown'
@@ -306,7 +377,7 @@ export function SafetyCommitmentPanel({
     value: number | undefined,
     onChange: (v: number | null) => void
   ) => (
-    <Col span={6} key={label}>
+    <Col span={4} key={label}>
       <Typography.Text type="secondary" style={{ fontSize: 12 }}>
         {label}
       </Typography.Text>
@@ -319,7 +390,7 @@ export function SafetyCommitmentPanel({
             onChange={(v) => onChange(v)}
           />
         ) : (
-          <div style={{ fontSize: 18, fontWeight: 600 }}>{value ?? 0}</div>
+          <div style={{ fontSize: 16, fontWeight: 600 }}>{value ?? 0}</div>
         )}
       </div>
     </Col>
@@ -331,7 +402,7 @@ export function SafetyCommitmentPanel({
     onChange: (v: TriState) => void,
     extra?: string
   ) => (
-    <Col span={12} key={label}>
+    <Col span={8} key={label}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <span>{label}</span>
         {statusEditing && !readOnly ? (
@@ -398,6 +469,21 @@ export function SafetyCommitmentPanel({
     return (
       <Card
         size="small"
+        style={{
+          height: 420,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        }}
+        styles={{
+          body: {
+            flex: 1,
+            minHeight: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+          },
+        }}
         title={
           <Space>
             <span>{title}</span>
@@ -419,7 +505,10 @@ export function SafetyCommitmentPanel({
           )
         }
       >
-        <Typography.Paragraph type="secondary" style={{ marginBottom: 8, fontSize: 12 }}>
+        <Typography.Paragraph
+          type="secondary"
+          style={{ marginBottom: 8, fontSize: 12, flexShrink: 0 }}
+        >
           {description}
         </Typography.Paragraph>
         {items.length === 0 ? (
@@ -435,94 +524,95 @@ export function SafetyCommitmentPanel({
             暂无内容，点击「新增」创建第一张信息卡
           </div>
         ) : (
-          <div
-            data-testid={`commitment-carousel-${cardType}`}
-            style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 8 }}
-          >
-            {items.map((card) => (
-              <div
-                key={card.id}
-                style={{
-                  minWidth: 320,
-                  maxWidth: 420,
-                  flex: '0 0 auto',
-                  border: '1px solid #f0f0f0',
-                  borderRadius: 8,
-                  padding: 12,
-                }}
-              >
-                {cardEditingId === card.id ? (
-                  <Space orientation="vertical" size={8} style={{ display: 'flex' }}>
-                    <Input
-                      value={cardDraft.title}
-                      placeholder="卡片标题"
-                      onChange={(e) =>
-                        setCardDraft((prev) => ({ ...prev, title: e.target.value }))
-                      }
-                    />
-                    <Input.TextArea
-                      rows={5}
-                      value={cardDraft.content}
-                      placeholder="卡片内容"
-                      onChange={(e) =>
-                        setCardDraft((prev) => ({ ...prev, content: e.target.value }))
-                      }
-                    />
-                    <Space>
-                      <Button
-                        size="small"
-                        type="primary"
-                        loading={savingCard}
-                        onClick={() => void saveCard(card.id)}
-                      >
-                        保存
-                      </Button>
-                      <Button size="small" onClick={() => setCardEditingId(null)}>
-                        取消
-                      </Button>
-                    </Space>
-                  </Space>
-                ) : (
-                  <>
+          <div data-testid={`commitment-carousel-${cardType}`} style={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
+            <AutoScrollBox flex paused={cardEditingId !== null}>
+              <Space orientation="vertical" size={12} style={{ display: 'flex' }}>
+                {items.map((card) => {
+                  const editing = cardEditingId === card.id
+                  return (
                     <div
+                      key={card.id}
                       style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        marginBottom: 8,
+                        border: '1px solid #f0f0f0',
+                        borderRadius: 8,
+                        padding: '10px 12px',
                       }}
                     >
-                      <Typography.Text strong>{card.title || '（未命名）'}</Typography.Text>
-                      {!readOnly && (
-                        <Space size={4}>
-                          <Button
-                            type="text"
-                            size="small"
-                            icon={<EditOutlined />}
-                            onClick={() => beginEditCard(card)}
-                          />
-                          <Popconfirm
-                            title="删除这张信息卡？"
-                            description="删除后网页端不可恢复。"
-                            onConfirm={() => void removeCard(card.id)}
-                          >
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          marginBottom: 6,
+                        }}
+                      >
+                        <Typography.Text strong style={{ fontSize: 13 }}>
+                          {card.title || '（未命名）'}
+                        </Typography.Text>
+                        {!readOnly && (
+                          <Space size={4}>
                             <Button
                               type="text"
                               size="small"
-                              danger
-                              icon={<DeleteOutlined />}
+                              icon={<EditOutlined />}
+                              onClick={() => beginEditCard(card)}
                             />
-                          </Popconfirm>
+                            <Popconfirm
+                              title="删除这张信息卡？"
+                              description="删除后网页端不可恢复。"
+                              onConfirm={() => void removeCard(card.id)}
+                            >
+                              <Button
+                                type="text"
+                                size="small"
+                                danger
+                                icon={<DeleteOutlined />}
+                              />
+                            </Popconfirm>
+                          </Space>
+                        )}
+                      </div>
+                      {editing ? (
+                        <Space orientation="vertical" size={8} style={{ display: 'flex' }}>
+                          <Input
+                            value={cardDraft.title}
+                            placeholder="卡片标题"
+                            onChange={(e) =>
+                              setCardDraft((prev) => ({ ...prev, title: e.target.value }))
+                            }
+                          />
+                          <Input.TextArea
+                            rows={6}
+                            value={cardDraft.content}
+                            placeholder="卡片内容"
+                            onChange={(e) =>
+                              setCardDraft((prev) => ({ ...prev, content: e.target.value }))
+                            }
+                          />
+                          <Space>
+                            <Button
+                              size="small"
+                              type="primary"
+                              loading={savingCard}
+                              onClick={() => void saveCard(card.id)}
+                            >
+                              保存
+                            </Button>
+                            <Button size="small" onClick={() => setCardEditingId(null)}>
+                              取消
+                            </Button>
+                          </Space>
                         </Space>
+                      ) : (
+                        <div style={{ whiteSpace: 'pre-wrap', fontSize: 13, lineHeight: 1.7 }}>
+                          {card.content}
+                        </div>
                       )}
                     </div>
-                    <div style={{ whiteSpace: 'pre-wrap', fontSize: 13, lineHeight: 1.7 }}>
-                      {card.content}
-                    </div>
-                  </>
-                )}
-              </div>
-            ))}
+                  )
+                })}
+              </Space>
+            </AutoScrollBox>
           </div>
         )}
       </Card>
@@ -551,9 +641,11 @@ export function SafetyCommitmentPanel({
     // `.ant-space` 基础规则会排在 `.ant-space-vertical` 之后把方向覆盖为 row
     <Space
       orientation="vertical"
-      size={16}
+      size={12}
       style={{ display: 'flex', flexDirection: 'column' }}
     >
+      {/* 播报式滚动动画样式（本页局部） */}
+      <style dangerouslySetInnerHTML={{ __html: AUTO_SCROLL_CSS }} />
       {!permissions.canAccess && (
         <PlatformNotice
           type="warning"
@@ -814,17 +906,26 @@ export function SafetyCommitmentPanel({
             </Row>
           </Card>
 
-          {/* ── 左右滚动信息卡 ── */}
-          {carouselSection(
-            '安全承诺信息',
-            'commitment',
-            '按左右滚动查看；点击卡片右上角编辑，内容即时保存。'
-          )}
-          {carouselSection(
-            '重大危险源信息',
-            'major_hazard',
-            '重大危险源台账要点与管控要求；支持多张卡片左右滚动。'
-          )}
+          {/* ── 信息卡：一行两卡，等宽等高 ── */}
+          <div
+            data-testid="commitment-info-row"
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+              gap: 12,
+            }}
+          >
+            {carouselSection(
+              '安全承诺信息',
+              'commitment',
+              '内容较多时自动向上滚动播报，鼠标悬停暂停；点击卡片右上角编辑，内容即时保存。'
+            )}
+            {carouselSection(
+              '重大危险源信息',
+              'major_hazard',
+              '重大危险源台账要点与管控要求；内容较多时自动向上滚动播报。'
+            )}
+          </div>
 
           {/* ── AI 风险研判 ── */}
           <Card
@@ -844,44 +945,46 @@ export function SafetyCommitmentPanel({
             }
           >
             {risk ? (
-              <Space orientation="vertical" size={8} style={{ display: 'flex' }}>
-                <Space size={12}>
-                  <Tag color={RISK_LEVEL_COLOR[risk.risk_level] ?? 'default'}>
-                    综合风险等级：{risk.risk_level}
-                  </Tag>
-                  {riskBasis && (
-                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                      数据依据：{riskBasis}
-                    </Typography.Text>
+              <AutoScrollBox height={240}>
+                <Space orientation="vertical" size={8} style={{ display: 'flex' }}>
+                  <Space size={12}>
+                    <Tag color={RISK_LEVEL_COLOR[risk.risk_level] ?? 'default'}>
+                      综合风险等级：{risk.risk_level}
+                    </Tag>
+                    {riskBasis && (
+                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                        数据依据：{riskBasis}
+                      </Typography.Text>
+                    )}
+                  </Space>
+                  <Typography.Paragraph style={{ marginBottom: 0 }}>
+                    {risk.summary}
+                  </Typography.Paragraph>
+                  {risk.key_risks.length > 0 && (
+                    <div>
+                      <Typography.Text strong>主要风险点</Typography.Text>
+                      <ul style={{ margin: '4px 0 0', paddingLeft: 20 }}>
+                        {risk.key_risks.map((item, idx) => (
+                          <li key={idx} style={{ fontSize: 13 }}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
                   )}
+                  {risk.suggestions.length > 0 && (
+                    <div>
+                      <Typography.Text strong>管控建议</Typography.Text>
+                      <ul style={{ margin: '4px 0 0', paddingLeft: 20 }}>
+                        {risk.suggestions.map((item, idx) => (
+                          <li key={idx} style={{ fontSize: 13 }}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                    AI 研判仅作辅助参考，不替代人工确认与审批责任。
+                  </Typography.Text>
                 </Space>
-                <Typography.Paragraph style={{ marginBottom: 0 }}>
-                  {risk.summary}
-                </Typography.Paragraph>
-                {risk.key_risks.length > 0 && (
-                  <div>
-                    <Typography.Text strong>主要风险点</Typography.Text>
-                    <ul style={{ margin: '4px 0 0', paddingLeft: 20 }}>
-                      {risk.key_risks.map((item, idx) => (
-                        <li key={idx} style={{ fontSize: 13 }}>{item}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                {risk.suggestions.length > 0 && (
-                  <div>
-                    <Typography.Text strong>管控建议</Typography.Text>
-                    <ul style={{ margin: '4px 0 0', paddingLeft: 20 }}>
-                      {risk.suggestions.map((item, idx) => (
-                        <li key={idx} style={{ fontSize: 13 }}>{item}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                  AI 研判仅作辅助参考，不替代人工确认与审批责任。
-                </Typography.Text>
-              </Space>
+              </AutoScrollBox>
             ) : (
               <Typography.Text type="secondary">
                 尚未生成 AI 风险研判；点击页头「AI 风险研判」根据当日作业与危化品库存自动生成。
@@ -944,9 +1047,11 @@ export function SafetyCommitmentPanel({
                 onChange={(e) => setCommitmentDraft(e.target.value)}
               />
             ) : (
-              <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.9, fontSize: 13 }}>
-                {report.commitment_text || '尚未填写承诺正文，点击「编辑」填写。'}
-              </div>
+              <AutoScrollBox height={200}>
+                <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.9, fontSize: 13 }}>
+                  {report.commitment_text || '尚未填写承诺正文，点击「编辑」填写。'}
+                </div>
+              </AutoScrollBox>
             )}
           </Card>
         </>

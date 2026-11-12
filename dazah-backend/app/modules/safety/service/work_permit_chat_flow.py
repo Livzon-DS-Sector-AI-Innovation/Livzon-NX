@@ -29,7 +29,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import AppException
 from app.core.redis import cache_delete, cache_get, cache_set
 from app.modules.safety.models import (
-    WorkPermitFormDefault,
     WorkPermitSignature,
 )
 from app.modules.safety.schemas.work_permit import WorkPermitCreate
@@ -152,16 +151,13 @@ class ChatFlowService:
     # ── 发起 ──
 
     async def start_form(self, permit_type: str) -> dict[str, Any]:
-        user = await self.ensure_user()
+        await self.ensure_user()
         if permit_type not in PERMIT_TEMPLATES:
             raise AppException(status_code=422, message="未知票种")
-        defaults_row = await self.db.execute(select_defaults(user.id, permit_type))
-        default_row = defaults_row.scalar_one_or_none()
-        defaults = (default_row.values if default_row else None) or {}
-        values = base_form_values(permit_type, defaults)
+        # 全新空白表单（不读历史记忆：每次按文档干净填写）
+        values = base_form_values(permit_type, None)
         values["level"] = _sanitize_level(permit_type, values.get("level"))
-        # 实施时间不沿用历史记忆（避免旧日期导致时长超有效期），
-        # 默认当天 08:00–17:00（选择器无默认值，状态里兜底）
+        # 实施时间默认当天 08:00–17:00（选择器无默认值，状态里兜底）
         today = datetime.now().strftime("%Y-%m-%d")
         values["planned_start"] = f"{today} 08:00"
         values["planned_end"] = f"{today} 17:00"
@@ -169,7 +165,7 @@ class ChatFlowService:
             "type": permit_type,
             "step": 1,
             "values": values,
-            "sign": dict(defaults.get("sign") or {}) if defaults else {},
+            "sign": {},
         }
         await self._save_state(state)
         return build_step_card(permit_type, 1, state["values"], self.open_id)
@@ -181,16 +177,38 @@ class ChatFlowService:
         form_value: dict[str, Any],
         *,
         message_id: str = "",
+        person_role_idx: int | None = None,
     ) -> dict[str, Any]:
         state = await self._load_state(permit_type)
         if state is None:
             raise AppException(status_code=410, message="表单已过期，请重新发起")
         values = state.setdefault("values", {})
         if step == 2:
-            # 人员步需查库（选人解析 + 证件自动关联），走异步合并
+            # 人员阶段：每次只合并当前岗位（选人即选证/外部录入），
+            # 合并后游标推进到下一岗位；全部完成才进入第③步
             await self._merge_persons(permit_type, values, form_value)
-        else:
-            _merge_form_values(permit_type, step, values, form_value)
+            roles = list(get_template(permit_type).person_roles)
+            idx = values.get("person_role_idx")
+            idx = (
+                int(person_role_idx)
+                if person_role_idx is not None
+                else (int(idx) if idx is not None else 0)
+            )
+            if idx + 1 < len(roles):
+                values["person_role_idx"] = idx + 1
+                await self._save_state(state)
+                return build_step_card(
+                    permit_type,
+                    2,
+                    values,
+                    self.open_id,
+                    person_role_idx=idx + 1,
+                )
+            values.pop("person_role_idx", None)
+            state["step"] = 3
+            await self._save_state(state)
+            return build_step_card(permit_type, 3, values, self.open_id)
+        _merge_form_values(permit_type, step, values, form_value)
         # 第①步就地校验（时间倒置/超有效期）：停留本步回卡提示，不抛错
         if step == 1:
             warn = await self._step1_warnings(permit_type, values)
@@ -229,10 +247,13 @@ class ChatFlowService:
             state["summary_message_id"] = message_id
         await self._save_state(state)
         if next_s == 2:
-            # 进入人员步：装载特种作业证书名单（下拉选项）
+            # 进入人员阶段：装载全量证书名单，游标归零（每岗位一卡）
             await self._load_cert_roster(values)
+            values["person_role_idx"] = 0
             await self._save_state(state)
-            return build_step_card(permit_type, 2, values, self.open_id)
+            return build_step_card(
+                permit_type, 2, values, self.open_id, person_role_idx=0
+            )
         if next_s == 6:
             # 进入审批人指派步：注入默认审批人姓名供提示
             await self._inject_approver_defaults(permit_type, values)
@@ -375,6 +396,9 @@ class ChatFlowService:
                     "name": c.person_name,
                     "no": c.certificate_no or "",
                     "cat": c.certificate_category,
+                    "cat_label": cat_labels.get(
+                        c.certificate_category, c.certificate_category
+                    ),
                     "expiry": (
                         c.expiry_date.strftime("%Y-%m-%d") if c.expiry_date else ""
                     ),
@@ -383,6 +407,102 @@ class ChatFlowService:
         values["cert_roster"] = roster
         # cat_labels 保留给网关外场景（当前未使用，避免未用告警）
         _ = cat_labels
+
+    async def search_role_persons(
+        self, permit_type: str, role_key: str, kw: str
+    ) -> dict[str, Any]:
+        """第②步按姓名关键字搜索该岗位持证人员（结果以按钮渲染）。"""
+        state = await self._load_state(permit_type)
+        if state is None:
+            raise AppException(status_code=410, message="表单已过期，请重新发起")
+        values = state.setdefault("values", {})
+        keyword = (kw or "").strip()
+        roster = values.get("cert_roster") or []
+        if keyword:
+            from app.modules.safety.service.work_permit_templates import (
+                PERSON_ROLE_CERT_CATEGORIES,
+            )
+
+            cats = PERSON_ROLE_CERT_CATEGORIES.get(role_key) or ()
+            matched = [
+                r
+                for r in roster
+                if keyword in str(r.get("name") or "")
+                or keyword in str(r.get("no") or "")
+            ]
+            matched.sort(key=lambda r: 0 if str(r.get("cat")) in cats else 1)
+        else:
+            matched = []
+        values["cert_search_kw"] = keyword
+        values["cert_search_role"] = role_key
+        values["cert_search_results"] = [{**r, "role": role_key} for r in matched[:10]]
+        await self._save_state(state)
+        return build_step_card(permit_type, 2, values, self.open_id)
+
+    async def choose_cert_person(
+        self, permit_type: str, role_key: str, cert_id: str
+    ) -> dict[str, Any]:
+        """选定搜索结果中的持证人员（写入人员表并清除搜索态）。"""
+        state = await self._load_state(permit_type)
+        if state is None:
+            raise AppException(status_code=410, message="表单已过期，请重新发起")
+        values = state.setdefault("values", {})
+        match = next(
+            (
+                r
+                for r in (values.get("cert_search_results") or [])
+                if str(r.get("id")) == str(cert_id)
+            ),
+            None,
+        )
+        if match is None:
+            raise AppException(message="请先搜索并选择人员")
+        persons = {str(p.get("role")): p for p in (values.get("persons") or [])}
+        persons[role_key] = {
+            "role": role_key,
+            "name": str(match.get("name") or ""),
+            "certificate_id": str(match.get("id") or ""),
+            "certificate_no": str(match.get("no") or ""),
+            "certificate_category": str(match.get("cat") or ""),
+            "certificate_expiry": str(match.get("expiry") or ""),
+        }
+        values["persons"] = list(persons.values())
+        values["person_sign_names"] = {
+            str(p.get("role")): str(p.get("name") or "") for p in values["persons"]
+        }
+        for key in ("cert_search_kw", "cert_search_role", "cert_search_results"):
+            values.pop(key, None)
+        await self._save_state(state)
+        return build_step_card(permit_type, 2, values, self.open_id)
+
+    async def clear_person_search(self, permit_type: str) -> dict[str, Any]:
+        """清除搜索态，返回人员填写卡。"""
+        state = await self._load_state(permit_type)
+        if state is None:
+            raise AppException(status_code=410, message="表单已过期，请重新发起")
+        values = state.setdefault("values", {})
+        for key in ("cert_search_kw", "cert_search_role", "cert_search_results"):
+            values.pop(key, None)
+        await self._save_state(state)
+        return build_step_card(permit_type, 2, values, self.open_id)
+
+    async def person_prev(self, permit_type: str, idx: int) -> dict[str, Any]:
+        """人员阶段上一位：idx-1 岗位卡；第 1 位则回第①步。"""
+        state = await self._load_state(permit_type)
+        if state is None:
+            raise AppException(status_code=410, message="表单已过期，请重新发起")
+        values = state.setdefault("values", {})
+        idx = max(0, int(idx))
+        if idx == 0:
+            state["step"] = 1
+            await self._save_state(state)
+            return build_step_card(permit_type, 1, values, self.open_id)
+        values["person_role_idx"] = idx - 1
+        state["step"] = 2
+        await self._save_state(state)
+        return build_step_card(
+            permit_type, 2, values, self.open_id, person_role_idx=idx - 1
+        )
 
     async def _merge_persons(
         self,
@@ -623,8 +743,13 @@ class ChatFlowService:
                     state["summary_message_id"] = message_id
                     await self._save_state(state)
                 return await self.build_summary(permit_type)
+            idx = int(state.get("person_role_idx") or 0) if step == 2 else 0
             return build_step_card(
-                permit_type, step, state.get("values") or {}, self.open_id
+                permit_type,
+                step,
+                state.get("values") or {},
+                self.open_id,
+                person_role_idx=idx,
             )
         return build_menu_card(self.open_id)
 
@@ -796,7 +921,6 @@ class ChatFlowService:
                 image_key=str(sign[sign_key]),
             )
         # 默认模板记忆
-        await self._save_form_defaults(user.id, permit_type, values)
         # 提交审批（默认审批人）
         from uuid import UUID as _UUID
 
@@ -844,42 +968,6 @@ class ChatFlowService:
             "已提交审批" + (f"；提示：{'；'.join(warnings)}" if warnings else ""),
         )
         return receipt
-
-    async def _save_form_defaults(
-        self, user_id: UUID, permit_type: str, values: dict[str, Any]
-    ) -> None:
-
-        result = await self.db.execute(select_defaults(user_id, permit_type))
-        row = result.scalar_one_or_none()
-        snapshot = {
-            "apply_department": values.get("apply_department"),
-            "work_description": values.get("work_description"),
-            "work_location": values.get("work_location"),
-            "work_unit": values.get("work_unit"),
-            "planned_start": values.get("planned_start"),
-            "planned_end": values.get("planned_end"),
-            "type_data": values.get("type_data") or {},
-            "persons": values.get("persons") or [],
-            "gas": values.get("gas") or {},
-            "risk": values.get("risk") or [],
-            "measures": values.get("measures") or {},
-            "measures_note": values.get("measures_note") or "",
-            "related_permits": values.get("related_permits") or "",
-            "level": _sanitize_level(permit_type, values.get("level")),
-        }
-        if row is None:
-            self.db.add(
-                WorkPermitFormDefault(
-                    user_id=user_id,
-                    permit_type=permit_type,
-                    values=snapshot,
-                    created_by=user_id,
-                    updated_by=user_id,
-                )
-            )
-        else:
-            row.values = snapshot
-        await self.db.flush()
 
     # ── 审批 / 验票 / 验收 / 复检 ──
 
@@ -1147,16 +1235,6 @@ def select_user_by_open_id(open_id: str, union_id: str = "") -> Any:
             User.updated_at.desc(),
         )
         .limit(1)
-    )
-
-
-def select_defaults(user_id: UUID, permit_type: str) -> Any:
-    from app.modules.safety.models import WorkPermitFormDefault
-
-    return select(WorkPermitFormDefault).where(
-        WorkPermitFormDefault.user_id == user_id,
-        WorkPermitFormDefault.permit_type == permit_type,
-        WorkPermitFormDefault.is_deleted.is_(False),
     )
 
 
