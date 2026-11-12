@@ -2,12 +2,13 @@
 from typing import Any
 from uuid import UUID
 
-from fastapi import Depends, Query
+from fastapi import Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.response import paginated_response, success_response
 from app.modules.production.seed_culture_schemas import (
+    PersonMonthlyRow,
     SeedCultureCreate,
     SeedCultureResponse,
     SeedCultureUpdate,
@@ -39,6 +40,22 @@ async def list_seed_cultures(
     return paginated_response(
         [SeedCultureResponse.model_validate(i) for i in items], page, page_size, total
     )
+
+
+@router.get(
+    "/seed-cultures/person-monthly",
+    summary="人员月度工作统计（月度绩效依据）",
+)
+async def seed_culture_person_monthly(
+    month: str = Query(..., description="统计月份 YYYY-MM"),
+    product_name: str = Query("盐酸林可霉素", description="产品名称"),
+    svc: SeedCultureService = Depends(get_seed_culture_service),
+) -> Any:
+    try:
+        rows = await svc.person_monthly(product_name, month)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="month 格式应为 YYYY-MM")
+    return success_response([PersonMonthlyRow.model_validate(r) for r in rows])
 
 
 @router.get("/seed-cultures/{record_id}", summary="种子培养记录详情")
