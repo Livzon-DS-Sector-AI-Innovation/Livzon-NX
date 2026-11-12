@@ -1,5 +1,4 @@
 import {
-  getHazards,
   getHazardIdentifications,
   getExpiringCertificates,
   getSpecialOperationReports,
@@ -44,7 +43,6 @@ async function fetchDashboardData() {
   const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 
   const [
-    hazardsRes,
     identificationsRes,
     expiringCertsRes,
     specialOpReportsRes,
@@ -54,8 +52,9 @@ async function fetchDashboardData() {
     dutyStatsRes,
     dutyRecordsRes,
   ] = await Promise.all([
-    getHazards({ page_size: 200 }),
-    getHazardIdentifications({ page_size: 200 }),
+    getHazardIdentifications(
+      { page_size: 200 }, 'safety:risk-hazard:risk-grading:hazard-ledger',
+    ),
     getExpiringCertificates().catch(() => ({ data: [] })),
     getSpecialOperationReports({ page_size: 50 }).catch(() => ({ data: [], meta: { total: 0 } })),
     getDailyRiskReports({ page_size: 50, report_date: todayStr }).catch(() => ({ data: [], meta: { total: 0 } })),
@@ -85,11 +84,6 @@ async function fetchDashboardData() {
       ],
     }).catch(() => null),
   ])
-
-  // 未关闭隐患：过滤 status != closed && != verified
-  const hazardsAll = Array.isArray((hazardsRes as { data?: unknown[] }).data)
-    ? (hazardsRes as { data: { status: string }[] }).data
-    : []
 
   // 未关闭隐患（24小时值班隐患口径）：统计接口 neq 条件已排除已整改，
   // total 即未关闭数量；同时取未整改明细供卡片抽屉展示

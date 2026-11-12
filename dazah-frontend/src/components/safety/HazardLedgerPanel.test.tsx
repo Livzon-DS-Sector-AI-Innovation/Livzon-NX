@@ -13,6 +13,8 @@ const mocks = vi.hoisted(() => ({
   downloadBase64: vi.fn(),
   canImport: true,
   canOperate: true,
+  canExport: true,
+  push: vi.fn(),
 }))
 
 vi.mock('@/actions/safety', () => ({
@@ -30,12 +32,13 @@ vi.mock('@/hooks/usePagePermissions', () => ({
   usePagePermissions: () => ({
     canImport: mocks.canImport,
     canOperate: mocks.canOperate,
+    canExport: mocks.canExport,
     canView: true,
   }),
 }))
 
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+  useRouter: () => ({ push: mocks.push, refresh: vi.fn() }),
 }))
 
 import HazardLedgerPanel from './HazardLedgerPanel'
@@ -65,6 +68,7 @@ describe('HazardLedgerPanel', () => {
   let container: HTMLElement | undefined
 
   beforeEach(() => {
+    mocks.canExport = true
     mocks.getHazardIdentifications.mockResolvedValue({
       code: 200,
       message: 'success',
@@ -132,6 +136,17 @@ describe('HazardLedgerPanel', () => {
     renderPanel()
     await act(flush)
     expect((document.body.textContent ?? '').includes('加载台账失败')).toBe(true)
+  })
+
+  it('台账查询可打开独立详情，缺少导出授权时隐藏导出入口', async () => {
+    mocks.canExport = false
+    renderPanel()
+    await act(flush)
+    const view = findButtons(document.body, '查看')[0]
+    expect(view).toBeDefined()
+    await act(async () => view.click())
+    expect(mocks.push).toHaveBeenCalledWith('/safety/hazard-identification/ledger/h1')
+    expect(findButtons(document.body, '导出 PDF')).toHaveLength(0)
   })
 
   it('点编辑打开在线编辑抽屉（有操作权限）', async () => {

@@ -24912,7 +24912,7 @@ export interface paths {
         };
         /**
          * 获取隐患统计数据
-         * @description 获取隐患全局统计数据（不受分页/筛选影响，用于统计药丸展示）。
+         * @description 获取授权部门范围内的隐患统计，不受分页和列表筛选影响。
          */
         get: operations["get_hazard_stats_api_v1_safety_hazards_stats_get"];
         put?: never;

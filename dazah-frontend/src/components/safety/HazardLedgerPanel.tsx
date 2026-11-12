@@ -85,7 +85,7 @@ export default function HazardLedgerPanel() {
   const [riskLevel, setRiskLevel] = useState<string | undefined>()
   const [dateRange, setDateRange] = useState<[string, string] | null>(null)
   const { message } = App.useApp()
-  const { canImport, canOperate } = usePagePermissions()
+  const { canImport, canOperate, canExport } = usePagePermissions()
 
   // ── 车间表格导入 Modal 状态 ──
   const [importModalOpen, setImportModalOpen] = useState(false)
@@ -392,7 +392,7 @@ export default function HazardLedgerPanel() {
         <Space size={0}>
           <Button
             type="link" size="small"
-            onClick={() => router.push(`/safety/hazard-identification/${r.id}`)}
+            onClick={() => router.push(`/safety/hazard-identification/ledger/${r.id}`)}
           >
             查看
           </Button>
@@ -507,9 +507,9 @@ export default function HazardLedgerPanel() {
               导入车间表格
             </Button>
           )}
-          <Button type="primary" icon={<ExportOutlined />} onClick={() => setExportModalOpen(true)}>
+          {canExport && <Button type="primary" icon={<ExportOutlined />} onClick={() => setExportModalOpen(true)}>
             导出 PDF
-          </Button>
+          </Button>}
         </Space>
       </div>
 

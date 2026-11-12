@@ -84,8 +84,14 @@ def test_ops_safety_mirror_pages_registered(
     assert page.module_code == "safety"
     assert page.page_name == page_name
     assert page.route_path == route_path
-    # 页面键与路径不含台账/审批/设置等关键词，推导不出额外敏感动作
-    assert _sensitive_actions(page_key, route_path, page_name) == ()
+    expected_actions = (
+        {"approve", "reject", "delete"}
+        if page_key == "safety:ops-safety:daily-risk-report"
+        else set()
+    )
+    assert {
+        action.key for action in _sensitive_actions(page_key, route_path, page_name)
+    } == expected_actions
     assert page_lifecycle_errors(page) == []
 
 
