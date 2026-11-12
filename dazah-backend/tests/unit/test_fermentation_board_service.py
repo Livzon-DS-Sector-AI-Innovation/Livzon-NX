@@ -736,6 +736,48 @@ def test_build_dr_board_tanks_and_kpis() -> None:
     assert payload["period"]["end"] == "2026-09-26"
 
 
+def test_build_dr_board_drops_months_old_tank_events() -> None:
+    """数月前放罐的遗留批不再挂在实时罐状态板（线上 B302/DR-2611 回归）。
+
+    7月块：DR-2611 7/6 进罐 B302、7/23 放罐（350h）。9月扎帐周期
+    （8/27-9/26）的实时板不应再带出该罐；周期内罐不受影响。
+    """
+    rows = _dr_rows()
+    jul_title = ["102车间2026年07月份多拉计划（07.01）"]
+    jul_date = ["日期"] + [str(d) for d in range(1, 31)]
+    jul_ferm_b = ["发酵"] + [""] * 30
+    jul_ferm_t = [""] * 30
+    jul_dump_b = ["放罐"] + [""] * 30
+    jul_dump_t = [""] * 30
+    jul_cycle = ["周期"] + [""] * 30
+
+    def _set(row: list, col: int, value) -> None:
+        while len(row) <= col:
+            row.append("")
+        row[col] = value
+
+    _set(jul_ferm_b, 6, "DR-2611")
+    _set(jul_ferm_t, 6, "B302")
+    _set(jul_cycle, 6, "350h")
+    _set(jul_dump_b, 23, "DR-2611")
+    _set(jul_dump_t, 23, "B302")
+    jul_block = [
+        jul_title, jul_date, [""] * 30, [""] * 30, [""] * 30,
+        jul_ferm_b, jul_ferm_t, jul_dump_b, jul_dump_t, jul_cycle,
+        ["备注"], [""] * 30,
+    ]
+    payload = board.build_dr_board(
+        jul_block + rows, [], datetime(2026, 9, 15, 12, 0)
+    )
+    assert payload is not None
+    tanks = {t["tank_no"]: t for t in payload["tanks"]}
+    # 数月前放罐的遗留罐不再出现
+    assert "B302" not in tanks
+    # 周期内罐不受影响
+    assert set(tanks) == {"B305", "B401", "B402", "B304"}
+    assert tanks["B401"]["status"] == "running"
+
+
 def test_build_dr_board_trend_and_collect_dump_tanks() -> None:
     rows = _dr_rows()
     now = datetime(2026, 9, 25, 12, 0)

@@ -2,6 +2,7 @@
 Feishu → seed_cultures sync service.
 Maps Feishu field names to seed_cultures columns using predefined mapping.
 """
+import json
 import logging
 from datetime import date, datetime
 from typing import Any
@@ -78,6 +79,31 @@ TYPE_CONVERTERS = {
 STRING_FIELDS = {k for k in FIELD_MAPPING.values() if k not in TYPE_CONVERTERS}
 DATE_FIELDS = {"prepare_date", "shaker_start_date", "merge_time"}
 
+# 飞书成员类型字段：同步解析 open_id → 姓名+头像，入库为 JSONB 数组
+PERSON_FIELDS = {
+    "prepare_operator",
+    "sterilization_operator",
+    "shaker_setup_operator",
+    "inoculation_operator",
+    "tank_setup_operator",
+    "merge_operator",
+    "workshop_inoculation_operator",
+}
+
+
+def _extract_person_ids(field_value: Any) -> list[str]:
+    """人员字段值 → open_id 列表（bitable records: [{"id": "ou_x"}]）。"""
+    if isinstance(field_value, dict):
+        open_id = field_value.get("id")
+        return [str(open_id)] if open_id else []
+    if isinstance(field_value, list):
+        return [
+            str(entry["id"])
+            for entry in field_value
+            if isinstance(entry, dict) and entry.get("id")
+        ]
+    return []
+
 
 def _parse_date(v: Any) -> Any:
     if v is None:
@@ -123,6 +149,38 @@ def _extract_number(field_value: Any) -> float | None:
         return None
 
 
+async def _resolve_people(
+    client: ProductionFeishuClient,
+    open_ids: list[str],
+    cache: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """批量把飞书成员 open_id 解析为姓名+头像；失败保留 open_id。"""
+    people: list[dict[str, Any]] = []
+    for open_id in open_ids:
+        cached = cache.get(open_id)
+        if cached is not None:
+            people.append(dict(cached))
+            continue
+        info: dict[str, Any] = {"open_id": open_id, "name": "", "avatar_url": None}
+        try:
+            data = await client._request(
+                "GET",
+                f"/contact/v3/users/{open_id}",
+                params={"user_id_type": "open_id"},
+            )
+            user = data.get("user") or {}
+            info["name"] = str(user.get("name") or "")
+            avatar = user.get("avatar") or {}
+            info["avatar_url"] = (
+                avatar.get("avatar_240") or avatar.get("avatar_72") or None
+            )
+        except Exception:  # noqa: BLE001 —— 通讯录权限缺失等，降级保留 open_id
+            logger.warning("seed culture contact resolve failed: %s", open_id)
+        cache[open_id] = dict(info)
+        people.append(info)
+    return people
+
+
 async def sync_seed_culture_to_table(
     config: ProductionFeishuConfig, session: AsyncSession
 ) -> dict[str, Any]:
@@ -134,11 +192,23 @@ async def sync_seed_culture_to_table(
         app_token=config.bitable_app_token,
     )
 
-    # Fetch all records from feishu
-    records_data = await client.list_records(config.table_id, page_size=500)
-    raw_items = records_data.get("items") or []
-    items = [i for i in raw_items if isinstance(i, dict)]
+    # Fetch all records from feishu（分页拉全量）
+    items: list[dict[str, Any]] = []
+    page_token: str | None = None
+    while True:
+        records_data = await client.list_records(
+            config.table_id, page_size=500, page_token=page_token
+        )
+        raw_items = records_data.get("items") or []
+        items.extend(i for i in raw_items if isinstance(i, dict))
+        if not records_data.get("has_more"):
+            break
+        page_token = records_data.get("page_token")
+        if not page_token:
+            break
 
+    person_cache: dict[str, dict[str, Any]] = {}
+    unresolved_people = 0
     rows = []
     for item in items:
         fields = item.get("fields", {})
@@ -156,6 +226,16 @@ async def sync_seed_culture_to_table(
                     if date_value is not None:
                         mapped[db_col] = _parse_date(date_value)
                 continue
+            if db_col in PERSON_FIELDS:
+                open_ids = _extract_person_ids(raw)
+                if not open_ids:
+                    continue
+                people = await _resolve_people(client, open_ids, person_cache)
+                unresolved_people += sum(
+                    1 for p in people if not p.get("name")
+                )
+                mapped[db_col] = people
+                continue
             val: Any
             if db_col in STRING_FIELDS:
                 val = _extract_text(raw)
@@ -168,24 +248,48 @@ async def sync_seed_culture_to_table(
             continue
         rows.append(mapped)
 
+    # 飞书表可能存在同批号多行（历史编辑遗留）：按 (批号, 产品) 去重，
+    # 保留靠后的行（视为最新编辑），避免批量 upsert 同行二冲突
+    dedup: dict[tuple[str, str], dict[str, Any]] = {}
+    for row in rows:
+        dedup[(row["batch_no"], row.get("product_name") or "")] = row
+    duplicate_count = len(rows) - len(dedup)
+    if duplicate_count:
+        logger.warning(
+            "seed culture sync: %d duplicate batch rows deduped", duplicate_count
+        )
+    rows = list(dedup.values())
+
     if not rows:
-        return {"created": 0, "updated": 0}
+        return {
+            "created": 0,
+            "updated": 0,
+            "person_unresolved": 0,
+            "duplicates_deduped": duplicate_count,
+        }
 
     # 收集所有行中的列名（第一行可能字段不全）
     all_cols_set: set[Any] = set()
     for row in rows:
         all_cols_set.update(row.keys())
     cols = sorted(all_cols_set)  # 确保每次查询顺序一致
-    ", ".join(f":{c}_{i}" for i in range(len(rows)) for c in cols)
-    # Re-structure: one flat dict with indexed param names
+
+    # Re-structure: one flat dict with indexed param names；
+    # JSONB 人员列以 json.dumps 传参 + 显式 ::jsonb cast
     params: dict[str, Any] = {}
     for i, row in enumerate(rows):
         for c in cols:
-            params[f"{c}_{i}"] = row.get(c)
+            value = row.get(c)
+            if c in PERSON_FIELDS and value is not None:
+                value = json.dumps(value, ensure_ascii=False)
+            params[f"{c}_{i}"] = value
 
     values_clauses = []
     for i in range(len(rows)):
-        vals = ", ".join(f":{c}_{i}" for c in cols)
+        vals = ", ".join(
+            f"CAST(:{c}_{i} AS jsonb)" if c in PERSON_FIELDS else f":{c}_{i}"
+            for c in cols
+        )
         values_clauses.append(f"(gen_random_uuid(), {vals})")
 
     all_cols = "id, " + ", ".join(cols)
@@ -200,4 +304,9 @@ async def sync_seed_culture_to_table(
     )
 
     await session.execute(text(sql), params)
-    return {"created": len(rows), "updated": 0}
+    return {
+        "created": len(rows),
+        "updated": 0,
+        "person_unresolved": unresolved_people,
+        "duplicates_deduped": duplicate_count,
+    }

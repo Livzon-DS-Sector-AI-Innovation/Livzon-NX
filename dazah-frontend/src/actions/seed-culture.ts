@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { getAuthHeaders } from '@/lib/auth'
-import type { SeedCultureRecord, SeedCultureCreate, SeedCultureUpdate } from '@/types/seed-culture'
+import type { PersonMonthlyRow, SeedCultureRecord, SeedCultureCreate, SeedCultureUpdate } from '@/types/seed-culture'
 import type { ApiResponse } from '@/types/production'
 
 const API_BASE = process.env.API_BASE_URL || 'http://localhost:8000'
@@ -47,4 +47,10 @@ export async function deleteSeedCulture(id: string) {
   const res = await fetchApi<null>(`/api/v1/production/seed-cultures/${id}`, { method: 'DELETE' })
   revalidatePath('/production/batches/workshop/101-1')
   return res
+}
+
+export async function getPersonMonthly(params: { month: string; product_name?: string }) {
+  const sp = new URLSearchParams({ month: params.month })
+  if (params.product_name) sp.set('product_name', params.product_name)
+  return fetchApi<PersonMonthlyRow[]>(`/api/v1/production/seed-cultures/person-monthly?${sp.toString()}`)
 }

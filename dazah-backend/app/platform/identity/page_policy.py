@@ -3834,6 +3834,13 @@ def _production_api_bindings() -> tuple[PageApiBinding, ...]:
         "/seed-cultures/{record_id}",
     )
     add_many("GET", simple_bases, batch_context, scope_adapter="production.workshop")
+    # 人员月度工作统计（绩效依据）：只读，挂在菌种/车间与概览页 query 口径
+    add(
+        "GET",
+        "/seed-cultures/person-monthly",
+        batch_context,
+        scope_adapter="production.workshop",
+    )
     add_many(
         "POST",
         simple_bases,
