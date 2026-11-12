@@ -1002,7 +1002,25 @@ export default function ProductionDashboard() {
       width: 64,
       render: (v: string | null | undefined) => v || '-',
     },
-    { title: '批次号', dataIndex: 'batch_no', key: 'batch_no' },
+    {
+      title: '批次号',
+      dataIndex: 'batch_no',
+      key: 'batch_no',
+      // 状态标签：确认移种预建的未放罐记录与已放罐待录产量的批次
+      // 直观区分，避免整行 "-" 被误读为数据丢失
+      render: (v: string, record: FermentationBatchActual) => (
+        <span>
+          {v}
+          {record.dump_date == null && record.yield_kg == null ? (
+            <Tag style={{ marginInlineStart: 6 }}>未放罐</Tag>
+          ) : record.yield_kg == null ? (
+            <Tag color="orange" style={{ marginInlineStart: 6 }}>
+              待录产量
+            </Tag>
+          ) : null}
+        </span>
+      ),
+    },
     {
       title: '放罐日期',
       dataIndex: 'dump_date',
@@ -1953,6 +1971,7 @@ export default function ProductionDashboard() {
         />
         <Text type="secondary" style={{ fontSize: 12 }}>
           录入后单批产量图表与「最近完成批次」的放罐产量自动更新。
+          「未放罐」为确认移种后尚未放罐的批次，放罐后请编辑该行补录放罐时间与产量。
         </Text>
       </Drawer>
 
