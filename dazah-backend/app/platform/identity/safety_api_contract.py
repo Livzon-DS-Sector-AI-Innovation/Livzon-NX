@@ -491,7 +491,7 @@ SAFETY_SIGNATURE_ROUTES = frozenset(
         ("POST", "/api/v1/safety/work-permit-sign"),
         ("GET", "/api/v1/safety/work-permit-file/{token}"),
         ("GET", "/api/v1/safety/sign-relay/{token}"),
-        ("POST", "/api/v1/safety/sign-relay"),
+        ("POST", "/api/v1/safety/sign-relay/"),
         ("POST", "/api/v1/safety/sign-relay/pull"),
     }
 )

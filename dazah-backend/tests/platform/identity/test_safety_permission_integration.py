@@ -64,11 +64,11 @@ def test_signature_routes_keep_their_separate_protocol_boundary():
         )
     routes = tuple(page_policy.collect_http_route_catalog(app.routes))
     catalog = page_policy.ApiRouteCatalog(
-        (*routes, ("GET", "/api/v1/safety/sign-relay"))
+        (*routes, ("POST", "/api/v1/safety/sign-relay/"))
     )
     issues = page_policy.page_api_catalog_issues("safety", catalog=catalog).messages()
     assert len(issues) == 1
-    assert "GET /api/v1/safety/sign-relay" in issues[0]
+    assert "POST /api/v1/safety/sign-relay/" in issues[0]
 
 
 @pytest.mark.asyncio

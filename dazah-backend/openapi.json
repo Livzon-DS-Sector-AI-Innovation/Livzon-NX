@@ -246911,9 +246911,9 @@
         ]
       }
     },
-    "/api/v1/safety/sign-relay": {
+    "/api/v1/safety/sign-relay/": {
       "post": {
-        "operationId": "sign_relay_submit_api_v1_safety_sign_relay_post",
+        "operationId": "sign_relay_submit_api_v1_safety_sign_relay__post",
         "responses": {
           "200": {
             "content": {

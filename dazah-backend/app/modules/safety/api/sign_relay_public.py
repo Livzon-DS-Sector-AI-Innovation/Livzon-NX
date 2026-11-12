@@ -66,13 +66,15 @@ async def sign_relay_page(token: str) -> HTMLResponse:
             permit_no="作业票",
             row_name="签名确认",
             token=token,
-            post_url="/api/v1/safety/sign-relay",
+            post_url="/api/v1/safety/sign-relay/",
         )
     )
 
 
 @sign_relay_public_router.post(
-    "/sign-relay",
+    # 尾斜杠必须保留：公开白名单前缀为 "/sign-relay/"（带斜杠），
+    # 无斜杠路径会被权限中间件拦成 401
+    "/sign-relay/",
     summary="手写签名中转提交（暂存收件箱，等待内网拉取）",
 )
 async def sign_relay_submit(request: Request) -> JSONResponse:

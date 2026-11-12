@@ -73,13 +73,13 @@ async def test_page_and_submit_and_pull_roundtrip(
         assert "/api/v1/safety/sign-relay" in page.text, "页面应提交到中转端点"
 
         bad = await ac.post(
-            "/api/v1/safety/sign-relay",
+            "/api/v1/safety/sign-relay/",
             json={"token": "tok-1", "image": "not-a-data-url"},
         )
         assert bad.status_code == 400
 
         ok = await ac.post(
-            "/api/v1/safety/sign-relay",
+            "/api/v1/safety/sign-relay/",
             json={"token": "tok-1", "image": _png_data_url()},
         )
         assert ok.status_code == 200
@@ -123,7 +123,7 @@ async def test_disabled_returns_404(
         page = await ac.get("/api/v1/safety/sign-relay/tok-1")
         assert page.status_code == 404
         submit = await ac.post(
-            "/api/v1/safety/sign-relay", json={"token": "t", "image": "x"}
+            "/api/v1/safety/sign-relay/", json={"token": "t", "image": "x"}
         )
         assert submit.status_code == 404
         pull = await ac.post("/api/v1/safety/sign-relay/pull")
@@ -231,9 +231,26 @@ async def test_process_item_store_fail(monkeypatch: pytest.MonkeyPatch) -> None:
     assert await _process_item({"token": "t", "image": "data:..."}) is False
 
 
-async def test_poll_once_disabled_returns_zero() -> None:
+async def test_poll_once_disabled_returns_zero(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """未配置网关时不发请求直接返回 0（显式置空隔离本机 env）。"""
+    from app.modules.safety import sign_relay_poller as poller
     from app.modules.safety.sign_relay_poller import poll_once
 
+    monkeypatch.setattr(
+        poller,
+        "get_settings",
+        lambda: type(
+            "S",
+            (),
+            {
+                "SIGN_RELAY_GATEWAY_BASE": "",
+                "SIGN_RELAY_KEY": "",
+                "SIGN_RELAY_POLL_SECONDS": 10,
+            },
+        )(),
+    )
     assert await poll_once() == 0
 
 
@@ -366,10 +383,26 @@ async def test_poll_once_process_exception(monkeypatch: pytest.MonkeyPatch) -> N
     assert await poller.poll_once() == 0
 
 
-async def test_sign_relay_loop_no_config_returns() -> None:
+async def test_sign_relay_loop_no_config_returns(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """未配置直接返回（显式置空，隔离本机 .env.local 已配网关的情况）。"""
+    from app.modules.safety import sign_relay_poller as poller
     from app.modules.safety.sign_relay_poller import sign_relay_loop
 
-    # 未配置直接返回（不进入循环）
+    monkeypatch.setattr(
+        poller,
+        "get_settings",
+        lambda: type(
+            "S",
+            (),
+            {
+                "SIGN_RELAY_GATEWAY_BASE": "",
+                "SIGN_RELAY_KEY": "",
+                "SIGN_RELAY_POLL_SECONDS": 10,
+            },
+        )(),
+    )
     await sign_relay_loop()
 
 
@@ -413,11 +446,11 @@ async def test_relay_submit_bad_body_and_missing_params(
     """提交体非法 JSON / 缺参数 → 400。"""
     assert relay_client is not None
     async with relay_client as ac:
-        bad = await ac.post("/api/v1/safety/sign-relay", content="not-a-json")
+        bad = await ac.post("/api/v1/safety/sign-relay/", content="not-a-json")
         assert bad.status_code == 400
 
         missing = await ac.post(
-            "/api/v1/safety/sign-relay", json={"token": "", "image": ""}
+            "/api/v1/safety/sign-relay/", json={"token": "", "image": ""}
         )
         assert missing.status_code == 400
 
