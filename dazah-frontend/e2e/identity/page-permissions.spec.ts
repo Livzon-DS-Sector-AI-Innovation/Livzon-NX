@@ -140,8 +140,12 @@ test.describe('页面最小授权', () => {
       await page.emulateMedia({ reducedMotion: appearance === 'dark' ? 'reduce' : 'no-preference' })
       await context.addCookies([{ name: 'auth_token', value: 'matrix-admin', url: 'http://127.0.0.1:3200' }])
       await page.addInitScript((mode) => localStorage.setItem('dazah-appearance', mode), appearance)
-      await page.goto('/system/roles')
-      await page.evaluate(() => { document.documentElement.dataset.permissionNavigation = 'same-document' })
+      let releaseNavigation = () => {}
+      const navigationReady = new Promise<void>((resolve) => { releaseNavigation = resolve })
+      await page.route(/\/system\/roles\/role-matrix\/page-permissions(?:\?|$)/, async (route) => {
+        if (route.request().method() === 'GET') await navigationReady
+        await route.continue()
+      })
       const initialPermissionReads: string[] = []
       page.on('request', (request) => {
         if (request.method() === 'POST' && new URL(request.url()).pathname.endsWith('/role-matrix/page-permissions')) {
@@ -149,10 +153,14 @@ test.describe('页面最小授权', () => {
         }
       })
       const navigationProgress = page.getByRole('status', { name: /^正在(?:打开|加载)页面权限$/ })
-      await Promise.all([
-        expect(navigationProgress.first()).toBeVisible(),
-        page.getByRole('link', { name: '页面权限', exact: true }).click(),
-      ])
+      try {
+        await page.goto('/system/roles')
+        await page.evaluate(() => { document.documentElement.dataset.permissionNavigation = 'same-document' })
+        await page.getByRole('link', { name: '页面权限', exact: true }).click()
+        await expect(navigationProgress.first()).toBeVisible()
+      } finally {
+        releaseNavigation()
+      }
       await expect(page).toHaveURL(/roles\/role-matrix\/page-permissions$/)
       await expect(page.locator('html')).toHaveAttribute('data-theme', appearance)
       await expect(page.locator('html')).toHaveAttribute('data-permission-navigation', 'same-document')
@@ -189,7 +197,8 @@ test.describe('页面最小授权', () => {
       await permissionTier.getByText('普通操作', { exact: true }).click()
       await expect(risk).toBeEnabled()
       await expect(risk).not.toBeChecked()
-      await risk.check()
+      await detail.getByText('作废生产批次', { exact: true }).click()
+      await expect(risk).toBeChecked()
       await permissionTier.getByText('可查看', { exact: true }).click()
       await expect(detail.getByRole('radio', { name: '可查看' })).toBeChecked()
       await expect(risk).not.toBeChecked()

@@ -16,6 +16,10 @@ import {
   fetchHazardStats,
   getChecks,
   getHazard,
+  getHazardIdentifications,
+  getExpiringCertificates,
+  getSpecialOperationReports,
+  getDailyRiskReports,
   getKnowledgeArticles,
   getRadarRunDetail,
   getRadarRuns,
@@ -82,6 +86,24 @@ describe("safety actions", () => {
       expect.stringContaining("/api/v1/safety/checks?"),
       expect.anything(),
     );
+  });
+
+  it("uses the owning page grants for dashboard source reads", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockImplementation(async () =>
+      jsonResponse({ code: 200, data: [] }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const ledger = "safety:risk-hazard:risk-grading:hazard-ledger";
+    await getHazardIdentifications({}, ledger);
+    await getExpiringCertificates();
+    await getSpecialOperationReports();
+    await getDailyRiskReports();
+    expect(fetchMock.mock.calls.map(([, init]) => new Headers(init?.headers).get("X-Dazah-Page-Key"))).toEqual([
+      ledger,
+      "safety:training-check:safety-training",
+      "safety:ops-safety:special-ops-mgmt",
+      "safety:ops-safety:daily-risk-report",
+    ]);
   });
 
   it("creates a safety check", async () => {

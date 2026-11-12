@@ -235,9 +235,15 @@ def require_module_view(module_code: str) -> Callable[..., Awaitable[User]]:
         if binding.action_selector is not None:
             selector = binding.action_selector
             try:
-                body = await request.json()
-                if not isinstance(body, dict):
-                    raise ValueError("Expected an object")
+                if isinstance(selector, EnumActionSelector) and selector.from_query:
+                    values = request.query_params.getlist(selector.field)
+                    if len(values) != 1:
+                        raise ValueError("Expected a single decision parameter")
+                    body = {selector.field: values[0]}
+                else:
+                    body = await request.json()
+                    if not isinstance(body, dict):
+                        raise ValueError("Expected an object")
                 if isinstance(selector, EnumActionSelector):
                     value = body.get(selector.field)
                     choices = dict(selector.actions)

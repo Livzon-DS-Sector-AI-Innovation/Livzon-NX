@@ -109,3 +109,44 @@ def test_statin_recent_groups_pair_by_turn_tank_and_dump() -> None:
         ["MV-26072"],
         ["LV-26017"],
     ]
+
+
+def test_composite_batch_no_required_detects_turn_pair_member() -> None:
+    """倒罐对成员单批号必须改用复合批号；复合批号/直放批/非他汀放行。"""
+    rows = _statin_rows()
+    # 倒罐对成员（303B/305B 各自单批号）→ 返回复合批号
+    assert (
+        board.composite_batch_no_required(rows, "LV", "MV-26069")
+        == "MV-26069/070"
+    )
+    assert (
+        board.composite_batch_no_required(rows, "MV", "MV-26070")
+        == "MV-26069/070"
+    )
+    # 复合批号本身不在时间线键中 → 放行
+    assert board.composite_batch_no_required(rows, "LV", "MV-26069/070") is None
+    # 直放批（无倒罐标注）→ 放行
+    assert board.composite_batch_no_required(rows, "LV", "MV-26063") is None
+    # 非他汀产品 → 放行
+    assert board.composite_batch_no_required(rows, "FA", "MV-26069") is None
+    # 时间线中不存在的批号 → 放行
+    assert board.composite_batch_no_required(rows, "LV", "MV-29999") is None
+
+
+def test_statin_tank_rows_carry_composite_batch_no_before_turn() -> None:
+    """倒罐前单罐行（303B: MV-26069 / 305B: MV-26070）带对组复合批号，
+    确认移种据此提交复合记录，不被服务端单批号校验拒绝。"""
+    rows = _statin_rows()
+    # 6/5 12:00：两批尚在 303B/305B 运行、未倒罐
+    payload = board.build_mp_board(
+        rows, [], datetime(2026, 6, 5, 12, 0), product="LV"
+    )
+    assert payload is not None
+    tanks = {t["tank_no"]: t for t in payload["tanks"]}
+    assert tanks["303B"]["batch_no"] == "MV-26069"
+    assert tanks["303B"]["composite_batch_no"] == "MV-26069/070"
+    assert tanks["305B"]["batch_no"] == "MV-26070"
+    assert tanks["305B"]["composite_batch_no"] == "MV-26069/070"
+    # 直放批单罐行（304B: MV-26063）无倒罐对 → 无复合批号
+    assert tanks["304B"]["batch_no"] == "MV-26063"
+    assert tanks["304B"]["composite_batch_no"] is None

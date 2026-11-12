@@ -386,6 +386,71 @@ async def test_batch_actuals_crud_endpoints(
 
 
 @pytest.mark.anyio
+async def test_batch_actuals_rejects_statin_turn_pair_single_batch(
+    auth_client: AsyncClient,
+    mock_db_service: None,
+    monkeypatch: Any,
+) -> None:
+    """他汀倒罐对防呆：单批号录入被 400 拒绝并给出复合批号；
+    复合批号与直放批正常放行；无存档时不拦截。"""
+    from tests.unit.test_fermentation_board_service import _statin_rows
+
+    item = SimpleNamespace(
+        id="x",
+        batch_no="MV-26069/070",
+        product_code="LV",
+        dump_date=date(2026, 6, 13),
+        inoculated_at=None,
+        dumped_at=None,
+        yield_kg=2400.0,
+        extract_kg=None,
+        remark=None,
+    )
+    monkeypatch.setattr(
+        board,
+        "load_latest_archive",
+        AsyncMock(return_value=SimpleNamespace(rows=_statin_rows())),
+    )
+    monkeypatch.setattr(board, "upsert_batch_actual", AsyncMock(return_value=item))
+
+    # 倒罐对成员单批号 → 400，文案带复合批号，且未触达写入
+    rejected = await auth_client.post(
+        f"{API}/fermentation-batch-actuals?product=LV",
+        json={"batch_no": "MV-26069", "dump_date": "2026-06-13", "yield_kg": 2400.0},
+    )
+    assert rejected.status_code == 400
+    assert "MV-26069/070" in rejected.json()["message"]
+    board.upsert_batch_actual.assert_not_awaited()
+
+    # 复合批号 → 放行
+    saved = await auth_client.post(
+        f"{API}/fermentation-batch-actuals?product=LV",
+        json={
+            "batch_no": "MV-26069/070",
+            "dump_date": "2026-06-13",
+            "yield_kg": 2400.0,
+        },
+    )
+    assert saved.status_code == 200
+    assert saved.json()["data"]["yield_kg"] == 2400.0
+
+    # 直放批单批号 → 放行
+    direct = await auth_client.post(
+        f"{API}/fermentation-batch-actuals?product=LV",
+        json={"batch_no": "MV-26063", "dump_date": "2026-06-04", "yield_kg": 800.0},
+    )
+    assert direct.status_code == 200
+
+    # 无存档（排产未上传）→ 不拦截
+    monkeypatch.setattr(board, "load_latest_archive", AsyncMock(return_value=None))
+    no_archive = await auth_client.post(
+        f"{API}/fermentation-batch-actuals?product=LV",
+        json={"batch_no": "MV-26069", "dump_date": "2026-06-13", "yield_kg": 2400.0},
+    )
+    assert no_archive.status_code == 200
+
+
+@pytest.mark.anyio
 async def test_maintenance_mark_list_release_via_mock(
     auth_client: AsyncClient,
     mock_db_service: None,

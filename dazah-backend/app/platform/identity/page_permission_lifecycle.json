@@ -4207,6 +4207,10 @@
         "bulk_import": {
           "status": "active",
           "category": "bulk_change"
+        },
+        "approve": {
+          "status": "active",
+          "category": "decision"
         }
       }
     },
@@ -4235,7 +4239,20 @@
       "status": "active",
       "module_code": "safety",
       "route_path": "/safety/risk-reporting",
-      "actions": {}
+      "actions": {
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        },
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        }
+      }
     },
     "safety:ops-safety:feeding-inspection": {
       "status": "active",
@@ -4265,7 +4282,24 @@
       "status": "active",
       "module_code": "safety",
       "route_path": "/safety/special-ops",
-      "actions": {}
+      "actions": {
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        },
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        },
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        }
+      }
     },
     "safety:regulation-info:knowledge-base": {
       "status": "active",
@@ -4275,6 +4309,10 @@
         "sync_config": {
           "status": "active",
           "category": "integration_admin"
+        },
+        "delete": {
+          "status": "active",
+          "category": "destructive"
         }
       }
     },
@@ -4369,7 +4407,20 @@
       "status": "active",
       "module_code": "safety",
       "route_path": "/safety/hazard-identification",
-      "actions": {}
+      "actions": {
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        },
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        }
+      }
     },
     "safety:risk-hazard:risk-grading:hazard-ledger": {
       "status": "active",
@@ -4398,6 +4449,10 @@
         "sync_config": {
           "status": "active",
           "category": "integration_admin"
+        },
+        "delete": {
+          "status": "active",
+          "category": "destructive"
         }
       }
     },
@@ -4420,6 +4475,10 @@
         "sync_config": {
           "status": "active",
           "category": "integration_admin"
+        },
+        "delete": {
+          "status": "active",
+          "category": "destructive"
         }
       }
     },
@@ -4439,6 +4498,14 @@
         "bulk_import": {
           "status": "active",
           "category": "bulk_change"
+        },
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
         }
       }
     },
@@ -4450,6 +4517,18 @@
         "bulk_import": {
           "status": "active",
           "category": "bulk_change"
+        },
+        "approve": {
+          "status": "active",
+          "category": "decision"
+        },
+        "reject": {
+          "status": "active",
+          "category": "decision"
+        },
+        "delete": {
+          "status": "active",
+          "category": "destructive"
         }
       }
     },
@@ -4461,6 +4540,10 @@
         "bulk_import": {
           "status": "active",
           "category": "bulk_change"
+        },
+        "delete": {
+          "status": "active",
+          "category": "destructive"
         }
       }
     },

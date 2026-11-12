@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.deps import CurrentUser, get_current_user
 from app.core.response import ApiResponse
+from app.modules.safety.page_scope import reject_direct_workflow_edit
 from app.modules.safety.schemas import (
     ContractorCreate,
     ContractorResponse,
@@ -96,6 +97,7 @@ async def update_contractor(
     current_user: CurrentUser | None = Depends(get_current_user),
 ) -> Any:
     """更新承包商"""
+    reject_direct_workflow_edit(data, "status")
     service = SafetyService(db)
     item = await service.update_contractor(contractor_id, data)
     if not item:

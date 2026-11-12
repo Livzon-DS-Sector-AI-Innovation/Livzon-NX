@@ -13,6 +13,11 @@ from app.core.database import get_db
 from app.core.deps import CurrentUser, get_current_user
 from app.core.response import ApiResponse
 from app.core.upload_security import read_upload_secure
+from app.modules.safety.page_scope import (
+    ledger_department_scope,
+    reject_direct_workflow_edit,
+    require_ledger_department,
+)
 from app.modules.safety.schemas import (
     DepartmentLeaderResponse,
     HazardReportCreate,
@@ -74,7 +79,7 @@ async def get_hazards(
 async def get_hazard_stats(
     db: AsyncSession = Depends(get_db),
 ) -> Any:
-    """获取隐患全局统计数据（不受分页/筛选影响，用于统计药丸展示）。"""
+    """获取授权部门范围内的隐患统计，不受分页和列表筛选影响。"""
     service = SafetyService(db)
     stats = await service.get_hazard_stats()
     return ApiResponse(data=HazardStatsResponse(**stats))
@@ -94,12 +99,15 @@ async def get_department_leader(
     """
     from app.modules.safety.feishu import IdentityResolver
 
+    scope = await ledger_department_scope(db)
+    require_ledger_department(scope, department_name)
     resolver = IdentityResolver(db)
     person = await resolver.resolve_department_leader(department_name)
     if person is None:
         return ApiResponse(
             code=404, message=f"未找到部门 '{department_name}' 或其负责人"
         )
+    require_ledger_department(scope, person.department)
     return ApiResponse(
         data=DepartmentLeaderResponse(
             department=person.department or department_name,
@@ -148,6 +156,10 @@ async def update_hazard(
     current_user: CurrentUser | None = Depends(get_current_user),
 ) -> Any:
     """更新隐患"""
+    reject_direct_workflow_edit(
+        data, "status", "rectification_status",
+        "script1_review_status", "script2_review_status",
+    )
     service = SafetyService(db)
     item = await service.update_hazard(hazard_id, data)
     if not item:
@@ -175,6 +187,10 @@ async def upload_hazard_photo(
         allowed_extensions=_HAZARD_IMAGE_EXTENSIONS,
         what="图片",
     )
+    service = SafetyService(db)
+    if await service.get_hazard(hazard_id) is None:
+        return ApiResponse(code=404, message="隐患不存在")
+
     upload_dir = Path("uploads") / "safety" / "hazard"
     upload_dir.mkdir(parents=True, exist_ok=True)
     safe_name = (
@@ -184,11 +200,11 @@ async def upload_hazard_photo(
     file_path = upload_dir / safe_name
     file_path.write_bytes(content)
 
-    service = SafetyService(db)
     item = await service.upload_hazard_photo(
         hazard_id, filename, str(file_path)
     )
     if not item:
+        file_path.unlink(missing_ok=True)
         return ApiResponse(code=404, message="隐患不存在")
     await db.commit()
     return ApiResponse(data=HazardReportResponse.model_validate(item))
@@ -213,6 +229,10 @@ async def upload_rectification_photo(
         allowed_extensions=_HAZARD_IMAGE_EXTENSIONS,
         what="图片",
     )
+    service = SafetyService(db)
+    if await service.get_hazard(hazard_id) is None:
+        return ApiResponse(code=404, message="隐患不存在")
+
     upload_dir = Path("uploads") / "safety" / "hazard"
     upload_dir.mkdir(parents=True, exist_ok=True)
     safe_name = (
@@ -222,9 +242,9 @@ async def upload_rectification_photo(
     file_path = upload_dir / safe_name
     file_path.write_bytes(content)
 
-    service = SafetyService(db)
     item = await service.upload_rectification_photo(hazard_id, str(file_path))
     if not item:
+        file_path.unlink(missing_ok=True)
         return ApiResponse(code=404, message="隐患不存在")
     await db.commit()
     return ApiResponse(data=HazardReportResponse.model_validate(item))

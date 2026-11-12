@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.deps import CurrentUser, get_current_user
 from app.core.response import ApiResponse
+from app.modules.safety.page_scope import reject_direct_workflow_edit
 from app.modules.safety.schemas import (
     AccidentCreate,
     AccidentResponse,
@@ -95,6 +96,7 @@ async def update_accident(
     current_user: CurrentUser | None = Depends(get_current_user),
 ) -> Any:
     """更新事故"""
+    reject_direct_workflow_edit(data, "status", "corrective_action_status")
     service = SafetyService(db)
     item = await service.update_accident(accident_id, data)
     if not item:

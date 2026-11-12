@@ -17,6 +17,7 @@ import {
   Card,
   Row,
   Col,
+  Grid,
   Statistic,
   DatePicker,
 } from 'antd'
@@ -72,6 +73,8 @@ const RISK_CARD_CONFIG: Record<string, { label: string; color: string; bgColor: 
 
 export default function HazardLedgerPanel() {
   const router = useRouter()
+  // 窄屏只固定操作列，避免两侧固定列重叠。
+  const fixedLeadingColumn = Grid.useBreakpoint().lg ? 'left' : undefined
   const [loading, setLoading] = useState(false)
   const [data, setData] = useState<HazardIdentification[]>([])
   const [total, setTotal] = useState(0)
@@ -85,7 +88,7 @@ export default function HazardLedgerPanel() {
   const [riskLevel, setRiskLevel] = useState<string | undefined>()
   const [dateRange, setDateRange] = useState<[string, string] | null>(null)
   const { message } = App.useApp()
-  const { canImport, canOperate } = usePagePermissions()
+  const { canImport, canOperate, canExport } = usePagePermissions()
 
   // ── 车间表格导入 Modal 状态 ──
   const [importModalOpen, setImportModalOpen] = useState(false)
@@ -318,11 +321,11 @@ export default function HazardLedgerPanel() {
       key: 'row_no',
       width: 55,
       align: 'center',
-      fixed: 'left',
+      fixed: fixedLeadingColumn,
       render: (_, __, idx) => (queryParams.page - 1) * queryParams.page_size + idx + 1,
     },
-    { title: '部门', dataIndex: 'department', key: 'department', width: 95, ellipsis: true, fixed: 'left' },
-    { title: '岗位', dataIndex: 'position', key: 'position', width: 95, ellipsis: true, fixed: 'left' },
+    { title: '部门', dataIndex: 'department', key: 'department', width: 95, ellipsis: true, fixed: fixedLeadingColumn },
+    { title: '岗位', dataIndex: 'position', key: 'position', width: 95, ellipsis: true, fixed: fixedLeadingColumn },
     {
       title: '风险点',
       onHeaderCell: headerCell(GROUP_BG.risk),
@@ -392,7 +395,7 @@ export default function HazardLedgerPanel() {
         <Space size={0}>
           <Button
             type="link" size="small"
-            onClick={() => router.push(`/safety/hazard-identification/${r.id}`)}
+            onClick={() => router.push(`/safety/hazard-identification/ledger/${r.id}`)}
           >
             查看
           </Button>
@@ -507,9 +510,9 @@ export default function HazardLedgerPanel() {
               导入车间表格
             </Button>
           )}
-          <Button type="primary" icon={<ExportOutlined />} onClick={() => setExportModalOpen(true)}>
+          {canExport && <Button type="primary" icon={<ExportOutlined />} onClick={() => setExportModalOpen(true)}>
             导出 PDF
-          </Button>
+          </Button>}
         </Space>
       </div>
 

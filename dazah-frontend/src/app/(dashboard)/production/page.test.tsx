@@ -360,7 +360,28 @@ describe('ProductionHomePage (fermentation board)', () => {
           yield_kg: 100,
           remark: '染菌批',
         },
+        // 确认移种预建的空记录：抽屉不渲染该行，下拉保留该批次（录入即覆盖）
+        {
+          id: 'a-blank',
+          tank_no: '304A',
+          batch_no: 'FA26230',
+          dump_date: null,
+          yield_kg: null,
+          remark: null,
+        },
       ],
+    })
+    // 下拉多一个倒罐复合批选项，验证置顶与「倒罐对」标注
+    actions.getFermentationBoard.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: {
+        ...BOARD,
+        dumped_batches: [
+          { batch_no: 'MV-26087/088', dump_date: '2026-09-06', dump_plan_at: '2026-09-06T10:00:00' },
+          ...BOARD.dumped_batches,
+        ],
+      },
     })
     await render()
     const historyBtn = Array.from(container.querySelectorAll('button')).find((b) =>
@@ -377,6 +398,13 @@ describe('ProductionHomePage (fermentation board)', () => {
     expect(drawerText).toContain('罐号')
     // 列表展示备注
     expect(drawerText).toContain('染菌批')
+    // 空记录行（FA26230）不再渲染
+    const drawerRows = Array.from(
+      document.body.querySelectorAll('.ant-drawer tbody tr'),
+    )
+    expect(
+      drawerRows.find((r) => r.textContent?.includes('FA26230')),
+    ).toBeUndefined()
     const addBtn = Array.from(document.body.querySelectorAll('.ant-drawer button')).find(
       (b) => b.textContent?.includes('录入批次产量'),
     ) as HTMLElement | undefined
@@ -387,12 +415,17 @@ describe('ProductionHomePage (fermentation board)', () => {
     })
     expect(document.body.textContent || '').toContain('录入批次产量')
 
-    // 批号下拉：只列出未录入产量的已放罐批次
+    // 批号下拉：倒罐复合批置顶；空记录批次保留（录入即覆盖）；
+    // 已实质录入（有放罐日期/产量）的批次排除
     const selector = document.body.querySelector('.ant-modal .ant-select') as HTMLElement
     await act(async () => {
       selector.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
       await new Promise((r) => setTimeout(r, 120))
     })
+    const options = Array.from(
+      document.body.querySelectorAll('.ant-select-item-option'),
+    )
+    expect(options[0]?.textContent).toContain('倒罐对 · MV-26087/088')
     const optionText = document.body.textContent || ''
     expect(optionText).toContain('FA26230（2026-09-07）')
     expect(optionText).not.toContain('FA26231（2026-09-08）')
@@ -411,8 +444,9 @@ describe('ProductionHomePage (fermentation board)', () => {
     expect(inputValues).toContain('2026-09-07 10:00')
   })
 
-  it('tags in-progress and yield-pending rows in the history drawer', async () => {
-    // 确认移种预建的未放罐记录（全空）与已放罐未录产量记录不再被误读为丢数据
+  it('hides in-progress rows and tags yield-pending rows in the history drawer', async () => {
+    // 确认移种预建的未放罐记录（全空）不再显示（从录入下拉补录）；
+    // 已放罐未录产量的行保留并带「待录产量」标签
     actions.getFermentationBatchActuals.mockResolvedValue({
       code: 200,
       data: [
@@ -451,15 +485,15 @@ describe('ProductionHomePage (fermentation board)', () => {
       await new Promise((r) => setTimeout(r, 120))
     })
     const drawerText = document.body.textContent || ''
-    // 说明文字：未放罐批次的处理指引
-    expect(drawerText).toContain('放罐后请编辑该行补录放罐时间与产量')
-    // 标签挂在对应批次行：未放罐行仍是最后（放罐日期排序），可编辑入口保留
+    // 说明文字：未放罐批次走下拉补录的新指引
+    expect(drawerText).toContain('从「录入批次产量」下拉选择补录')
+    // 空记录行不再渲染（未放罐批次从下拉补录）
     const rows = Array.from(
       document.body.querySelectorAll('.ant-drawer tbody tr'),
     )
     const rowText = (batch: string) =>
       rows.find((r) => r.textContent?.includes(batch))?.textContent ?? ''
-    expect(rowText('FA26235')).toContain('未放罐')
+    expect(rowText('FA26235')).toBe('')
     expect(rowText('FA26233')).toContain('待录产量')
     // 已完成记录无状态标签
     expect(rowText('FA26231')).not.toContain('未放罐')

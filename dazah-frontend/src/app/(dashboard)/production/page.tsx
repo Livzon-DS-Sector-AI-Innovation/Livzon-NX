@@ -534,9 +534,10 @@ export default function ProductionDashboard() {
       message.warning('请选择实际移种时刻')
       return
     }
-    // 他汀合并批号/待进罐行取首个批号挂靠实际时刻；后端按显式字段部分
-    // 更新，不触碰该批已录入的产量与放罐日期
-    const confirmBatchNo = primaryBatchNo(inoculateTank)
+    // 倒罐对优先提交复合批号（后端拒绝单批号录倒罐对）；常规行取首个
+    // 主批号挂靠实际时刻；后端按显式字段部分更新，不触碰已录产量与放罐日期
+    const confirmBatchNo =
+      inoculateTank.composite_batch_no || primaryBatchNo(inoculateTank)
     if (!confirmBatchNo) return
     const res = await upsertFermentationBatchActual(
       {
@@ -987,12 +988,25 @@ export default function ProductionDashboard() {
     },
   ]
 
-  // 新建录入时的批号下拉：已放罐且尚未录入产量的批次；编辑时锁定原批号
+  // 新建录入时的批号下拉：已放罐且尚未实质录入（无放罐日期且无产量）的
+  // 批次——确认移种预建的空记录批次保留在下拉，选中录入即覆盖原记录
+  // （后端部分字段更新，保留已录移种时刻）；倒罐复合批选项置顶并标注。
+  // 编辑时锁定原批号
   const actualBatchOptions = editingActual
     ? [{ label: editingActual.batch_no, value: editingActual.batch_no }]
     : (board?.dumped_batches || [])
-        .filter((b) => !actuals.some((a) => a.batch_no === b.batch_no))
-        .map((b) => ({ label: `${b.batch_no}（${b.dump_date}）`, value: b.batch_no }))
+        .filter((b) => {
+          const existing = actuals.find((a) => a.batch_no === b.batch_no)
+          return !existing || (!existing.dump_date && existing.yield_kg == null)
+        })
+        .map((b) => ({
+          label: `${b.batch_no.includes('/') ? '倒罐对 · ' : ''}${b.batch_no}（${b.dump_date}）`,
+          value: b.batch_no,
+        }))
+        .sort(
+          (a, b) =>
+            Number(b.value.includes('/')) - Number(a.value.includes('/')),
+        )
 
   const actualColumns = [
     {
@@ -1925,7 +1939,12 @@ export default function ProductionDashboard() {
         cancelText="取消"
       >
         <Space direction="vertical" style={{ width: '100%' }} size={12}>
-          <Text>批次号：{inoculateTank ? (primaryBatchNo(inoculateTank) ?? '-') : '-'}</Text>
+          <Text>
+            批次号：
+            {inoculateTank
+              ? (inoculateTank.composite_batch_no || primaryBatchNo(inoculateTank) || '-')
+              : '-'}
+          </Text>
           <Text type="secondary">
             排产移种时间：
             {fmtShort(inoculateTank?.inoculate_plan_at ?? inoculateTank?.inoculate_at)}
@@ -1963,7 +1982,7 @@ export default function ProductionDashboard() {
           rowKey="id"
           size="small"
           columns={actualColumns}
-          dataSource={actuals}
+          dataSource={actuals.filter((a) => a.dump_date || a.yield_kg != null)}
           loading={actualsLoading}
           pagination={false}
           scroll={{ x: 600 }}
@@ -1971,7 +1990,8 @@ export default function ProductionDashboard() {
         />
         <Text type="secondary" style={{ fontSize: 12 }}>
           录入后单批产量图表与「最近完成批次」的放罐产量自动更新。
-          「未放罐」为确认移种后尚未放罐的批次，放罐后请编辑该行补录放罐时间与产量。
+          倒罐复合批请按复合批号（如 MV-26087/088）录入一条总量；
+          确认移种预建的未放罐批次不在列表中，放罐后从「录入批次产量」下拉选择补录。
         </Text>
       </Drawer>
 
