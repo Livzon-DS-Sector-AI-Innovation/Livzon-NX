@@ -96,7 +96,7 @@ describe('person monthly stats action', () => {
   })
 
   it('fetches person monthly stats with month and product params', async () => {
-    const fetchMock = vi.fn(() =>
+    const fetchMock = vi.fn((input: RequestInfo | URL) =>
       jsonResponse({
         code: 200,
         message: 'success',
@@ -118,7 +118,7 @@ describe('person monthly stats action', () => {
     const rows = await getPersonMonthly({ month: '2026-11', product_name: '盐酸林可霉素' })
     expect(rows.code).toBe(200)
     expect(rows.data?.[0]).toMatchObject({ name: '张三', total_batches: 2 })
-    const url = fetchMock.mock.calls[0]?.[0] as string
+    const url = String(fetchMock.mock.calls[0]?.[0] ?? '')
     expect(url).toContain('/api/v1/production/seed-cultures/person-monthly')
     expect(url).toContain('month=2026-11')
     expect(url).toContain('product_name=')
