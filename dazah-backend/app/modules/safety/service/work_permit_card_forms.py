@@ -254,7 +254,22 @@ _FILL_LABELS: dict[str, str] = {
     "blanket_count": "灭火毯多少块",
     "hose_count": "消防蒸汽带或水带多少条",
     "blind_no": "盲板编号",
+    # 受限空间应急设施（文档无单位，用"数量"）
+    "fire_equipment": "消防器材数量",
+    "life_rope": "救生绳数量",
+    "gas_protection_equipment": "气防装备数量",
 }
+
+# 各票"级别"字段的文档叫法（动火=动火级别、高处=高处作业级别）
+_LEVEL_FIELD_LABELS: dict[str, str] = {
+    "hot_work": "动火级别",
+    "height_work": "高处作业级别",
+    "lifting": "吊装作业级别",
+}
+
+
+def _level_field_label(permit_type: str) -> str:
+    return _LEVEL_FIELD_LABELS.get(permit_type, "作业级别")
 
 
 def _fill_label(measure_text: str, fill_key: str) -> str:
@@ -321,11 +336,9 @@ def build_step_card(
             )
 
             current_level = str(values.get("level") or template.levels[0])
-            current_label = PERMIT_LEVEL_LABELS.get(
-                current_level, current_level
-            )
+            current_label = PERMIT_LEVEL_LABELS.get(current_level, current_level)
             form_elements.append(
-                _md(f"**作业级别**（当前：{current_label}）")
+                _md(f"**{_level_field_label(permit_type)}**（当前：{current_label}）")
             )
             for opt in level_options_for_type(permit_type):
                 active = opt["value"] == current_level
@@ -334,8 +347,7 @@ def build_step_card(
                         "tag": "button",
                         "text": {
                             "tag": "plain_text",
-                            "content": ("✔ " if active else "□ ")
-                            + opt["label"],
+                            "content": ("✔ " if active else "□ ") + opt["label"],
                         },
                         "type": "primary" if active else "default",
                         "value": {
@@ -391,9 +403,7 @@ def build_step_card(
             elif tf_type == "datetime":
                 form_elements.extend(_dt_picker(key, label))
             else:
-                form_elements.append(
-                    _input(key, label, default=default_text)
-                )
+                form_elements.append(_input(key, label, default=default_text))
         elements.append(
             _md(
                 f"{template.name}（编号前缀 {template.no_prefix}）\n"
@@ -401,31 +411,24 @@ def build_step_card(
             )
         )
         elements.append(_hr())
-        elements.append(
-            _form(form_elements, _form_submit("下一步", "step_save"))
-        )
-        elements.append(
-            _btn("取消", {**nav, "act": "form_cancel"})
-        )
+        elements.append(_form(form_elements, _form_submit("下一步", "step_save")))
+        elements.append(_btn("取消", {**nav, "act": "form_cancel"}))
         return _card(title, elements)
 
     if step == 2:
         elements.append(
             _md(
-                "**填写作业相关人员**：优先从通讯录选择系统内人员（选定后自动"
-                "关联其特种作业证件号）；外部人员（系统无信息）填姓名与证件号。\n"
+                "**填写作业相关人员**：从特种作业证书名单选择（选定即自动带出"
+                "证件号）；证书名单没有的人员（外部人员）填姓名与证件号。\n"
                 "人员选定后在汇总页逐行手写签字确认。"
             )
         )
         elements.append(_hr())
-        existing_map = {
-            str(p.get("role")): p for p in (values.get("persons") or [])
-        }
+        existing_map = {str(p.get("role")): p for p in (values.get("persons") or [])}
+        roster = values.get("cert_roster") or []
         for role in template.person_roles:
             role_key = str(role["role"])
-            label = str(role["label"]) + (
-                "（需持证）" if role.get("cert") else ""
-            )
+            label = str(role["label"]) + ("（需持证）" if role.get("cert") else "")
             existing = existing_map.get(role_key) or {}
             line = f"**{label}**"
             if existing.get("name"):
@@ -433,26 +436,40 @@ def build_step_card(
                 if existing.get("certificate_no"):
                     line += f"　证件号：{existing.get('certificate_no')}"
             form_elements.append(_md(line))
-            form_elements.append(
+            # 按该角色建议证件类别优先排序，截取前 20 人（飞书单卡元素/选项
+            # 数量上限 11310，名单过长时其余人员请用外部人员录入或平台维护）
+            from app.modules.safety.service.work_permit_templates import (
+                PERSON_ROLE_CERT_CATEGORIES,
+            )
+
+            cats = PERSON_ROLE_CERT_CATEGORIES.get(role_key) or ()
+            matched = [r for r in roster if r.get("cat") in cats]
+            others = [r for r in roster if r.get("cat") not in cats]
+            picked_roster = (matched + others)[:20]
+            roster_options = [
                 {
-                    "tag": "select_person",
-                    "name": f"person__{role_key}",
-                    "placeholder": {
-                        "tag": "plain_text",
-                        "content": f"选择{label}（系统人员）",
-                    },
+                    "value": str(item["id"]),
+                    "label": (
+                        f"{item.get('name')}｜{item.get('no') or '无证号'}"
+                        f"｜至 {item.get('expiry') or '?'}"
+                    ),
                 }
+                for item in picked_roster
+            ] or [{"value": "", "label": "（证书名单为空，请填下方外部人员）"}]
+            form_elements.append(
+                _select(
+                    f"person__{role_key}",
+                    f"从证书名单选择{label}",
+                    roster_options,
+                    placeholder="点击展开证书名单",
+                )
             )
             is_external = bool(existing.get("external"))
             form_elements.append(
                 _input(
                     f"person_ext_name__{role_key}",
                     f"{label}·外部人员姓名",
-                    default=(
-                        str(existing.get("name") or "")
-                        if is_external
-                        else None
-                    ),
+                    default=(str(existing.get("name") or "") if is_external else None),
                     placeholder="系统无此人时填",
                 )
             )
@@ -494,7 +511,9 @@ def build_step_card(
                     placeholder=placeholder,
                 )
             )
-        elements.append(_md("现场检测完成后如实填写（复检数据开工后可在聊天里继续提交）。"))
+        elements.append(
+            _md("现场检测完成后如实填写（复检数据开工后可在聊天里继续提交）。")
+        )
         elements.append(_hr())
         elements.append(_form(form_elements, _form_submit("下一步", "step_save")))
         prev = prev_step(permit_type, step)
@@ -508,28 +527,19 @@ def build_step_card(
     if step == 4:
         # 风险辨识：下拉多选（与动火方式一致），点开展开 23 项勾选
         risk_picked = [str(item) for item in (values.get("risk") or [])]
-        elements.append(
-            _md(
-                "**风险辨识结果**（下拉多选：展开勾选本次作业涉及的风险）"
-            )
-        )
+        elements.append(_md("**风险辨识结果**（下拉多选：展开勾选本次作业涉及的风险）"))
         elements.append(_hr())
         form_elements.append(
             _select(
                 "risk",
                 "风险辨识结果",
-                [
-                    {"value": opt, "label": opt}
-                    for opt in risk_options_for(permit_type)
-                ],
+                [{"value": opt, "label": opt} for opt in risk_options_for(permit_type)],
                 default="、".join(risk_picked) or None,
                 multi=True,
                 placeholder="点击展开多选",
             )
         )
-        elements.append(
-            _form(form_elements, _form_submit("保存并下一步", "step_save"))
-        )
+        elements.append(_form(form_elements, _form_submit("保存并下一步", "step_save")))
         prev = prev_step(permit_type, step)
         if prev:
             elements.append(
@@ -542,9 +552,7 @@ def build_step_card(
         # 安全措施：条文一行 + 是/否 + 下划线（____）条文附数量填空
         measures_picked = {str(item) for item in (values.get("measures") or [])}
         measure_fills: dict[str, Any] = values.get("measure_fills") or {}
-        elements.append(
-            _md("**安全措施**（逐行选择：是 / 否；下划线处填数量）")
-        )
+        elements.append(_md("**安全措施**（逐行选择：是 / 否；下划线处填数量）"))
         elements.append(_hr())
         grouped: dict[str, list[dict[str, object]]] = {}
         for m in template.measures:
@@ -580,9 +588,7 @@ def build_step_card(
                             placeholder="填数量",
                         )
                     )
-        elements.append(
-            _form(form_elements, _form_submit("保存并下一步", "step_save"))
-        )
+        elements.append(_form(form_elements, _form_submit("保存并下一步", "step_save")))
         prev = prev_step(permit_type, step)
         if prev:
             elements.append(
@@ -620,9 +626,7 @@ def build_step_card(
             hint = f"（默认：{default_name}）" if default_name else "（必选）"
             picked_name = assignment_names.get(node_key) or ""
             picked_hint = f"　已选：**{picked_name}**" if picked_name else ""
-            elements.append(
-                _md(f"{idx}. **{node_name}**{hint}{picked_hint}")
-            )
+            elements.append(_md(f"{idx}. **{node_name}**{hint}{picked_hint}"))
             form_elements.append(
                 {
                     "tag": "select_person",
@@ -633,9 +637,7 @@ def build_step_card(
                     },
                 }
             )
-        elements.append(
-            _form(form_elements, _form_submit("保存并下一步", "step_save"))
-        )
+        elements.append(_form(form_elements, _form_submit("保存并下一步", "step_save")))
         prev = prev_step(permit_type, step)
         if prev:
             elements.append(
@@ -686,12 +688,9 @@ def ticket_document_markdown(
     lines: list[str] = []
 
     def _join_options(options: list[dict[str, str]], selected: Any) -> str:
-        picked = set(
-            selected if isinstance(selected, (list, tuple)) else [selected]
-        )
+        picked = set(selected if isinstance(selected, (list, tuple)) else [selected])
         return " ".join(
-            ("✔" if str(item["value"]) in picked else "□")
-            + str(item["label"])
+            ("✔" if str(item["value"]) in picked else "□") + str(item["label"])
             for item in options
         )
 
@@ -709,11 +708,14 @@ def ticket_document_markdown(
     )
     lines.append(f"**作业内容** {values.get('work_description') or '—'}")
     lines.append(f"**作业地点** {values.get('work_location') or '—'}")
-    lines.append(f"**作业单位** {values.get('work_unit') or '—'}")
+    # 动火票文档表头无"作业单位"栏（其余票种有），保持与文档一致
+    if permit_type != "hot_work":
+        lines.append(f"**作业单位** {values.get('work_unit') or '—'}")
     if template.levels != ("none",):
         level = str(values.get("level") or template.levels[0])
         lines.append(
-            "**作业级别** " + _join_options(level_options_for(permit_type), level)
+            f"**{_level_field_label(permit_type)}** "
+            + _join_options(level_options_for(permit_type), level)
         )
     # 票面差异字段（文档票面逐项）
     for tf in template.type_fields:
@@ -723,8 +725,7 @@ def ticket_document_markdown(
         tf_type = str(tf.get("type") or "text")
         if tf_type in ("select", "multi_select"):
             options = [
-                {"value": str(opt), "label": str(opt)}
-                for opt in options_for(tf)
+                {"value": str(opt), "label": str(opt)} for opt in options_for(tf)
             ]
             lines.append(f"**{label}** " + _join_options(options, raw or []))
         elif isinstance(raw, (list, tuple)):
@@ -736,14 +737,14 @@ def ticket_document_markdown(
         f"至 {_fmt_time(values.get('planned_end'))} 止"
     )
 
-    # ── 气体分析（气体检票种，文档表体）──
+    # ── 气体分析（气体检票种，文档表体）；动火票文档无"分析部位"栏 ──
     if template.gas_enabled:
         gas = values.get("gas") or {}
         if any(str(v or "").strip() for v in gas.values()):
-            lines.append(
-                f"**气体取样分析时间** {gas.get('gas_time') or '—'}"
-                f"　**分析部位** {gas.get('gas_point') or '—'}"
-            )
+            time_line = f"**气体取样分析时间** {gas.get('gas_time') or '—'}"
+            if gas.get("gas_point"):
+                time_line += f"　**分析部位** {gas.get('gas_point')}"
+            lines.append(time_line)
             lines.append(
                 f"**代表性气体** {gas.get('gas_name') or '—'}"
                 f"　**分析结果** {gas.get('gas_value') or '—'}"
@@ -774,8 +775,11 @@ def ticket_document_markdown(
     lines.append("")
     lines.append("**安全措施**（✔已落实 □不适用）")
     for group, items in grouped.items():
-        lines.append("")
-        lines.append(f"**〔{group}〕**")
+        # 文档无"类"列的票种（如高处/盲板等组名恰为"安全措施"）不再重复
+        # 小标题，避免与总标题连排
+        if group != "安全措施":
+            lines.append("")
+            lines.append(f"**〔{group}〕**")
         for idx, m in enumerate(items, start=1):
             mark = "✔" if str(m["key"]) in measures_yes else "□"
             text = str(m["text"])
@@ -859,11 +863,7 @@ def build_summary_card(
     del permit_level  # 级别包含在文档版式票面内
     template = get_template(permit_type)
     elements: list[dict[str, Any]] = [
-        _md(
-            ticket_document_markdown(
-                permit_type, values, permit_no=permit_no or ""
-            )
-        ),
+        _md(ticket_document_markdown(permit_type, values, permit_no=permit_no or "")),
     ]
     if message:
         elements.append(_md(message))
@@ -934,9 +934,10 @@ def build_summary_card(
     if message:
         elements.append(_md(message))
     elements.append(_hr())
-    all_signed = all(sign_status.get(key) for key, _ in (
-        ("initiator", ""), ("briefer", ""), ("briefer_receiver", "")
-    ))
+    all_signed = all(
+        sign_status.get(key)
+        for key, _ in (("initiator", ""), ("briefer", ""), ("briefer_receiver", ""))
+    )
     if all_signed:
         submit_btn = _btn(
             "提交审批", {"type": permit_type, "act": "submit"}, type_="primary"
@@ -966,9 +967,7 @@ def build_summary_card(
             }
         )
     else:
-        elements.append(
-            _md("完成全部签名后出现「提交审批」。")
-        )
+        elements.append(_md("完成全部签名后出现「提交审批」。"))
     elements.append(_btn("取消", {"type": permit_type, "act": "form_cancel"}))
     return _card(
         f"{template.name} · 汇总确认{f'（{permit_no}）' if permit_no else ''}",
@@ -1027,9 +1026,7 @@ __all__ = [
 ]
 
 
-def build_reject_card(
-    permit_id: str, node_id: str, permit_no: str
-) -> dict[str, Any]:
+def build_reject_card(permit_id: str, node_id: str, permit_no: str) -> dict[str, Any]:
     """驳回意见输入卡（表单提交 reject_submit）。"""
     form_elements = [
         _input("opinion", "驳回意见（必填）", placeholder="请填写驳回原因", long=True)

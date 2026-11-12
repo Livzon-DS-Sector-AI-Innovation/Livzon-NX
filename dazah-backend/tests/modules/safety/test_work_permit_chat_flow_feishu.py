@@ -1519,63 +1519,61 @@ class TestChatFlowGapCoverage:
     async def test_merge_persons_all_branches(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """第②步人员合并四分支：选人命中/未命中走通讯录/外部/保留。"""
+        """第②步人员合并：证书命中/列表形态/非法id兜底/外部/保留。"""
+        from datetime import date
         from types import SimpleNamespace
 
-        from app.modules.safety.service import work_permit_chat_flow as cf
-
-        svc = self._svc(_RecDB([]))
-        found_user = SimpleNamespace(id="u-found", name="张三")
-        cert_by_name = SimpleNamespace(
-            id="c-name",
-            certificate_no="DJ-N",
+        cert1 = SimpleNamespace(
+            id="c-1",
+            person_name="张三",
+            certificate_no="DJ-1",
+            certificate_category="electrician",
+            expiry_date=date(2027, 1, 1),
+            status="valid",
+            identity_user_id="u-1",
+        )
+        cert2 = SimpleNamespace(
+            id="c-2",
+            person_name="李四",
+            certificate_no="DJ-2",
             certificate_category="electrician",
             expiry_date=None,
             status="valid",
+            identity_user_id=None,
         )
-        userinfo: dict[str, tuple[str, str]] = {
-            "ou-worker": ("李四", ""),
-            "ou-receiver": ("", ""),
-        }
-
-        async def _info(open_id: str) -> tuple[str, str]:
-            return userinfo.get(open_id, ("", ""))
-
-        async def _by_feishu(feishu_id: str) -> Any:
-            return found_user if feishu_id == "ou-leader" else None
-
-        async def _cert_by_name(name: str, role: str) -> Any:
-            return cert_by_name if name == "李四" else None
-
-        async def _cert_for_user(user_id: Any, role: str) -> Any:
-            return None
-
-        monkeypatch.setattr(cf, "feishu_user_info", _info)
-        svc._user_by_feishu_id = _by_feishu  # type: ignore[method-assign]
-        svc._certificate_by_name = _cert_by_name  # type: ignore[method-assign]
-        svc._certificate_for_user = _cert_for_user  # type: ignore[method-assign]
+        svc = self._svc(_RecDB([_result(cert1), _result(cert2)]))
 
         values: dict[str, Any] = {
             "persons": [{"role": "process_guardian", "name": "老成员"}]
         }
         form_value = {
-            "person__work_leader": "ou-leader",
-            "person__worker": ["ou-worker"],
+            # 证书名单选人：value = 证件记录 id
+            "person__work_leader": "0196c9d0-0000-7000-8000-000000000001",
+            "person__worker": ["0196c9d0-0000-7000-8000-000000000002"],
             "person__guardian": "",
             "person_ext_name__guardian": "王五",
             "person_ext_cert__guardian": "T-88",
-            "person__briefer": "ou-leader",
-            "person__briefer_receiver": "ou-receiver",
+            "person__briefer": "not-a-uuid",
+            "person__briefer_receiver": "（证书名单为空，请填下方外部人员）",
         }
         await svc._merge_persons("hot_work", values, form_value)
         by_role = {p["role"]: p for p in values["persons"]}
-        assert by_role["work_leader"]["user_id"] == "u-found"
+        # 证书命中：姓名/证号/类别随证带出，绑定账号时带 user_id
+        assert by_role["work_leader"]["name"] == "张三"
+        assert by_role["work_leader"]["certificate_no"] == "DJ-1"
+        assert by_role["work_leader"]["user_id"] == "u-1"
+        # 列表形态 + 未绑定账号（无 user_id）
         assert by_role["worker"]["name"] == "李四"
-        assert by_role["worker"]["certificate_no"] == "DJ-N"
+        assert by_role["worker"]["certificate_no"] == "DJ-2"
+        assert "user_id" not in by_role["worker"]
+        # 外部人员
         assert by_role["guardian"]["external"] == "true"
         assert by_role["guardian"]["certificate_no"] == "T-88"
+        # 非法 id → 姓名兜底
+        assert by_role["briefer"]["name"] == "not-a-uuid"
+        # 空提示值 → 无选人且无外部 → 保留原有成员
         assert by_role["process_guardian"]["name"] == "老成员"
-        assert by_role["briefer_receiver"]["name"] == "ou-receiver"
+        assert "briefer_receiver" not in by_role
         assert values["person_sign_names"]["work_leader"] == "张三"
 
     async def test_set_level_expired_and_success(
@@ -2254,3 +2252,600 @@ class TestSignaturesGapCoverage:
 
         gif = base64.b64encode(b"GIF89a" + b"x" * 16).decode()
         assert sig.decode_signature_data_url(f"data:image/png;base64,{gif}") is None
+
+
+# ── PR #213 缺口定向补测（气体记录表 / refresh / 名单装载 / 回执 / 分发）──
+
+
+def _scalars_result(rows: list[Any]) -> Any:
+    from types import SimpleNamespace
+
+    return SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: rows))
+
+
+class TestGasRecordsNotify:
+    """work_permit_notify 新增：作业中气体记录表 + 复检卡刷新。"""
+
+    async def test_gas_records_markdown_all_branches(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from datetime import datetime, timedelta
+        from types import SimpleNamespace
+
+        from app.modules.safety.service import work_permit_notify as notify
+
+        permit = _gap_permit("active")
+        permit.permit_type = "hot_work"
+        now = datetime.now()
+
+        def _row(phase: str, minutes_ago: int, point: str) -> Any:
+            return SimpleNamespace(
+                phase=phase,
+                sampled_at=now - timedelta(minutes=minutes_ago),
+                analysis_point=point,
+                items=[
+                    {"name": "可燃气体", "value": "0"},
+                    {"name": "氧气", "value": None},
+                ],
+                analyst_name=None,
+            )
+
+        rows = [_row("pre_work", 130, "釜内"), _row("on_duty", 10, "作业面")]
+
+        class _DB:
+            async def execute(self, *_a: Any, **_kw: Any) -> Any:
+                return _scalars_result(rows)
+
+        md = await notify._gas_records_markdown(_DB(), permit)
+        assert "复检周期 60 分钟" in md
+        assert "（作业前）" in md
+        assert "釜内" in md and "可燃气体=0" in md and "氧气=-" in md
+        assert "分析人 —" in md
+        # 最近采样 10 分钟前 + 60 分钟周期 → 未超期
+        assert "下次复检不晚于" in md
+
+        # 超期分支：最近采样 2 小时前
+        rows2 = [_row("on_duty", 120, "釜内")]
+
+        class _DB2:
+            async def execute(self, *_a: Any, **_kw: Any) -> Any:
+                return _scalars_result(rows2)
+
+        md2 = await notify._gas_records_markdown(_DB2(), permit)
+        assert "复检已超期" in md2
+
+        # 无记录：回退开工时间（tz-aware 需剥离）；开工 5 小时前 → 超期
+        permit2 = _gap_permit("active")
+        permit2.permit_type = "hot_work"
+        permit2.actual_start_time = (now - timedelta(hours=5)).replace(tzinfo=None)
+
+        class _DB3:
+            async def execute(self, *_a: Any, **_kw: Any) -> Any:
+                return _scalars_result([])
+
+        md3 = await notify._gas_records_markdown(_DB3(), permit2)
+        assert "暂无记录" in md3
+        assert "复检已超期" in md3
+
+        # 无周期票种：表头不带周期，不算超期
+        monkeypatch.setattr(notify, "_gas_cycle_for", lambda permit: None)
+        md4 = await notify._gas_records_markdown(_DB3(), permit2)
+        assert "气体检测记录**" in md4
+        assert "超期" not in md4
+
+    def test_gas_form_elements_shape(self) -> None:
+        import json as json_mod
+        from types import SimpleNamespace
+
+        from app.modules.safety.service.work_permit_notify import (
+            _gas_form_elements,
+        )
+
+        permit = SimpleNamespace(
+            id=uuid4(), permit_no="DH-GAS-1", permit_type="hot_work"
+        )
+        elements = _gas_form_elements(permit)
+        text = json_mod.dumps(elements, ensure_ascii=False)
+        assert "填写本次复检结果" in text
+        assert "提交本次复检" in text
+        assert "gas_point" in text and "gas_analyst" in text
+
+    async def test_next_stage_active_gas_card(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import json as json_mod
+
+        from app.modules.safety.service import work_permit_notify as notify
+        from app.modules.safety.service.work_permit_templates import (
+            PERMIT_STATUS_ACTIVE,
+        )
+
+        permit = _gap_permit(PERMIT_STATUS_ACTIVE)
+        target = uuid4()
+
+        async def _no_records(db: Any, permit: Any) -> str:
+            return ""
+
+        async def _target(db: Any, permit: Any) -> Any:
+            return target
+
+        async def _no_gas_rows(db: Any, permit: Any) -> str:
+            return "**气体检测记录**\n_暂无记录_"
+
+        monkeypatch.setattr(notify, "_sign_records_markdown", _no_records)
+        monkeypatch.setattr(notify, "_accept_target", _target)
+        monkeypatch.setattr(notify, "_gas_records_markdown", _no_gas_rows)
+        recipient, elements, title = await notify._next_stage_elements(object(), permit)
+        assert recipient == target
+        assert "作业中气体检测" in title
+        joined = json_mod.dumps(elements, ensure_ascii=False)
+        assert "完工验收" in joined
+        assert "提交本次复检" in joined
+
+    async def test_refresh_active_gas_card_paths(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+
+        from app.modules.safety.service import work_permit_notify as notify
+        from app.modules.safety.service.work_permit_templates import (
+            PERMIT_STATUS_ACTIVE,
+            PERMIT_STATUS_PENDING,
+        )
+
+        permit = _gap_permit(PERMIT_STATUS_ACTIVE)
+        recipient = uuid4()
+
+        async def _resolve(db: Any, ref: Any) -> Any:
+            return permit
+
+        async def _stage(db: Any, p: Any) -> tuple[Any, list, str]:
+            return (recipient, [{"tag": "md"}], "标题")
+
+        async def _target(db: Any, p: Any) -> Any:
+            return recipient
+
+        async def _union(db: Any, user_id: Any) -> str:
+            return "un-holder"
+
+        monkeypatch.setattr(notify, "_resolve_permit", _resolve)
+        monkeypatch.setattr(notify, "_next_stage_elements", _stage)
+        monkeypatch.setattr(notify, "_accept_target", _target)
+        monkeypatch.setattr(notify, "_recipient_union_id", _union)
+
+        # 非作业中 → False
+        pending = _gap_permit(PERMIT_STATUS_PENDING)
+
+        async def _resolve_pending(db: Any, ref: Any) -> Any:
+            return pending
+
+        monkeypatch.setattr(notify, "_resolve_permit", _resolve_pending)
+        assert await notify.refresh_active_gas_card(object(), uuid4(), "ou-x") is False
+        monkeypatch.setattr(notify, "_resolve_permit", _resolve)
+
+        # 操作人=持有人 且有缓存卡 → PATCH 原卡
+        patched: list[str] = []
+
+        async def _update(message_id: str, card: dict) -> None:
+            patched.append(message_id)
+
+        async def _cached(union_id: str, permit_id: Any) -> str:
+            return "om-holder"
+
+        class _DB:
+            async def execute(self, *_a: Any, **_kw: Any) -> Any:
+                return _result("un-holder")
+
+        monkeypatch.setattr(notify, "_cached_approval_card_id", _cached)
+        monkeypatch.setattr(
+            "app.modules.safety.feishu.notification.update_card", _update
+        )
+        ok = await notify.refresh_active_gas_card(_DB(), uuid4(), "ou-op")
+        assert ok is True and patched == ["om-holder"]
+
+        # 操作人≠持有人 → 补发最新卡片
+        resent: list[tuple[str, dict]] = []
+
+        async def _send(union_id: str, card: dict) -> str | None:
+            resent.append((union_id, card))
+            return "om_new"
+
+        monkeypatch.setattr(notify, "send_raw_card_by_union_id", _send)
+
+        class _DBOther:
+            async def execute(self, *_a: Any, **_kw: Any) -> Any:
+                return _result("un-other")
+
+        ok2 = await notify.refresh_active_gas_card(_DBOther(), uuid4(), "ou-op")
+        assert ok2 is True and resent and resent[0][0] == "un-other"
+
+        # 操作人查不到 union_id → False
+        class _DBNone:
+            async def execute(self, *_a: Any, **_kw: Any) -> Any:
+                return _result(None)
+
+        assert (
+            await notify.refresh_active_gas_card(_DBNone(), uuid4(), "ou-op") is False
+        )
+
+    async def test_active_gas_card_shape(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        import json as json_mod
+
+        from app.modules.safety.service import work_permit_notify as notify
+        from app.modules.safety.service.work_permit_templates import (
+            PERMIT_STATUS_ACTIVE,
+        )
+
+        permit = _gap_permit(PERMIT_STATUS_ACTIVE)
+
+        async def _records(db: Any, p: Any) -> str:
+            return "**气体检测记录**"
+
+        monkeypatch.setattr(notify, "_gas_records_markdown", _records)
+        card = await notify.active_gas_card(object(), permit)
+        text = json_mod.dumps(card, ensure_ascii=False)
+        assert "作业中气体检测" in text
+        assert "完工验收" in text
+        assert "提交本次复检" in text
+
+    async def test_notify_pending_node_card_content(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from types import SimpleNamespace
+
+        from app.modules.safety.service import work_permit_notify as notify
+
+        permit = _gap_permit("pending_approval")
+        approver = uuid4()
+        sent: list[dict[str, Any]] = []
+
+        async def _enabled(db: Any) -> bool:
+            return True
+
+        async def _open_map(db: Any, ids: list[Any]) -> dict[Any, str]:
+            return {approver: "ou-approver"}
+
+        async def _send_card(open_id: str, title: str, content: str, **kw: Any) -> None:
+            sent.append({"open_id": open_id, "title": title, "content": content})
+
+        monkeypatch.setattr(notify, "_permit_notify_enabled", _enabled)
+        monkeypatch.setattr(notify, "_open_id_map", _open_map)
+        monkeypatch.setattr(
+            "app.modules.safety.feishu.notification.send_user_card", _send_card
+        )
+
+        node = SimpleNamespace(
+            node_key="safety_officer",
+            node_name="安全员审批",
+            node_kind="approve",
+            assigned_approver_id=approver,
+            id=uuid4(),
+        )
+        await notify.notify_pending_node(object(), permit, node)
+        assert sent and "待您处理节点" in sent[0]["content"]
+
+        # 非审批/确认节点：简版文案
+        node.node_kind = "verify"
+        sent.clear()
+        await notify.notify_pending_node(object(), permit, node)
+        assert sent
+
+        # 审批人未绑定飞书 → 不发卡
+        async def _empty_map(db: Any, ids: list[Any]) -> dict[Any, str]:
+            return {}
+
+        monkeypatch.setattr(notify, "_open_id_map", _empty_map)
+        sent.clear()
+        await notify.notify_pending_node(object(), permit, node)
+        assert not sent
+
+    async def test_gas_due_no_open_map(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from app.modules.safety.service import work_permit_notify as notify
+        from app.modules.safety.service.work_permit_templates import (
+            PERMIT_STATUS_ACTIVE,
+        )
+
+        permit = _gap_permit(PERMIT_STATUS_ACTIVE)
+        permit.persons = [
+            {"role": "guardian", "user_id": str(uuid4())},
+            {"role": "work_leader", "user_id": str(uuid4())},
+        ]
+
+        async def _enabled(db: Any) -> bool:
+            return True
+
+        async def _empty_map(db: Any, ids: list[Any]) -> dict[Any, str]:
+            return {}
+
+        monkeypatch.setattr(notify, "_permit_notify_enabled", _enabled)
+        monkeypatch.setattr(notify, "_open_id_map", _empty_map)
+        # 无绑定人 → 静默返回（297 分支）
+        from datetime import datetime as _dt
+
+        await notify.notify_gas_due(
+            object(), permit, due_at=_dt(2026, 11, 12, 11, 0), overdue=True
+        )
+
+
+class TestChatFlowGasGapCoverage:
+    """chat_flow 新增路径：证书名单装载 / 验票验收驳回回执 / 复检保存。"""
+
+    def _svc(self, db: Any = None) -> Any:
+        from app.modules.safety.service.work_permit_chat_flow import (
+            ChatFlowService,
+        )
+
+        return ChatFlowService(db or object(), open_id="ou-h")
+
+    async def test_load_cert_roster_dedupe(self) -> None:
+        from datetime import date
+        from types import SimpleNamespace
+
+        cid = uuid4()
+        rows = [
+            SimpleNamespace(
+                id=cid,
+                person_name="张三",
+                certificate_no="DJ-1",
+                certificate_category="electrician",
+                expiry_date=date(2027, 1, 1),
+                status="valid",
+            ),
+            # 同人同证号（不同记录 id）→ 去重
+            SimpleNamespace(
+                id=uuid4(),
+                person_name="张三",
+                certificate_no="DJ-1",
+                certificate_category="electrician",
+                expiry_date=date(2026, 6, 1),
+                status="expiring",
+            ),
+            SimpleNamespace(
+                id=uuid4(),
+                person_name="李四",
+                certificate_no=None,
+                certificate_category="welder",
+                expiry_date=None,
+                status="valid",
+            ),
+        ]
+
+        class _DB:
+            async def execute(self, *_a: Any, **_kw: Any) -> Any:
+                return _scalars_result(rows)
+
+        svc = self._svc(_DB())
+        values: dict[str, Any] = {}
+        await svc._load_cert_roster(values)
+        roster = values["cert_roster"]
+        assert len(roster) == 2, "同人同证号应去重"
+        by_name = {r["name"]: r for r in roster}
+        assert by_name["张三"]["no"] == "DJ-1"
+        assert by_name["张三"]["expiry"] == "2027-01-01"
+        assert by_name["李四"]["no"] == ""
+
+    async def test_verify_accept_reject_receipts(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from types import SimpleNamespace
+
+        from app.modules.safety.service import work_permit_chat_flow as cf
+
+        user = SimpleNamespace(id="u1", name="张三", feishu_open_id="ou-h")
+        permit_obj = SimpleNamespace(permit_no="DH-1", id=uuid4())
+
+        async def _verify(db: Any, pid: Any, u: Any) -> Any:
+            return permit_obj
+
+        async def _accept(db: Any, pid: Any, data: Any, u: Any) -> Any:
+            return permit_obj
+
+        async def _reject(db: Any, pid: Any, nid: Any, opinion: str, u: Any) -> Any:
+            return permit_obj
+
+        async def _push(permit: Any) -> None:
+            return None
+
+        monkeypatch.setattr(cf.permit_service, "verify_permit", _verify)
+        monkeypatch.setattr(cf.permit_service, "accept_permit", _accept)
+        monkeypatch.setattr(cf.permit_service, "reject_node", _reject)
+
+        svc = self._svc(_RecDB([_result(user)]))
+        svc._push_flow_after_action = _push  # type: ignore[method-assign]
+
+        receipt_verify = await svc.verify(uuid4())
+        assert "已开工" in json.dumps(receipt_verify, ensure_ascii=False)
+
+        svc2 = self._svc(_RecDB([_result(user)]))
+        svc2._push_flow_after_action = _push  # type: ignore[method-assign]
+        receipt_accept = await svc2.accept(uuid4())
+        assert "已完工" in json.dumps(receipt_accept, ensure_ascii=False)
+
+        # 驳回：节点归属校验 mock 后走回执
+        node = SimpleNamespace(id=uuid4(), node_key="k", assigned_approver_id="u1")
+
+        async def _get_node(db: Any, pid: Any, nid: Any) -> Any:
+            return node
+
+        monkeypatch.setattr(cf, "_get_node", _get_node)
+        monkeypatch.setattr(cf, "_ensure_assignee", lambda node, user: None)
+
+        async def _notify_rejected(permit: Any, opinion: str) -> None:
+            return None
+
+        svc3 = self._svc(_RecDB([_result(user)]))
+        svc3._notify_creator_rejected = _notify_rejected  # type: ignore[method-assign]
+        receipt_reject = await svc3.reject(uuid4(), node.id, "风险未消除")
+        assert "已驳回" in json.dumps(receipt_reject, ensure_ascii=False)
+
+    async def test_save_gas_receipt(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from datetime import datetime
+        from types import SimpleNamespace
+
+        from app.modules.safety.service import work_permit_chat_flow as cf
+
+        user = SimpleNamespace(id="u1", name="张三", feishu_open_id="ou-h")
+        item = SimpleNamespace(
+            sampled_at=datetime(2026, 11, 12, 10, 0), analysis_point="釜内"
+        )
+
+        async def _add_gas(db: Any, pid: Any, payload: Any, u: Any) -> Any:
+            return item
+
+        monkeypatch.setattr(cf.permit_service, "add_gas_analysis", _add_gas)
+        svc = self._svc(_RecDB([_result(user)]))
+        receipt = await svc.save_gas(
+            uuid4(),
+            {
+                "gas_time_date": "2026-11-12",
+                "gas_time_time": "10:00",
+                "gas_point": "釜内",
+                "gas_name": "可燃气体",
+                "gas_value": "0",
+                "gas_analyst": "李四",
+            },
+        )
+        text = json.dumps(receipt, ensure_ascii=False)
+        assert "已录入" in text
+        assert "釜内" in text
+
+
+async def test_handler_gas_list_sends_active_card(
+    stub_flow: type,
+    stub_session: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """「复检」有作业中票时：发"活的"气体记录卡（不再是空表单卡）。"""
+    from types import SimpleNamespace
+
+    from app.modules.safety.feishu import work_permit_chat_handler as handler
+    from app.modules.safety.service import work_permit_notify as notify
+
+    permit = SimpleNamespace(id=uuid4(), permit_no="DH-ACT-1")
+
+    async def _permits(self: Any) -> list[Any]:
+        return [permit]
+
+    stub_flow.my_gas_permits = _permits  # type: ignore[assignment]
+
+    sent: list[dict[str, Any]] = []
+
+    async def _fake_active_card(db: Any, p: Any) -> dict[str, Any]:
+        return {"sentinel": "active-card"}
+
+    async def _fake_send(open_id: str, card: dict[str, Any]) -> str | None:
+        sent.append({"open_id": open_id, "card": card})
+        return "om_new"
+
+    monkeypatch.setattr(notify, "active_gas_card", _fake_active_card)
+    monkeypatch.setattr(notify, "send_raw_card", _fake_send)
+    await handler.handle_work_permit_message(_message_event("复检"))
+    assert sent and sent[0]["card"] == {"sentinel": "active-card"}
+
+
+async def test_handler_gas_save_refresh_suppresses_receipt(
+    stub_flow: type,
+    stub_session: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """gas_save 提交后记录卡原地刷新成功 → 不再 PATCH 独立回执。"""
+    from app.modules.safety.feishu import work_permit_chat_handler as handler
+    from app.modules.safety.service import work_permit_notify as notify
+
+    pid = uuid4()
+    refreshed: list[Any] = []
+
+    async def _refresh(db: Any, permit_id: Any, open_id: str | None) -> bool:
+        refreshed.append((permit_id, open_id))
+        return True
+
+    monkeypatch.setattr(notify, "refresh_active_gas_card", _refresh)
+
+    patched: list[str] = []
+
+    async def _fake_update(message_id: str, card: dict[str, Any]) -> None:
+        patched.append(message_id)
+
+    monkeypatch.setattr(
+        "app.modules.safety.feishu.notification.update_card", _fake_update
+    )
+
+    async def _save_gas(
+        self: Any, permit_id: Any, form_value: dict[str, Any]
+    ) -> dict[str, Any]:
+        return _card("复检已录入")
+
+    stub_flow.save_gas = _save_gas  # type: ignore[assignment]
+
+    event = _card_event(
+        {
+            "module": "wp_chat",
+            "act": "gas_save",
+            "permit_id": str(pid),
+        }
+    )
+    await handler.handle_wp_chat_card_action(event)
+    await asyncio.sleep(0.5)  # 让后台重动作任务执行
+    assert refreshed and refreshed[0][0] == pid
+    # 刷新成功 → receipt=None → 不再 PATCH 消息
+    assert not patched
+
+
+async def test_handler_gas_save_refresh_false_patches_receipt(
+    stub_flow: type,
+    stub_session: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """gas_save 刷新失败（如操作人查不到）→ 正常 PATCH 回执卡。"""
+    from app.modules.safety.feishu import work_permit_chat_handler as handler
+    from app.modules.safety.service import work_permit_notify as notify
+
+    pid = uuid4()
+
+    async def _refresh(db: Any, permit_id: Any, open_id: str | None) -> bool:
+        return False
+
+    monkeypatch.setattr(notify, "refresh_active_gas_card", _refresh)
+
+    patched: list[str] = []
+
+    async def _fake_update(message_id: str, card: dict[str, Any]) -> None:
+        patched.append(message_id)
+
+    from app.modules.safety.feishu import notification as feishu_notification
+
+    monkeypatch.setattr(feishu_notification, "update_card", _fake_update)
+
+    async def _save_gas(
+        self: Any, permit_id: Any, form_value: dict[str, Any]
+    ) -> dict[str, Any]:
+        return _card("复检已录入")
+
+    stub_flow.save_gas = _save_gas  # type: ignore[assignment]
+
+    event = _card_event({"module": "wp_chat", "act": "gas_save", "permit_id": str(pid)})
+    await handler.handle_wp_chat_card_action(event)
+    await asyncio.sleep(0.2)  # 让后台重动作任务执行
+    assert patched, "刷新失败时应 PATCH 回执"
+
+
+def test_ticket_document_gas_lines() -> None:
+    """票面气体分析：含分析部位与代表性气体/结果行。"""
+    md = forms.ticket_document_markdown(
+        "hot_work",
+        {
+            "gas": {
+                "gas_time": "2026-11-12 10:00",
+                "gas_point": "釜内",
+                "gas_name": "可燃气体",
+                "gas_value": "0",
+            },
+            "persons": [],
+            "measures": [],
+            "risk": [],
+            "type_data": {},
+        },
+    )
+    assert "气体取样分析时间** 2026-11-12 10:00" in md
+    assert "分析部位** 釜内" in md
+    assert "代表性气体** 可燃气体" in md
+    assert "分析结果** 0" in md

@@ -32,7 +32,6 @@ from app.core.exceptions import AppException
 from app.core.redis import cache_get, cache_set
 from app.modules.safety.feishu.event_client import on_event
 from app.modules.safety.service.work_permit_card_forms import (
-    build_gas_card,
     build_menu_card,
     build_reject_card,
 )
@@ -208,9 +207,7 @@ async def handle_work_permit_message(event: dict[str, Any]) -> None:
         await _reply_error(open_id, "处理出错，请发送「菜单」重新开始。")
 
 
-async def _route_text(
-    open_id: str, union_id: str, text: str
-) -> dict[str, Any] | None:
+async def _route_text(open_id: str, union_id: str, text: str) -> dict[str, Any] | None:
     intent = parse_intent(text)
     act = intent.get("act", "")
     if act in ("start_form", "gas_list", "cancel"):
@@ -220,6 +217,7 @@ async def _route_text(
                 return await flow.start_form(str(intent.get("permit_type") or ""))
             if act == "gas_list":
                 from app.modules.safety.service.work_permit_notify import (
+                    active_gas_card,
                     send_raw_card,
                 )
 
@@ -230,9 +228,7 @@ async def _route_text(
                         "当前没有作业中、需周期复检的作业票。发「菜单」查看其他操作。",
                     )
                 for permit in permits:
-                    await send_raw_card(
-                        open_id, build_gas_card(str(permit.id), permit.permit_no)
-                    )
+                    await send_raw_card(open_id, await active_gas_card(db, permit))
                 return None
             # cancel
             for permit_type in PERMIT_TEMPLATES:
@@ -273,9 +269,7 @@ async def handle_wp_chat_card_action(
         if await cache_get(dedupe_key):
             return _toast("info", "正在处理，请勿重复点击")
         await cache_set(dedupe_key, "1", ex=_DEDUPE_TTL_SECONDS)
-        asyncio.create_task(
-            _run_heavy_action(act, open_id, union_id, value, event)
-        )
+        asyncio.create_task(_run_heavy_action(act, open_id, union_id, value, event))
         return _toast("success", "正在处理…")
     return None
 
@@ -334,9 +328,7 @@ async def _run_fast_action(
                     permit_type, field, str(value.get("key") or "")
                 )
             elif act == "set_level":
-                card = await flow.set_level(
-                    permit_type, str(value.get("level") or "")
-                )
+                card = await flow.set_level(permit_type, str(value.get("level") or ""))
             elif act == "use_default_sign":
                 card = await flow.use_default_sign(
                     permit_type, str(value.get("sign_key") or "")
@@ -411,6 +403,17 @@ async def _run_heavy_action(
                     _uuid(value.get("permit_id"), field="permit_id"),
                     _form_value(event),
                 )
+                # 记录表卡片原地追加一行，成功则不再发独立回执
+                from app.modules.safety.service.work_permit_notify import (
+                    refresh_active_gas_card,
+                )
+
+                if await refresh_active_gas_card(
+                    db,
+                    _uuid(value.get("permit_id"), field="permit_id"),
+                    open_id,
+                ):
+                    receipt = None
         if receipt is not None:
             await _patch_open_message(event, receipt)
     except AppException as exc:
