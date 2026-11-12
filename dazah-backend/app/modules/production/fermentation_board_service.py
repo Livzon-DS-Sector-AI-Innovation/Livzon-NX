@@ -1843,6 +1843,28 @@ def _compact_statin_batch_nos(batch_nos: list[str]) -> str:
     return nos[0] + "/" + "/".join(no[-3:] for no in nos[1:])
 
 
+def _statin_recent_groups(
+    done: list[dict[str, Any]],
+) -> list[list[dict[str, Any]]]:
+    """「最近完成批次」展示分组：倒罐对合并为一组，直放批单独成组。
+
+    分组键与录入下拉的复合选项一致（同倒罐目的罐 + 同放罐时刻）；
+    组序沿用 done 的放罐倒序，供合并后按展示行数截取（非子批数）。
+    """
+    groups: list[list[dict[str, Any]]] = []
+    pair_index: dict[tuple[Any, Any], int] = {}
+    for batch in done:
+        turn_to = batch.get("turn_to")
+        key = (turn_to, batch["dump"]) if turn_to else None
+        if key is not None and key in pair_index:
+            groups[pair_index[key]].append(batch)
+            continue
+        groups.append([batch])
+        if key is not None:
+            pair_index[key] = len(groups) - 1
+    return groups
+
+
 def _statin_tanks(
     timeline_batches: list[dict[str, Any]],
     period_batches: list[dict[str, Any]],
@@ -2344,29 +2366,79 @@ def build_mp_board(
         "running": len(running),
         "pending": len(pending),
     }
-    recent = [
-        {
-            "batch_no": b["batch_no"],
-            "dump_date": b["dump"].date().isoformat() if b["dump"] else None,
-            "tank_no": b["dump_tank"] or b["ferm_tank"],
-            "yield_kg": actual_by_batch.get(b["batch_no"], {}).get("yield_kg"),
-            "extract_kg": actual_by_batch.get(b["batch_no"], {}).get(
-                "extract_kg"
-            ),
-            "batch_yield_rate": None,
-            "yield_rate": None,
-            "result": "计划放罐",
-            "inoculate_at": (
-                b["inoculate"].isoformat() if b["inoculate"] else None
-            ),
-            "cycle_hours": (
-                round((b["dump"] - b["inoculate"]).total_seconds() / 3600, 1)
-                if b["dump"] and b["inoculate"]
-                else None
-            ),
-        }
-        for b in done[:12]
-    ]
+    if product in _STATIN_KEYWORD:
+        # 「最近完成批次」倒罐对合并为一行：复合批号（MV-26069/070）+
+        # 合计产量（现场从大罐一次称量的总量，均摊值仅供柱状图与统计），
+        # 直放批保持逐批一行；按合并后的行数截取最近 12 行
+        def _member_actual_total(
+            members: list[dict[str, Any]], field: str
+        ) -> float | None:
+            values = [
+                float(actual_by_batch[m["batch_no"]][field])
+                for m in members
+                if actual_by_batch.get(m["batch_no"], {}).get(field) is not None
+            ]
+            return round(sum(values), 2) if values else None
+
+        recent = [
+            {
+                "batch_no": _compact_statin_batch_nos(
+                    sorted(m["batch_no"] for m in members)
+                ),
+                "dump_date": (
+                    members[0]["dump"].date().isoformat()
+                    if members[0]["dump"]
+                    else None
+                ),
+                "tank_no": (members[0]["dump_tank"] or members[0]["ferm_tank"]),
+                "yield_kg": _member_actual_total(members, "yield_kg"),
+                "extract_kg": _member_actual_total(members, "extract_kg"),
+                "batch_yield_rate": None,
+                "yield_rate": None,
+                "result": "计划放罐",
+                "inoculate_at": (
+                    members[0]["inoculate"].isoformat()
+                    if members[0]["inoculate"]
+                    else None
+                ),
+                "cycle_hours": (
+                    round(
+                        (members[0]["dump"] - members[0]["inoculate"]).total_seconds()
+                        / 3600,
+                        1,
+                    )
+                    if members[0]["dump"] and members[0]["inoculate"]
+                    else None
+                ),
+            }
+            for members in _statin_recent_groups(done)[:12]
+        ]
+    else:
+        recent = [
+            {
+                "batch_no": b["batch_no"],
+                "dump_date": (b["dump"].date().isoformat() if b["dump"] else None),
+                "tank_no": b["dump_tank"] or b["ferm_tank"],
+                "yield_kg": actual_by_batch.get(b["batch_no"], {}).get(
+                    "yield_kg"
+                ),
+                "extract_kg": actual_by_batch.get(b["batch_no"], {}).get(
+                    "extract_kg"
+                ),
+                "batch_yield_rate": None,
+                "yield_rate": None,
+                "result": "计划放罐",
+                "inoculate_at": (
+                    b["inoculate"].isoformat() if b["inoculate"] else None
+                ),
+                "cycle_hours": (
+                    round((b["dump"] - b["inoculate"]).total_seconds() / 3600, 1)
+                    if b["dump"] and b["inoculate"]
+                    else None
+                ),
+            }
+            for b in done[:12]
+        ]
     if product in _STATIN_KEYWORD:
         # 倒罐对（同倒罐目的罐 + 同放罐时刻）在录入下拉合并为一条复合批
         # 选项：现场只从大罐称一次总量，按复合批号（如 MV-26069/070）录
