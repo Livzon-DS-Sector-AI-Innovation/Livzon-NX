@@ -198,7 +198,10 @@ class ChatFlowService:
                 values["person_role_idx"] = idx + 1
                 await self._save_state(state)
                 return build_step_card(
-                    permit_type, 2, values, self.open_id,
+                    permit_type,
+                    2,
+                    values,
+                    self.open_id,
                     person_role_idx=idx + 1,
                 )
             values.pop("person_role_idx", None)
@@ -427,16 +430,12 @@ class ChatFlowService:
                 if keyword in str(r.get("name") or "")
                 or keyword in str(r.get("no") or "")
             ]
-            matched.sort(
-                key=lambda r: 0 if str(r.get("cat")) in cats else 1
-            )
+            matched.sort(key=lambda r: 0 if str(r.get("cat")) in cats else 1)
         else:
             matched = []
         values["cert_search_kw"] = keyword
         values["cert_search_role"] = role_key
-        values["cert_search_results"] = [
-            {**r, "role": role_key} for r in matched[:10]
-        ]
+        values["cert_search_results"] = [{**r, "role": role_key} for r in matched[:10]]
         await self._save_state(state)
         return build_step_card(permit_type, 2, values, self.open_id)
 
@@ -458,9 +457,7 @@ class ChatFlowService:
         )
         if match is None:
             raise AppException(message="请先搜索并选择人员")
-        persons = {
-            str(p.get("role")): p for p in (values.get("persons") or [])
-        }
+        persons = {str(p.get("role")): p for p in (values.get("persons") or [])}
         persons[role_key] = {
             "role": role_key,
             "name": str(match.get("name") or ""),
@@ -471,8 +468,7 @@ class ChatFlowService:
         }
         values["persons"] = list(persons.values())
         values["person_sign_names"] = {
-            str(p.get("role")): str(p.get("name") or "")
-            for p in values["persons"]
+            str(p.get("role")): str(p.get("name") or "") for p in values["persons"]
         }
         for key in ("cert_search_kw", "cert_search_role", "cert_search_results"):
             values.pop(key, None)
@@ -496,7 +492,6 @@ class ChatFlowService:
         if state is None:
             raise AppException(status_code=410, message="表单已过期，请重新发起")
         values = state.setdefault("values", {})
-        roles = list(get_template(permit_type).person_roles)
         idx = max(0, int(idx))
         if idx == 0:
             state["step"] = 1
@@ -750,7 +745,10 @@ class ChatFlowService:
                 return await self.build_summary(permit_type)
             idx = int(state.get("person_role_idx") or 0) if step == 2 else 0
             return build_step_card(
-                permit_type, step, state.get("values") or {}, self.open_id,
+                permit_type,
+                step,
+                state.get("values") or {},
+                self.open_id,
                 person_role_idx=idx,
             )
         return build_menu_card(self.open_id)

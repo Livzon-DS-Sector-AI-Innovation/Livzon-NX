@@ -127,26 +127,27 @@ def test_step_cards_carry_module_and_act() -> None:
     # 人员阶段：每岗位一卡，下拉**全量加载**证书名单（可滚动选中）
 
     roster = [
-        {"id": f"c-{i}", "name": f"人员{i}", "no": f"N-{i}",
-         "cat": "electrician", "cat_label": "电工作业",
-         "expiry": "2027-01-01"}
+        {
+            "id": f"c-{i}",
+            "name": f"人员{i}",
+            "no": f"N-{i}",
+            "cat": "electrician",
+            "cat_label": "电工作业",
+            "expiry": "2027-01-01",
+        }
         for i in range(1, 4)
     ]
     values_p = forms.base_form_values("hot_work", None)
     values_p["cert_roster"] = roster
-    card_p = forms.build_step_card(
-        "hot_work", 2, values_p, "ou-x", person_role_idx=0
-    )
+    card_p = forms.build_step_card("hot_work", 2, values_p, "ou-x", person_role_idx=0)
     p_form = [el for el in card_p["body"]["elements"] if el.get("tag") == "form"][0]
-    p_select = [
-        el for el in p_form["elements"] if el.get("tag") == "select_static"
-    ][0]
+    p_select = [el for el in p_form["elements"] if el.get("tag") == "select_static"][0]
     assert p_select["name"] == "person__work_leader"
     assert len(p_select["options"]) == len(roster), "证书名单应全量加载"
-    assert any(n.startswith("person_ext_cert__work_leader") for n in
-               [el.get("name") for el in p_form["elements"]]), (
-        "应支持外部人员证件号录入"
-    )
+    assert any(
+        n.startswith("person_ext_cert__work_leader")
+        for n in [el.get("name") for el in p_form["elements"]]
+    ), "应支持外部人员证件号录入"
     _form_names("hot_work", 2)
     # ④ 风险辨识：下拉多选（与动火方式一致）
     step4_card = forms.build_step_card(
@@ -384,8 +385,8 @@ async def test_handler_ignores_foreign_module_and_noop() -> None:
 
 
 async def test_handler_menu_returns_card(
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     from app.modules.safety.feishu.work_permit_chat_handler import (
         handle_wp_chat_card_action,
     )

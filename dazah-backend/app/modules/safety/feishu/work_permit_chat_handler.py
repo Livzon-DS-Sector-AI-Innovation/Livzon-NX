@@ -278,9 +278,7 @@ async def handle_wp_chat_card_action(
     if act in _FAST_ACTS:
         asyncio.create_task(_run_fast_action(act, open_id, union_id, value, event))
     elif act in _HEAVY_ACTS:
-        asyncio.create_task(
-            _run_heavy_action(act, open_id, union_id, value, event)
-        )
+        asyncio.create_task(_run_heavy_action(act, open_id, union_id, value, event))
     else:
         return None
     return _toast("success", "正在处理…")
@@ -346,10 +344,7 @@ async def _run_fast_action(
                 card = await flow.search_role_persons(
                     permit_type,
                     search_role_key,
-                    str(
-                        _form_value(event).get(f"person_kw__{search_role_key}")
-                        or ""
-                    ),
+                    str(_form_value(event).get(f"person_kw__{search_role_key}") or ""),
                 )
             elif act == "choose_cert":
                 card = await flow.choose_cert_person(
@@ -375,7 +370,7 @@ async def _run_fast_action(
                     _form_value(event),
                     message_id=message_id,
                     person_role_idx=(
-                        int(idx_raw) if idx_raw not in (None, "") else None
+                        int(str(idx_raw)) if idx_raw not in (None, "") else None
                     ),
                 )
         asyncio.create_task(_patch_open_message(event, card))

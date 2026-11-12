@@ -424,9 +424,7 @@ def build_step_card(
         role = roles[idx]
         role_key = str(role["role"])
         label = str(role["label"]) + ("（需持证）" if role.get("cert") else "")
-        existing_map = {
-            str(p.get("role")): p for p in (values.get("persons") or [])
-        }
+        existing_map = {str(p.get("role")): p for p in (values.get("persons") or [])}
         existing = existing_map.get(role_key) or {}
 
         elements.append(
@@ -479,9 +477,7 @@ def build_step_card(
             _input(
                 f"person_ext_name__{role_key}",
                 "外部人员姓名（证书名单没有时填）",
-                default=(
-                    str(existing.get("name") or "") if is_external else None
-                ),
+                default=(str(existing.get("name") or "") if is_external else None),
                 placeholder="系统无此人时填",
             )
         )
@@ -490,16 +486,12 @@ def build_step_card(
                 f"person_ext_cert__{role_key}",
                 "外部人员证件号",
                 default=(
-                    str(existing.get("certificate_no") or "")
-                    if is_external
-                    else None
+                    str(existing.get("certificate_no") or "") if is_external else None
                 ),
                 placeholder="外部人员持证件号",
             )
         )
-        elements.append(
-            _form(form_elements, _form_submit("保存并下一位", "step_save"))
-        )
+        elements.append(_form(form_elements, _form_submit("保存并下一位", "step_save")))
         # 上一步：第 1 位 → 第①步；否则回上一岗位
         if idx > 0:
             elements.append(
