@@ -116,6 +116,7 @@ export function RolePagePermissionsWorkbench({ role, roles, departments, onClose
   const [saving, setSaving] = useState(false)
   const [pendingAction, setPendingAction] = useState<"preview" | "save" | null>(null)
   const previewing = pendingAction !== null
+  const savePending = saving || pendingAction === "save"
   const controlsDisabled = loading || saving || previewing || result?.role_id !== roleId
   const [errorMessage, setErrorMessage] = useState(() => initialLoad?.ok === false ? initialLoad.message
     : initialLoad && !initialResult ? mismatchedRoleMessage : "")
@@ -713,7 +714,8 @@ export function RolePagePermissionsWorkbench({ role, roles, departments, onClose
         placeholder="填写角色授权调整原因" maxLength={500} />
       <div className={styles.footerActions}>
         <Button loading={pendingAction === "preview"} onClick={() => void previewChanges("preview")} disabled={controlsDisabled}>预览</Button>
-        <Button type="primary" loading={saving || pendingAction === "save"} onClick={() => void previewChanges("save")} disabled={controlsDisabled}>保存</Button>
+        <Button type="primary" aria-label="保存" aria-busy={savePending} loading={savePending}
+          onClick={() => void previewChanges("save")} disabled={controlsDisabled}>保存</Button>
       </div>
     </footer>
 

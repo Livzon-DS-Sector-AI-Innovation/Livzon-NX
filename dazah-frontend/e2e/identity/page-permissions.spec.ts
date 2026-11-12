@@ -148,17 +148,19 @@ test.describe('页面最小授权', () => {
           initialPermissionReads.push(request.url())
         }
       })
+      const navigationProgress = page.getByRole('status', { name: /^正在(?:打开|加载)页面权限$/ })
       await Promise.all([
-        page.getByRole('status', { name: '正在加载页面权限', exact: true }).waitFor(),
+        expect(navigationProgress.first()).toBeVisible(),
         page.getByRole('link', { name: '页面权限', exact: true }).click(),
       ])
       await expect(page).toHaveURL(/roles\/role-matrix\/page-permissions$/)
       await expect(page.locator('html')).toHaveAttribute('data-theme', appearance)
       await expect(page.locator('html')).toHaveAttribute('data-permission-navigation', 'same-document')
       const heading = page.getByRole('heading', { name: '页面权限基线配置' })
+      const save = page.getByRole('button', { name: '保存', exact: true })
       await expect(heading).toBeVisible()
       await expect(heading.locator('xpath=ancestor::header[1]/..')).toHaveCSS('animation-duration', appearance === 'dark' ? '0s' : '0.17s')
-      await expect(page.getByRole('button', { name: /^保\s*存$/ })).toBeEnabled()
+      await expect(save).toBeEnabled()
       expect(initialPermissionReads).toEqual([])
       await expect(page.getByRole('dialog')).toHaveCount(0)
       const modules = page.getByRole('navigation', { name: '业务模块', exact: true })
@@ -193,7 +195,7 @@ test.describe('页面最小授权', () => {
       await expect(risk).not.toBeChecked()
       await expect(risk).toBeDisabled()
       await page.getByPlaceholder('填写角色授权调整原因').fill('调整页面只读范围')
-      await page.getByRole('button', { name: /^保\s*存$/ }).click()
+      await save.click()
       const confirmation = page.getByRole('dialog').filter({ hasText: '确认调整页面授权测试角色的页面权限' })
       await expect(confirmation.getByRole('columnheader', { name: '调整前', exact: true })).toBeVisible()
       await expect(confirmation.getByRole('columnheader', { name: '调整后', exact: true })).toBeVisible()
@@ -203,8 +205,11 @@ test.describe('页面最小授权', () => {
       await expect(page.getByPlaceholder('填写角色授权调整原因')).toHaveValue('调整页面只读范围')
       await expect(page.getByText('未保存调整 1 个页面', { exact: true })).toBeVisible()
 
+      await expect(confirmation).toBeHidden()
+      await expect(save).toHaveAttribute('aria-busy', 'false')
+      await expect(save).toBeEnabled()
       await page.setViewportSize({ width: 390, height: 844 })
-      await expect(page.getByRole('button', { name: /^保\s*存$/ })).toBeInViewport()
+      await expect(save).toBeInViewport()
       const headerBounds = await modules.locator('xpath=preceding-sibling::header[1]').boundingBox()
       const moduleBounds = await modules.boundingBox()
       expect(headerBounds && moduleBounds && headerBounds.y + headerBounds.height <= moduleBounds.y).toBe(true)
