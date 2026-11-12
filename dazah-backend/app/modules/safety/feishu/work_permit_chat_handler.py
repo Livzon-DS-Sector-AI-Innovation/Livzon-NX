@@ -58,6 +58,10 @@ _FAST_ACTS = frozenset(
         "toggle_risk",
         "toggle_measure",
         "set_level",
+        "search_role",
+        "choose_cert",
+        "person_prev",
+        "clear_search",
     }
 )
 _HEAVY_ACTS = frozenset(
@@ -90,6 +94,8 @@ def _value_from_submit_name(name: str) -> dict[str, Any] | None:
     if act in ("step_save", "submit") and len(parts) >= 4:
         value["type"] = parts[2]
         value["step"] = parts[3]
+        if act == "step_save" and len(parts) >= 5:
+            value["person_role_idx"] = parts[4]
     elif act == "submit" and len(parts) >= 3:
         value["type"] = parts[2]
     elif act == "reject_submit" and len(parts) >= 4:
@@ -262,16 +268,21 @@ async def handle_wp_chat_card_action(
         return _toast("error", "无法识别操作者，请重新点击")
     union_id = _operator_union_id(event)
 
+    # 全部动作统一"立即 ACK + 后台处理"：飞书 EVENT 通道对卡片回调有
+    # 2.9s 同步窗口，超时会取消整个处理任务（表现为点击无反应）；
+    # 证书名单加载 + 20KB 大卡 PATCH 可能超过窗口，故一律后台执行，
+    # 结果通过 PATCH 原消息 / 私信呈现。
+    dedupe_key = _dedupe_key(act, open_id, value)
+    if await cache_get(dedupe_key):
+        return _toast("info", "正在处理，请勿重复点击")
+    await cache_set(dedupe_key, "1", ex=_DEDUPE_TTL_SECONDS)
     if act in _FAST_ACTS:
-        return await _run_fast_action(act, open_id, union_id, value, event)
-    if act in _HEAVY_ACTS:
-        dedupe_key = _dedupe_key(act, open_id, value)
-        if await cache_get(dedupe_key):
-            return _toast("info", "正在处理，请勿重复点击")
-        await cache_set(dedupe_key, "1", ex=_DEDUPE_TTL_SECONDS)
+        asyncio.create_task(_run_fast_action(act, open_id, union_id, value, event))
+    elif act in _HEAVY_ACTS:
         asyncio.create_task(_run_heavy_action(act, open_id, union_id, value, event))
-        return _toast("success", "正在处理…")
-    return None
+    else:
+        return None
+    return _toast("success", "正在处理…")
 
 
 def _dedupe_key(act: str, open_id: str, value: dict[str, Any]) -> str:
@@ -329,16 +340,39 @@ async def _run_fast_action(
                 )
             elif act == "set_level":
                 card = await flow.set_level(permit_type, str(value.get("level") or ""))
+            elif act == "search_role":
+                search_role_key = str(value.get("search_role") or "")
+                card = await flow.search_role_persons(
+                    permit_type,
+                    search_role_key,
+                    str(_form_value(event).get(f"person_kw__{search_role_key}") or ""),
+                )
+            elif act == "choose_cert":
+                card = await flow.choose_cert_person(
+                    permit_type,
+                    str(value.get("role") or ""),
+                    str(value.get("cert_id") or ""),
+                )
+            elif act == "person_prev":
+                card = await flow.person_prev(
+                    permit_type, int(value.get("person_role_idx") or 0)
+                )
+            elif act == "clear_search":
+                card = await flow.clear_person_search(permit_type)
             elif act == "use_default_sign":
                 card = await flow.use_default_sign(
                     permit_type, str(value.get("sign_key") or "")
                 )
             else:  # step_save
+                idx_raw = value.get("person_role_idx")
                 card = await flow.save_step(
                     permit_type,
                     int(value.get("step") or 1),
                     _form_value(event),
                     message_id=message_id,
+                    person_role_idx=(
+                        int(str(idx_raw)) if idx_raw not in (None, "") else None
+                    ),
                 )
         asyncio.create_task(_patch_open_message(event, card))
         toast = "已使用默认签名" if act == "use_default_sign" else ""

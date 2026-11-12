@@ -293,6 +293,7 @@ def build_step_card(
     step: int,
     values: dict[str, Any],
     open_id: str,
+    person_role_idx: int = 0,
 ) -> dict[str, Any]:
     template = get_template(permit_type)
     title = f"{template.name} · {_STEP_TITLES[step]}"
@@ -416,80 +417,96 @@ def build_step_card(
         return _card(title, elements)
 
     if step == 2:
+        # 人员阶段：每个岗位一张卡，下拉全量加载证书名单（可滚动选中
+        # 所有人）；名单超长由 select 自带滚动承载，卡片元素数恒定
+        roles = list(template.person_roles)
+        idx = max(0, min(int(person_role_idx), len(roles) - 1))
+        role = roles[idx]
+        role_key = str(role["role"])
+        label = str(role["label"]) + ("（需持证）" if role.get("cert") else "")
+        existing_map = {str(p.get("role")): p for p in (values.get("persons") or [])}
+        existing = existing_map.get(role_key) or {}
+
         elements.append(
             _md(
-                "**填写作业相关人员**：从特种作业证书名单选择（选定即自动带出"
-                "证件号）；证书名单没有的人员（外部人员）填姓名与证件号。\n"
-                "人员选定后在汇总页逐行手写签字确认。"
+                f"**② 人员（{idx + 1}/{len(roles)}）：{label}**"
+                + (
+                    f"　当前：{existing.get('name')}"
+                    + (
+                        f"｜证号 {existing.get('certificate_no')}"
+                        if existing.get("certificate_no")
+                        else ""
+                    )
+                    if existing.get("name")
+                    else ""
+                )
+            )
+        )
+        elements.append(
+            _md(
+                "下拉为**特种作业证书名单**（全量，滚动查找），选中即自动带出"
+                "证件号；名单没有的外部人员填下方姓名与证件号。"
             )
         )
         elements.append(_hr())
-        existing_map = {str(p.get("role")): p for p in (values.get("persons") or [])}
-        roster = values.get("cert_roster") or []
-        for role in template.person_roles:
-            role_key = str(role["role"])
-            label = str(role["label"]) + ("（需持证）" if role.get("cert") else "")
-            existing = existing_map.get(role_key) or {}
-            line = f"**{label}**"
-            if existing.get("name"):
-                line += f"　当前：{existing.get('name')}"
-                if existing.get("certificate_no"):
-                    line += f"　证件号：{existing.get('certificate_no')}"
-            form_elements.append(_md(line))
-            # 按该角色建议证件类别优先排序，截取前 20 人（飞书单卡元素/选项
-            # 数量上限 11310，名单过长时其余人员请用外部人员录入或平台维护）
-            from app.modules.safety.service.work_permit_templates import (
-                PERSON_ROLE_CERT_CATEGORIES,
-            )
 
-            cats = PERSON_ROLE_CERT_CATEGORIES.get(role_key) or ()
-            matched = [r for r in roster if r.get("cat") in cats]
-            others = [r for r in roster if r.get("cat") not in cats]
-            picked_roster = (matched + others)[:20]
-            roster_options = [
-                {
-                    "value": str(item["id"]),
-                    "label": (
-                        f"{item.get('name')}｜{item.get('no') or '无证号'}"
-                        f"｜至 {item.get('expiry') or '?'}"
-                    ),
-                }
-                for item in picked_roster
-            ] or [{"value": "", "label": "（证书名单为空，请填下方外部人员）"}]
-            form_elements.append(
-                _select(
-                    f"person__{role_key}",
-                    f"从证书名单选择{label}",
-                    roster_options,
-                    placeholder="点击展开证书名单",
-                )
+        # 全量证书名单下拉（按姓名排序，全部加载）
+        roster = values.get("cert_roster") or []
+        roster_options = [
+            {
+                "value": str(item["id"]),
+                "label": (
+                    f"{item.get('name')}｜"
+                    f"{item.get('cat_label') or item.get('cat') or ''}｜"
+                    f"{item.get('no') or '无证号'}｜"
+                    f"至 {item.get('expiry') or '?'}"
+                ),
+            }
+            for item in roster
+        ] or [{"value": "", "label": "（证书名单为空，请填下方外部人员）"}]
+        form_elements.append(
+            _select(
+                f"person__{role_key}",
+                f"从证书名单选择{label}",
+                roster_options,
+                placeholder="点击展开全部持证人员",
             )
-            is_external = bool(existing.get("external"))
-            form_elements.append(
-                _input(
-                    f"person_ext_name__{role_key}",
-                    f"{label}·外部人员姓名",
-                    default=(str(existing.get("name") or "") if is_external else None),
-                    placeholder="系统无此人时填",
-                )
+        )
+        is_external = bool(existing.get("external"))
+        form_elements.append(
+            _input(
+                f"person_ext_name__{role_key}",
+                "外部人员姓名（证书名单没有时填）",
+                default=(str(existing.get("name") or "") if is_external else None),
+                placeholder="系统无此人时填",
             )
-            form_elements.append(
-                _input(
-                    f"person_ext_cert__{role_key}",
-                    f"{label}·外部人员证件号",
-                    default=(
-                        str(existing.get("certificate_no") or "")
-                        if is_external
-                        else None
-                    ),
-                    placeholder="外部人员持证件号",
-                )
+        )
+        form_elements.append(
+            _input(
+                f"person_ext_cert__{role_key}",
+                "外部人员证件号",
+                default=(
+                    str(existing.get("certificate_no") or "") if is_external else None
+                ),
+                placeholder="外部人员持证件号",
             )
-        elements.append(_form(form_elements, _form_submit("下一步", "step_save")))
-        prev = prev_step(permit_type, step)
-        if prev:
+        )
+        elements.append(_form(form_elements, _form_submit("保存并下一位", "step_save")))
+        # 上一步：第 1 位 → 第①步；否则回上一岗位
+        if idx > 0:
             elements.append(
-                _btn("上一步", {**nav, "act": "form_prev", "prev_step": prev})
+                _btn(
+                    "上一位",
+                    {
+                        **nav,
+                        "act": "person_prev",
+                        "person_role_idx": idx - 1,
+                    },
+                )
+            )
+        else:
+            elements.append(
+                _btn("上一步（申请信息）", {**nav, "act": "form_prev", "prev_step": 1})
             )
         elements.append(_btn("取消", {**nav, "act": "form_cancel"}))
         return _card(title, elements)
