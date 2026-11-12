@@ -14,6 +14,7 @@ vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }))
 import {
   createSeedCulture,
   deleteSeedCulture,
+  getPersonMonthly,
   getSeedCultures,
   updateSeedCulture,
 } from './seed-culture'
@@ -86,5 +87,40 @@ describe('seed-culture actions', () => {
       expect.objectContaining({ method: 'DELETE' }),
     )
     expect(mocks.revalidatePath).toHaveBeenCalledWith(REVALIDATE)
+  })
+})
+describe('person monthly stats action', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.clearAllMocks()
+  })
+
+  it('fetches person monthly stats with month and product params', async () => {
+    const fetchMock = vi.fn(() =>
+      jsonResponse({
+        code: 200,
+        message: 'success',
+        data: [
+          {
+            key: 'ou_z',
+            name: '张三',
+            open_id: 'ou_z',
+            avatar_url: 'https://avatar/z.png',
+            total_batches: 2,
+            role_counts: { 配制: 2, 接种: 1 },
+            details: [{ date: '2026-11-03', batch_no: 'SC-1', role: '配制' }],
+          },
+        ],
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const rows = await getPersonMonthly({ month: '2026-11', product_name: '盐酸林可霉素' })
+    expect(rows.code).toBe(200)
+    expect(rows.data?.[0]).toMatchObject({ name: '张三', total_batches: 2 })
+    const url = fetchMock.mock.calls[0]?.[0] as string
+    expect(url).toContain('/api/v1/production/seed-cultures/person-monthly')
+    expect(url).toContain('month=2026-11')
+    expect(url).toContain('product_name=')
   })
 })
