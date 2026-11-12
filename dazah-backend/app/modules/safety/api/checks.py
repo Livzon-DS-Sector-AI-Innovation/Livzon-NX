@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.deps import CurrentUser, get_current_user
 from app.core.response import ApiResponse
+from app.modules.safety.page_scope import reject_direct_workflow_edit
 from app.modules.safety.schemas import (
     ConfirmCheckRequest,
     SafetyCheckCreate,
@@ -67,6 +68,10 @@ async def create_check(
     current_user: CurrentUser | None = Depends(get_current_user),
 ) -> Any:
     """创建安全检查"""
+    if data.inspector_confirmed or data.safety_officer_confirmed:
+        reject_direct_workflow_edit(
+            data, "inspector_confirmed", "safety_officer_confirmed"
+        )
     service = SafetyService(db)
     item = await service.create_check(data)
     await db.commit()
@@ -83,6 +88,10 @@ async def update_check(
     current_user: CurrentUser | None = Depends(get_current_user),
 ) -> Any:
     """更新安全检查"""
+    reject_direct_workflow_edit(
+        data, "status", "rectification_status",
+        "inspector_confirmed", "safety_officer_confirmed",
+    )
     service = SafetyService(db)
     item = await service.update_check(check_id, data)
     if not item:

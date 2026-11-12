@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.deps import CurrentUser, get_current_user
 from app.core.response import ApiResponse
+from app.modules.safety.page_scope import reject_direct_workflow_edit
 from app.modules.safety.schemas import (
     LedgerExportRequest,
     SpecialOperationLedgerStats,
@@ -111,6 +112,7 @@ async def update_special_operation_report(
     current_user: CurrentUser | None = Depends(get_current_user),
 ) -> Any:
     """更新特殊作业报备"""
+    reject_direct_workflow_edit(data, "status")
     service = SpecialOperationReportService(db)
     item = await service.update_report(report_id, data)
     if not item:

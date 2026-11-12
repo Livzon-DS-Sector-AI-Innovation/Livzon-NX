@@ -42,6 +42,24 @@ describe('page permission menu boundary', () => {
     expect(getAuthorizedPageMenus(undefined, [dossierGrant])[0]?.children.map((item) => item.path)).toEqual([path])
   })
 
+  it('resolves safety details and legacy links to their reviewed page grants', () => {
+    expect(getPageKeyByPath('/safety/hazard/record-1')).toBe(
+      'safety:risk-hazard:hazard-inspection:hazard-inspection-ledger',
+    )
+    expect(getPageKeyByPath('/safety/fire-inspection/scan/equipment-1')).toBe(
+      'safety:emergency-accident:fire-equipment-inspection',
+    )
+    const ledger: PageAccessSummary = {
+      page_key: 'safety:risk-hazard:risk-grading:hazard-ledger',
+      module_code: 'safety',
+      permissions: ['access', 'query'],
+    }
+    const path = '/safety/hazard-identification/ledger/record-1'
+    expect(getPostLoginPath({ page_permissions: [ledger] }, path)).toBe(path)
+    const workflow = '/safety/hazard-identification/record-1'
+    expect(getPostLoginPath({ page_permissions: [ledger] }, workflow)).not.toBe(workflow)
+  })
+
   it('names the energy landing page consistently without changing its permission key', () => {
     expect(moduleMenus.find(menu => menu.moduleCode === 'energy')?.children.find(item => item.path === '/energy')?.label).toBe('能源仪表盘')
     expect(getPageKeyByPath('/energy')).toBe('energy:ledger-overview')

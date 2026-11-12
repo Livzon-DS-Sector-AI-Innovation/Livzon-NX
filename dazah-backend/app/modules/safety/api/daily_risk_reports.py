@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.deps import CurrentUser, get_current_user
 from app.core.response import ApiResponse
+from app.modules.safety.page_scope import reject_direct_workflow_edit
 from app.modules.safety.schemas import (
     DailyRiskReportCreate,
     DailyRiskReportResponse,
@@ -99,6 +100,7 @@ async def update_daily_risk_report(
     current_user: CurrentUser | None = Depends(get_current_user),
 ) -> Any:
     """更新每日风险作业报备"""
+    reject_direct_workflow_edit(data, "status")
     service = DailyRiskReportService(db)
     item = await service.update_report(report_id, data)
     if not item:

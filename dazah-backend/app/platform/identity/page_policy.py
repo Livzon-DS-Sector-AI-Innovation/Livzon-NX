@@ -18,6 +18,11 @@ from app.platform.identity.menu_seed_data import SEED_MENUS
 from app.platform.identity.page_lifecycle import page_lifecycle_errors
 from app.platform.identity.page_route_catalog import load_reviewed_route_aliases
 from app.platform.identity.quality_api_contract import QUALITY_REVIEWED_API_ROUTES
+from app.platform.identity.safety_api_contract import (
+    SAFETY_DECISION_ROUTES,
+    SAFETY_SIGNATURE_ROUTES,
+    safety_route_rules,
+)
 
 PAGE_PERMISSION_ORDER = ("access", "query", "operate")
 PAGE_PERMISSION_SET = frozenset(PAGE_PERMISSION_ORDER)
@@ -224,6 +229,7 @@ class EnumActionSelector:
 
     field: str
     actions: tuple[tuple[str, str], ...]
+    from_query: bool = False
 
 
 @dataclass(frozen=True)
@@ -347,6 +353,8 @@ def _api_binding_errors(binding: PageApiBinding) -> list[str]:
     errors: list[str] = []
     parts = binding.route_path.split("/")
     module_code = parts[3] if len(parts) >= 4 and parts[1:3] == ["api", "v1"] else None
+    if (binding.method, binding.route_path) in SAFETY_SIGNATURE_ROUTES:
+        errors.append("签名专用接口不能绑定后台页面")
     if module_code == "dossier-writer":
         module_code = "registration"
         if binding.page_keys != ("registration:dossier-writer",):
@@ -431,15 +439,22 @@ def page_api_catalog_issues(
     if actual_routes is None:
         gaps.add("检查目录", "api", "实际业务接口目录", "目录尚未加载，无法完成检查")
     else:
+        signature_routes = SAFETY_SIGNATURE_ROUTES if module_code == "safety" else ()
         for (method, path), count in sorted(Counter(actual_routes).items()):
             target = f"{method} {path}"
-            if api_binding_for_route(method, path) is None:
+            if (
+                (method, path) not in signature_routes
+                and api_binding_for_route(method, path) is None
+            ):
                 gaps.add("接口", target, target, "业务接口未完成有效的页面权限登记")
             if count > 1:
                 gaps.add(
                     "接口", target, target, "存在重复业务接口，无法确定唯一处理入口"
                 )
         actual_route_set = set(actual_routes)
+        for method, path in sorted(set(signature_routes) - actual_route_set):
+            target = f"{method} {path}"
+            gaps.add("接口", target, target, "签名策略对应的接口已不存在")
         for binding in api_bindings_for_module(module_code):
             if (binding.method, binding.route_path) not in actual_route_set:
                 target = f"{binding.method} {binding.route_path}"
@@ -587,10 +602,23 @@ def _sensitive_actions(
         ),
         # 特种作业证件：删除证件及附件属于破坏性动作
         "safety:ops-safety:work-certificates": ("delete",),
+        "safety:ops-safety:daily-risk-report": ("approve", "reject", "delete"),
+        "safety:ops-safety:special-ops-mgmt": (
+            "approve", "reject", "delete", "sensitive_export",
+        ),
+        "safety:risk-hazard:risk-grading:hazard-identification": (
+            "approve", "reject", "delete",
+        ),
+        "safety:emergency-accident:accident-ledger": ("approve",),
+        "safety:training-check:safety-check": ("approve", "reject", "delete"),
+        "safety:training-check:safety-training": ("delete",),
+        "safety:training-check:contractor": ("approve", "reject"),
+        "safety:system-config:ai-workflow": ("delete",),
+        "safety:system-config:scheduled-tasks": ("delete",),
         "quality:capas:capa-plans": ("approve",),
         "quality:documents": ("bulk_import",),
         # 安全知识库：飞书法规库全量同步入口（写入镜像数据）
-        "safety:regulation-info:knowledge-base": ("sync_config",),
+        "safety:regulation-info:knowledge-base": ("sync_config", "delete"),
         "quality:inspection:inspection-instruments:inspection-instruments-equipment": (
             "bulk_import",
         ),
@@ -1485,7 +1513,7 @@ PAGE_API_BINDINGS += _module_api_bindings(
             "/knowledge-articles/{article_id}/attachments/{token}",
             ("safety:regulation-info:knowledge-base",),
             "operate",
-            None,
+            "delete",
             "not_applicable",
         ),
     ],
@@ -2143,14 +2171,6 @@ PAGE_API_BINDINGS += _module_api_bindings(
         ),
         (
             "GET",
-            "/hazardous-chemicals/{chemical_id}/msds",
-            (_HAZCHEM_PAGE,),
-            "query",
-            None,
-            "not_applicable",
-        ),
-        (
-            "GET",
             "/chemical-inventories",
             # 安全总览驾驶舱的“危化品每日统计”卡片只读消费该列表
             (_HAZCHEM_PAGE, "safety:overview"),
@@ -2180,14 +2200,6 @@ PAGE_API_BINDINGS += _module_api_bindings(
             (_HAZCHEM_PAGE,),
             "operate",
             "delete",
-            "not_applicable",
-        ),
-        (
-            "POST",
-            "/hazardous-chemicals/{chemical_id}/msds",
-            (_HAZCHEM_PAGE,),
-            "operate",
-            None,
             "not_applicable",
         ),
         (
@@ -2513,7 +2525,7 @@ PAGE_API_BINDINGS += _module_api_bindings(
         (
             "GET",
             "/regulations/{regulation_id}",
-            (_REGULATION_LIST_PAGE,),
+            _REGULATION_PAGES,
             "query",
             None,
             "not_applicable",
@@ -7545,7 +7557,7 @@ PAGE_API_BINDINGS += _module_api_bindings(
             "/work-permits/{permit_id}/gas-analyses/{analysis_id}",
             (_WORK_PERMITS_PAGE,),
             "operate",
-            None,
+            "delete",
             "not_applicable",
         ),
         (
@@ -7561,7 +7573,7 @@ PAGE_API_BINDINGS += _module_api_bindings(
             "/work-permits/{permit_id}/relations/{related_permit_id}",
             (_WORK_PERMITS_PAGE,),
             "operate",
-            None,
+            "delete",
             "not_applicable",
         ),
         (
@@ -7593,7 +7605,7 @@ PAGE_API_BINDINGS += _module_api_bindings(
             "/work-permits/{permit_id}/attachments/{attachment_id}",
             (_WORK_PERMITS_PAGE,),
             "operate",
-            None,
+            "delete",
             "not_applicable",
         ),
         ("GET", "/work-permit-configs", (_WORK_PERMITS_PAGE,), "query", None,
@@ -7693,7 +7705,7 @@ PAGE_API_BINDINGS += _module_api_bindings(
             "/work-certificates/{certificate_id}/files/{file_id}",
             (_WORK_CERTIFICATES_PAGE,),
             "operate",
-            None,
+            "delete",
             "not_applicable",
         ),
         (
@@ -7706,6 +7718,20 @@ PAGE_API_BINDINGS += _module_api_bindings(
         ),
     ],
 )
+
+PAGE_API_BINDINGS += _module_api_bindings("safety", tuple(safety_route_rules()))
+PAGE_API_BINDINGS += tuple(
+    PageApiBinding(
+        route_path=f"/api/v1/safety{path}",
+        method="POST",
+        page_keys=(page,),
+        permission="operate",
+        scope_adapter=adapter,
+        action_selector=EnumActionSelector(field, actions, from_query=from_query),
+    )
+    for path, page, adapter, field, actions, from_query in SAFETY_DECISION_ROUTES
+)
+
 
 # ── 安全承诺（应急〔2018〕74号 承诺公告制度）──
 # 日报读取/历史查看与信息卡列表随页面查询权限放行；编辑企业状态、

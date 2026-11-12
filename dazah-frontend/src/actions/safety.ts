@@ -711,13 +711,16 @@ export async function getTrainingCertificates(
 }
 
 export async function getExpiringCertificates() {
-  return fetchApi<TrainingRecord[]>('/safety/training-certificates/expiring')
+  return fetchApi<TrainingRecord[]>('/safety/training-certificates/expiring', {
+    headers: { 'X-Dazah-Page-Key': 'safety:training-check:safety-training' },
+  })
 }
 
 // ============ HazardIdentification Actions ============
 
 export async function getHazardIdentifications(
-  params: import('@/types/safety').HazardIdentificationQueryParams = {}
+  params: import('@/types/safety').HazardIdentificationQueryParams = {},
+  source?: 'safety:risk-hazard:risk-grading:hazard-ledger',
 ) {
   const searchParams = new URLSearchParams()
   if (params.page) searchParams.set('page', String(params.page))
@@ -733,7 +736,9 @@ export async function getHazardIdentifications(
 
   const queryString = searchParams.toString()
   const endpoint = `/safety/hazard-identifications${queryString ? `?${queryString}` : ''}`
-  return fetchApi<import('@/types/safety').HazardIdentification[]>(endpoint)
+  return fetchApi<import('@/types/safety').HazardIdentification[]>(endpoint,
+    source ? { headers: { 'X-Dazah-Page-Key': source } } : undefined,
+  )
 }
 
 export async function getHIStats() {
@@ -1620,7 +1625,9 @@ export async function getSpecialOperationReports(params?: SpecialOperationReport
     if (params.is_critical !== undefined) query.set('is_critical', String(params.is_critical))
   }
   const qs = query.toString()
-  const response = await fetchApi<SpecialOperationReport[]>(`/safety/special-operation-reports${qs ? `?${qs}` : ''}`)
+  const response = await fetchApi<SpecialOperationReport[]>(`/safety/special-operation-reports${qs ? `?${qs}` : ''}`, {
+    headers: { 'X-Dazah-Page-Key': 'safety:ops-safety:special-ops-mgmt' },
+  })
   return response
 }
 
@@ -1743,7 +1750,9 @@ export async function getDailyRiskReports(params?: DailyRiskReportQueryParams) {
     if (params.report_type) query.set('report_type', params.report_type)
   }
   const qs = query.toString()
-  const response = await fetchApi<DailyRiskReport[]>(`/safety/daily-risk-reports${qs ? `?${qs}` : ''}`)
+  const response = await fetchApi<DailyRiskReport[]>(`/safety/daily-risk-reports${qs ? `?${qs}` : ''}`, {
+    headers: { 'X-Dazah-Page-Key': 'safety:ops-safety:daily-risk-report' },
+  })
   return response
 }
 

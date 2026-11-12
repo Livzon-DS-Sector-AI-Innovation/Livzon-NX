@@ -4,9 +4,10 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import Integer, cast, func, select, update
+from sqlalchemy import Integer, cast, func, select, true, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import InstrumentedAttribute, selectinload
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.modules.safety.models import (
     Accident,
@@ -29,6 +30,10 @@ from app.modules.safety.models import (
     SpecialOperationPersonnel,
     SpecialOperationReport,
     TrainingRecord,
+)
+from app.modules.safety.page_scope import (
+    ledger_department_scope,
+    require_ledger_department,
 )
 
 
@@ -60,6 +65,17 @@ class SafetyRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
+    async def _ledger_department_filter(
+        self, column: InstrumentedAttribute[str | None]
+    ) -> ColumnElement[bool]:
+        scope = await ledger_department_scope(self.session)
+        return true() if scope.is_all else column.in_(scope.department_names)
+
+    async def _check_ledger_department(self, data: dict[str, Any]) -> None:
+        require_ledger_department(
+            await ledger_department_scope(self.session), data.get("department")
+        )
+
     # ==================== SafetyCheck Operations ====================
 
     async def get_checks(
@@ -71,7 +87,8 @@ class SafetyRepository:
         department: str | None = None,
     ) -> tuple[list[SafetyCheck], int]:
         """获取安全检查列表"""
-        query = select(SafetyCheck).where(SafetyCheck.is_deleted.is_(False))
+        scoped = await self._ledger_department_filter(SafetyCheck.department)
+        query = select(SafetyCheck).where(SafetyCheck.is_deleted.is_(False), scoped)
 
         if status:
             query = query.where(SafetyCheck.status == status)
@@ -81,7 +98,7 @@ class SafetyRepository:
             query = query.where(SafetyCheck.department == department)
 
         count_query = select(func.count(SafetyCheck.id)).where(
-            SafetyCheck.is_deleted.is_(False)
+            SafetyCheck.is_deleted.is_(False), scoped
         )
         if status:
             count_query = count_query.where(SafetyCheck.status == status)
@@ -101,13 +118,18 @@ class SafetyRepository:
         query = (
             select(SafetyCheck)
             .options(selectinload(SafetyCheck.hazards))
-            .where(SafetyCheck.id == check_id, SafetyCheck.is_deleted.is_(False))
+            .where(
+                SafetyCheck.id == check_id,
+                SafetyCheck.is_deleted.is_(False),
+                await self._ledger_department_filter(SafetyCheck.department),
+            )
         )
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
     async def create_check(self, data: dict[str, Any]) -> SafetyCheck:
         """创建安全检查"""
+        await self._check_ledger_department(data)
         item = SafetyCheck(**data)
         self.session.add(item)
         await self.session.flush()
@@ -119,9 +141,15 @@ class SafetyRepository:
         self, check_id: uuid.UUID, data: dict[str, Any]
     ) -> SafetyCheck | None:
         """更新安全检查"""
+        if "department" in data:
+            await self._check_ledger_department(data)
         query = (
             update(SafetyCheck)
-            .where(SafetyCheck.id == check_id, SafetyCheck.is_deleted.is_(False))
+            .where(
+                SafetyCheck.id == check_id,
+                SafetyCheck.is_deleted.is_(False),
+                await self._ledger_department_filter(SafetyCheck.department),
+            )
             .values(**data, updated_at=func.now())
             .returning(SafetyCheck)
         )
@@ -132,7 +160,11 @@ class SafetyRepository:
         """删除安全检查（软删除）"""
         query = (
             update(SafetyCheck)
-            .where(SafetyCheck.id == check_id, SafetyCheck.is_deleted.is_(False))
+            .where(
+                SafetyCheck.id == check_id,
+                SafetyCheck.is_deleted.is_(False),
+                await self._ledger_department_filter(SafetyCheck.department),
+            )
             .values(is_deleted=True)
         )
         result = await self.session.execute(query)
@@ -154,7 +186,8 @@ class SafetyRepository:
         keyword: str | None = None,
     ) -> tuple[list[HazardReport], int]:
         """获取隐患列表"""
-        query = select(HazardReport).where(HazardReport.is_deleted.is_(False))
+        scoped = await self._ledger_department_filter(HazardReport.department)
+        query = select(HazardReport).where(HazardReport.is_deleted.is_(False), scoped)
 
         if status:
             query = query.where(HazardReport.status == status)
@@ -182,7 +215,7 @@ class SafetyRepository:
             )
 
         count_query = select(func.count(HazardReport.id)).where(
-            HazardReport.is_deleted.is_(False)
+            HazardReport.is_deleted.is_(False), scoped
         )
         if status:
             count_query = count_query.where(HazardReport.status == status)
@@ -218,7 +251,7 @@ class SafetyRepository:
         return items, total or 0
 
     async def get_hazard_stats(self) -> dict[str, int]:
-        """获取隐患状态统计数据（全局，不受分页/筛选影响）。"""
+        """获取授权范围内的隐患状态统计，不受分页和列表筛选影响。"""
         from sqlalchemy import case
 
         base = select(
@@ -268,7 +301,10 @@ class SafetyRepository:
                     )
                 )
             ).label("overdue"),
-        ).where(HazardReport.is_deleted.is_(False))
+        ).where(
+            HazardReport.is_deleted.is_(False),
+            await self._ledger_department_filter(HazardReport.department),
+        )
 
         result = await self.session.execute(base)
         row = result.one()
@@ -287,13 +323,16 @@ class SafetyRepository:
     async def get_hazard_by_id(self, hazard_id: uuid.UUID) -> HazardReport | None:
         """获取隐患详情"""
         query = select(HazardReport).where(
-            HazardReport.id == hazard_id, HazardReport.is_deleted.is_(False)
+            HazardReport.id == hazard_id,
+            HazardReport.is_deleted.is_(False),
+            await self._ledger_department_filter(HazardReport.department),
         )
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
     async def create_hazard(self, data: dict[str, Any]) -> HazardReport:
         """创建隐患"""
+        await self._check_ledger_department(data)
         item = HazardReport(**data)
         self.session.add(item)
         await self.session.flush()
@@ -333,16 +372,23 @@ class SafetyRepository:
                 )
                 del data[guard_field]
 
+        if "department" in data:
+            await self._check_ledger_department(data)
+        scoped = await self._ledger_department_filter(HazardReport.department)
         stmt_update = (
             update(HazardReport)
-            .where(HazardReport.id == hazard_id, HazardReport.is_deleted.is_(False))
+            .where(
+                HazardReport.id == hazard_id, HazardReport.is_deleted.is_(False), scoped
+            )
             .values(**data, updated_at=func.now())
         )
         await self.session.execute(stmt_update)
 
         stmt_select = (
             select(HazardReport)
-            .where(HazardReport.id == hazard_id, HazardReport.is_deleted.is_(False))
+            .where(
+                HazardReport.id == hazard_id, HazardReport.is_deleted.is_(False), scoped
+            )
             .execution_options(populate_existing=True)
         )
         result = await self.session.execute(stmt_select)
@@ -352,7 +398,11 @@ class SafetyRepository:
         """删除隐患（软删除）"""
         query = (
             update(HazardReport)
-            .where(HazardReport.id == hazard_id, HazardReport.is_deleted.is_(False))
+            .where(
+                HazardReport.id == hazard_id,
+                HazardReport.is_deleted.is_(False),
+                await self._ledger_department_filter(HazardReport.department),
+            )
             .values(is_deleted=True)
         )
         result = await self.session.execute(query)
@@ -381,9 +431,10 @@ class SafetyRepository:
         keyword: str | None = None,
     ) -> tuple[list[Accident], int]:
         """获取事故列表"""
-        query = select(Accident).where(Accident.is_deleted.is_(False))
+        scoped = await self._ledger_department_filter(Accident.department)
+        query = select(Accident).where(Accident.is_deleted.is_(False), scoped)
         count_query = select(func.count(Accident.id)).where(
-            Accident.is_deleted.is_(False)
+            Accident.is_deleted.is_(False), scoped
         )
 
         if status:
@@ -428,13 +479,16 @@ class SafetyRepository:
     async def get_accident_by_id(self, accident_id: uuid.UUID) -> Accident | None:
         """获取事故详情"""
         query = select(Accident).where(
-            Accident.id == accident_id, Accident.is_deleted.is_(False)
+            Accident.id == accident_id,
+            Accident.is_deleted.is_(False),
+            await self._ledger_department_filter(Accident.department),
         )
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
     async def create_accident(self, data: dict[str, Any]) -> Accident:
         """创建事故"""
+        await self._check_ledger_department(data)
         item = Accident(**data)
         self.session.add(item)
         await self.session.flush()
@@ -446,16 +500,19 @@ class SafetyRepository:
         self, accident_id: uuid.UUID, data: dict[str, Any]
     ) -> Accident | None:
         """更新事故"""
+        if "department" in data:
+            await self._check_ledger_department(data)
+        scoped = await self._ledger_department_filter(Accident.department)
         # 两步模式：先 UPDATE，再 SELECT + populate_existing 强制刷新 identity map 缓存
         stmt_update = (
             update(Accident)
-            .where(Accident.id == accident_id, Accident.is_deleted.is_(False))
+            .where(Accident.id == accident_id, Accident.is_deleted.is_(False), scoped)
             .values(**data, updated_at=func.now())
         )
         await self.session.execute(stmt_update)
         stmt_select = (
             select(Accident)
-            .where(Accident.id == accident_id, Accident.is_deleted.is_(False))
+            .where(Accident.id == accident_id, Accident.is_deleted.is_(False), scoped)
             .execution_options(populate_existing=True)
         )
         result = await self.session.execute(stmt_select)
@@ -465,7 +522,11 @@ class SafetyRepository:
         """删除事故（软删除）"""
         query = (
             update(Accident)
-            .where(Accident.id == accident_id, Accident.is_deleted.is_(False))
+            .where(
+                Accident.id == accident_id,
+                Accident.is_deleted.is_(False),
+                await self._ledger_department_filter(Accident.department),
+            )
             .values(is_deleted=True)
         )
         result = await self.session.execute(query)
