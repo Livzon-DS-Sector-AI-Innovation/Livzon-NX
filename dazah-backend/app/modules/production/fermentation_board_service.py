@@ -1063,6 +1063,19 @@ def build_dr_board(
     ]
 
     # ── 罐状态：事件流时间线推算（复合批拆分后逐罐独立）──
+    # 实时板只保留与当前扎帐周期相关的事件：全表解析会带出历史月份
+    # 老批（如数月前已放罐的遗留批），不按周期过滤会长期挂在"实时
+    # 状态"里。周期相关批（含跨周期在制）的事件无条件保留，防止
+    # 上周期移种/下周期放罐的在制罐丢失；更早的孤立事件剔除。
+    protected_batches = {b["batch_no"] for b in batches}
+    inoc_by_tank = {}
+    dump_by_tank = {}
+    for ev in inoc_events:
+        if ev["batch_no"] in protected_batches or ev["date"] >= block["start"]:
+            inoc_by_tank.setdefault(ev["tank"], []).append(ev)
+    for ev in dump_events:
+        if ev["batch_no"] in protected_batches or ev["date"] >= block["start"]:
+            dump_by_tank.setdefault(ev["tank"], []).append(ev)
     tank_nos: list[str] = []
     for tank in [*inoc_by_tank, *dump_by_tank]:
         if tank not in tank_nos:
