@@ -1,4 +1,5 @@
 """摇瓶种子制备记录 service."""
+
 from datetime import date as date_type
 from datetime import timedelta
 from typing import Any
@@ -7,6 +8,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.production.seed_culture_repository import SeedCultureRepository
+from app.modules.production.seed_culture_schemas import coerce_person_refs
 
 # 人员环节列 → 绩效角色标签（列值与飞书位表人员字段一一对应）
 ROLE_LABELS: dict[str, str] = {
@@ -45,7 +47,10 @@ def aggregate_person_monthly(
             continue
         batch_no = str(getattr(record, "batch_no", ""))
         for role_col, label in ROLE_LABELS.items():
-            for person in getattr(record, role_col, None) or []:
+            people = coerce_person_refs(getattr(record, role_col, None))
+            if not isinstance(people, list):
+                continue
+            for person in people:
                 name = str(_person_attr(person, "name") or "")
                 open_id = _person_attr(person, "open_id")
                 key = open_id or f"name:{name}"
