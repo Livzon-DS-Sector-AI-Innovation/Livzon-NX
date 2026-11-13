@@ -76,6 +76,16 @@ def test_aggregate_counts_roles_and_dedupes_batches() -> None:
     assert second["total_batches"] == 1
 
 
+def test_aggregate_counts_people_written_by_legacy_clients() -> None:
+    day = date(2026, 11, 3)
+    records = [_record("SC-1", day, prepare_operator="张三、李四")]
+    rows = aggregate_person_monthly(records, day, day)
+    assert {row["name"]: row["role_counts"]["配制"] for row in rows} == {
+        "张三": 1,
+        "李四": 1,
+    }
+
+
 def test_aggregate_groups_by_open_id_then_name() -> None:
     """有 open_id 按 open_id 归组；无 open_id 的手工录入按姓名归组。"""
     records = [
@@ -176,6 +186,13 @@ async def test_person_monthly_endpoint_returns_stats(
         assert target["total_batches"] == 2
         assert target["role_counts"]["配制"] == 2
         assert len(target["details"]) == 2
+        profile = await client.get("/api/v1/production/batch-profile/SC-PM-01")
+        assert profile.status_code == 200
+        seed_culture = profile.json()["data"]["seed_culture"]
+        assert seed_culture["prepare_operator"] == "张三"
+        assert "prepare_operator_people" not in seed_culture
+        missing = await client.get(f"/api/v1/production/batch-profile/{uuid.uuid4()}")
+        assert missing.status_code == 404
         app.dependency_overrides.pop(identity_deps.get_current_user, None)
 
         # 清理

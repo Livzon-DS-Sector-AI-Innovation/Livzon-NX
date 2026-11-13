@@ -9,6 +9,26 @@ from uuid import UUID
 from pydantic import BaseModel, Field, field_validator
 
 
+def coerce_person_refs(value: object) -> object:
+    """兼容历史文本（"张三,李四"）与 to_jsonb 迁移产生的 JSON 字符串。"""
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return None
+        try:
+            parsed = json.loads(stripped)
+        except ValueError:
+            parsed = None
+        if isinstance(parsed, list):
+            return parsed
+        return [
+            {"name": part.strip()}
+            for part in re.split(r"[,，、]", stripped)
+            if part.strip()
+        ]
+    return value
+
+
 class PersonRef(BaseModel):
     """人员引用：飞书成员（open_id + 姓名 + 头像），兼容仅姓名的手工录入。"""
 
@@ -76,7 +96,6 @@ class SeedCultureCreate(BaseModel):
     tank_yield: float | None = Field(None, description="罐产")
     remarks: str | None = Field(None, description="备注")
 
-
     @field_validator(
         "prepare_operator",
         "sterilization_operator",
@@ -88,24 +107,8 @@ class SeedCultureCreate(BaseModel):
         mode="before",
     )
     @classmethod
-    def _coerce_person_refs(cls: Any, value: Any) -> Any:
-        """兼容历史文本（"张三,李四"）与 to_jsonb 迁移产生的 JSON 字符串。"""
-        if isinstance(value, str):
-            stripped = value.strip()
-            if not stripped:
-                return None
-            try:
-                parsed = json.loads(stripped)
-            except ValueError:
-                parsed = None
-            if isinstance(parsed, list):
-                return parsed
-            return [
-                {"name": part.strip()}
-                for part in re.split(r"[,，、]", stripped)
-                if part.strip()
-            ]
-        return value
+    def _coerce_person_refs(cls, value: object) -> object:
+        return coerce_person_refs(value)
 
 
 class SeedCultureUpdate(BaseModel):
@@ -162,7 +165,6 @@ class SeedCultureUpdate(BaseModel):
     tank_yield: float | None = Field(None, description="罐产")
     remarks: str | None = Field(None, description="备注")
 
-
     @field_validator(
         "prepare_operator",
         "sterilization_operator",
@@ -174,24 +176,8 @@ class SeedCultureUpdate(BaseModel):
         mode="before",
     )
     @classmethod
-    def _coerce_person_refs(cls: Any, value: Any) -> Any:
-        """兼容历史文本（"张三,李四"）与 to_jsonb 迁移产生的 JSON 字符串。"""
-        if isinstance(value, str):
-            stripped = value.strip()
-            if not stripped:
-                return None
-            try:
-                parsed = json.loads(stripped)
-            except ValueError:
-                parsed = None
-            if isinstance(parsed, list):
-                return parsed
-            return [
-                {"name": part.strip()}
-                for part in re.split(r"[,，、]", stripped)
-                if part.strip()
-            ]
-        return value
+    def _coerce_person_refs(cls, value: object) -> object:
+        return coerce_person_refs(value)
 
 
 class SeedCultureResponse(BaseModel):
@@ -250,24 +236,8 @@ class SeedCultureResponse(BaseModel):
         mode="before",
     )
     @classmethod
-    def _coerce_person_refs(cls: Any, value: Any) -> Any:
-        """兼容历史文本（"张三,李四"）与 to_jsonb 迁移产生的 JSON 字符串。"""
-        if isinstance(value, str):
-            stripped = value.strip()
-            if not stripped:
-                return None
-            try:
-                parsed = json.loads(stripped)
-            except ValueError:
-                parsed = None
-            if isinstance(parsed, list):
-                return parsed
-            return [
-                {"name": part.strip()}
-                for part in re.split(r"[,，、]", stripped)
-                if part.strip()
-            ]
-        return value
+    def _coerce_person_refs(cls, value: object) -> object:
+        return coerce_person_refs(value)
 
 
 class PersonMonthlyDetail(BaseModel):

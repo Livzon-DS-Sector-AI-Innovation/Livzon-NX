@@ -1,3 +1,10 @@
 {
-  "transitions": []
+  "transitions": [
+    {
+      "from_revision": "b2e9e5fc78d1",
+      "to_revision": "4bd62e5d78a1",
+      "backward_compatible": true,
+      "review_reference": "docs/runbooks/production-offline-deployment.md#菌种台账迁移与镜像回滚"
+    }
+  ]
 }
