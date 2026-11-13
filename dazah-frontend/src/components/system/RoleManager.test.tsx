@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { createRole, deleteRole, updateRole } from '@/actions/admin'
 import { RoleManager } from './RoleManager'
+import styles from './RoleManager.module.css'
 
 vi.mock('@/actions/admin', () => ({ createRole: vi.fn(), updateRole: vi.fn(), deleteRole: vi.fn() }))
 
@@ -169,6 +170,27 @@ it.each(['light', 'dark'])('shows 20 roles per page and recovers after deleting 
 })
 
 describe('role operation availability', () => {
+  it('places both administrator roles before pagination and preserves the order of other roles', () => {
+    const otherRoles = Array.from({ length: 20 }, (_, index) => ({
+      id: `role-${index + 1}`,
+      code: `role_${index + 1}`,
+      name: `角色 ${index + 1}`,
+      is_system: index < 2,
+      permissions: [],
+    }))
+    const ordinaryAdmin = { id: 'ordinary', code: 'ordinary_admin', name: '普通管理员', is_system: true, permissions: [] }
+    const superAdmin = { id: 'super', code: 'super_admin', name: '系统管理员', is_system: true, permissions: [] }
+    const container = document.createElement('div')
+    container.innerHTML = renderToStaticMarkup(
+      <App><RoleManager initialRoles={[...otherRoles, ordinaryAdmin, superAdmin]} /></App>,
+    )
+
+    const firstPage = Array.from(container.querySelectorAll('tbody tr[data-row-key]'))
+    expect(firstPage.map(row => row.getAttribute('data-row-key'))).toEqual([
+      superAdmin.id, ordinaryAdmin.id, ...otherRoles.slice(0, 18).map(role => role.id),
+    ])
+  })
+
   it.each([
     ['quality_qc', true, '系统内置角色，可编辑'],
     ['product_qa', true, '系统内置角色，可编辑'],
@@ -198,7 +220,7 @@ describe('role operation availability', () => {
       code: 'probe-role-0c4d1c78174e460987a370ce97d96340',
       name: '用于验证长名称展示的自定义角色',
       description: '负责质量管理中的审核、查询及相关业务记录维护',
-      grant_version: 7,
+      grant_version: 24,
       is_system: false,
       permissions: [],
     }
@@ -214,13 +236,19 @@ describe('role operation availability', () => {
     expect(table.style.minWidth).toBe('100%')
     expect(table.style.width).toBe('900px')
     const columns = Array.from(table.querySelectorAll('col'))
-    expect(columns.map(column => column.style.width)).toEqual(['120px', '180px', '110px', '120px', '', '240px'])
-    const cells = Array.from(table.querySelectorAll('tbody tr[data-row-key] td'))
+    expect(columns.map(column => column.style.width)).toEqual(['152px', '180px', '110px', '88px', '', '240px'])
+    const versionHeader = table.querySelectorAll<HTMLTableCellElement>('thead th')[3]
+    expect(versionHeader.textContent).toBe('授权版本')
+    expect(versionHeader.classList.contains(styles.grantVersionCell)).toBe(true)
+    expect(versionHeader.style.textAlign).toBe('center')
+    const cells = Array.from(table.querySelectorAll<HTMLTableCellElement>('tbody tr[data-row-key] td'))
     for (const [index, value] of [[0, role.name], [1, role.code], [4, role.description]] as const) {
       expect(cells[index].classList.contains('ant-table-cell-ellipsis')).toBe(true)
       expect(cells[index].getAttribute('title')).toBe(value)
     }
-    expect(cells[3].textContent).toBe('7')
+    expect(cells[3].textContent).toBe('24')
+    expect(cells[3].classList.contains(styles.grantVersionCell)).toBe(true)
+    expect(cells[3].style.textAlign).toBe('center')
     expect(cells[5].querySelectorAll('a, button')).toHaveLength(3)
   })
 
