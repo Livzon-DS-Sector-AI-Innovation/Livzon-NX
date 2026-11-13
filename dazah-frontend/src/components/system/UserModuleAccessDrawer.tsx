@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Drawer, Empty, Input, Skeleton, Table, Tag, Typography } from 'antd'
+import { Button, Drawer, Input, Skeleton, Table, Tag, Typography } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
 import { ReloadOutlined, SearchOutlined } from '@ant-design/icons'
 import { getUserPagePermissions } from '@/actions/users'
@@ -71,52 +71,46 @@ export default function UserModuleAccessDrawer({ user, open, onClose }: {
   const names = new Map((result?.definitions || []).map((page) => [page.page_key, page.page_name]))
 
   return <Drawer rootClassName={styles.drawer} open={open} onClose={onClose}
-    placement="right" size="min(820px, 100vw)" destroyOnHidden
-    title={<div>
-      <Title level={4} className={styles.title}>有效权限 · {user?.name || '用户'}</Title>
-      <Text type="secondary" className={styles.subtitle}>角色与用户页面覆盖的最终生效结果</Text>
-    </div>}
-    extra={<Button icon={<ReloadOutlined />} loading={loading} onClick={() => void load()}>刷新</Button>}
-    footer={<div className={styles.footer}><Button onClick={onClose}>关闭</Button></div>}>
+    placement="right" size="min(560px, 100vw)" destroyOnHidden
+    title={<Title level={4} className={styles.title}>有效权限 · {user?.name || '用户'}</Title>}
+    closable={{ placement: 'end', 'aria-label': '关闭' }}
+    extra={<Button size="small" icon={<ReloadOutlined />} loading={loading} onClick={() => void load()}>刷新</Button>}>
     <div className={styles.body}>
-      <Alert className={styles.rulesNotice} type="info" showIcon
-        title="模块入口随有效页面访问权限自动生效，无需单独开通。"
-        description="多个角色的页面权限合并，用户页面覆盖优先。模块内至少一个页面具有有效访问权限时，入口自动开通；撤销最后一个可访问页面后，入口自动关闭。系统管理员默认拥有全部模块访问权限。本页只展示已保存的有效结果，权限调整请通过角色分配或页面权限进行。" />
       {errorMessage && <Alert type="error" showIcon title={errorMessage}
         action={<Button size="small" disabled={loading} onClick={() => void load()}>重新加载</Button>} />}
       {loading || (open && userId && !ready && !errorMessage) ? <Skeleton active paragraph={{ rows: 8 }} />
-        : ready && <>
-          <div className={styles.summary}>
-            <Text strong>已开通 {allowedCount} 个模块</Text>
-            <Text type="secondary">授权版本 {result?.grant_version}</Text>
-          </div>
-          {!allowedCount && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="尚无可访问页面，请分配角色或配置页面权限。" />}
-          <section aria-label="有效模块与页面权限">
+        : ready && <section aria-label="有效模块与页面权限">
             <div className={styles.toolbar}>
-              <Title level={5}>业务模块</Title>
-              <Input prefix={<SearchOutlined />} allowClear value={search}
+              <div className={styles.summary}>
+                <Text strong>已开通 {allowedCount} 个模块</Text>
+                <Text type="secondary">授权版本 {result?.grant_version}</Text>
+              </div>
+              <Input size="small" prefix={<SearchOutlined />} allowClear value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="搜索模块名称或编码" aria-label="搜索模块" className={styles.search} />
             </div>
+            {allowedCount === 0 && <Text type="secondary" className={styles.emptyAccess}>
+              尚无可访问页面，请分配角色或配置页面权限。
+            </Text>}
             <Table className={styles.moduleTable} rowKey="moduleCode" dataSource={filteredRows}
-              pagination={false} size="middle" tableLayout="fixed" scroll={{ x: 520 }}
+              pagination={false} size="small" tableLayout="fixed" scroll={{ x: 320 }}
               columns={[
                 { title: '模块', dataIndex: 'name', key: 'name' },
-                { title: '入口状态', key: 'access', width: 150, render: (_, row) =>
-                  <Tag color={row.allowed ? 'success' : 'default'}>{row.allowed ? '自动开通' : '无可访问页面'}</Tag> },
-                { title: '可访问页面', key: 'pages', width: 120, render: (_, row) => row.grants.length },
+                { title: '入口状态', key: 'access', width: 112, render: (_, row) =>
+                  row.allowed ? <Tag color="success">自动开通</Tag> : <Text type="secondary">无可访问页面</Text> },
+                { title: '可访问页面', key: 'pages', width: 96, align: 'right', render: (_, row) => row.grants.length },
               ]}
-              locale={{ emptyText: <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有匹配的模块，请调整搜索条件。" /> }}
-              expandable={{ rowExpandable: (row) => Boolean(row.grants.length),
+              locale={{ emptyText: <Text type="secondary">没有匹配的模块，请调整搜索条件。</Text> }}
+              expandable={{ showExpandColumn: rows.some((row) => row.grants.length > 0), columnWidth: 40,
+                rowExpandable: (row) => Boolean(row.grants.length),
                 expandedRowRender: (row) => <div className={styles.pageDetails}><Table rowKey="page_key" dataSource={row.grants}
-                  pagination={false} size="small" scroll={{ x: 520 }} columns={[
+                  pagination={false} size="small" tableLayout="fixed" columns={[
                     { title: '页面', key: 'page', render: (_, grant) => names.get(grant.page_key) || grant.page_key },
-                    { title: '权限', key: 'permission', width: 110, render: (_, grant) => pagePermissionTierLabel(grant.permissions || []) },
+                    { title: '权限', key: 'permission', width: 72, render: (_, grant) => pagePermissionTierLabel(grant.permissions || []) },
                     { title: '来源', key: 'source', render: (_, grant) => grant.source === 'user' ? '用户覆盖'
                       : grant.source === 'super_admin' ? '管理员' : grant.source_role_names?.join('、') || '角色基线' },
                   ]} /></div> }} />
-          </section>
-        </>}
+          </section>}
     </div>
   </Drawer>
 }

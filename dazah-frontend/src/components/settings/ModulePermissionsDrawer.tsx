@@ -11,6 +11,7 @@ import {
   pageGrantChangeKind, pagePermissionTierLabel, pagePermissionTierOptions, permissionsForTier,
   pageScopeIssue, pageScopeSummary, type PageGrantChangeKind, type PagePermissionTier,
 } from '@/lib/page-permission-editor'
+import { AuthorizationReasonInput } from '@/components/shared/AuthorizationReasonInput'
 import { PagePermissionDiff } from '@/components/shared/PagePermissionDiff'
 import { PagePermissionHistoryDrawer } from '@/components/shared/PagePermissionHistoryDrawer'
 import {
@@ -423,8 +424,9 @@ export default function ModulePermissionsDrawer({ user, open, onClose }: {
 
   return <Drawer title={null} open={open} onClose={() => confirmDiscard(onClose)} size="min(1180px, 100vw)"
     destroyOnHidden footer={<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <Input disabled={systemAdmin || loading || saving} value={reason} onChange={(event) => setReason(event.target.value)}
-        placeholder="填写授权调整原因" maxLength={500} aria-label="授权调整原因" />
+      <AuthorizationReasonInput disabled={systemAdmin || loading || saving} value={reason} onChange={setReason}
+        placeholder="填写授权调整原因" aria-label="授权调整原因"
+        presets={['临时工作授权', '个别数据范围调整', '恢复角色基线']} />
       <Space className="shrink-0"><Button onClick={() => confirmDiscard(onClose)}>取消</Button>
         <Button type="primary" loading={saving} onClick={previewSave}
           disabled={systemAdmin || loading || !result || result.user_id !== user?.id}

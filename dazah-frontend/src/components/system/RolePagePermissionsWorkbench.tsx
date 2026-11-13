@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import dynamic from "next/dynamic"
 import { App, Button, Checkbox, ConfigProvider, Dropdown, Empty, Input, Radio, Select, Spin, Tag, type InputRef } from "antd"
-import { AppstoreOutlined, BlockOutlined, CheckCircleFilled, DatabaseOutlined, DownOutlined, FileTextOutlined, FolderFilled, HistoryOutlined, LeftOutlined, RightOutlined, SearchOutlined, SwapOutlined, TeamOutlined, UpOutlined, WarningOutlined } from "@ant-design/icons"
+import { AppstoreOutlined, BlockOutlined, CheckCircleFilled, CheckOutlined, DatabaseOutlined, DownOutlined, FileTextOutlined, FolderFilled, HistoryOutlined, LeftOutlined, RightOutlined, SearchOutlined, SwapOutlined, TeamOutlined, UpOutlined, WarningOutlined } from "@ant-design/icons"
+import { AuthorizationReasonInput } from "@/components/shared/AuthorizationReasonInput"
 import PlatformNotice from "@/components/shared/PlatformNotice"
 import {
   getRolePagePermissions,
@@ -525,22 +526,36 @@ export function RolePagePermissionsWorkbench({ role, roles, departments, onClose
   const selectedGroup = selected && groups
     .filter((node) => node.page_key !== selected.page_key && node.pageKeys.includes(selected.page_key)).at(-1)
   const detailTitle = selected ? `页面权限详情：${selected.page_name}` : "页面权限详情"
+  const roleCaption = <>
+    <TeamOutlined className={styles.roleIcon} aria-hidden />
+    <span className={styles.roleCaption} id="permission-role-label">当前角色</span>
+  </>
 
   return <div className={`${styles.workbench} ${styles.enter}`}>
     <header className={styles.header}>
-      <div className={styles.heading}>
-        <Button className={styles.back} type="text" icon={<LeftOutlined />} aria-label="返回权限管理" onClick={() => leave(onClose)}
-          disabled={saving || previewing} />
-        <span className={styles.headingIcon}><BlockOutlined /></span>
-        <h1>页面权限基线配置</h1>
-      </div>
-      <div className={styles.rolePicker}>
-        <TeamOutlined className={styles.accent} />
-        <label htmlFor="permission-role">当前角色</label>
-        {roles && onRoleChange ? <Select id="permission-role" value={roleId} className={styles.roleSelect} variant="borderless"
-          disabled={saving || previewing} showSearch={{ optionFilterProp: "label" }}
+      <div className={styles.headerContext}>
+        <div className={styles.heading}>
+          <Button className={styles.back} type="text" icon={<LeftOutlined />} aria-label="返回权限管理" onClick={() => leave(onClose)}
+            disabled={saving || previewing} />
+          <span className={styles.headingIcon}><BlockOutlined /></span>
+          <h1>页面权限基线配置</h1>
+        </div>
+        {roles && onRoleChange ? <Select id="permission-role" aria-labelledby="permission-role-label"
+          aria-describedby="permission-role-value" value={roleId} className={styles.roleSelect} prefix={roleCaption}
+          disabled={saving || previewing} showSearch={{ optionFilterProp: "label" }} virtual={false}
+          classNames={{ prefix: styles.rolePrefix, content: styles.roleContent, suffix: styles.roleSuffix,
+            popup: { root: styles.rolePopup, listItem: styles.roleOption } }}
+          labelRender={({ label }) => <>
+            <span id="permission-role-value" className={styles.roleValue}>{label}</span>
+            <span className={styles.roleSearchPrompt} aria-hidden>搜索角色</span>
+          </>}
+          menuItemSelectedIcon={<CheckOutlined aria-hidden />}
+          notFoundContent="未找到匹配角色"
           options={roles.map(({ id, name }) => ({ value: id, label: name }))}
-          onChange={(id) => leave(() => onRoleChange(id))} /> : <strong id="permission-role">{role.name}</strong>}
+          onChange={(id) => leave(() => onRoleChange(id))} /> : <div className={styles.roleDisplay}>
+          {roleCaption}
+          <strong className={styles.roleValue}>{role.name}</strong>
+        </div>}
       </div>
       <dl className={styles.stats} aria-label="角色页面权限统计">
         {[
@@ -709,9 +724,9 @@ export function RolePagePermissionsWorkbench({ role, roles, departments, onClose
       <span className={styles.draftStatus} role="status" data-dirty={hasChanges}>
         {hasChanges ? `未保存调整 ${changes.length} 个页面` : "暂无未保存调整"}
       </span>
-      <Input className={styles.reason} prefix={<FileTextOutlined />} showCount aria-label="角色授权调整原因（必填）"
-        disabled={controlsDisabled} value={reason} onChange={(event) => setReason(event.target.value)}
-        placeholder="填写角色授权调整原因" maxLength={500} />
+      <AuthorizationReasonInput className={styles.reason} aria-label="角色授权调整原因（必填）"
+        disabled={controlsDisabled} value={reason} onChange={setReason} placeholder="填写角色授权调整原因"
+        presets={["岗位权限调整", "数据范围调整", "收紧高风险权限"]} />
       <div className={styles.footerActions}>
         <Button loading={pendingAction === "preview"} onClick={() => void previewChanges("preview")} disabled={controlsDisabled}>预览</Button>
         <Button type="primary" aria-label="保存" aria-busy={savePending} loading={savePending}

@@ -96,9 +96,250 @@ test.describe('页面最小授权', () => {
     })
   }
 
+  for (const { appearance, viewport } of [
+    { appearance: 'light', viewport: { width: 1366, height: 720 } },
+    { appearance: 'dark', viewport: { width: 900, height: 720 } },
+    { appearance: 'dark', viewport: { width: 390, height: 740 } },
+  ]) {
+    test(`分配角色抽屉无需整体下滑即可填写原因 ${appearance} ${viewport.width}`, async ({ context, page }) => {
+      await page.setViewportSize(viewport)
+      await page.emulateMedia({ reducedMotion: 'reduce' })
+      await context.addCookies([{ name: 'auth_token', value: 'assignment-layout-admin', url: 'http://127.0.0.1:3200' }])
+      await page.addInitScript((mode) => localStorage.setItem('dazah-appearance', mode), appearance)
+      await page.route(/\/api\/v1\/identity\/admin\/users\?/, (route) => route.fulfill({ json: { code: 200, data: {
+        total: 1, items: [{ id: 'layout-user', name: 'QA部公用账号', grant_version: 1,
+          roles: [
+            { id: 'role-1', name: '测试角色 1', code: 'test_role_1', is_system: false },
+            { id: 'role-2', name: '测试角色 2', code: 'test_role_2', is_system: false },
+          ] }],
+      } } }))
+      await page.route('**/api/v1/identity/admin/data-scopes', (route) => route.fulfill({ json: { code: 200, data: [] } }))
+      await page.goto('/settings?tab=permissions')
+      await page.getByRole('button', { name: '用户角色', exact: true }).click()
+      await expect(page.locator('html')).toHaveAttribute('data-theme', appearance)
+      await page.getByRole('button', { name: /分配角色$/ }).click()
+
+      const drawer = page.getByRole('dialog', { name: /分配角色/ })
+      const body = drawer.locator('.ant-drawer-body')
+      const search = drawer.getByRole('textbox', { name: '搜索可分配角色' })
+      const footer = drawer.locator('.ant-drawer-footer')
+      const reason = footer.getByRole('textbox', { name: '角色授权调整原因' })
+      const reasonTrigger = footer.getByRole('button', { name: /授权调整原因/ })
+      const lastRole = drawer.getByRole('checkbox', { name: /测试角色 12/ })
+      await expect(lastRole).toBeAttached()
+      await expect(lastRole).not.toBeInViewport()
+      await expect(search).toBeInViewport({ ratio: 1 })
+      const selection = drawer.getByRole('region', { name: '已选择的角色' })
+      const restore = selection.getByRole('button', { name: '恢复原有选择' })
+      const clear = selection.getByRole('button', { name: '取消全部选择' })
+      const roleCount = selection.getByRole('heading', { name: '已选择 2 个角色' })
+      await expect(restore).toBeDisabled()
+      await expect.poll(() => drawer.evaluate((element) =>
+        Math.abs(element.getBoundingClientRect().right - window.innerWidth))).toBeLessThanOrEqual(0.01)
+      const selectionBox = (await selection.boundingBox())!
+      const restoreBox = (await restore.boundingBox())!
+      const clearBox = (await clear.boundingBox())!
+      const countBox = (await roleCount.boundingBox())!
+      const firstTag = selection.getByRole('button', { name: '移除角色 测试角色 1' })
+      const tagBox = (await firstTag.boundingBox())!
+      expect(restoreBox.y).toBe(clearBox.y)
+      expect(restoreBox.height).toBe(clearBox.height)
+      expect(restoreBox.x + restoreBox.width).toBeLessThan(clearBox.x)
+      expect(clearBox.x + clearBox.width).toBeCloseTo(selectionBox.x + selectionBox.width, 0)
+      expect(clearBox.y + clearBox.height).toBeLessThanOrEqual(tagBox.y)
+      if (viewport.width < 576) {
+        expect(restoreBox.y).toBeGreaterThanOrEqual(countBox.y + countBox.height)
+      } else {
+        expect(restoreBox.x).toBeGreaterThan(countBox.x + countBox.width)
+      }
+      await clear.click()
+      await expect(selection).toContainText('已选择 0 个角色')
+      await expect(restore).toBeInViewport({ ratio: 1 })
+      await restore.click()
+      await expect(selection).toContainText('已选择 2 个角色')
+      await expect(drawer.getByRole('checkbox', { name: /^测试角色 1\b/ })).toBeChecked()
+      await expect(drawer.getByRole('checkbox', { name: /^测试角色 2\b/ })).toBeChecked()
+      await expect(reason).toBeHidden()
+      await expect(reasonTrigger).toContainText('待填写')
+      await expect(drawer.getByRole('button', { name: /^保\s*存$/ })).toBeInViewport({ ratio: 1 })
+      await expect.poll(() => body.evaluate((element) => element.scrollHeight - element.clientHeight)).toBeLessThanOrEqual(1)
+
+      const roleSection = drawer.getByRole('region', { name: '添加角色' })
+      const scopeTrigger = footer.getByRole('button', { name: /部门数据范围/ })
+      const scope = footer.getByRole('region', { name: '部门数据范围' })
+      const save = footer.getByRole('button', { name: /^保\s*存$/ })
+      await expect(scopeTrigger).toHaveAttribute('aria-expanded', 'false')
+      await expect(scope).toBeHidden()
+      const roleBounds = (await roleSection.boundingBox())!
+      const reasonBounds = (await reasonTrigger.boundingBox())!
+      const triggerBounds = (await scopeTrigger.boundingBox())!
+      const saveBounds = (await save.boundingBox())!
+      expect(triggerBounds.x + triggerBounds.width).toBeLessThanOrEqual(saveBounds.x)
+      expect(triggerBounds.y).toBe(reasonBounds.y)
+      expect(triggerBounds.height).toBe(reasonBounds.height)
+      if (viewport.width >= 900) {
+        await expect(drawer).toHaveCSS('width', '800px')
+        expect(reasonBounds.x).toBeGreaterThanOrEqual(triggerBounds.x + triggerBounds.width)
+        expect(reasonBounds.x + reasonBounds.width).toBeLessThanOrEqual(saveBounds.x)
+        expect(Math.abs(triggerBounds.y - saveBounds.y)).toBeLessThanOrEqual(1)
+        await expect(drawer.getByRole('checkbox', { name: /^测试角色 5\b/ })).toBeInViewport({ ratio: 1 })
+      } else {
+        expect(reasonBounds.y).toBeGreaterThanOrEqual(roleBounds.y + roleBounds.height)
+      }
+
+      await scopeTrigger.press('Enter')
+      await scope.getByText('全部部门', { exact: true }).click()
+      await expect(scopeTrigger).toHaveAttribute('aria-expanded', 'false')
+      await expect(scopeTrigger).toContainText('全部部门')
+      await expect(scope).toBeHidden()
+      await scopeTrigger.press('Enter')
+      await scope.getByText('本部门 + 子部门', { exact: true }).click()
+      await expect(scopeTrigger).toContainText('本部门 + 子部门')
+      await expect(scope).toBeHidden()
+      await scopeTrigger.press('Enter')
+      await expect(scopeTrigger).toHaveAttribute('aria-expanded', 'true')
+      await scope.getByText('指定部门', { exact: true }).click()
+      const done = scope.getByRole('button', { name: /^完\s*成$/ })
+      await expect(done).toBeDisabled()
+      const firstDepartment = scope.getByRole('treeitem', { name: '测试部门 1', exact: true })
+      await expect(firstDepartment).toBeInViewport({ ratio: 1 })
+      await firstDepartment.getByRole('checkbox').click()
+      await expect(scopeTrigger).toContainText('指定部门（1）')
+      await expect(scopeTrigger).toHaveAttribute('aria-expanded', 'true')
+      await scope.getByRole('treeitem', { name: '测试部门 10', exact: true }).getByRole('checkbox').click()
+      await expect(scopeTrigger).toContainText('指定部门（2）')
+      await expect(scope).toBeInViewport({ ratio: 1 })
+      const scopeBounds = (await scope.boundingBox())!
+      expect(scopeBounds.y + scopeBounds.height).toBeLessThanOrEqual(triggerBounds.y)
+      expect(await roleSection.boundingBox()).toEqual(roleBounds)
+      expect(await save.boundingBox()).toEqual(saveBounds)
+      await save.click({ trial: true })
+      await done.click()
+      await expect(scope).toBeHidden()
+      await expect(scopeTrigger).toContainText('指定部门（2）')
+      await expect(scopeTrigger).toBeFocused()
+      await scopeTrigger.press('Enter')
+      await expect(firstDepartment).toHaveAttribute('aria-checked', 'true')
+      await scopeTrigger.press('Escape')
+      await expect(scope).toBeHidden()
+      await expect(scopeTrigger).toBeFocused()
+
+      await search.fill('test_role_12')
+      await expect(lastRole).toBeInViewport({ ratio: 1 })
+      const lastRoleDescription = roleSection.getByText(/^可以查看质量管理模块中的偏差记录/)
+      await expect(lastRoleDescription).toBeInViewport({ ratio: 1 })
+      expect(await lastRoleDescription.evaluate((element) =>
+        element.scrollHeight <= element.clientHeight && element.scrollWidth <= element.clientWidth)).toBe(true)
+      await scopeTrigger.click()
+      await reasonTrigger.click()
+      await expect(scope).toBeHidden()
+      const reasonPanel = footer.getByRole('region', { name: '授权调整原因', exact: true })
+      await expect(reasonPanel).toBeInViewport({ ratio: 1 })
+      await expect(reasonPanel.getByText('0 / 20', { exact: true })).toBeVisible()
+      await expect(reasonPanel.getByRole('group', { name: '预设授权调整原因' }).getByRole('button')).toHaveCount(3)
+      await reasonPanel.getByRole('button', { name: '岗位职责调整' }).click()
+      await expect(reasonPanel).toBeHidden()
+      await expect(reasonTrigger).toContainText('岗位职责调整')
+      await expect(reasonTrigger).toBeFocused()
+      expect(await save.boundingBox()).toEqual(saveBounds)
+      await reasonTrigger.click()
+      await expect(reason).toHaveValue('岗位职责调整')
+      const manualReason = '因岗位职责变更调整指定部门查看权限范围'
+      await reason.fill(manualReason)
+      await expect(reasonPanel).toBeVisible()
+      await save.click({ trial: true })
+      await reasonPanel.getByRole('button', { name: /^完\s*成$/ }).click()
+      await expect(reasonPanel).toBeHidden()
+      await expect(reasonTrigger).toContainText(manualReason)
+      const summaryBounds = (await reasonTrigger.getByText(manualReason, { exact: true }).boundingBox())!
+      const updatedReasonBounds = (await reasonTrigger.boundingBox())!
+      expect(summaryBounds.y + summaryBounds.height).toBeLessThan(updatedReasonBounds.y + updatedReasonBounds.height)
+      expect(summaryBounds.x + summaryBounds.width).toBeLessThan(updatedReasonBounds.x + updatedReasonBounds.width)
+      expect(await body.evaluate((element) => element.scrollTop)).toBe(0)
+    })
+  }
+
+  for (const { width, appearance } of [{ width: 1366, appearance: 'light' }, { width: 390, appearance: 'dark' }]) {
+    test(`展开全部已选角色后可移除单个角色 ${appearance}`, async ({ context, page }) => {
+      await page.setViewportSize({ width, height: 740 })
+      await page.addInitScript((mode) => localStorage.setItem('dazah-appearance', mode), appearance)
+      await context.addCookies([{ name: 'auth_token', value: 'assignment-layout-admin', url: 'http://127.0.0.1:3200' }])
+      const roles = Array.from({ length: 12 }, (_, index) => ({
+        id: `role-${index + 1}`, name: `测试角色 ${index + 1}`, code: `test_role_${index + 1}`, is_system: false,
+      }))
+      await page.route(/\/api\/v1\/identity\/admin\/users\?/, (route) => route.fulfill({ json: { code: 200, data: {
+        total: 1, items: [{ id: 'layout-user', name: '角色测试账号', grant_version: 1, roles }],
+      } } }))
+      await page.route('**/api/v1/identity/admin/data-scopes', (route) => route.fulfill({ json: { code: 200, data: [] } }))
+      await page.goto('/system/user-roles')
+      await page.getByRole('button', { name: /分配角色$/ }).click()
+
+      const drawer = page.getByRole('dialog', { name: /分配角色/ })
+      const selection = drawer.getByRole('region', { name: '已选择的角色' })
+      const expand = selection.getByRole('button', { name: '展开全部' })
+      const removeLast = selection.getByRole('button', { name: '移除角色 测试角色 12' })
+      await expect(expand).toHaveAttribute('aria-expanded', 'false')
+      await expect(removeLast).not.toBeInViewport()
+      await expand.click()
+      const collapse = selection.getByRole('button', { name: '收起', exact: true })
+      await expect(collapse).toHaveAttribute('aria-expanded', 'true')
+      const panelId = await collapse.getAttribute('aria-controls')
+      const tags = page.locator(`[id="${panelId}"]`)
+      expect(await tags.evaluate((element) => element.clientHeight)).toBeGreaterThan(84)
+      await removeLast.scrollIntoViewIfNeeded()
+      await expect(removeLast).toBeInViewport({ ratio: 1 })
+      await removeLast.click()
+      await expect(selection).toContainText('已选择 11 个角色')
+      await expect(removeLast).toHaveCount(0)
+      await collapse.click()
+      await expect(expand).toHaveAttribute('aria-expanded', 'false')
+      expect(await tags.evaluate((element) => element.clientHeight)).toBeLessThanOrEqual(84)
+      await expect(drawer.getByRole('button', { name: /^保\s*存$/ })).toBeInViewport({ ratio: 1 })
+    })
+  }
+
+  test('切换普通管理员时保留原有选择直至确认', async ({ context, page }) => {
+    await context.addCookies([{ name: 'auth_token', value: 'assignment-layout-admin', url: 'http://127.0.0.1:3200' }])
+    await page.route(/\/api\/v1\/identity\/admin\/users\?/, (route) => route.fulfill({ json: { code: 200, data: {
+      total: 1, items: [{ id: 'layout-user', name: '角色测试账号', grant_version: 1, roles: [] }],
+    } } }))
+    await page.route('**/api/v1/identity/admin/data-scopes', (route) => route.fulfill({ json: { code: 200, data: [] } }))
+    await page.goto('/system/user-roles')
+    await page.getByRole('button', { name: /分配角色$/ }).click()
+    const drawer = page.getByRole('dialog', { name: /分配角色/ })
+    const available = drawer.getByRole('region', { name: '添加角色' })
+    await expect(available.getByRole('checkbox').nth(0)).toHaveAccessibleName(/^系统管理员/)
+    await expect(available.getByRole('checkbox').nth(1)).toHaveAccessibleName(/^普通管理员/)
+    for (let index = 1; index <= 7; index += 1) {
+      await drawer.getByRole('checkbox', { name: new RegExp(`^测试角色 ${index}\\b`) }).check()
+    }
+    const count = drawer.getByRole('region', { name: '已选择的角色' })
+    await expect(count).toContainText('已选择 7 个角色')
+    const admin = drawer.getByRole('checkbox', { name: /普通管理员/ })
+    await admin.click()
+    const confirmation = page.getByRole('dialog', { name: '切换为「普通管理员」？' })
+    await expect(confirmation).toContainText('移除以下 7 个角色')
+    await expect(confirmation).toContainText('测试角色 7')
+    await confirmation.getByRole('button', { name: '保留当前选择' }).click()
+    await expect(count).toContainText('已选择 7 个角色')
+    await expect(admin).not.toBeChecked()
+
+    const clear = count.getByRole('button', { name: '取消全部选择' })
+    await expect(clear).toBeInViewport({ ratio: 1 })
+    await admin.click()
+    await confirmation.getByRole('button', { name: '确认切换' }).click()
+    await expect(count).toContainText('已选择 1 个角色')
+    await expect(admin).toBeChecked()
+    await clear.click()
+    await expect(count).toContainText('已选择 0 个角色')
+    await expect(admin).not.toBeChecked()
+  })
+
   for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
     test(`有效权限只读展示自动模块入口 ${viewport.width}`, async ({ context, page }, testInfo) => {
       await page.setViewportSize(viewport)
+      const appearance = viewport.width === 390 ? 'light' : 'dark'
+      await page.addInitScript((mode) => localStorage.setItem('dazah-appearance', mode), appearance)
       await context.addCookies([{ name: 'auth_token', value: 'effective-admin', url: 'http://127.0.0.1:3200' }])
       await page.goto('/system/user-roles')
       await expect(page.getByText('为用户分配角色，模块入口随有效页面权限自动生效。', { exact: true })).toBeVisible()
@@ -106,6 +347,9 @@ test.describe('页面最小授权', () => {
       await page.getByRole('button', { name: /有效权限$/ }).click()
       const drawer = page.getByRole('dialog')
       await expect(drawer.getByText('已开通 1 个模块', { exact: true })).toBeVisible()
+      await expect(page.locator('html')).toHaveAttribute('data-theme', appearance)
+      await expect(drawer.getByRole('button', { name: '了解访问规则' })).toHaveCount(0)
+      await expect(drawer.getByRole('textbox', { name: '搜索模块' })).toBeVisible()
       const hrRow = drawer.getByRole('row').filter({ hasText: '人事管理' })
       await expect(hrRow.getByText('自动开通', { exact: true })).toBeVisible()
       await hrRow.getByRole('button', { name: '展开行' }).click()
@@ -115,7 +359,7 @@ test.describe('页面最小授权', () => {
       expect(pageRow && nextModuleRow && pageRow.y + pageRow.height <= nextModuleRow.y).toBe(true)
       await expect(drawer.getByRole('checkbox')).toHaveCount(0)
       await expect(drawer.getByRole('button', { name: /保存/ })).toHaveCount(0)
-      await expect(drawer).toHaveCSS('width', viewport.width === 390 ? '390px' : '820px')
+      await expect(drawer).toHaveCSS('width', viewport.width === 390 ? '390px' : '560px')
       await page.screenshot({ path: testInfo.outputPath('effective-permissions.png'), fullPage: true })
     })
   }

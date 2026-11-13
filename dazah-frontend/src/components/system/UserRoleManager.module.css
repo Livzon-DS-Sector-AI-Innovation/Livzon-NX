@@ -1,33 +1,50 @@
-.drawer .title {
-  margin: 0 0 6px;
+.drawer {
+  --assignment-drawer-width: 620px;
 }
 
-.drawer .subtitle {
-  font-weight: 400;
+.drawer .title {
+  margin: 0;
 }
 
 .drawer :global(.ant-drawer-header) {
-  padding: 24px;
+  padding: 16px 24px;
 }
 
 .drawer :global(.ant-drawer-body) {
-  padding: 24px;
-  scrollbar-gutter: stable;
+  padding: 16px 24px;
 }
 
 .drawer :global(.ant-drawer-footer) {
-  padding: 16px 24px;
+  padding: 12px 24px;
 }
 
 .body {
   display: flex;
   flex-direction: column;
-  gap: 24px;
-  padding-bottom: 20px;
+  height: 100%;
+  gap: 14px;
+}
+
+.rolesColumn,
+.settingsColumn {
+  display: flex;
+  flex-direction: column;
+  gap: inherit;
+  min-width: 0;
+}
+
+.rolesColumn {
+  flex: 1 0 auto;
+  min-height: 0;
+}
+
+.rolesColumn > :not(.availableRoles),
+.settingsColumn > * {
+  flex: none;
 }
 
 .body :global(h5.ant-typography) {
-  margin: 0 0 12px;
+  margin: 0 0 8px;
 }
 
 .body :global(.ant-alert) {
@@ -43,18 +60,54 @@
   height: auto;
 }
 
-.sectionHeading,
 .roleToolbar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.sectionHeading {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 4px 16px;
+  margin-bottom: 8px;
+}
+
+.selectionSummary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-height: var(--ant-control-height-sm);
 }
 
 .sectionHeading :global(h5.ant-typography),
 .roleToolbar :global(h5.ant-typography) {
   margin: 0;
+}
+
+.selectionActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px 12px;
+}
+
+.selectionActions button {
+  padding-inline: 0;
+}
+
+.selectedRolesViewport {
+  max-height: 84px;
+  overflow-y: auto;
+}
+
+.selectedRolesViewport[data-expanded="true"] {
+  max-height: clamp(84px, 40dvh, 320px);
 }
 
 .selectedRoles {
@@ -69,7 +122,7 @@
   gap: 10px;
   max-width: 100%;
   margin: 0;
-  padding: 8px 14px;
+  padding: 4px 10px;
   border-radius: var(--ant-border-radius);
   font-size: var(--ant-font-size);
   white-space: normal;
@@ -94,12 +147,22 @@
 }
 
 .roleSearch {
-  width: 280px;
-  max-width: 100%;
+  width: min(280px, 65%);
+}
+
+.availableRoles {
+  display: flex;
+  flex: 1 0 116px;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.roleToolbar {
+  flex: none;
 }
 
 .roleList {
-  max-height: 320px;
+  min-height: 0;
   overflow-y: auto;
   border: 1px solid var(--ant-color-border-secondary);
   border-radius: var(--ant-border-radius-lg);
@@ -121,7 +184,7 @@
   display: flex;
   width: 100%;
   align-items: flex-start;
-  padding: 18px 20px;
+  padding: 8px 12px;
 }
 
 .roleChoice :global(.ant-checkbox) {
@@ -131,38 +194,127 @@
 
 .roleChoice :global(.ant-checkbox-label) {
   min-width: 0;
-  padding-inline-start: 16px;
+  padding-inline-start: 10px;
 }
 
 .roleHeading {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 2px 8px;
+  overflow-wrap: anywhere;
 }
 
-.roleCode,
+.roleCode {
+  font-size: var(--ant-font-size-sm);
+}
+
 .roleDescription {
   display: block;
-  margin-top: 6px;
+  margin-top: 2px;
   overflow-wrap: anywhere;
 }
 
 .emptyRoles {
-  padding: 24px;
+  padding: 12px;
   text-align: center;
 }
 
+.departmentScope,
+.reasonSection {
+  width: min(340px, calc(100vw - 60px));
+}
+
+.departmentScope :global(div.ant-typography) {
+  margin-bottom: 8px;
+  font-size: var(--ant-font-size-sm);
+}
+
+.reasonPresets {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.reasonSection {
+  display: grid;
+  gap: 8px;
+}
+
 .reasonLabel {
-  display: block;
-  margin-bottom: 10px;
   font-weight: 600;
 }
 
-.footer {
+.footer,
+.footerFields,
+.footerActions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.footerFields {
+  flex: 1 1 466px;
+  align-items: stretch;
+  min-width: 0;
+}
+
+.scopeActions {
   display: flex;
   justify-content: flex-end;
-  gap: 12px;
+  margin-top: 8px;
+}
+
+.footerControl {
+  position: relative;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.footerControl > button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  gap: 0 10px;
+  width: 184px;
+  max-width: 100%;
+  height: 100%;
+  min-height: var(--ant-control-height);
+  align-content: center;
+  padding: 4px 12px;
+  text-align: start;
+}
+
+.reasonControl > button {
+  width: 270px;
+}
+
+.footerControl :global(.ant-btn-icon) {
+  grid-area: 1 / 2 / 3;
+}
+
+.controlLabel,
+.controlValue {
+  grid-column: 1;
+  line-height: 1.25;
+}
+
+.controlLabel {
+  font-weight: 600;
+}
+
+.controlValue {
+  color: var(--ant-color-text-secondary);
+  font-size: var(--ant-font-size-sm);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.footerActions {
+  justify-content: flex-end;
+  margin-inline-start: auto;
 }
 
 .footer .previewButton {
@@ -171,18 +323,44 @@
   color: var(--ant-color-primary);
 }
 
-@media (max-width: 575px) {
-  .drawer :global(.ant-drawer-header),
-  .drawer :global(.ant-drawer-body) {
-    padding: 20px 16px;
-  }
-
-  .drawer :global(.ant-drawer-footer) {
-    padding: 16px;
+@media (min-width: 900px) {
+  .drawer {
+    --assignment-drawer-width: 800px;
   }
 
   .body {
-    gap: 20px;
+    gap: 24px;
+  }
+
+  .body[data-system-admin="true"] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 260px);
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .settingsColumn {
+    padding-inline-start: 16px;
+    border-inline-start: 1px solid var(--ant-color-border-secondary);
+    overflow-y: auto;
+  }
+}
+
+@media (max-width: 575px) {
+  .sectionHeading {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .drawer :global(.ant-drawer-header),
+  .drawer :global(.ant-drawer-body) {
+    padding: 12px 16px;
+  }
+
+  .drawer :global(.ant-drawer-footer) {
+    padding: 10px 16px;
+  }
+
+  .body {
+    gap: 10px;
   }
 
   .body :global(.ant-alert) {
@@ -194,15 +372,17 @@
     margin: 8px 0 0 26px;
   }
 
-  .roleSearch {
-    width: 100%;
-  }
-
-  .roleChoice:global(.ant-checkbox-wrapper) {
-    padding: 16px 12px;
-  }
-
-  .footer {
+  .footer,
+  .footerFields,
+  .footerActions {
     gap: 8px;
+  }
+
+  .footerControl {
+    flex: 1 1 0;
+  }
+
+  .footerControl > button {
+    width: 100%;
   }
 }
