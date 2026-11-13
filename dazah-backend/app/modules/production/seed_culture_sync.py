@@ -2,6 +2,7 @@
 Feishu → seed_cultures sync service.
 Maps Feishu field names to seed_cultures columns using predefined mapping.
 """
+
 import json
 import logging
 from datetime import date, datetime
@@ -231,10 +232,8 @@ async def sync_seed_culture_to_table(
                 if not open_ids:
                     continue
                 people = await _resolve_people(client, open_ids, person_cache)
-                unresolved_people += sum(
-                    1 for p in people if not p.get("name")
-                )
-                mapped[db_col] = people
+                unresolved_people += sum(1 for p in people if not p.get("name"))
+                mapped[f"{db_col}_people"] = people
                 continue
             val: Any
             if db_col in STRING_FIELDS:
@@ -276,18 +275,19 @@ async def sync_seed_culture_to_table(
 
     # Re-structure: one flat dict with indexed param names；
     # JSONB 人员列以 json.dumps 传参 + 显式 ::jsonb cast
+    person_columns = {f"{field}_people" for field in PERSON_FIELDS}
     params: dict[str, Any] = {}
     for i, row in enumerate(rows):
         for c in cols:
             value = row.get(c)
-            if c in PERSON_FIELDS and value is not None:
+            if c in person_columns and value is not None:
                 value = json.dumps(value, ensure_ascii=False)
             params[f"{c}_{i}"] = value
 
     values_clauses = []
     for i in range(len(rows)):
         vals = ", ".join(
-            f"CAST(:{c}_{i} AS jsonb)" if c in PERSON_FIELDS else f":{c}_{i}"
+            f"CAST(:{c}_{i} AS jsonb)" if c in person_columns else f":{c}_{i}"
             for c in cols
         )
         values_clauses.append(f"(gen_random_uuid(), {vals})")
