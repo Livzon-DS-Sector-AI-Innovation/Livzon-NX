@@ -8,7 +8,6 @@
 
 import { useState } from 'react'
 import {
-  Alert,
   App,
   Button,
   Modal,
@@ -21,6 +20,7 @@ import {
 import type { ColumnsType } from 'antd/es/table'
 import type { RcFile } from 'antd/es/upload'
 import { ImportOutlined, InboxOutlined } from '@ant-design/icons'
+import PlatformNotice from '@/components/shared/PlatformNotice'
 import { importGuardianRoster, parseGuardianRosterImport } from '@/actions/safety'
 import { GUARDIAN_ROSTER_PAGE_KEY } from '@/lib/work-permit-api'
 
@@ -252,7 +252,8 @@ export default function GuardianRosterImportModal({
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         {result ? (
           <>
-            <Alert
+            <PlatformNotice
+              showRulesLink={false}
               type={result.imported > 0 ? 'success' : 'warning'}
               showIcon
               message={
@@ -280,7 +281,8 @@ export default function GuardianRosterImportModal({
           </>
         ) : (
           <>
-            <Alert
+            <PlatformNotice
+              showRulesLink={false}
               type="warning"
               showIcon
               message="导入将整表替换现有名单"
