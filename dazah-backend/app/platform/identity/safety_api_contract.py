@@ -493,5 +493,7 @@ SAFETY_SIGNATURE_ROUTES = frozenset(
         ("GET", "/api/v1/safety/sign-relay/{token}"),
         ("POST", "/api/v1/safety/sign-relay/"),
         ("POST", "/api/v1/safety/sign-relay/pull"),
+        ("POST", "/api/v1/safety/sign-relay/pdf/{pdf_key}"),
+        ("GET", "/api/v1/safety/sign-relay/pdf/{pdf_key}"),
     }
 )
