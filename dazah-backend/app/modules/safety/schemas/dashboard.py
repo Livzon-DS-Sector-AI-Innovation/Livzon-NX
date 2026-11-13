@@ -64,6 +64,7 @@ class OverLimitChemicalItem(BaseModel):
     inventory_id: UUID | None = None
     chemical_name: str
     workshop: str
+    location: str = ""
     quantity: float
     upper_limit: float | None = None
     over_pct: float | None = None

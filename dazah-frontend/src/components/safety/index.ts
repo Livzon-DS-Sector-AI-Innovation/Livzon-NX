@@ -68,4 +68,8 @@ export {
   WorkCertificatePanel,
 } from './WorkCertificatePanel'
 export { default as WorkCertificateImportModal } from './WorkCertificateImportModal'
+export {
+  GuardianRosterPanel,
+} from './GuardianRosterPanel'
+export { default as GuardianRosterImportModal } from './GuardianRosterImportModal'
 export { default as SafetyCommitmentPanel } from './SafetyCommitmentPanel'

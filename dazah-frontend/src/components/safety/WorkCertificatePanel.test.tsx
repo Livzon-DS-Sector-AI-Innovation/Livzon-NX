@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   updateWorkCertificate: vi.fn(),
   deleteWorkCertificate: vi.fn(),
   uploadWorkCertificateFile: vi.fn(),
+  exportWorkCertificates: vi.fn(),
   canOperate: true,
   canDelete: true,
   canAccess: true,
@@ -26,6 +27,7 @@ vi.mock('@/actions/safety', () => ({
   updateWorkCertificate: mocks.updateWorkCertificate,
   deleteWorkCertificate: mocks.deleteWorkCertificate,
   uploadWorkCertificateFile: mocks.uploadWorkCertificateFile,
+  exportWorkCertificates: mocks.exportWorkCertificates,
 }))
 
 vi.mock('@/hooks/usePagePermissions', () => ({
@@ -93,7 +95,7 @@ vi.mock('antd', async (importOriginal) => {
 
 vi.mock('@ant-design/icons', () => {
   const Icon = () => null
-  return { ImportOutlined: Icon, ArrowUpOutlined: Icon }
+  return { ImportOutlined: Icon, ArrowUpOutlined: Icon, DownloadOutlined: Icon }
 })
 
 import { WorkCertificatePanel } from './WorkCertificatePanel'
@@ -402,5 +404,53 @@ describe('证件管理面板', () => {
     await triggerUpload()
     await flush()
     expect(mocks.message.warning).toHaveBeenCalledWith('照片模糊')
+  })
+
+  it('导出 Excel：调用导出 action 并触发下载', async () => {
+    // happy-dom 下替身 URL.createObjectURL，验证下载链路不因环境缺失
+    const createObjectURL = vi.fn(() => 'blob:mock')
+    const revokeObjectURL = vi.fn()
+    Object.defineProperty(window.URL, 'createObjectURL', {
+      value: createObjectURL,
+      configurable: true,
+    })
+    Object.defineProperty(window.URL, 'revokeObjectURL', {
+      value: revokeObjectURL,
+      configurable: true,
+    })
+    mocks.exportWorkCertificates.mockResolvedValue({
+      code: 0,
+      message: 'ok',
+      data: btoa('fake-xlsx'),
+    })
+    await renderPanel()
+    const exportButton = buttons('导出Excel')[0]
+    expect(exportButton, '导出按钮应存在').toBeTruthy()
+    await act(async () => {
+      exportButton!.click()
+    })
+    await flush()
+    expect(mocks.exportWorkCertificates).toHaveBeenCalledWith(
+      'safety:ops-safety:work-certificates',
+    )
+    expect(createObjectURL).toHaveBeenCalledTimes(1)
+    expect(mocks.message.success).toHaveBeenCalledWith('导出成功')
+  })
+
+  it('导出失败提示错误信息', async () => {
+    mocks.exportWorkCertificates.mockResolvedValue({
+      code: 403,
+      message: '无页面权限',
+      data: '',
+    })
+    await renderPanel()
+    const exportButton = buttons('导出Excel')[0]
+    expect(exportButton).toBeTruthy()
+    await act(async () => {
+      exportButton!.click()
+    })
+    await flush()
+    expect(mocks.message.error).toHaveBeenCalledWith('无页面权限')
+    expect(mocks.message.success).not.toHaveBeenCalledWith('导出成功')
   })
 })

@@ -49,8 +49,8 @@ export interface DashboardData {
 const PANEL_HEIGHT = 420
 // 半宽下的作业行栅格：作业内容 / 等级 / 作业地点(含部门) / 负责人 / 时段 / 来源
 const RISK_GRID = 'minmax(0,1.1fr) 44px minmax(0,1.15fr) 58px 66px 54px'
-// 危化品行栅格：车间 / 物料 / 现有量 / 临界量 / 是否超标
-const CHEM_GRID = 'minmax(0,0.9fr) minmax(0,1.2fr) 62px 62px 58px'
+// 危化品行栅格：车间 / 物料 / 储存位置 / 现有量 / 临界量 / 是否超标
+const CHEM_GRID = 'minmax(0,0.75fr) minmax(0,0.85fr) minmax(0,0.9fr) 56px 56px 54px'
 
 interface TodayRiskRow {
   key: string
@@ -496,6 +496,7 @@ export default function SafetyDashboard({ data }: { data: DashboardData }) {
         key: `m${i}`,
         workshop: r.workshop,
         name: r.chemical_name,
+        location: r.location,
         quantity: r.quantity,
         upper: r.upper_limit,
         unit: r.unit || '吨',
@@ -506,6 +507,7 @@ export default function SafetyDashboard({ data }: { data: DashboardData }) {
         key: r.id,
         workshop: r.workshop,
         name: r.chemical_name,
+        location: '',
         quantity: r.quantity,
         upper: r.upper_limit,
         unit: r.unit,
@@ -872,7 +874,7 @@ export default function SafetyDashboard({ data }: { data: DashboardData }) {
                     zIndex: 1,
                   }}
                 >
-                  {['车间', '物料', '现有量', '临界量', '是否超标'].map((h) => (
+                  {['车间', '物料', '储存位置', '现有量', '临界量', '是否超标'].map((h) => (
                     <Text key={h} className="text-xs font-semibold" style={{ color: T.slate, fontSize: 11 }}>
                       {h}
                     </Text>
@@ -895,6 +897,13 @@ export default function SafetyDashboard({ data }: { data: DashboardData }) {
                       </Text>
                       <Text className="text-xs truncate" style={{ color: T.charcoal }} title={row.name}>
                         {row.name}
+                      </Text>
+                      <Text
+                        className="text-xs truncate"
+                        style={{ color: T.steel }}
+                        title={row.location}
+                      >
+                        {row.location || '-'}
                       </Text>
                       <Text style={{ color: T.charcoal, fontSize: 12 }}>
                         {row.quantity}

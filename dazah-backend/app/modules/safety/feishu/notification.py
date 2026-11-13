@@ -252,6 +252,57 @@ async def build_card(
     return _json_dumps(card)
 
 
+_IMAGE_KEY_CACHE: dict[str, str] = {}
+
+
+async def upload_image_bytes_to_feishu(
+    data: bytes, cache_key: str | None = None, filename: str = "cert.jpg"
+) -> str | None:
+    """上传图片字节到飞书 CDN，返回 image_key（用于卡片 img 元素）。
+
+    Args:
+        data: 图片二进制内容
+        cache_key: 可选缓存键（如证件附件 storage_key），同键复用已上传的
+            image_key，避免同一证件图片重复上传
+        filename: multipart 文件名
+
+    Returns:
+        飞书 image_key（如 img_v3_xxx），失败返回 None
+    """
+    if cache_key and cache_key in _IMAGE_KEY_CACHE:
+        return _IMAGE_KEY_CACHE[cache_key]
+    try:
+        client = await get_safety_feishu_client()
+        token = await get_safety_tenant_token(client)
+
+        async with httpx.AsyncClient(timeout=30) as http_client:
+            resp = await http_client.post(
+                "https://open.feishu.cn/open-apis/im/v1/images",
+                headers={"Authorization": f"Bearer {token}"},
+                files={"image": (filename, data, "image/jpeg")},
+                data={"image_type": "message"},
+            )
+            if resp.status_code == 200:
+                resp_data = resp.json()
+                if resp_data.get("code") == 0:
+                    image_key = resp_data.get("data", {}).get("image_key", "")
+                    if isinstance(image_key, str) and image_key:
+                        logger.info(
+                            "图片(bytes)上传飞书成功: %s → %s",
+                            filename,
+                            image_key,
+                        )
+                        if cache_key:
+                            _IMAGE_KEY_CACHE[cache_key] = image_key
+                        return image_key
+                logger.error("上传图片(bytes)到飞书失败: %s", resp_data)
+            else:
+                logger.error("上传图片(bytes) HTTP错误: %s", resp.status_code)
+    except Exception:
+        logger.exception("上传图片(bytes)异常: %s", filename)
+    return None
+
+
 async def upload_image_to_feishu(file_path: str) -> str | None:
     """上传本地图片到飞书 CDN，返回 image_key（用于卡片 img 元素）。
 

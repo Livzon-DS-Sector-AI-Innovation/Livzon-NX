@@ -162,9 +162,7 @@ def _field_text(value: Any) -> str:
         return value.strip()
     if isinstance(value, list):
         names = [
-            str(item.get("name") or "")
-            for item in value
-            if isinstance(item, dict)
+            str(item.get("name") or "") for item in value if isinstance(item, dict)
         ]
         return "、".join(name for name in names if name)
     return str(value)
@@ -197,13 +195,9 @@ async def list_open_hazard_details(
         content = _field_text(fields.get("隐患内容"))
         if not content:
             continue
-        where = _field_text(
-            fields.get("车间/位置" if duty else "部门/车间")
-        )
+        where = _field_text(fields.get("车间/位置" if duty else "部门/车间"))
         who = _field_text(fields.get("值班人员" if duty else "负责人"))
-        date = _field_text(
-            fields.get("值班日期" if duty else "目标完成日期")
-        )
+        date = _field_text(fields.get("值班日期" if duty else "目标完成日期"))
         items.append(
             OpenHazardDetailItem(
                 record_id=str(row.record_id),
@@ -439,8 +433,7 @@ class SafetyOverviewService:
                     )
                     .order_by(
                         (
-                            ChemicalInventory.quantity
-                            / ChemicalInventory.upper_limit
+                            ChemicalInventory.quantity / ChemicalInventory.upper_limit
                         ).desc()
                     )
                     .limit(10)
@@ -482,6 +475,7 @@ class SafetyOverviewService:
                     inventory_id=None,
                     chemical_name=row.name,
                     workshop=row.workshop,
+                    location=row.location,
                     quantity=row.quantity if row.quantity is not None else 0.0,
                     upper_limit=row.upper_limit,
                     over_pct=row.over_pct,
@@ -522,6 +516,7 @@ class SafetyOverviewService:
                     inventory_id=inventory.id,
                     chemical_name=chemical.name,
                     workshop=inventory.workshop,
+                    location="",
                     quantity=float(inventory.quantity),
                     upper_limit=float(inventory.upper_limit)
                     if inventory.upper_limit

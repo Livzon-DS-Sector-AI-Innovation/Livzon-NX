@@ -3843,6 +3843,7 @@ export async function deleteEmergencySupply(id: string) {
 }
 
 import {
+  GUARDIAN_ROSTER_PAGE_KEY,
   WORK_CERTIFICATES_PAGE_KEY,
   WORK_PERMITS_PAGE_KEY,
 } from '@/lib/work-permit-api'
@@ -4340,6 +4341,236 @@ export async function importCertificates(
       code: -1,
       message: '网络请求失败，无法连接到后端服务',
     } as ApiResponse<CertificateImportResultData>
+  }
+}
+
+/**
+ * 导出持证人员台账 Excel（按证件类别分子表，可再导入）。
+ * Server Action 在服务端执行，无法操作 DOM，返回 base64 由客户端组装下载。
+ */
+export async function exportWorkCertificates(
+  pageKey?: string
+): Promise<ApiResponse<string>> {
+  const authHeaders = await getAuthHeaders()
+  try {
+    const response = await fetch(
+      `${API_BASE}/safety/work-certificates/export`,
+      {
+        method: 'GET',
+        headers: { ...authHeaders, ...workCertificateHeaders(pageKey) },
+      }
+    )
+    if (!response.ok) {
+      const text = await response.text().catch(() => '')
+      let message = `HTTP ${response.status}`
+      try {
+        const parsed = JSON.parse(text)
+        message = parsed.message ?? parsed.detail ?? message
+      } catch {
+        // 非 JSON 错误体
+      }
+      return { code: response.status, message, data: '' } as ApiResponse<string>
+    }
+    const arrayBuffer = await response.arrayBuffer()
+    const base64 = Buffer.from(arrayBuffer).toString('base64')
+    return { code: 0, message: 'ok', data: base64 }
+  } catch {
+    return {
+      code: -1,
+      message: '网络请求失败，无法连接到后端服务',
+      data: '',
+    } as ApiResponse<string>
+  }
+}
+
+// ============ 作业安全监护人名单（guardian roster） ============
+
+type GuardianListData = components['schemas']['GuardianRosterListResponse']
+type GuardianItem = components['schemas']['GuardianRosterResponse']
+type GuardianImportPreviewData =
+  components['schemas']['GuardianImportPreview']
+type GuardianImportResultData =
+  components['schemas']['GuardianImportResult']
+
+export type GuardianCreateInput =
+  components['schemas']['GuardianRosterCreate']
+export type GuardianUpdateInput =
+  components['schemas']['GuardianRosterUpdate']
+
+function guardianHeaders(pageKey?: string): Record<string, string> {
+  return { 'X-Dazah-Page-Key': pageKey ?? GUARDIAN_ROSTER_PAGE_KEY }
+}
+
+export async function getGuardianRoster(params: {
+  pageKey?: string
+  page?: number
+  pageSize?: number
+  workshop?: string | null
+  keyword?: string | null
+}) {
+  const search = new URLSearchParams()
+  search.set('page', String(params.page ?? 1))
+  search.set('page_size', String(params.pageSize ?? 20))
+  if (params.workshop) search.set('workshop', params.workshop)
+  if (params.keyword) search.set('keyword', params.keyword)
+  return fetchApi<GuardianListData>(`/safety/guardian-roster?${search.toString()}`, {
+    headers: guardianHeaders(params.pageKey),
+  })
+}
+
+export async function createGuardianRoster(
+  data: GuardianCreateInput,
+  pageKey?: string
+) {
+  return fetchApi<GuardianItem>('/safety/guardian-roster', {
+    method: 'POST',
+    headers: {
+      ...guardianHeaders(pageKey),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  })
+}
+
+export async function updateGuardianRoster(
+  guardianId: string,
+  data: GuardianUpdateInput,
+  pageKey?: string
+) {
+  return fetchApi<GuardianItem>(`/safety/guardian-roster/${guardianId}`, {
+    method: 'PUT',
+    headers: {
+      ...guardianHeaders(pageKey),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  })
+}
+
+export async function deleteGuardianRoster(
+  guardianId: string,
+  pageKey?: string
+) {
+  return fetchApi<null>(`/safety/guardian-roster/${guardianId}`, {
+    method: 'DELETE',
+    headers: guardianHeaders(pageKey),
+  })
+}
+
+/**
+ * 解析监护人名单 Excel：预览子表与行数，不落库。
+ * multipart 直传，去 JSON Content-Type（与证件导入口径一致）。
+ */
+export async function parseGuardianRosterImport(
+  file: File,
+  pageKey?: string
+): Promise<ApiResponse<GuardianImportPreviewData>> {
+  const authHeaders = await getAuthHeaders()
+  const headers: Record<string, string> = { ...authHeaders }
+  delete headers['Content-Type']
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+    const response = await fetch(
+      `${API_BASE}/safety/guardian-roster/import/parse`,
+      {
+        method: 'POST',
+        headers: { ...headers, ...guardianHeaders(pageKey) },
+        body: formData,
+      }
+    )
+    return (await response.json()) as ApiResponse<GuardianImportPreviewData>
+  } catch {
+    return {
+      code: -1,
+      message: '网络请求失败，无法连接到后端服务',
+    } as ApiResponse<GuardianImportPreviewData>
+  }
+}
+
+/** 导入监护人名单：以最新导入为准，整表替换现有名单。 */
+export async function importGuardianRoster(
+  file: File,
+  sheets: string[],
+  pageKey?: string
+): Promise<ApiResponse<GuardianImportResultData>> {
+  const authHeaders = await getAuthHeaders()
+  const headers: Record<string, string> = { ...authHeaders }
+  delete headers['Content-Type']
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('sheets', JSON.stringify(sheets))
+    const response = await fetch(`${API_BASE}/safety/guardian-roster/import`, {
+      method: 'POST',
+      headers: { ...headers, ...guardianHeaders(pageKey) },
+      body: formData,
+    })
+    if (!response.ok) {
+      const text = await response.text().catch(() => '')
+      let message = `HTTP ${response.status}`
+      try {
+        const parsed = JSON.parse(text)
+        message = parsed.message ?? parsed.detail ?? message
+      } catch {
+        // 非 JSON 错误体
+      }
+      return {
+        code: response.status,
+        message,
+      } as ApiResponse<GuardianImportResultData>
+    }
+    revalidatePath('/safety/guardian-roster')
+    return (await response.json()) as ApiResponse<GuardianImportResultData>
+  } catch {
+    return {
+      code: -1,
+      message: '网络请求失败，无法连接到后端服务',
+    } as ApiResponse<GuardianImportResultData>
+  }
+}
+
+/**
+ * 导出监护人名单 Excel（按当前筛选，车间→姓名排序）。
+ * Server Action 在服务端执行，无法操作 DOM，返回 base64 由客户端组装下载。
+ */
+export async function exportGuardianRoster(
+  filters: { workshop?: string | null; keyword?: string | null } = {},
+  pageKey?: string
+): Promise<ApiResponse<string>> {
+  const authHeaders = await getAuthHeaders()
+  const search = new URLSearchParams()
+  if (filters.workshop) search.set('workshop', filters.workshop)
+  if (filters.keyword) search.set('keyword', filters.keyword)
+  const query = search.toString()
+  try {
+    const response = await fetch(
+      `${API_BASE}/safety/guardian-roster/export${query ? `?${query}` : ''}`,
+      {
+        method: 'GET',
+        headers: { ...authHeaders, ...guardianHeaders(pageKey) },
+      }
+    )
+    if (!response.ok) {
+      const text = await response.text().catch(() => '')
+      let message = `HTTP ${response.status}`
+      try {
+        const parsed = JSON.parse(text)
+        message = parsed.message ?? parsed.detail ?? message
+      } catch {
+        // 非 JSON 错误体
+      }
+      return { code: response.status, message, data: '' } as ApiResponse<string>
+    }
+    const arrayBuffer = await response.arrayBuffer()
+    const base64 = Buffer.from(arrayBuffer).toString('base64')
+    return { code: 0, message: 'ok', data: base64 }
+  } catch {
+    return {
+      code: -1,
+      message: '网络请求失败，无法连接到后端服务',
+      data: '',
+    } as ApiResponse<string>
   }
 }
 

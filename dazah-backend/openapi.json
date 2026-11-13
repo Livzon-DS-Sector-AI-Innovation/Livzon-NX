@@ -7511,6 +7511,142 @@
         "title": "ApiResponseEnvelope[GasAnalysisItem]",
         "type": "object"
       },
+      "ApiResponseEnvelope_GuardianImportPreview_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/GuardianImportPreview"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[GuardianImportPreview]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_GuardianImportResult_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/GuardianImportResult"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[GuardianImportResult]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_GuardianRosterListResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/GuardianRosterListResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[GuardianRosterListResponse]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_GuardianRosterResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/GuardianRosterResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[GuardianRosterResponse]",
+        "type": "object"
+      },
       "ApiResponseEnvelope_HazardousChemicalListResponse_": {
         "properties": {
           "code": {
@@ -16516,6 +16652,26 @@
         "title": "Body_import_exam_scores_api_v1_hr_training_ledgers_import_exam_scores_post",
         "type": "object"
       },
+      "Body_import_guardian_roster_api_v1_safety_guardian_roster_import_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          },
+          "sheets": {
+            "default": "",
+            "description": "要导入的子表名 JSON 数组，空则导入全部子表（自动合并重复人员）",
+            "title": "Sheets",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_import_guardian_roster_api_v1_safety_guardian_roster_import_post",
+        "type": "object"
+      },
       "Body_import_hazard_ledger_api_v1_safety_hazard_identifications_import_post": {
         "properties": {
           "department": {
@@ -16799,6 +16955,20 @@
           "coa"
         ],
         "title": "Body_parse_coa_file_api_v1_registration_reference_standards_parse_coa_post",
+        "type": "object"
+      },
+      "Body_parse_guardian_import_api_v1_safety_guardian_roster_import_parse_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_parse_guardian_import_api_v1_safety_guardian_roster_import_parse_post",
         "type": "object"
       },
       "Body_parse_hazard_ledger_import_api_v1_safety_hazard_identifications_import_parse_post": {
@@ -49678,6 +49848,511 @@
         "title": "GenerateSubstance",
         "type": "object"
       },
+      "GuardianImportPreview": {
+        "properties": {
+          "current_total": {
+            "default": 0,
+            "description": "库内现有名单人数（导入后将被替换）",
+            "title": "Current Total",
+            "type": "integer"
+          },
+          "duplicate_across_sheets": {
+            "default": 0,
+            "description": "跨子表重复人员合并的行数（全簿估算）",
+            "title": "Duplicate Across Sheets",
+            "type": "integer"
+          },
+          "merged_total": {
+            "default": 0,
+            "description": "合并去重后预计导入人数（全簿估算）",
+            "title": "Merged Total",
+            "type": "integer"
+          },
+          "sheets": {
+            "items": {
+              "$ref": "#/components/schemas/GuardianImportSheetInfo"
+            },
+            "title": "Sheets",
+            "type": "array"
+          }
+        },
+        "title": "GuardianImportPreview",
+        "type": "object"
+      },
+      "GuardianImportResult": {
+        "properties": {
+          "archive_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archive Path"
+          },
+          "duplicates_merged": {
+            "default": 0,
+            "description": "文件内重复行合并数",
+            "title": "Duplicates Merged",
+            "type": "integer"
+          },
+          "imported": {
+            "default": 0,
+            "description": "本次导入写入的人数",
+            "title": "Imported",
+            "type": "integer"
+          },
+          "replaced": {
+            "default": 0,
+            "description": "本次导入替换前的库内人数",
+            "title": "Replaced",
+            "type": "integer"
+          },
+          "row_errors": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Row Errors",
+            "type": "array"
+          },
+          "skipped_sheets": {
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "title": "Skipped Sheets",
+            "type": "array"
+          }
+        },
+        "title": "GuardianImportResult",
+        "type": "object"
+      },
+      "GuardianImportSheetInfo": {
+        "description": "导入预览：单个子表的解析结果。",
+        "properties": {
+          "default_selected": {
+            "default": false,
+            "description": "是否默认勾选（识别为最优数据源）",
+            "title": "Default Selected",
+            "type": "boolean"
+          },
+          "errors": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "row_count": {
+            "default": 0,
+            "title": "Row Count",
+            "type": "integer"
+          },
+          "sample": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Sample",
+            "type": "array"
+          },
+          "sheet": {
+            "title": "Sheet",
+            "type": "string"
+          },
+          "workshops": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Workshops",
+            "type": "array"
+          }
+        },
+        "required": [
+          "sheet"
+        ],
+        "title": "GuardianImportSheetInfo",
+        "type": "object"
+      },
+      "GuardianRosterCreate": {
+        "properties": {
+          "exam_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exam Date"
+          },
+          "exam_name": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exam Name"
+          },
+          "person_name": {
+            "description": "监护人姓名",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Person Name",
+            "type": "string"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "maximum": 1000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "workshop": {
+            "description": "车间/部门",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Workshop",
+            "type": "string"
+          }
+        },
+        "required": [
+          "person_name",
+          "workshop"
+        ],
+        "title": "GuardianRosterCreate",
+        "type": "object"
+      },
+      "GuardianRosterListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/GuardianRosterResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "workshops": {
+            "items": {
+              "$ref": "#/components/schemas/GuardianWorkshopCount"
+            },
+            "title": "Workshops",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "GuardianRosterListResponse",
+        "type": "object"
+      },
+      "GuardianRosterResponse": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "exam_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exam Date"
+          },
+          "exam_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exam Name"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "person_name": {
+            "title": "Person Name",
+            "type": "string"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "source_file": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source File"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "workshop": {
+            "title": "Workshop",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "person_name",
+          "workshop",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "GuardianRosterResponse",
+        "type": "object"
+      },
+      "GuardianRosterUpdate": {
+        "properties": {
+          "exam_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exam Date"
+          },
+          "exam_name": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exam Name"
+          },
+          "person_name": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Person Name"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "maximum": 1000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          },
+          "workshop": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workshop"
+          }
+        },
+        "title": "GuardianRosterUpdate",
+        "type": "object"
+      },
+      "GuardianWorkshopCount": {
+        "description": "车间分组计数（列表页车间卡片/筛选）。",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "workshop": {
+            "title": "Workshop",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workshop",
+          "count"
+        ],
+        "title": "GuardianWorkshopCount",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -64933,6 +65608,11 @@
               }
             ],
             "title": "Inventory Id"
+          },
+          "location": {
+            "default": "",
+            "title": "Location",
+            "type": "string"
           },
           "over_pct": {
             "anyOf": [
@@ -232986,6 +233666,491 @@
         ]
       }
     },
+    "/api/v1/safety/guardian-roster": {
+      "get": {
+        "operationId": "list_guardian_roster_api_v1_safety_guardian_roster_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "workshop",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Workshop"
+            }
+          },
+          {
+            "in": "query",
+            "name": "keyword",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Keyword"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_GuardianRosterListResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "监护人名单分页列表（车间筛选/关键字 + 车间人数汇总）",
+        "tags": [
+          "安全管理"
+        ]
+      },
+      "post": {
+        "operationId": "create_guardian_roster_api_v1_safety_guardian_roster_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuardianRosterCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_GuardianRosterResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "新建监护人",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/guardian-roster/export": {
+      "get": {
+        "operationId": "export_guardian_roster_api_v1_safety_guardian_roster_export_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "workshop",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Workshop"
+            }
+          },
+          {
+            "in": "query",
+            "name": "keyword",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Keyword"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "导出监护人名单 Excel（按当前筛选，车间→姓名排序）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/guardian-roster/import": {
+      "post": {
+        "description": "整表替换：先软删现有名单，再写入本次解析合并后的人员。",
+        "operationId": "import_guardian_roster_api_v1_safety_guardian_roster_import_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_guardian_roster_api_v1_safety_guardian_roster_import_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_GuardianImportResult_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "导入监护人名单 Excel（以最新导入为准，整表替换）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/guardian-roster/import/parse": {
+      "post": {
+        "operationId": "parse_guardian_import_api_v1_safety_guardian_roster_import_parse_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_parse_guardian_import_api_v1_safety_guardian_roster_import_parse_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_GuardianImportPreview_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "解析监护人名单 Excel（预览子表与行数，不落库）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/guardian-roster/{guardian_id}": {
+      "delete": {
+        "operationId": "delete_guardian_roster_api_v1_safety_guardian_roster__guardian_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "guardian_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Guardian Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_NoneType_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "删除监护人（软删除）",
+        "tags": [
+          "安全管理"
+        ]
+      },
+      "put": {
+        "operationId": "update_guardian_roster_api_v1_safety_guardian_roster__guardian_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "guardian_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Guardian Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GuardianRosterUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_GuardianRosterResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "更新监护人",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
     "/api/v1/safety/hazard-identifications": {
       "get": {
         "description": "获取危险源辨识列表",
@@ -250615,6 +251780,53 @@
           }
         },
         "summary": "证件到期统计（总数/有效/30天内到期/已过期）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/work-certificates/export": {
+      "get": {
+        "operationId": "export_work_certificates_api_v1_safety_work_certificates_export_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "导出持证人员台账 Excel（按证件类别分子表，可再导入）",
         "tags": [
           "安全管理"
         ]
