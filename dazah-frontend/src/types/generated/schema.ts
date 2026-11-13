@@ -27237,6 +27237,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/safety/sign-relay/pdf/{pdf_key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 公网下载完工 PDF（中转 7 天有效） */
+        get: operations["sign_relay_pdf_download_api_v1_safety_sign_relay_pdf__pdf_key__get"];
+        put?: never;
+        /** 内网上传完工 PDF 到公网中转（共享密钥认证，7 天有效） */
+        post: operations["sign_relay_pdf_upload_api_v1_safety_sign_relay_pdf__pdf_key__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/safety/sign-relay/pull": {
         parameters: {
             query?: never;
@@ -142952,6 +142970,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    sign_relay_pdf_download_api_v1_safety_sign_relay_pdf__pdf_key__get: {
+        parameters: {
+            query?: {
+                name?: string;
+            };
+            header?: never;
+            path: {
+                pdf_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    sign_relay_pdf_upload_api_v1_safety_sign_relay_pdf__pdf_key__post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Relay-Key"?: string | null;
+            };
+            path: {
+                pdf_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
