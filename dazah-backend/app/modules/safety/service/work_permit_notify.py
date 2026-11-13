@@ -625,7 +625,9 @@ async def _next_stage_elements(
     if permit.status == PERMIT_STATUS_COMPLETED:
         if permit.created_by is None:
             return None, [], ""
-        download_url = await _download_url(permit.id)
+        # 手机可达优先：完工即生成 PDF 并中转上传到公网网关（180），
+        # 手机直接下载；网关未配置/生成上传失败时回退本环境链接（电脑端）
+        download_url = await _relay_or_local_pdf_url(db, permit)
         if not download_url:
             return None, [], ""
         elements = list(base)
@@ -644,6 +646,50 @@ async def _next_stage_elements(
         )
 
     return None, [], ""
+
+
+async def _relay_or_local_pdf_url(db: AsyncSession, permit: WorkPermit) -> str | None:
+    """完工 PDF 下载地址：配置公网网关时生成并中转上传，返回公网链接；
+    未配置或生成/上传失败时回退本环境链接（电脑端下载）。"""
+    settings = get_settings()
+    gateway = (settings.SIGN_RELAY_GATEWAY_BASE or "").rstrip("/")
+    relay_key = settings.SIGN_RELAY_KEY or ""
+    local_url = await _download_url(permit.id)
+    if not gateway or not relay_key:
+        return local_url
+    try:
+        from app.modules.safety.service.work_permit_pdf import render_permit_pdf
+
+        pdf_bytes = await render_permit_pdf(db, permit.id)
+        if not pdf_bytes:
+            return local_url
+        import secrets
+
+        import httpx
+
+        pdf_key = f"{permit.permit_no}-{secrets.token_urlsafe(16)}"
+        async with httpx.AsyncClient(timeout=60) as http:
+            resp = await http.post(
+                f"{gateway}/api/v1/safety/sign-relay/pdf/{pdf_key}",
+                headers={
+                    "X-Relay-Key": relay_key,
+                    "Content-Type": "application/pdf",
+                },
+                content=pdf_bytes,
+            )
+        if resp.status_code != 200:
+            logger.warning(
+                "完工 PDF 中转上传失败: %s %s",
+                resp.status_code,
+                resp.text[:120],
+            )
+            return local_url
+        return (
+            f"{gateway}/api/v1/safety/sign-relay/pdf/{pdf_key}?name={permit.permit_no}"
+        )
+    except Exception:
+        logger.exception("完工 PDF 中转异常，回退本环境链接")
+        return local_url
 
 
 async def _accept_stage_elements(
@@ -764,7 +810,18 @@ async def _sign_records_markdown(db: AsyncSession, permit: WorkPermit) -> str:
 async def _gas_records_markdown(db: AsyncSession, permit: WorkPermit) -> str:
     """作业期间气体检测记录表 + 下次复检时间（超期红字警示）。"""
 
+    from zoneinfo import ZoneInfo
+
     from app.modules.safety.models import WorkPermitGasAnalysis
+
+    bj = ZoneInfo("Asia/Shanghai")
+
+    def _bj(dt_value: datetime) -> datetime:
+        """统一转北京时间（库内 UTC 转 +08:00；naive 视为已是北京并附加时区，
+        保证后续比较恒为 aware）。"""
+        if dt_value.tzinfo is not None:
+            return dt_value.astimezone(bj)
+        return dt_value.replace(tzinfo=bj)
 
     rows = (
         (
@@ -790,9 +847,10 @@ async def _gas_records_markdown(db: AsyncSession, permit: WorkPermit) -> str:
         items_txt = "；".join(
             f"{it.get('name')}={it.get('value') or '-'}" for it in (r.items or [])
         )
+        shown = _bj(r.sampled_at).strftime("%m-%d %H:%M")
         lines.append(
-            f"{i}. {r.sampled_at:%m-%d %H:%M}{tag} "
-            f"{r.analysis_point or ''}｜{items_txt}｜"
+            f"{i}. {shown}{tag} "
+            f"{r.analysis_point or '—'}｜{items_txt}｜"
             f"分析人 {r.analyst_name or '—'}"
         )
     if not rows:
@@ -802,10 +860,9 @@ async def _gas_records_markdown(db: AsyncSession, permit: WorkPermit) -> str:
     if cycle:
         base_time = rows[-1].sampled_at if rows else permit.actual_start_time
         if base_time is not None:
-            if base_time.tzinfo is not None:
-                base_time = base_time.replace(tzinfo=None)
-            due = base_time + timedelta(minutes=cycle)
-            if datetime.now() > due:
+            due = _bj(base_time) + timedelta(minutes=cycle)
+            now_local = datetime.now(bj)
+            if now_local > due:
                 lines.append(
                     f"⚠️ **复检已超期**（应不晚于 {due:%m-%d %H:%M}），"
                     "请立即停止作业并复检"

@@ -246930,6 +246930,105 @@
         ]
       }
     },
+    "/api/v1/safety/sign-relay/pdf/{pdf_key}": {
+      "get": {
+        "operationId": "sign_relay_pdf_download_api_v1_safety_sign_relay_pdf__pdf_key__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pdf_key",
+            "required": true,
+            "schema": {
+              "title": "Pdf Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "name",
+            "required": false,
+            "schema": {
+              "default": "permit.pdf",
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "公网下载完工 PDF（中转 7 天有效）",
+        "tags": [
+          "安全作业票签名中转"
+        ]
+      },
+      "post": {
+        "operationId": "sign_relay_pdf_upload_api_v1_safety_sign_relay_pdf__pdf_key__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pdf_key",
+            "required": true,
+            "schema": {
+              "title": "Pdf Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Relay-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Relay-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "内网上传完工 PDF 到公网中转（共享密钥认证，7 天有效）",
+        "tags": [
+          "安全作业票签名中转"
+        ]
+      }
+    },
     "/api/v1/safety/sign-relay/pull": {
       "post": {
         "operationId": "sign_relay_pull_api_v1_safety_sign_relay_pull_post",

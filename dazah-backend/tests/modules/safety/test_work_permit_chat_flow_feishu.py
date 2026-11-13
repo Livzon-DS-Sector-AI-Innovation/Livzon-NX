@@ -2312,12 +2312,14 @@ class TestGasRecordsNotify:
     ) -> None:
         from datetime import datetime, timedelta
         from types import SimpleNamespace
+        from zoneinfo import ZoneInfo
 
         from app.modules.safety.service import work_permit_notify as notify
 
         permit = _gap_permit("active")
         permit.permit_type = "hot_work"
-        now = datetime.now()
+        # _bj 把 naive 视为北京时间：基准取当前北京时间（naive）
+        now = datetime.now(ZoneInfo("Asia/Shanghai")).replace(tzinfo=None)
 
         def _row(phase: str, minutes_ago: int, point: str) -> Any:
             return SimpleNamespace(
@@ -2344,6 +2346,23 @@ class TestGasRecordsNotify:
         assert "分析人 —" in md
         # 最近采样 10 分钟前 + 60 分钟周期 → 未超期
         assert "下次复检不晚于" in md
+
+        # aware UTC 记录：显示与到期判断按北京时间（+8）
+        utc_row = SimpleNamespace(
+            phase="on_duty",
+            sampled_at=datetime.now(ZoneInfo("UTC")) - timedelta(minutes=10),
+            analysis_point="罐区",
+            items=[{"name": "氧气", "value": "20.9"}],
+            analyst_name="王五",
+        )
+
+        class _DBUtc:
+            async def execute(self, *_a: Any, **_kw: Any) -> Any:
+                return _scalars_result([utc_row])
+
+        md_utc = await notify._gas_records_markdown(_DBUtc(), permit)
+        assert "罐区" in md_utc and "王五" in md_utc
+        assert "下次复检不晚于" in md_utc, "UTC 采样 10 分钟前不应超期"
 
         # 超期分支：最近采样 2 小时前
         rows2 = [_row("on_duty", 120, "釜内")]
@@ -3215,3 +3234,271 @@ def test_dedupe_key_fallback_chain() -> None:
         "hot_work"
     )
     assert _dedupe_key("cancel", "ou-1", {}).endswith(":")
+
+
+# ── PDF 公网中转 + 完工下载回退 定向补测 ──
+
+
+class TestPdfRelayEndpoints:
+    """sign_relay_public 新增：PDF 共享密钥上传 / 随机 key 公网下载。"""
+
+    async def test_pdf_upload_disabled_and_wrong_key(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from fastapi import FastAPI
+        from httpx import ASGITransport, AsyncClient
+
+        from app.modules.safety.api import sign_relay_public as relay
+
+        settings = __import__(
+            "app.core.config", fromlist=["get_settings"]
+        ).get_settings()
+        monkeypatch.setattr(settings, "SIGN_RELAY_GATEWAY_ENABLED", False)
+
+        app = FastAPI()
+        app.include_router(relay.sign_relay_public_router, prefix="/api/v1/safety")
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://t"
+        ) as ac:
+            # 网关未启用 → 404
+            r = await ac.post("/api/v1/safety/sign-relay/pdf/k1", content=b"%PDF-1.7")
+            assert r.status_code == 404
+
+            # 启用但密钥缺失/错误 → 403
+            monkeypatch.setattr(settings, "SIGN_RELAY_GATEWAY_ENABLED", True)
+            monkeypatch.setattr(settings, "SIGN_RELAY_KEY", "relay-key-pdf")
+            r2 = await ac.post(
+                "/api/v1/safety/sign-relay/pdf/k1",
+                content=b"%PDF-1.7",
+                headers={"X-Relay-Key": "wrong"},
+            )
+            assert r2.status_code == 403
+            r2b = await ac.post("/api/v1/safety/sign-relay/pdf/k1", content=b"%PDF-1.7")
+            assert r2b.status_code == 403
+
+    async def test_pdf_upload_invalid_and_oversize(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from fastapi import FastAPI
+        from httpx import ASGITransport, AsyncClient
+
+        from app.modules.safety.api import sign_relay_public as relay
+
+        settings = __import__(
+            "app.core.config", fromlist=["get_settings"]
+        ).get_settings()
+        monkeypatch.setattr(settings, "SIGN_RELAY_GATEWAY_ENABLED", True)
+        monkeypatch.setattr(settings, "SIGN_RELAY_KEY", "relay-key-pdf")
+
+        app = FastAPI()
+        app.include_router(relay.sign_relay_public_router, prefix="/api/v1/safety")
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://t"
+        ) as ac:
+            # 非 PDF 魔数 / 空体 → 400
+            bad = await ac.post(
+                "/api/v1/safety/sign-relay/pdf/k1",
+                content=b"GIF89a",
+                headers={"X-Relay-Key": "relay-key-pdf"},
+            )
+            assert bad.status_code == 400
+            empty = await ac.post(
+                "/api/v1/safety/sign-relay/pdf/k1",
+                content=b"",
+                headers={"X-Relay-Key": "relay-key-pdf"},
+            )
+            assert empty.status_code == 400
+            # 超 20MB → 400
+            big = await ac.post(
+                "/api/v1/safety/sign-relay/pdf/k1",
+                content=b"%PDF-" + b"x" * (21 * 1024 * 1024),
+                headers={"X-Relay-Key": "relay-key-pdf"},
+            )
+            assert big.status_code == 400
+
+    async def test_pdf_upload_and_download_roundtrip(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+
+        from fastapi import FastAPI
+        from httpx import ASGITransport, AsyncClient
+
+        from app.core.redis import cache_set
+        from app.modules.safety.api import sign_relay_public as relay
+
+        try:
+            await cache_set("probe:pdfrelay", "1", ex=5)
+        except Exception:
+            pytest.skip("Redis 不可用，跳过 PDF 中转用例")
+
+        settings = __import__(
+            "app.core.config", fromlist=["get_settings"]
+        ).get_settings()
+        monkeypatch.setattr(settings, "SIGN_RELAY_GATEWAY_ENABLED", True)
+        monkeypatch.setattr(settings, "SIGN_RELAY_KEY", "relay-key-pdf")
+
+        pdf = b"%PDF-1.7\n%\xe2\xe3\xcf\xd3\nfake-body"
+        app = FastAPI()
+        app.include_router(relay.sign_relay_public_router, prefix="/api/v1/safety")
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://t"
+        ) as ac:
+            up = await ac.post(
+                "/api/v1/safety/sign-relay/pdf/MB-1-abc",
+                content=pdf,
+                headers={"X-Relay-Key": "relay-key-pdf"},
+            )
+            assert up.status_code == 200
+
+            # 下载：默认文件名补 .pdf；Content-Disposition UTF-8 编码
+            dl = await ac.get(
+                "/api/v1/safety/sign-relay/pdf/MB-1-abc", params={"name": "MB-1"}
+            )
+            assert dl.status_code == 200
+            assert dl.content == pdf
+            assert dl.headers["content-type"] == "application/pdf"
+            assert "MB-1.pdf" in dl.headers["content-disposition"]
+
+            # 不存在的 key → 404（已失效话术）
+            miss = await ac.get("/api/v1/safety/sign-relay/pdf/MB-404")
+            assert miss.status_code == 404
+
+            # 网关停用 → 下载也 404
+            monkeypatch.setattr(settings, "SIGN_RELAY_GATEWAY_ENABLED", False)
+            off = await ac.get("/api/v1/safety/sign-relay/pdf/MB-1-abc")
+            assert off.status_code == 404
+
+            # 清理
+            from app.core.redis import redis_client
+
+            await redis_client.delete("safety:signrelay:pdf:MB-1-abc")
+
+
+class TestRelayPdfUrlFallback:
+    """_relay_or_local_pdf_url：未配网关/生成失败/上传失败/异常 全回退本地链接。"""
+
+    async def test_no_gateway_returns_local(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+
+        from app.modules.safety.service import work_permit_notify as notify
+
+        async def _local(permit_id: Any) -> str:
+            return "http://local/dl"
+
+        monkeypatch.setattr(notify, "_download_url", _local)
+        permit = _gap_permit("completed")
+        url = await notify._relay_or_local_pdf_url(object(), permit)
+        assert url == "http://local/dl"
+
+    async def test_upload_success_returns_gateway_url(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+
+        from app.modules.safety.service import work_permit_notify as notify
+
+        class _S:
+            SIGN_RELAY_GATEWAY_BASE = "https://relay.example.com"
+            SIGN_RELAY_KEY = "k1"
+
+        monkeypatch.setattr(notify, "get_settings", lambda: _S())
+
+        async def _local(permit_id: Any) -> str:
+            return "http://local/dl"
+
+        async def _render(db: Any, permit_id: Any) -> bytes:
+            return b"%PDF-1.7 body"
+
+        class _Resp:
+            status_code = 200
+            text = ""
+
+        class _HTTP:
+            async def __aenter__(self) -> _HTTP:
+                return self
+
+            async def __aexit__(self, *args: object) -> None:
+                pass
+
+            async def post(self, url: str, **kwargs: object) -> _Resp:
+                _HTTP.last_url = url
+                return _Resp()
+
+        def _client(**kw: Any) -> _HTTP:
+            return _HTTP()
+
+        import app.modules.safety.service.work_permit_pdf as pdf_mod
+
+        monkeypatch.setattr(notify, "_download_url", _local)
+        monkeypatch.setattr(pdf_mod, "render_permit_pdf", _render)
+        monkeypatch.setattr("httpx.AsyncClient", _client)
+
+        permit = _gap_permit("completed")
+        permit.permit_no = "MB-PDF-1"
+        url = await notify._relay_or_local_pdf_url(object(), permit)
+        assert url.startswith(
+            "https://relay.example.com/api/v1/safety/sign-relay/pdf/MB-PDF-1-"
+        )
+        assert url.endswith("?name=MB-PDF-1")
+
+    async def test_upload_failure_and_exception_fallback(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from app.modules.safety.service import work_permit_notify as notify
+
+        class _S:
+            SIGN_RELAY_GATEWAY_BASE = "https://relay.example.com"
+            SIGN_RELAY_KEY = "k1"
+
+        monkeypatch.setattr(notify, "get_settings", lambda: _S())
+
+        async def _local(permit_id: Any) -> str:
+            return "http://local/dl"
+
+        monkeypatch.setattr(notify, "_download_url", _local)
+
+        # 渲染失败（返回空）→ 本地
+        import app.modules.safety.service.work_permit_pdf as pdf_mod
+
+        async def _no_pdf(db: Any, permit_id: Any) -> bytes | None:
+            return None
+
+        monkeypatch.setattr(pdf_mod, "render_permit_pdf", _no_pdf)
+        permit = _gap_permit("completed")
+        assert (
+            await notify._relay_or_local_pdf_url(object(), permit) == "http://local/dl"
+        )
+
+        # 上传非 200 → 本地
+        async def _pdf(db: Any, permit_id: Any) -> bytes:
+            return b"%PDF-1.7"
+
+        monkeypatch.setattr(pdf_mod, "render_permit_pdf", _pdf)
+
+        class _Resp503:
+            status_code = 503
+            text = "unavailable"
+
+        class _HTTP503:
+            async def __aenter__(self) -> _HTTP503:
+                return self
+
+            async def __aexit__(self, *args: object) -> None:
+                pass
+
+            async def post(self, url: str, **kwargs: object) -> _Resp503:
+                return _Resp503()
+
+        monkeypatch.setattr("httpx.AsyncClient", lambda **kw: _HTTP503())
+        assert (
+            await notify._relay_or_local_pdf_url(object(), permit) == "http://local/dl"
+        )
+
+        # 全链路异常 → 本地（不抛错）
+        async def _boom(db: Any, permit_id: Any) -> bytes:
+            raise RuntimeError("render down")
+
+        monkeypatch.setattr(pdf_mod, "render_permit_pdf", _boom)
+        assert (
+            await notify._relay_or_local_pdf_url(object(), permit) == "http://local/dl"
+        )
