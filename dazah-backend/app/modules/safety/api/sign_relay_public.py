@@ -181,11 +181,7 @@ async def sign_relay_pdf_download(
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
-        headers={
-            "Content-Disposition": (
-                f"attachment; filename*=UTF-8''{filename}"
-            )
-        },
+        headers={"Content-Disposition": (f"attachment; filename*=UTF-8''{filename}")},
     )
 
 

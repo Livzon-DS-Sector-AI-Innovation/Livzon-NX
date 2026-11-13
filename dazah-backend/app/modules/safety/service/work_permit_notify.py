@@ -648,9 +648,7 @@ async def _next_stage_elements(
     return None, [], ""
 
 
-async def _relay_or_local_pdf_url(
-    db: AsyncSession, permit: WorkPermit
-) -> str | None:
+async def _relay_or_local_pdf_url(db: AsyncSession, permit: WorkPermit) -> str | None:
     """完工 PDF 下载地址：配置公网网关时生成并中转上传，返回公网链接；
     未配置或生成/上传失败时回退本环境链接（电脑端下载）。"""
     settings = get_settings()
@@ -687,8 +685,7 @@ async def _relay_or_local_pdf_url(
             )
             return local_url
         return (
-            f"{gateway}/api/v1/safety/sign-relay/pdf/{pdf_key}"
-            f"?name={permit.permit_no}"
+            f"{gateway}/api/v1/safety/sign-relay/pdf/{pdf_key}?name={permit.permit_no}"
         )
     except Exception:
         logger.exception("完工 PDF 中转异常，回退本环境链接")
