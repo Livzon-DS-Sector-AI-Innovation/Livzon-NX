@@ -1,96 +1,50 @@
 .drawer .title {
-  margin: 0 0 6px;
+  margin: 0;
   overflow-wrap: anywhere;
 }
 
-.drawer .subtitle {
-  font-weight: 400;
+.drawer :global(.ant-drawer-header) {
+  gap: 12px;
+  padding: 12px 20px;
 }
 
-.drawer :global(.ant-drawer-header),
-.drawer :global(.ant-drawer-body) {
-  padding: 24px;
-}
-
+.drawer :global(.ant-drawer-header-title),
 .drawer :global(.ant-drawer-title) {
   min-width: 0;
 }
 
 .drawer :global(.ant-drawer-body) {
+  padding: 16px 20px;
   scrollbar-gutter: stable;
 }
 
-.drawer :global(.ant-drawer-footer) {
-  padding: 16px 24px;
-}
-
-.body,
-.previewContent {
+.body {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 12px;
 }
 
-.body {
-  padding-bottom: 20px;
-}
-
-.rulesNotice:global(.ant-alert) {
-  align-items: center;
-}
-
-.rulesNotice :global(.ant-alert-actions .ant-btn) {
-  padding-inline: 0;
-  height: auto;
-}
-
+.toolbar,
 .summary {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 16px 20px;
-  border-radius: var(--ant-border-radius-lg);
-  background: var(--color-surface-soft);
-}
-
-.selectionSummary,
-.summaryDetails,
-.sectionHeading,
-.toolbar,
-.batchActions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
-}
-
-.summaryDetails :global(.ant-tag) {
-  margin: 0;
-}
-
-.sectionHeading {
-  margin-bottom: 16px;
-}
-
-.sectionHeading :global(h5.ant-typography) {
-  margin: 0;
+  gap: 8px 12px;
 }
 
 .toolbar {
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
-.toolbar .search {
-  width: 280px;
+.search {
+  width: 240px;
   max-width: 100%;
 }
 
-.searchHelp {
+.emptyAccess {
   display: block;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .moduleTable {
@@ -101,6 +55,7 @@
 
 .pageDetails {
   padding-block: 8px;
+  overflow-wrap: anywhere;
 }
 
 .moduleTable:global(.ant-table-wrapper) :global(.ant-table-thead > tr > th) {
@@ -111,83 +66,17 @@
   border-bottom: 0;
 }
 
-.moduleTable :global(.ant-table-tbody > tr).allowedRow > td {
-  background: var(--ant-color-primary-bg);
-}
-
-.moduleDescription {
-  overflow-wrap: anywhere;
-}
-
-.description {
-  display: block;
-  margin-top: 4px;
-  font-size: var(--ant-font-size-sm);
-}
-
-.reasonLabel {
-  display: block;
-  margin-bottom: 10px;
-  font-weight: 600;
-}
-
-.reasonLabel :global(.ant-typography) {
-  font-weight: 400;
-}
-
-.reasonError {
-  display: block;
-  margin-top: 8px;
-}
-
-.footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-}
-
-.footer .previewButton {
-  border-color: var(--ant-color-primary-border);
-  background: var(--ant-color-primary-bg);
-  color: var(--ant-color-primary);
-}
-
-.previewContent :global(.ant-tag) {
-  margin-block: 4px;
-}
-
 @media (max-width: 575px) {
   .drawer :global(.ant-drawer-header),
   .drawer :global(.ant-drawer-body) {
-    padding: 20px 16px;
+    padding-inline: 12px;
   }
 
-  .drawer :global(.ant-drawer-footer) {
-    padding: 16px;
+  .drawer .title {
+    font-size: var(--ant-font-size-lg);
   }
 
-  .summary {
-    padding: 16px;
-  }
-
-  .toolbar .search {
+  .search {
     width: 100%;
-  }
-
-  .body :global(.ant-alert) {
-    flex-wrap: wrap;
-  }
-
-  .body :global(.ant-alert-actions) {
-    margin: 12px 0 0;
-    width: 100%;
-  }
-
-  .body .rulesNotice :global(.ant-alert-actions) {
-    margin: 8px 0 0 26px;
-  }
-
-  .footer {
-    gap: 8px;
   }
 }

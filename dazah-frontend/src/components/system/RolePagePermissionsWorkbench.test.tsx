@@ -349,6 +349,30 @@ async function show(id: string) {
   })
 }
 
+it('opens the searchable role list from its label and switches using the full role name', async () => {
+  const currentRole = role('A')
+  const longRole = { ...role('B'), name: '质量管理中心原料药生产全过程质量审核与放行复核负责人' }
+  const onRoleChange = vi.fn()
+  await act(async () => root.render(createElement(RolePagePermissionsWorkbench, {
+    role: currentRole, roles: [currentRole, longRole], departments: [], onClose: vi.fn(), onRoleChange,
+    initialLoad: { ok: true, data: result('A') },
+  })))
+
+  const picker = host.querySelector('[role="combobox"][aria-labelledby="permission-role-label"]')
+  const label = host.querySelector('#permission-role-label')
+  expect(picker?.getAttribute('aria-expanded')).toBe('false')
+  expect(label?.textContent).toBe('当前角色')
+  await act(async () => label?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })))
+  expect(picker?.getAttribute('aria-expanded')).toBe('true')
+  expect(document.querySelector('[role="option"][aria-selected="true"]')?.textContent).toBe(currentRole.name)
+  const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')]
+    .find((item) => item.textContent === longRole.name)
+  expect(option).toBeTruthy()
+  await act(async () => option?.click())
+  expect(picker?.getAttribute('aria-expanded')).toBe('false')
+  expect(onRoleChange).toHaveBeenCalledExactlyOnceWith(longRole.id)
+})
+
 it('uses server-loaded permissions on the first render without a second request', async () => {
   await act(async () => root.render(createElement(RolePagePermissionsWorkbench, {
     role: role('A'), departments: [], onClose: vi.fn(), initialLoad: { ok: true, data: result('A') },
@@ -436,6 +460,27 @@ it('requires an adjustment reason before starting save confirmation', async () =
   expect(mocks.replace).not.toHaveBeenCalled()
 })
 
+it('offers three reasons in the footer and sends the selected reason through save confirmation', async () => {
+  mocks.get.mockResolvedValue(result('A'))
+  mocks.replace.mockResolvedValue({ ok: true, data: { ...result('A'), grant_version: 4 } })
+  await show('A')
+  const input = host.querySelector<HTMLInputElement>('footer input[placeholder="填写角色授权调整原因"]')!
+  const shortcuts = host.querySelector<HTMLButtonElement>('footer button[aria-label="快捷授权调整原因"]')!
+  expect(input.maxLength).toBe(20)
+  expect(host.querySelector('footer')?.textContent).toContain('0 / 20')
+  await act(async () => shortcuts.click())
+  const options = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+  expect(options.map((item) => item.textContent)).toEqual(['岗位权限调整', '数据范围调整', '收紧高风险权限'])
+  await act(async () => options[1].click())
+  expect(input.value).toBe('数据范围调整')
+  expect(mocks.preview).not.toHaveBeenCalled()
+
+  await act(async () => host.querySelector<HTMLInputElement>('[data-page-name] input[value="query"]')!.click())
+  await act(async () => button('保存').click())
+  await act(async () => mocks.confirm.mock.lastCall![0].onOk())
+  expect(mocks.replace).toHaveBeenCalledWith('A', expect.objectContaining({ reason: '数据范围调整' }))
+})
+
 it('keeps edits and restores both buttons after a preview failure', async () => {
   mocks.get.mockResolvedValue(result('A'))
   mocks.preview.mockRejectedValue(new Error('影响预演失败'))
@@ -463,6 +508,7 @@ it('disables both actions during preview and ignores a late preview for a previo
   await act(async () => button('预览').click())
   expect(button('预览').disabled).toBe(true)
   expect(button('保存').disabled).toBe(true)
+  expect(host.querySelector<HTMLButtonElement>('button[aria-label="快捷授权调整原因"]')?.disabled).toBe(true)
   await show('B')
   await act(async () => pending.resolve({ role_id: 'A', grant_version: 3, member_count: 2,
     affected_user_count: 1, expanded_user_count: 1, restricted_user_count: 0,

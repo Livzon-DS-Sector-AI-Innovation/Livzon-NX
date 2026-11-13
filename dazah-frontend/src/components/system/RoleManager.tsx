@@ -13,6 +13,7 @@ import {
 import type { components } from "@/types/generated/schema"
 import { rolePagePermissionsPath, type PermissionWorkbenchOrigin } from "@/lib/rolePagePermissionsPath"
 import { roleTagColor } from "@/lib/role-tag"
+import tableStyles from "./RoleManager.module.css"
 import styles from "./RolePagePermissionsWorkbench.module.css"
 
 type RoleFormValues = components["schemas"]["RoleCreateRequest"]
@@ -39,6 +40,11 @@ export function RoleManager({ initialRoles: roles, origin }: RoleManagerProps) {
   const [saving, setSaving] = useState(false)
   const [form] = Form.useForm<RoleFormValues>()
   const creating = editing === "new"
+  const orderedRoles = [
+    ...roles.filter((role) => role.code === "super_admin"),
+    ...roles.filter((role) => role.code === "ordinary_admin"),
+    ...roles.filter((role) => role.code !== "super_admin" && role.code !== "ordinary_admin"),
+  ]
 
   const openCreate = () => {
     setEditing("new")
@@ -93,16 +99,17 @@ export function RoleManager({ initialRoles: roles, origin }: RoleManagerProps) {
     <div className="mb-3"><Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
       新建角色
     </Button></div>
-    <Table rowKey="id" dataSource={roles} tableLayout="fixed" scroll={{ x: 900 }}
+    <Table rowKey="id" dataSource={orderedRoles} tableLayout="fixed" scroll={{ x: 900 }}
       pagination={{ pageSize: 20, showSizeChanger: false }} columns={[
-      { title: "角色名称", dataIndex: "name", key: "name", width: 120, ellipsis: true },
+      { title: "角色名称", dataIndex: "name", key: "name", width: 152, ellipsis: true },
       { title: "角色标识", dataIndex: "code", key: "code", width: 180, ellipsis: true },
       { title: "类型", dataIndex: "is_system", key: "is_system", width: 110, render: (value: boolean, role: RoleItem) => {
         const label = role.code === "super_admin" ? "系统管理员"
           : role.code === "ordinary_admin" ? "普通管理员" : value ? "系统内置" : "自定义"
         return <Tag color={roleTagColor(role.code, value)}>{label}</Tag>
       } },
-      { title: "页面授权版本", dataIndex: "grant_version", key: "grant_version", width: 120 },
+      { title: "授权版本", dataIndex: "grant_version", key: "grant_version",
+        width: 88, align: "center", className: tableStyles.grantVersionCell },
       { title: "描述", dataIndex: "description", key: "description", ellipsis: true,
         render: (description: RoleItem["description"], role: RoleItem) =>
           role.is_system && role.code !== "super_admin" && role.code !== "ordinary_admin"

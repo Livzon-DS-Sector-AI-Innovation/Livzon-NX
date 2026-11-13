@@ -299,6 +299,27 @@ const server = createServer(async (request, response) => {
     return
   }
 
+  if (authorization === 'Bearer assignment-layout-admin') {
+    const roles = Array.from({ length: 12 }, (_, index) => ({
+      id: `role-${index + 1}`, name: `测试角色 ${index + 1}`, code: `test_role_${index + 1}`,
+      description: index === 11
+        ? '可以查看质量管理模块中的偏差记录、调查报告和供应商资料，并按授权范围维护审核记录。'.repeat(2)
+        : '用于核对角色列表与授权表单布局。',
+      is_system: false, permissions: [], grant_version: 1,
+    }))
+    const departments = Array.from({ length: 12 }, (_, index) => ({
+      feishu_department_id: `dept-${index + 1}`, name: `测试部门 ${index + 1}`, parent_feishu_department_id: null,
+    }))
+    roles.push({ id: 'role-ordinary-admin', name: '普通管理员', code: 'ordinary_admin',
+      description: '', is_system: true, permissions: [], grant_version: 1 })
+    roles.push({ id: 'role-super-admin', name: '系统管理员', code: 'super_admin',
+      description: '', is_system: true, permissions: [], grant_version: 1 })
+    if (request.url === '/api/v1/identity/admin/roles' || request.url === '/api/v1/identity/departments') {
+      response.end(JSON.stringify({ code: 200, data: request.url.endsWith('/roles') ? roles : departments }))
+      return
+    }
+  }
+
   if (authorization === 'Bearer effective-admin') {
     const role = { id: 'role-effective', name: '员工查看角色', code: 'employee_reader', is_system: false, permissions: [], grant_version: 1 }
     if (request.url?.startsWith('/api/v1/identity/admin/users')) {
