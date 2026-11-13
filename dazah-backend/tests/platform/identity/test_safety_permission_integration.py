@@ -132,3 +132,22 @@ async def test_safety_review_requires_the_matching_grant_and_rejects_ambiguous_i
         assert response.json()["data"]["status"] == "reviewed"
         assert response.json()["data"]["result"] == "qualified"
         review.assert_awaited_once_with(check_id, "qualified")
+
+
+def test_pdf_relay_routes_registered_in_signature_boundary():
+    """PDF 中转端点（上传/下载）必须登记 SAFETY_SIGNATURE_ROUTES 豁免，
+    否则页面权限集成检查会报"未完成有效的页面权限登记"。"""
+
+    expected = {
+        ("POST", "/api/v1/safety/sign-relay/pdf/{pdf_key}"),
+        ("GET", "/api/v1/safety/sign-relay/pdf/{pdf_key}"),
+    }
+    assert expected <= set(SAFETY_SIGNATURE_ROUTES)
+    # 登记的路由必须真实挂载（防登记与实现漂移）
+    mounted = {
+        (method, route.path)
+        for route in app.routes
+        if isinstance(route, APIRoute)
+        for method in route.methods or ()
+    }
+    assert expected <= mounted
