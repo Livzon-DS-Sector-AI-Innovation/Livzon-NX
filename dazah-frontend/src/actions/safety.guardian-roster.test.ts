@@ -164,3 +164,59 @@ describe('guardian roster actions', () => {
     expect(down.code).toBe(-1)
   })
 })
+
+describe('commitment workshop actions', () => {
+  it('getCommitmentWorkshops 带页面头获取配置', async () => {
+    const data = [
+      {
+        id: 'w1',
+        workshop_name: '锅炉',
+        reporter_open_id: 'ou-b',
+        reporter_name: '张三',
+        sort_order: 0,
+        is_enabled: true,
+      },
+    ]
+    mocks.fetch.mockResolvedValue(
+      new Response(JSON.stringify({ code: 200, message: 'ok', data }))
+    )
+    const { getCommitmentWorkshops } = await import('./safety')
+    const res = await getCommitmentWorkshops()
+    expect(res.code).toBe(200)
+    expect(res.data?.[0]?.workshop_name).toBe('锅炉')
+    const [url, init] = mocks.fetch.mock.calls[0]
+    expect(url).toContain('/safety/safety-commitment-workshops')
+    expect(init.headers['X-Dazah-Page-Key']).toBeDefined()
+  })
+
+  it('saveCommitmentWorkshops 成功走 PUT；失败原样返回', async () => {
+    const { saveCommitmentWorkshops } = await import('./safety')
+    mocks.fetch.mockResolvedValue(
+      new Response(
+        JSON.stringify({ code: 200, message: 'ok', data: [{ id: 'w1' }] })
+      )
+    )
+    const ok = await saveCommitmentWorkshops(
+      [
+        {
+          workshop_name: '锅炉',
+          reporter_open_id: 'ou-b',
+          reporter_name: '张三',
+          sort_order: 0,
+          is_enabled: true,
+        },
+      ],
+      'safety:ops-safety:commitment'
+    )
+    expect(ok.code).toBe(200)
+    const [url, init] = mocks.fetch.mock.calls[0]
+    expect(init.method).toBe('PUT')
+    expect(url).toContain('/safety/safety-commitment-workshops')
+
+    mocks.fetch.mockResolvedValue(
+      new Response(JSON.stringify({ message: '车间名重复' }), { status: 422 })
+    )
+    const bad = await saveCommitmentWorkshops([], 'safety:ops-safety:commitment')
+    expect(bad.code).toBe(422)
+  })
+})

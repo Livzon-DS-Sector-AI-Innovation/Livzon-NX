@@ -898,3 +898,117 @@ describe('SafetyCommitmentPanel：riskBasis 与编辑表单全字段', () => {
     expect(mocks.publishCommitment).not.toHaveBeenCalled()
   })
 })
+
+describe('SafetyCommitmentPanel 车间填报配置', () => {
+  const WS_ROWS = [
+    {
+      id: 'w1',
+      workshop_name: '锅炉',
+      reporter_open_id: 'ou-b',
+      reporter_name: '张三',
+      sort_order: 0,
+      is_enabled: true,
+    },
+    {
+      id: 'w2',
+      workshop_name: '动力部',
+      reporter_open_id: '',
+      reporter_name: '李四',
+      sort_order: 1,
+      is_enabled: false,
+    },
+  ]
+
+  async function openConfig() {
+    mocks.getCommitmentWorkshops.mockResolvedValue({
+      code: 200,
+      data: WS_ROWS,
+    })
+    await renderPanel()
+    await act(async () => {
+      buttons('车间填报配置')[0]?.click()
+    })
+    await flush()
+  }
+
+  it('打开配置弹窗：加载并渲染车间行', async () => {
+    await openConfig()
+    const text = document.body.textContent ?? ''
+    expect(text).toContain('锅炉')
+    expect(text).toContain('动力部')
+    expect(mocks.getCommitmentWorkshops).toHaveBeenCalled()
+  })
+
+  it('配置加载失败提示错误', async () => {
+    mocks.getCommitmentWorkshops.mockResolvedValue({
+      code: 500,
+      message: '后端不可用',
+    })
+    await renderPanel()
+    await act(async () => {
+      buttons('车间填报配置')[0]?.click()
+    })
+    await flush()
+    expect(mocks.message.error).toHaveBeenCalledWith('后端不可用')
+  })
+
+  it('保存成功：提交排序后的配置并提示', async () => {
+    await openConfig()
+    mocks.saveCommitmentWorkshops.mockResolvedValue({
+      code: 200,
+      data: WS_ROWS,
+    })
+    await act(async () => {
+      buttons('保存配置')[0]?.click()
+    })
+    await flush()
+    expect(mocks.saveCommitmentWorkshops).toHaveBeenCalled()
+    const payload = mocks.saveCommitmentWorkshops.mock.calls[0][0]
+    expect(payload).toHaveLength(2)
+    expect(payload[0].workshop_name).toBe('锅炉')
+    expect(mocks.message.success).toHaveBeenCalledWith('车间填报配置已保存')
+  })
+
+  it('保存失败：提示错误信息', async () => {
+    await openConfig()
+    mocks.saveCommitmentWorkshops.mockResolvedValue({
+      code: 422,
+      message: '车间名重复',
+    })
+    await act(async () => {
+      buttons('保存配置')[0]?.click()
+    })
+    await flush()
+    expect(mocks.message.error).toHaveBeenCalledWith('车间名重复')
+  })
+
+  it('删除/新增车间行与启用开关切换', async () => {
+    await openConfig()
+    expect(buttons('保存配置').length).toBeGreaterThan(0)
+    // 弹窗内车间卡：含 input 且标题为车间名的卡片（页面信息卡无 input）
+    const cards = Array.from(document.body.querySelectorAll('.ant-card'))
+    const inModal = cards.filter((c) => c.querySelector('input'))
+    expect(inModal.length).toBe(2)
+    // 删除第一行（锅炉）：extra = [Switch(渲染为 button), 删除按钮] → 取最后一个
+    const del = inModal[0].querySelectorAll('button')
+    expect(del.length).toBeGreaterThanOrEqual(2)
+    await act(async () => {
+      del[del.length - 1]?.click()
+    })
+    await flush()
+    const afterDelete = Array.from(
+      document.body.querySelectorAll('.ant-card'),
+    ).filter((c) => c.querySelector('input'))
+    expect(afterDelete.length).toBe(1)
+    // 新增一行：弹窗内 block 的「新增车间」按钮（区别于页面信息卡「新增」）
+    const addBtn = buttons('新增').find((b) => b.className.includes('block'))
+    await act(async () => {
+      addBtn?.click()
+    })
+    await flush()
+    const after = Array.from(document.body.querySelectorAll('.ant-card')).filter(
+      (c) => c.querySelector('input'),
+    )
+    expect(after.length).toBe(2)
+  })
+})

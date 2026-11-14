@@ -116,12 +116,8 @@ class SafetyHazardDueReminderGenerator(TaskGenerator):
         return [True]
 
     async def execute_one(self, session: Any, item: Any) -> None:
-        sent, errors = await hazard_due_reminder.send_hazard_due_notifications(
-            session
-        )
-        logger.info(
-            "隐患到期提醒推送完成: 成功=%s 错误=%s", sent, errors or "无"
-        )
+        sent, errors = await hazard_due_reminder.send_hazard_due_notifications(session)
+        logger.info("隐患到期提醒推送完成: 成功=%s 错误=%s", sent, errors or "无")
 
 
 class SafetyPageMirrorSyncGenerator(TaskGenerator):
@@ -201,12 +197,10 @@ class SafetyFireExpiryReminderGenerator(TaskGenerator):
     async def execute_one(self, session: Any, item: Any) -> None:
         from app.modules.safety.service import fire_expiry_reminder
 
-        sent, errors = (
-            await fire_expiry_reminder.send_fire_expiry_notifications(session)
+        sent, errors = await fire_expiry_reminder.send_fire_expiry_notifications(
+            session
         )
-        logger.info(
-            "消防器材有效期提醒推送完成: 成功=%s 错误=%s", sent, errors or "无"
-        )
+        logger.info("消防器材有效期提醒推送完成: 成功=%s 错误=%s", sent, errors or "无")
 
 
 class SafetyWorkPermitGasDueGenerator(TaskGenerator):
@@ -231,9 +225,7 @@ class SafetyWorkPermitGasDueGenerator(TaskGenerator):
 
         # 非生产环境不自动推送真实飞书消息（护栏同隐患到期提醒）
         if get_settings().APP_ENV != "production":
-            logger.info(
-                "非生产环境（APP_ENV!=production），作业票复检催办跳过"
-            )
+            logger.info("非生产环境（APP_ENV!=production），作业票复检催办跳过")
             return []
 
         row = (
@@ -245,9 +237,7 @@ class SafetyWorkPermitGasDueGenerator(TaskGenerator):
             )
         ).scalar_one_or_none()
         if row is None or not row.permit_notify_enabled:
-            logger.info(
-                "作业票飞书通知未启用（permit_notify_enabled=false），本轮跳过"
-            )
+            logger.info("作业票飞书通知未启用（permit_notify_enabled=false），本轮跳过")
             return []
         return [True]
 
@@ -282,9 +272,7 @@ class SafetyCertificateExpiryReminderGenerator(TaskGenerator):
         from app.modules.safety.models import SafetyFeishuAppSettings
 
         if get_settings().APP_ENV != "production":
-            logger.info(
-                "非生产环境（APP_ENV!=production），证件到期提醒自动推送跳过"
-            )
+            logger.info("非生产环境（APP_ENV!=production），证件到期提醒自动推送跳过")
             return []
 
         row = (
@@ -333,15 +321,12 @@ class SafetyCommitmentPushGenerator(TaskGenerator):
     timeout_seconds = 300
 
     async def find_due(self, session: Any) -> list[Any]:
-        from datetime import datetime, timedelta, timezone
 
         from app.core.config import get_settings
         from app.modules.safety.models import SafetyFeishuAppSettings
 
         if get_settings().APP_ENV != "production":
-            logger.info(
-                "非生产环境（APP_ENV!=production），安全承诺填报推送跳过"
-            )
+            logger.info("非生产环境（APP_ENV!=production），安全承诺填报推送跳过")
             return []
 
         row = (
@@ -360,7 +345,6 @@ class SafetyCommitmentPushGenerator(TaskGenerator):
         from datetime import datetime, timedelta, timezone
 
         from app.core.redis import cache_get, cache_set
-
         from app.modules.safety.service.commitment_notify import (
             push_remind_cards,
             push_workshop_cards,
@@ -378,6 +362,7 @@ class SafetyCommitmentPushGenerator(TaskGenerator):
         from app.modules.safety.service.commitment_notify import (
             get_commitment_settings,
         )
+
         settings = await get_commitment_settings(session)
         if settings is None:
             return
@@ -394,12 +379,13 @@ class SafetyCommitmentPushGenerator(TaskGenerator):
             f"commitment_ws_pushed:{report_date}"
         ):
             sent, failed, missing = await push_workshop_cards(session, report_date)
-            await cache_set(
-                f"commitment_ws_pushed:{report_date}", "1", ex=20 * 60 * 60
-            )
+            await cache_set(f"commitment_ws_pushed:{report_date}", "1", ex=20 * 60 * 60)
             logger.info(
                 "车间填报卡推送完成: date=%s 成功=%s 失败=%s 未配负责人=%s",
-                report_date, sent, failed, len(missing),
+                report_date,
+                sent,
+                failed,
+                len(missing),
             )
 
         # 2) 汇总检查（齐全未汇总则汇总+推群，服务与 notify 各自幂等）
@@ -428,7 +414,9 @@ class SafetyCommitmentPushGenerator(TaskGenerator):
                     await cache_set(remind_key, "1", ex=12 * 60 * 60)
                     logger.info(
                         "车间填报催办完成: date=%s 成功=%s 失败=%s",
-                        report_date, sent, failed,
+                        report_date,
+                        sent,
+                        failed,
                     )
 
 
@@ -483,9 +471,7 @@ async def mirror_sync_loop() -> None:
                         await generator.execute_one(session, page_key)
                         synced.append(page_key)
                     except Exception:
-                        logger.exception(
-                            "页面镜像独立同步单页失败: page=%s", page_key
-                        )
+                        logger.exception("页面镜像独立同步单页失败: page=%s", page_key)
                 await session.commit()
                 if special_danger_page_key in synced:
                     try:

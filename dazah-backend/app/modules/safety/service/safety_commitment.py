@@ -28,7 +28,6 @@ from app.modules.safety.schemas.safety_commitment import (
     SafetyCommitmentCardUpdateRequest,
     SafetyCommitmentUpdateRequest,
 )
-from app.modules.safety.service import safety_commitment_risk
 from app.platform.audit.service import record_audit_log
 
 logger = logging.getLogger(__name__)
@@ -51,6 +50,7 @@ def _as_date(value: date | str) -> date:
         return date.fromisoformat(str(value).strip())
     except ValueError as exc:
         raise AppException(message=f"日期格式无效：{value}") from exc
+
 
 DEFAULT_COMMITMENT_TEMPLATE = """今日本公司郑重向全体员工作出安全承诺：
 一、当日所有生产装置、罐区、仓库均处于安全运行状态，各类安全风险得到有效管控；
@@ -106,7 +106,7 @@ def _to_item(report: SafetyCommitmentReport) -> dict[str, Any]:
         "report_date": report.report_date,
         "enterprise_status": dict(report.enterprise_status or {}),
         "commitment_text": report.commitment_text,
-            "risk_assessment": (
+        "risk_assessment": (
             dict(report.risk_assessment) if report.risk_assessment else None
         ),
         "status": report.status,

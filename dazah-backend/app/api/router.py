@@ -21,11 +21,11 @@ from app.modules.registration import router as registration_router
 from app.modules.regulatory_tracker import router as regulatory_tracker_router
 from app.modules.research import router as research_router
 from app.modules.safety import router as safety_router
-from app.modules.safety.api.sign_relay_public import (
-    sign_relay_public_router,
-)
 from app.modules.safety.api.commitment_sign_public import (
     commitment_sign_public_router,
+)
+from app.modules.safety.api.sign_relay_public import (
+    sign_relay_public_router,
 )
 from app.modules.safety.api.work_permit_sign_public import (
     work_permit_sign_public_router,
