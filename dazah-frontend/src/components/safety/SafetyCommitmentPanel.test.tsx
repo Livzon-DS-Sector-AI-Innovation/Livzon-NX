@@ -1012,3 +1012,68 @@ describe('SafetyCommitmentPanel 车间填报配置', () => {
     expect(after.length).toBe(2)
   })
 })
+
+describe('SafetyCommitmentPanel 车间配置行内编辑', () => {
+  it('编辑三个输入框并关闭弹窗', async () => {
+    mocks.getCommitmentWorkshops.mockResolvedValue({
+      code: 200,
+      data: [
+        {
+          id: 'w1',
+          workshop_name: '锅炉',
+          reporter_open_id: 'ou-b',
+          reporter_name: '张三',
+          sort_order: 0,
+          is_enabled: true,
+        },
+      ],
+    })
+    await renderPanel()
+    await act(async () => {
+      buttons('车间填报配置')[0]?.click()
+    })
+    await flush()
+
+    const modalCards = Array.from(
+      document.body.querySelectorAll('.ant-card'),
+    ).filter((c) => c.querySelector('input'))
+    expect(modalCards.length).toBe(1)
+    const inputs = Array.from(modalCards[0].querySelectorAll('input'))
+    expect(inputs.length).toBe(3)
+    // 依次编辑：车间名 / 负责人姓名 / open_id
+    const values = ['102车间', '李四', 'ou-l4']
+    for (let i = 0; i < inputs.length; i += 1) {
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        'value',
+      )?.set
+      await act(async () => {
+        setter?.call(inputs[i], values[i])
+        inputs[i].dispatchEvent(new Event('input', { bubbles: true }))
+      })
+      await flush()
+    }
+    // 保存携带编辑后的值
+    mocks.saveCommitmentWorkshops.mockResolvedValue({
+      code: 200,
+      data: [],
+    })
+    await act(async () => {
+      buttons('保存配置')[0]?.click()
+    })
+    await flush()
+    const payload = mocks.saveCommitmentWorkshops.mock.calls[0][0]
+    expect(payload[0].workshop_name).toBe('102车间')
+    expect(payload[0].reporter_name).toBe('李四')
+    expect(payload[0].reporter_open_id).toBe('ou-l4')
+
+    // 关闭按钮 onClose
+    const closeBtn = Array.from(
+      document.body.querySelectorAll<HTMLButtonElement>('button'),
+    ).find((b) => (b.textContent ?? '').trim() === '关闭')
+    await act(async () => {
+      closeBtn?.click()
+    })
+    await flush()
+  })
+})

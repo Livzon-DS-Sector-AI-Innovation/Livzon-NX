@@ -1157,16 +1157,31 @@ async def test_commitment_notify_test_endpoint(
     )
     await db_session.commit()
 
-    sent: list[str] = []
+    sent: list[tuple[str, str]] = []
 
-    async def _fake_send(db: Any, open_id: str) -> bool:
-        sent.append(open_id)
+    async def _fake_send(db: Any, open_id: str, ws_name: str) -> bool:
+        sent.append((open_id, ws_name))
         return True
 
-    monkeypatch.setattr(service, "send_test_fill_card", _fake_send)
+    monkeypatch.setattr(service, "send_test_workshop_card", _fake_send)
+
+    async def _configs(db: Any, ensure: bool = True) -> list[Any]:
+        from types import SimpleNamespace
+
+        return [
+            SimpleNamespace(
+                workshop_name="一车间",
+                reporter_open_id="ou-sc-target",
+                reporter_name="张三",
+            )
+        ]
+
+    monkeypatch.setattr(
+        "app.modules.safety.service.commitment_workshops.list_configs", _configs
+    )
     result = await api.test_commitment_notify(db_session, None)
     assert result.data["success"] is True
-    assert sent == ["ou-sc-target"]
+    assert sent == [("ou-sc-target", "一车间")]
 
     await _cleanup_chat_flow(db_session)
 

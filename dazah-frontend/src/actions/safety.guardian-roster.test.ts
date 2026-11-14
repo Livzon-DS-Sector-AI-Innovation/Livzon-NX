@@ -220,3 +220,22 @@ describe('commitment workshop actions', () => {
     expect(bad.code).toBe(422)
   })
 })
+
+describe('commitment workshop fills action', () => {
+  it('getCommitmentWorkshopFills 带/不带日期两种查询', async () => {
+    const data = { report_date: '2026-11-14', total: 2, filled: 1, workshops: [] }
+    mocks.fetch.mockResolvedValue(
+      new Response(JSON.stringify({ code: 200, message: 'ok', data }))
+    )
+    const { getCommitmentWorkshopFills } = await import('./safety')
+    await getCommitmentWorkshopFills('2026-11-14')
+    expect(mocks.fetch.mock.calls[0][0]).toContain(
+      '/safety/safety-commitment-workshops/fills?date=2026-11-14'
+    )
+    await getCommitmentWorkshopFills(null)
+    expect(mocks.fetch.mock.calls[1][0]).toContain(
+      '/safety/safety-commitment-workshops/fills'
+    )
+    expect(mocks.fetch.mock.calls[1][0]).not.toContain('?')
+  })
+})
