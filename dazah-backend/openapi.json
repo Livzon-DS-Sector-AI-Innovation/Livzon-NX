@@ -67912,6 +67912,12 @@
             ],
             "title": "Certificate No"
           },
+          "external": {
+            "default": false,
+            "description": "外部人员（证书名单外手工录入）",
+            "title": "External",
+            "type": "boolean"
+          },
           "name": {
             "description": "姓名",
             "maxLength": 100,
@@ -68009,6 +68015,12 @@
             ],
             "description": "证件有效性（None=未关联证件）",
             "title": "Certificate Valid"
+          },
+          "external": {
+            "default": false,
+            "description": "外部人员（证书名单外手工录入）",
+            "title": "External",
+            "type": "boolean"
           },
           "name": {
             "description": "姓名",
@@ -79626,6 +79638,21 @@
               }
             ],
             "title": "Updated At"
+          },
+          "workshop_summary": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workshop Summary"
           }
         },
         "required": [
@@ -80940,6 +80967,22 @@
             "default": "08:30",
             "title": "Commitment Push Time",
             "type": "string"
+          },
+          "commitment_remind_interval_minutes": {
+            "default": 30,
+            "title": "Commitment Remind Interval Minutes",
+            "type": "integer"
+          },
+          "commitment_signer_open_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commitment Signer Open Id"
           },
           "commitment_user_ids": {
             "items": {
@@ -97032,6 +97075,25 @@
             "maxLength": 5,
             "title": "Commitment Push Time",
             "type": "string"
+          },
+          "commitment_remind_interval_minutes": {
+            "default": 30,
+            "maximum": 720.0,
+            "minimum": 5.0,
+            "title": "Commitment Remind Interval Minutes",
+            "type": "integer"
+          },
+          "commitment_signer_open_id": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commitment Signer Open Id"
           },
           "commitment_user_ids": {
             "items": {
@@ -228186,6 +228248,67 @@
         ]
       }
     },
+    "/api/v1/safety/commitment-sign": {
+      "post": {
+        "operationId": "submit_commitment_signature_api_v1_safety_commitment_sign_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "提交企业安全承诺手写签名（免登）",
+        "tags": [
+          "安全承诺免登签署"
+        ]
+      }
+    },
+    "/api/v1/safety/commitment-sign/{token}": {
+      "get": {
+        "operationId": "render_commitment_sign_page_api_v1_safety_commitment_sign__token__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "企业安全承诺签署手写板（免登）",
+        "tags": [
+          "安全承诺免登签署"
+        ]
+      }
+    },
     "/api/v1/safety/contractors": {
       "get": {
         "description": "获取承包商列表",
@@ -232714,7 +232837,7 @@
     },
     "/api/v1/safety/feishu-settings/commitment-notify/test": {
       "post": {
-        "description": "向已配置的第一个填报人员发送一张样例填报卡，验证推送通道。",
+        "description": "向第一个配置了负责人的车间发送样例填报卡，验证推送通道。",
         "operationId": "test_commitment_notify_api_v1_safety_feishu_settings_commitment_notify_test_post",
         "parameters": [
           {
@@ -244367,6 +244490,180 @@
         ]
       }
     },
+    "/api/v1/safety/safety-commitment-workshops": {
+      "get": {
+        "operationId": "list_workshop_configs_api_v1_safety_safety_commitment_workshops_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_dict_str__Any___"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "车间填报配置列表（首次访问自动播种 12 车间）",
+        "tags": [
+          "安全管理"
+        ]
+      },
+      "put": {
+        "operationId": "save_workshop_configs_api_v1_safety_safety_commitment_workshops_put",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": true,
+                "title": "Payload",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_dict_str__Any___"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "批量保存车间填报配置（名称/负责人/排序/启停，可增删）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
+    "/api/v1/safety/safety-commitment-workshops/fills": {
+      "get": {
+        "operationId": "get_workshop_fills_api_v1_safety_safety_commitment_workshops_fills_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_dict_str__Any__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "当日各车间填报状态与明细（汇总进度）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
     "/api/v1/safety/safety-commitments/by-date/{report_date}": {
       "get": {
         "operationId": "get_commitment_by_date_api_v1_safety_safety_commitments_by_date__report_date__get",
@@ -244498,6 +244795,70 @@
         ]
       }
     },
+    "/api/v1/safety/safety-commitments/signature-image": {
+      "get": {
+        "operationId": "get_commitment_signature_image_api_v1_safety_safety_commitments_signature_image_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "读取当日承诺签名图（PNG，登录态）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
     "/api/v1/safety/safety-commitments/today": {
       "get": {
         "operationId": "get_today_commitment_api_v1_safety_safety_commitments_today_get",
@@ -244616,6 +244977,63 @@
         ]
       }
     },
+    "/api/v1/safety/safety-commitments/{report_id}/download": {
+      "get": {
+        "operationId": "download_commitment_api_v1_safety_safety_commitments__report_id__download_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "report_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Report Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "下载企业安全承诺公告（含企业状态与签名图）",
+        "tags": [
+          "安全管理"
+        ]
+      }
+    },
     "/api/v1/safety/safety-commitments/{report_id}/publish": {
       "post": {
         "operationId": "publish_commitment_api_v1_safety_safety_commitments__report_id__publish_post",
@@ -244679,7 +245097,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "发布当日承诺公告（主要负责人名义）",
+        "summary": "发布并推送签署（推签署卡给设置的主要负责人手写签名）",
         "tags": [
           "安全管理"
         ]

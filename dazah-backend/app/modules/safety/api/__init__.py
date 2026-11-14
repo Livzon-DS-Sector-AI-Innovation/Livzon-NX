@@ -8,6 +8,9 @@ from fastapi import APIRouter
 from app.modules.safety.api.accidents import accidents_router
 from app.modules.safety.api.ai_workflow import ai_workflow_router
 from app.modules.safety.api.checks import checks_router
+from app.modules.safety.api.commitment_workshops import (
+    commitment_workshops_router,
+)
 from app.modules.safety.api.contractors import contractors_router
 from app.modules.safety.api.daily_risk_reports import daily_risk_reports_router
 from app.modules.safety.api.dashboard import safety_dashboard_router
@@ -64,6 +67,7 @@ router.include_router(oh_detection_reports_router)
 router.include_router(oh_hazard_monitors_router)
 router.include_router(oh_health_exams_router)
 router.include_router(page_table_router)
+router.include_router(commitment_workshops_router)
 router.include_router(regulations_router)
 router.include_router(safety_commitments_router)
 router.include_router(safety_targets_router)

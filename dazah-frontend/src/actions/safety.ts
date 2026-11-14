@@ -4942,3 +4942,47 @@ export async function fetchEmergencyPlanDocxBytes(
   const buffer = await response.arrayBuffer()
   return { base64: Buffer.from(buffer).toString('base64'), fileName }
 }
+
+export async function getCommitmentWorkshops(pageKey?: string) {
+  return fetchApi<
+    import('@/lib/safety-commitment').WorkshopConfig[]
+  >('/safety/safety-commitment-workshops', {
+    headers: commitmentHeaders(pageKey),
+  })
+}
+
+export async function saveCommitmentWorkshops(
+  items: {
+    id?: string
+    workshop_name: string
+    reporter_open_id?: string
+    reporter_name?: string
+    sort_order?: number
+    is_enabled?: boolean
+  }[],
+  pageKey?: string
+) {
+  const res = await fetchApi<
+    import('@/lib/safety-commitment').WorkshopConfig[]
+  >('/safety/safety-commitment-workshops', {
+    method: 'PUT',
+    headers: {
+      ...commitmentHeaders(pageKey),
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ items }),
+  })
+  if (res.code === 200) commitmentPage()
+  return res
+}
+
+export async function getCommitmentWorkshopFills(
+  date: string | null,
+  pageKey?: string
+) {
+  const query = date ? `?date=${date}` : ''
+  return fetchApi<import('@/lib/safety-commitment').WorkshopFillsProgress>(
+    `/safety/safety-commitment-workshops/fills${query}`,
+    { headers: commitmentHeaders(pageKey) }
+  )
+}

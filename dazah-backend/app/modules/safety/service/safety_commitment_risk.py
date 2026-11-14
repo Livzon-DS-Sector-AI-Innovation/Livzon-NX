@@ -28,11 +28,11 @@ from app.core.llm.exceptions import (
 from app.modules.safety.models import (
     Accident,
     ChemicalInventory,
+    DailyRiskReport,
     HazardousChemical,
     HazardReport,
     SafetyCommitmentReport,
     SpecialOperationReport,
-    WorkPermit,
 )
 from app.modules.safety.page_tables import HAZCHEM_PAGE_KEY
 from app.modules.safety.schemas.safety_commitment import RISK_LEVELS
@@ -56,9 +56,9 @@ _PROMPT_TEMPLATE = """你是化工企业的安全管理助手。
 ## 当日企业状态（人工填报）
 {enterprise_status}
 
-## 当日特殊作业（报备+作业票）
+## 当日申报作业
 - 特殊作业报备 {ops_report_total} 项：{ops_report_items}
-- 作业票（approved/active）{permit_total} 张：{permit_items}
+- 关键风险作业报备 {risk_report_total} 项：{risk_report_items}
 
 ## 未关闭隐患
 共 {hazard_total} 条{hazard_by_level}
@@ -86,7 +86,10 @@ def _short(text: str | None, limit: int = 60) -> str:
 async def _collect_today_operations(
     db: AsyncSession, day_start: datetime, day_end: datetime
 ) -> tuple[int, list[str], int, list[str]]:
-    """当日特殊作业：报备表 + 作业票（approved/active）。"""
+    """当日申报作业：特殊作业报备 + 关键风险作业报备（排除草稿/驳回）。
+
+    口径以申报为主，不采集平台作业票（work_permits）审批数据。
+    """
     ops_rows = (
         await db.execute(
             select(SpecialOperationReport).where(
@@ -101,27 +104,20 @@ async def _collect_today_operations(
         _short(f"{row.operation_type}·{row.location or ''}") for row in ops_rows
     ][:_MAX_ITEMS_IN_PROMPT]
 
-    permit_rows = (
+    risk_rows = (
         await db.execute(
-            select(WorkPermit).where(
-                WorkPermit.is_deleted.is_(False),
-                WorkPermit.status.in_(["approved", "active"]),
-                or_(
-                    WorkPermit.planned_start_time.is_(None),
-                    WorkPermit.planned_start_time < day_end,
-                ),
-                or_(
-                    WorkPermit.planned_end_time.is_(None),
-                    WorkPermit.planned_end_time >= day_start,
-                ),
+            select(DailyRiskReport).where(
+                DailyRiskReport.is_deleted.is_(False),
+                DailyRiskReport.report_date == day_start.date(),
+                DailyRiskReport.status.notin_(["draft", "rejected"]),
             )
         )
     ).scalars()
-    permit_items = [
-        _short(f"{row.permit_no}·{row.permit_type}·{row.permit_level}")
-        for row in permit_rows
+    risk_items = [
+        _short(f"{row.operation_description or ''}·{row.department or ''}")
+        for row in risk_rows
     ][:_MAX_ITEMS_IN_PROMPT]
-    return len(ops_items), ops_items, len(permit_items), permit_items
+    return len(ops_items), ops_items, len(risk_items), risk_items
 
 
 async def _collect_open_hazards(db: AsyncSession) -> tuple[int, str]:
@@ -216,8 +212,8 @@ async def collect_daily_context(
     (
         ops_report_total,
         ops_report_items,
-        permit_total,
-        permit_items,
+        risk_report_total,
+        risk_report_items,
     ) = await _collect_today_operations(db, day_start, day_end)
     hazard_total, hazard_by_level = await _collect_open_hazards(db)
     over_limit_items = await _collect_over_limit_chemicals(db)
@@ -227,8 +223,8 @@ async def collect_daily_context(
         "report_date": str(report_date),
         "ops_report_total": ops_report_total,
         "ops_report_items": ops_report_items,
-        "permit_total": permit_total,
-        "permit_items": permit_items,
+        "risk_report_total": risk_report_total,
+        "risk_report_items": risk_report_items,
         "hazard_total": hazard_total,
         "hazard_by_level": hazard_by_level,
         "over_limit_items": over_limit_items,
@@ -255,9 +251,9 @@ def _build_prompt(context: dict[str, Any], enterprise_status: dict[str, Any]) ->
             "\n".join(f"- {item}" for item in context["ops_report_items"])
             or "- 无"
         ),
-        permit_total=context["permit_total"],
-        permit_items=(
-            "\n".join(f"- {item}" for item in context["permit_items"]) or "- 无"
+        risk_report_total=context["risk_report_total"],
+        risk_report_items=(
+            "\n".join(f"- {item}" for item in context["risk_report_items"]) or "- 无"
         ),
         hazard_total=context["hazard_total"],
         hazard_by_level=context["hazard_by_level"],
@@ -325,7 +321,7 @@ async def generate_risk_assessment(
         **assessment,
         "data_basis": {
             "ops_report_total": context["ops_report_total"],
-            "permit_total": context["permit_total"],
+            "risk_report_total": context["risk_report_total"],
             "hazard_total": context["hazard_total"],
             "over_limit_total": len(context["over_limit_items"]),
             "accident_total": len(context["accidents"]),

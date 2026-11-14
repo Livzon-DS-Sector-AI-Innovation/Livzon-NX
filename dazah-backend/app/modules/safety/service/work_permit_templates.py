@@ -105,6 +105,36 @@ PERSON_ROLE_CERT_CATEGORIES: dict[str, tuple[str, ...]] = {
     "guardian": ("confined_space_guardian",),
 }
 
+# 天然多人员的角色（②步可多选；批准后交底签字推送对象）
+MULTI_PERSON_ROLES: tuple[str, ...] = ("worker", "rigger", "rigging_slacker")
+
+# 发起签字行（聊天流表单态签字，node_id 为空落库）
+INITIATOR_SIGN_KEYS: tuple[str, ...] = ("initiator", "briefer", "briefer_receiver")
+
+
+def is_multi_person_role(role_key: str) -> bool:
+    return role_key in MULTI_PERSON_ROLES
+
+
+def brief_worker_entries(
+    persons: list[dict[str, object]] | None,
+) -> list[tuple[int, dict[str, object]]]:
+    """需交底签字的作业人条目 → [(序号, person)]，序号即签字行 brief_worker_{i}。
+
+    按 persons 列表顺序对 multi 角色条目连续编号，作为签字行 key 的稳定标识。
+    """
+    entries: list[tuple[int, dict[str, object]]] = []
+    index = 0
+    for person in persons or []:
+        if str(person.get("role")) in MULTI_PERSON_ROLES:
+            entries.append((index, person))
+            index += 1
+    return entries
+
+
+def brief_sign_key(index: int) -> str:
+    return f"brief_worker_{index}"
+
 # ── 证件类别字典（人员特殊作业证件管理） ──
 
 CERTIFICATE_CATEGORIES: tuple[dict[str, str], ...] = (
@@ -882,7 +912,7 @@ _PERMIT_TYPES: tuple[PermitTypeTemplate, ...] = (
         ),
         person_roles=(
             {"role": "work_leader", "label": "作业负责人"},
-            {"role": "worker", "label": "作业人", "cert": True},
+            {"role": "worker", "label": "作业人", "cert": True, "multi": True},
             {"role": "guardian", "label": "作业监护人"},
             {"role": "process_guardian", "label": "工艺监护人"},
             {"role": "briefer", "label": "安全交底人"},
@@ -913,7 +943,7 @@ _PERMIT_TYPES: tuple[PermitTypeTemplate, ...] = (
         ),
         person_roles=(
             {"role": "work_leader", "label": "作业负责人"},
-            {"role": "worker", "label": "作业人", "cert": True},
+            {"role": "worker", "label": "作业人", "cert": True, "multi": True},
             {"role": "guardian", "label": "监护人", "cert": True},
             {"role": "process_guardian", "label": "工艺监护人"},
             {"role": "briefer", "label": "安全交底人"},
@@ -945,7 +975,7 @@ _PERMIT_TYPES: tuple[PermitTypeTemplate, ...] = (
         ),
         person_roles=(
             {"role": "work_leader", "label": "作业负责人"},
-            {"role": "worker", "label": "作业人"},
+            {"role": "worker", "label": "作业人", "multi": True},
             {"role": "guardian", "label": "监护人"},
             {"role": "briefer", "label": "安全交底人"},
             {"role": "briefer_receiver", "label": "接受交底人"},
@@ -980,7 +1010,7 @@ _PERMIT_TYPES: tuple[PermitTypeTemplate, ...] = (
         ),
         person_roles=(
             {"role": "work_leader", "label": "作业负责人"},
-            {"role": "worker", "label": "作业人", "cert": True},
+            {"role": "worker", "label": "作业人", "cert": True, "multi": True},
             {"role": "guardian", "label": "监护人"},
             {"role": "briefer", "label": "安全交底人"},
             {"role": "briefer_receiver", "label": "接受交底人"},
@@ -1007,8 +1037,8 @@ _PERMIT_TYPES: tuple[PermitTypeTemplate, ...] = (
             _n("completion_accept", "完工验收", NODE_KIND_ACCEPT),
         ),
         person_roles=(
-            {"role": "rigger", "label": "吊装作业人", "cert": True},
-            {"role": "rigging_slacker", "label": "司索人", "cert": True},
+            {"role": "rigger", "label": "吊装作业人", "cert": True, "multi": True},
+            {"role": "rigging_slacker", "label": "司索人", "cert": True, "multi": True},
             {"role": "crane_commander", "label": "指挥人员", "cert": True},
             {"role": "guardian", "label": "监护人"},
             {"role": "briefer", "label": "安全交底人"},
@@ -1065,7 +1095,7 @@ _PERMIT_TYPES: tuple[PermitTypeTemplate, ...] = (
         ),
         person_roles=(
             {"role": "work_leader", "label": "作业负责人"},
-            {"role": "worker", "label": "作业人"},
+            {"role": "worker", "label": "作业人", "multi": True},
             {"role": "guardian", "label": "监护人"},
             {"role": "briefer", "label": "安全交底人"},
             {"role": "briefer_receiver", "label": "接受交底人"},
@@ -1186,6 +1216,11 @@ __all__ = [
     "NODE_STATUS_SKIPPED",
     "NODE_STATUS_WAITING",
     "PERSON_ROLE_CERT_CATEGORIES",
+    "MULTI_PERSON_ROLES",
+    "is_multi_person_role",
+    "INITIATOR_SIGN_KEYS",
+    "brief_worker_entries",
+    "brief_sign_key",
     "PERSON_ROLE_LABELS",
     "PERMIT_LEVEL_LABELS",
     "PERMIT_STATUS_ACTIVE",

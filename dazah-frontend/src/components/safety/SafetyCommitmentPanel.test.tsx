@@ -12,6 +12,9 @@ const mocks = vi.hoisted(() => ({
   updateCommitment: vi.fn(),
   publishCommitment: vi.fn(),
   regenerateCommitmentRiskAssessment: vi.fn(),
+  getCommitmentWorkshopFills: vi.fn(),
+  getCommitmentWorkshops: vi.fn(),
+  saveCommitmentWorkshops: vi.fn(),
   createCommitmentCard: vi.fn(),
   updateCommitmentCard: vi.fn(),
   deleteCommitmentCard: vi.fn(),
@@ -27,6 +30,9 @@ vi.mock('@/actions/safety', () => ({
   updateCommitment: mocks.updateCommitment,
   publishCommitment: mocks.publishCommitment,
   regenerateCommitmentRiskAssessment: mocks.regenerateCommitmentRiskAssessment,
+  getCommitmentWorkshopFills: mocks.getCommitmentWorkshopFills,
+  getCommitmentWorkshops: mocks.getCommitmentWorkshops,
+  saveCommitmentWorkshops: mocks.saveCommitmentWorkshops,
   createCommitmentCard: mocks.createCommitmentCard,
   updateCommitmentCard: mocks.updateCommitmentCard,
   deleteCommitmentCard: mocks.deleteCommitmentCard,
@@ -83,6 +89,7 @@ vi.mock('@ant-design/icons', () => {
     PlusOutlined: Icon,
     ReloadOutlined: Icon,
     SendOutlined: Icon,
+    SettingOutlined: Icon,
   }
 })
 
@@ -187,6 +194,18 @@ beforeEach(() => {
   mocks.getCommitmentCards.mockResolvedValue({
     code: 200,
     data: { cards: CARDS },
+  })
+  mocks.getCommitmentWorkshopFills.mockResolvedValue({
+    code: 200,
+    data: {
+      report_date: todayStr(),
+      total: 2,
+      filled: 1,
+      workshops: [
+        { workshop_name: '锅炉', reporter_name: '', reporter_open_id: '', filled: true, filled_by_name: '张起智', filled_at: null, fields: {}, remark: '', source: 'feishu' },
+        { workshop_name: '动力部', reporter_name: '', reporter_open_id: '', filled: false, filled_by_name: '', filled_at: null, fields: {}, remark: '', source: '' },
+      ],
+    },
   })
   mocks.updateCommitment.mockResolvedValue({
     code: 200,
@@ -489,7 +508,7 @@ describe('SafetyCommitmentPanel：发布与 AI 研判失败分支', () => {
     mocks.publishCommitment.mockResolvedValue({ code: 500, message: '发布失败' })
     await renderPanel()
     act(() => {
-      buttons('发布承诺公告')[0]?.click()
+      buttons('发布并推送签署')[0]?.click()
     })
     await flush()
     await act(async () => {
@@ -877,5 +896,184 @@ describe('SafetyCommitmentPanel：riskBasis 与编辑表单全字段', () => {
       await flush()
     }
     expect(mocks.publishCommitment).not.toHaveBeenCalled()
+  })
+})
+
+describe('SafetyCommitmentPanel 车间填报配置', () => {
+  const WS_ROWS = [
+    {
+      id: 'w1',
+      workshop_name: '锅炉',
+      reporter_open_id: 'ou-b',
+      reporter_name: '张三',
+      sort_order: 0,
+      is_enabled: true,
+    },
+    {
+      id: 'w2',
+      workshop_name: '动力部',
+      reporter_open_id: '',
+      reporter_name: '李四',
+      sort_order: 1,
+      is_enabled: false,
+    },
+  ]
+
+  async function openConfig() {
+    mocks.getCommitmentWorkshops.mockResolvedValue({
+      code: 200,
+      data: WS_ROWS,
+    })
+    await renderPanel()
+    await act(async () => {
+      buttons('车间填报配置')[0]?.click()
+    })
+    await flush()
+  }
+
+  it('打开配置弹窗：加载并渲染车间行', async () => {
+    await openConfig()
+    const text = document.body.textContent ?? ''
+    expect(text).toContain('锅炉')
+    expect(text).toContain('动力部')
+    expect(mocks.getCommitmentWorkshops).toHaveBeenCalled()
+  })
+
+  it('配置加载失败提示错误', async () => {
+    mocks.getCommitmentWorkshops.mockResolvedValue({
+      code: 500,
+      message: '后端不可用',
+    })
+    await renderPanel()
+    await act(async () => {
+      buttons('车间填报配置')[0]?.click()
+    })
+    await flush()
+    expect(mocks.message.error).toHaveBeenCalledWith('后端不可用')
+  })
+
+  it('保存成功：提交排序后的配置并提示', async () => {
+    await openConfig()
+    mocks.saveCommitmentWorkshops.mockResolvedValue({
+      code: 200,
+      data: WS_ROWS,
+    })
+    await act(async () => {
+      buttons('保存配置')[0]?.click()
+    })
+    await flush()
+    expect(mocks.saveCommitmentWorkshops).toHaveBeenCalled()
+    const payload = mocks.saveCommitmentWorkshops.mock.calls[0][0]
+    expect(payload).toHaveLength(2)
+    expect(payload[0].workshop_name).toBe('锅炉')
+    expect(mocks.message.success).toHaveBeenCalledWith('车间填报配置已保存')
+  })
+
+  it('保存失败：提示错误信息', async () => {
+    await openConfig()
+    mocks.saveCommitmentWorkshops.mockResolvedValue({
+      code: 422,
+      message: '车间名重复',
+    })
+    await act(async () => {
+      buttons('保存配置')[0]?.click()
+    })
+    await flush()
+    expect(mocks.message.error).toHaveBeenCalledWith('车间名重复')
+  })
+
+  it('删除/新增车间行与启用开关切换', async () => {
+    await openConfig()
+    expect(buttons('保存配置').length).toBeGreaterThan(0)
+    // 弹窗内车间卡：含 input 且标题为车间名的卡片（页面信息卡无 input）
+    const cards = Array.from(document.body.querySelectorAll('.ant-card'))
+    const inModal = cards.filter((c) => c.querySelector('input'))
+    expect(inModal.length).toBe(2)
+    // 删除第一行（锅炉）：extra = [Switch(渲染为 button), 删除按钮] → 取最后一个
+    const del = inModal[0].querySelectorAll('button')
+    expect(del.length).toBeGreaterThanOrEqual(2)
+    await act(async () => {
+      del[del.length - 1]?.click()
+    })
+    await flush()
+    const afterDelete = Array.from(
+      document.body.querySelectorAll('.ant-card'),
+    ).filter((c) => c.querySelector('input'))
+    expect(afterDelete.length).toBe(1)
+    // 新增一行：弹窗内 block 的「新增车间」按钮（区别于页面信息卡「新增」）
+    const addBtn = buttons('新增').find((b) => b.className.includes('block'))
+    await act(async () => {
+      addBtn?.click()
+    })
+    await flush()
+    const after = Array.from(document.body.querySelectorAll('.ant-card')).filter(
+      (c) => c.querySelector('input'),
+    )
+    expect(after.length).toBe(2)
+  })
+})
+
+describe('SafetyCommitmentPanel 车间配置行内编辑', () => {
+  it('编辑三个输入框并关闭弹窗', async () => {
+    mocks.getCommitmentWorkshops.mockResolvedValue({
+      code: 200,
+      data: [
+        {
+          id: 'w1',
+          workshop_name: '锅炉',
+          reporter_open_id: 'ou-b',
+          reporter_name: '张三',
+          sort_order: 0,
+          is_enabled: true,
+        },
+      ],
+    })
+    await renderPanel()
+    await act(async () => {
+      buttons('车间填报配置')[0]?.click()
+    })
+    await flush()
+
+    const modalCards = Array.from(
+      document.body.querySelectorAll('.ant-card'),
+    ).filter((c) => c.querySelector('input'))
+    expect(modalCards.length).toBe(1)
+    const inputs = Array.from(modalCards[0].querySelectorAll('input'))
+    expect(inputs.length).toBe(3)
+    // 依次编辑：车间名 / 负责人姓名 / open_id
+    const values = ['102车间', '李四', 'ou-l4']
+    for (let i = 0; i < inputs.length; i += 1) {
+      const setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        'value',
+      )?.set
+      await act(async () => {
+        setter?.call(inputs[i], values[i])
+        inputs[i].dispatchEvent(new Event('input', { bubbles: true }))
+      })
+      await flush()
+    }
+    // 保存携带编辑后的值
+    mocks.saveCommitmentWorkshops.mockResolvedValue({
+      code: 200,
+      data: [],
+    })
+    await act(async () => {
+      buttons('保存配置')[0]?.click()
+    })
+    await flush()
+    const payload = mocks.saveCommitmentWorkshops.mock.calls[0][0]
+    expect(payload[0].workshop_name).toBe('102车间')
+    expect(payload[0].reporter_name).toBe('李四')
+    expect(payload[0].reporter_open_id).toBe('ou-l4')
+
+    // 关闭按钮 onClose
+    const closeBtn = Array.from(
+      document.body.querySelectorAll<HTMLButtonElement>('button'),
+    ).find((b) => (b.textContent ?? '').trim() === '关闭')
+    await act(async () => {
+      closeBtn?.click()
+    })
+    await flush()
   })
 })
