@@ -817,9 +817,14 @@ def ticket_document_markdown(
         lines.append("")
         lines.append(f"**其他安全措施/数量备注** {note}")
 
-    # ── 人员（文档签字行对应人员，分行编号；含证件号/外部标记）──
+    # ── 人员（文档签字行对应人员，分行编号；含证件类别/证号/有效期/外部标记）──
     persons = values.get("persons") or []
     if persons:
+        from app.modules.safety.service.work_permit_templates import (
+            CERTIFICATE_CATEGORIES,
+        )
+
+        cat_labels = {c["value"]: c["label"] for c in CERTIFICATE_CATEGORIES}
         person_lines = []
         for i, p in enumerate(persons, start=1):
             line = (
@@ -827,8 +832,17 @@ def ticket_document_markdown(
                 f"{PERSON_ROLE_LABELS.get(str(p.get('role')), p.get('role'))}"
                 f"：{p.get('name') or '—'}"
             )
+            cert_bits = []
+            cat = cat_labels.get(str(p.get("certificate_category") or ""))
+            if cat:
+                cert_bits.append(cat)
             if p.get("certificate_no"):
-                line += f"（证件编号：{p.get('certificate_no')}）"
+                cert_bits.append(f"证件编号：{p.get('certificate_no')}")
+            expiry = str(p.get("certificate_expiry") or "")
+            if expiry:
+                cert_bits.append(f"有效至 {expiry[:10]}")
+            if cert_bits:
+                line += f"（{'｜'.join(cert_bits)}）"
             if p.get("external"):
                 line += "〔外部人员〕"
             person_lines.append(line)

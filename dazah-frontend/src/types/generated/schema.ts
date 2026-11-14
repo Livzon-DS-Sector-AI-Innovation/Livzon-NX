@@ -24412,6 +24412,96 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/safety/guardian-roster": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 监护人名单分页列表（车间筛选/关键字 + 车间人数汇总） */
+        get: operations["list_guardian_roster_api_v1_safety_guardian_roster_get"];
+        put?: never;
+        /** 新建监护人 */
+        post: operations["create_guardian_roster_api_v1_safety_guardian_roster_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/guardian-roster/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 导出监护人名单 Excel（按当前筛选，车间→姓名排序） */
+        get: operations["export_guardian_roster_api_v1_safety_guardian_roster_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/guardian-roster/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 导入监护人名单 Excel（以最新导入为准，整表替换）
+         * @description 整表替换：先软删现有名单，再写入本次解析合并后的人员。
+         */
+        post: operations["import_guardian_roster_api_v1_safety_guardian_roster_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/guardian-roster/import/parse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 解析监护人名单 Excel（预览子表与行数，不落库） */
+        post: operations["parse_guardian_import_api_v1_safety_guardian_roster_import_parse_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/guardian-roster/{guardian_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 更新监护人 */
+        put: operations["update_guardian_roster_api_v1_safety_guardian_roster__guardian_id__put"];
+        post?: never;
+        /** 删除监护人（软删除） */
+        delete: operations["delete_guardian_roster_api_v1_safety_guardian_roster__guardian_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/safety/hazard-identifications": {
         parameters: {
             query?: never;
@@ -27929,6 +28019,23 @@ export interface paths {
         };
         /** 证件到期统计（总数/有效/30天内到期/已过期） */
         get: operations["get_certificate_expiry_summary_api_v1_safety_work_certificates_expiry_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/safety/work-certificates/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 导出持证人员台账 Excel（按证件类别分子表，可再导入） */
+        get: operations["export_work_certificates_api_v1_safety_work_certificates_export_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -32941,6 +33048,78 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** ApiResponseEnvelope[GuardianImportPreview] */
+        ApiResponseEnvelope_GuardianImportPreview_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["GuardianImportPreview"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[GuardianImportResult] */
+        ApiResponseEnvelope_GuardianImportResult_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["GuardianImportResult"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[GuardianRosterListResponse] */
+        ApiResponseEnvelope_GuardianRosterListResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["GuardianRosterListResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[GuardianRosterResponse] */
+        ApiResponseEnvelope_GuardianRosterResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["GuardianRosterResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** ApiResponseEnvelope[HazardousChemicalListResponse] */
         ApiResponseEnvelope_HazardousChemicalListResponse_: {
             /**
@@ -37351,6 +37530,17 @@ export interface components {
              */
             record_id: string;
         };
+        /** Body_import_guardian_roster_api_v1_safety_guardian_roster_import_post */
+        Body_import_guardian_roster_api_v1_safety_guardian_roster_import_post: {
+            /** File */
+            file: string;
+            /**
+             * Sheets
+             * @description 要导入的子表名 JSON 数组，空则导入全部子表（自动合并重复人员）
+             * @default
+             */
+            sheets: string;
+        };
         /** Body_import_hazard_ledger_api_v1_safety_hazard_identifications_import_post */
         Body_import_hazard_ledger_api_v1_safety_hazard_identifications_import_post: {
             /**
@@ -37494,6 +37684,11 @@ export interface components {
         Body_parse_coa_file_api_v1_registration_reference_standards_parse_coa_post: {
             /** Coa */
             coa: string;
+        };
+        /** Body_parse_guardian_import_api_v1_safety_guardian_roster_import_parse_post */
+        Body_parse_guardian_import_api_v1_safety_guardian_roster_import_parse_post: {
+            /** File */
+            file: string;
         };
         /** Body_parse_hazard_ledger_import_api_v1_safety_hazard_identifications_import_parse_post */
         Body_parse_hazard_ledger_import_api_v1_safety_hazard_identifications_import_parse_post: {
@@ -50008,6 +50203,192 @@ export interface components {
              */
             name: string;
         };
+        /** GuardianImportPreview */
+        GuardianImportPreview: {
+            /**
+             * Current Total
+             * @description 库内现有名单人数（导入后将被替换）
+             * @default 0
+             */
+            current_total: number;
+            /**
+             * Duplicate Across Sheets
+             * @description 跨子表重复人员合并的行数（全簿估算）
+             * @default 0
+             */
+            duplicate_across_sheets: number;
+            /**
+             * Merged Total
+             * @description 合并去重后预计导入人数（全簿估算）
+             * @default 0
+             */
+            merged_total: number;
+            /** Sheets */
+            sheets?: components["schemas"]["GuardianImportSheetInfo"][];
+        };
+        /** GuardianImportResult */
+        GuardianImportResult: {
+            /** Archive Path */
+            archive_path?: string | null;
+            /**
+             * Duplicates Merged
+             * @description 文件内重复行合并数
+             * @default 0
+             */
+            duplicates_merged: number;
+            /**
+             * Imported
+             * @description 本次导入写入的人数
+             * @default 0
+             */
+            imported: number;
+            /**
+             * Replaced
+             * @description 本次导入替换前的库内人数
+             * @default 0
+             */
+            replaced: number;
+            /** Row Errors */
+            row_errors?: {
+                [key: string]: unknown;
+            }[];
+            /** Skipped Sheets */
+            skipped_sheets?: {
+                [key: string]: string;
+            }[];
+        };
+        /**
+         * GuardianImportSheetInfo
+         * @description 导入预览：单个子表的解析结果。
+         */
+        GuardianImportSheetInfo: {
+            /**
+             * Default Selected
+             * @description 是否默认勾选（识别为最优数据源）
+             * @default false
+             */
+            default_selected: boolean;
+            /** Errors */
+            errors?: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Row Count
+             * @default 0
+             */
+            row_count: number;
+            /** Sample */
+            sample?: {
+                [key: string]: unknown;
+            }[];
+            /** Sheet */
+            sheet: string;
+            /** Workshops */
+            workshops?: string[];
+        };
+        /** GuardianRosterCreate */
+        GuardianRosterCreate: {
+            /** Exam Date */
+            exam_date?: string | null;
+            /** Exam Name */
+            exam_name?: string | null;
+            /**
+             * Person Name
+             * @description 监护人姓名
+             */
+            person_name: string;
+            /** Phone */
+            phone?: string | null;
+            /** Position */
+            position?: string | null;
+            /** Remark */
+            remark?: string | null;
+            /** Score */
+            score?: number | null;
+            /**
+             * Workshop
+             * @description 车间/部门
+             */
+            workshop: string;
+        };
+        /** GuardianRosterListResponse */
+        GuardianRosterListResponse: {
+            /** Items */
+            items: components["schemas"]["GuardianRosterResponse"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
+            /** Workshops */
+            workshops?: components["schemas"]["GuardianWorkshopCount"][];
+        };
+        /** GuardianRosterResponse */
+        GuardianRosterResponse: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Exam Date */
+            exam_date?: string | null;
+            /** Exam Name */
+            exam_name?: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Person Name */
+            person_name: string;
+            /** Phone */
+            phone?: string | null;
+            /** Position */
+            position?: string | null;
+            /** Remark */
+            remark?: string | null;
+            /** Score */
+            score?: number | null;
+            /** Source File */
+            source_file?: string | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Workshop */
+            workshop: string;
+        };
+        /** GuardianRosterUpdate */
+        GuardianRosterUpdate: {
+            /** Exam Date */
+            exam_date?: string | null;
+            /** Exam Name */
+            exam_name?: string | null;
+            /** Person Name */
+            person_name?: string | null;
+            /** Phone */
+            phone?: string | null;
+            /** Position */
+            position?: string | null;
+            /** Remark */
+            remark?: string | null;
+            /** Score */
+            score?: number | null;
+            /** Workshop */
+            workshop?: string | null;
+        };
+        /**
+         * GuardianWorkshopCount
+         * @description 车间分组计数（列表页车间卡片/筛选）。
+         */
+        GuardianWorkshopCount: {
+            /** Count */
+            count: number;
+            /** Workshop */
+            workshop: string;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -56610,6 +56991,11 @@ export interface components {
             chemical_name: string;
             /** Inventory Id */
             inventory_id?: string | null;
+            /**
+             * Location
+             * @default
+             */
+            location: string;
             /** Over Pct */
             over_pct?: number | null;
             /** Quantity */
@@ -136226,6 +136612,251 @@ export interface operations {
             };
         };
     };
+    list_guardian_roster_api_v1_safety_guardian_roster_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                workshop?: string | null;
+                keyword?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_GuardianRosterListResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_guardian_roster_api_v1_safety_guardian_roster_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GuardianRosterCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_GuardianRosterResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_guardian_roster_api_v1_safety_guardian_roster_export_get: {
+        parameters: {
+            query?: {
+                workshop?: string | null;
+                keyword?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_guardian_roster_api_v1_safety_guardian_roster_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_guardian_roster_api_v1_safety_guardian_roster_import_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_GuardianImportResult_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    parse_guardian_import_api_v1_safety_guardian_roster_import_parse_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_parse_guardian_import_api_v1_safety_guardian_roster_import_parse_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_GuardianImportPreview_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_guardian_roster_api_v1_safety_guardian_roster__guardian_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                guardian_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GuardianRosterUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_GuardianRosterResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_guardian_roster_api_v1_safety_guardian_roster__guardian_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                guardian_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_NoneType_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_hazard_identifications_api_v1_safety_hazard_identifications_get: {
         parameters: {
             query?: {
@@ -144670,6 +145301,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiResponseEnvelope_CertificateExpirySummaryResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_work_certificates_api_v1_safety_work_certificates_export_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

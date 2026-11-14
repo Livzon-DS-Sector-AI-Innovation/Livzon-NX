@@ -18,6 +18,7 @@ from app.modules.safety.api.enums import enums_router
 from app.modules.safety.api.facilities import safety_facilities_router
 from app.modules.safety.api.feishu_settings import feishu_settings_router
 from app.modules.safety.api.fire_equipment import fire_equipment_router
+from app.modules.safety.api.guardian_roster import guardian_roster_router
 from app.modules.safety.api.hazard_identifications import hazard_identifications_router
 from app.modules.safety.api.hazards import hazards_router
 from app.modules.safety.api.hazchem import hazchem_router
@@ -53,6 +54,7 @@ router.include_router(emergency_plan_ai_router)
 router.include_router(feishu_settings_router)
 router.include_router(safety_facilities_router)
 router.include_router(fire_equipment_router)
+router.include_router(guardian_roster_router)
 router.include_router(hazchem_router)
 router.include_router(enums_router)
 router.include_router(hazard_identifications_router)

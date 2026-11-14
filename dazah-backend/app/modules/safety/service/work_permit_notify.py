@@ -485,6 +485,14 @@ async def _next_stage_elements(
     from app.modules.safety.service.work_permit_card_forms import _hr, _md
 
     base: list[dict[str, Any]] = [_md(_ticket_markdown(permit)), _hr()]
+    # 人员证件核验明细 + 证件影像（审批人直接在卡上核对），失败降级不影响审批
+    try:
+        cert_section = await _persons_cert_section(db, permit, with_images=True)
+        if cert_section:
+            base.extend(cert_section)
+            base.append(_hr())
+    except Exception:
+        logger.exception("人员证件明细渲染失败 permit=%s", permit.permit_no)
     records = await _sign_records_markdown(db, permit)
     if records:
         base.extend([_md(records), _hr()])
@@ -805,6 +813,156 @@ async def _sign_records_markdown(db: AsyncSession, permit: WorkPermit) -> str:
         suffix = f"（{who} {when}{sig}）" if who or when else ""
         lines.append(f"{node.seq}. {mark} {node.node_name}{suffix}")
     return "\n".join(lines)
+
+
+_CERT_IMAGE_MAX = 6  # 审批卡最多嵌入的证件影像张数（防超元素上限）
+
+
+async def _persons_cert_section(
+    db: AsyncSession, permit: WorkPermit, *, with_images: bool
+) -> list[dict[str, Any]]:
+    """人员与证件核验区块：每岗位一行证书明细（类别/证号/有效期/状态），
+    监护人行 🛡 标记；with_images=True 时把证件影像（图片附件）上传飞书
+    并以 img 元素嵌入（整卡最多 _CERT_IMAGE_MAX 张）。"""
+    from datetime import date, timedelta
+
+    from app.modules.safety.models import (
+        SpecialWorkCertificate,
+        SpecialWorkCertificateFile,
+    )
+    from app.modules.safety.service.work_permit_templates import (
+        CERTIFICATE_CATEGORIES,
+        PERSON_ROLE_CERT_CATEGORIES,
+        PERSON_ROLE_LABELS,
+    )
+
+    cat_labels = {c["value"]: c["label"] for c in CERTIFICATE_CATEGORIES}
+    cert_ids: list[str] = []
+    for p in permit.persons or []:
+        cid = str(p.get("certificate_id") or "")
+        if cid:
+            cert_ids.append(cid)
+
+    cert_by_id: dict[str, Any] = {}
+    if cert_ids:
+        uuid_ids: list[UUID] = []
+        for x in cert_ids:
+            try:
+                uuid_ids.append(UUID(x))
+            except ValueError:
+                continue
+        cert_rows = (
+            (
+                await db.execute(
+                    select(SpecialWorkCertificate).where(
+                        SpecialWorkCertificate.id.in_(uuid_ids),
+                        SpecialWorkCertificate.is_deleted.is_(False),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        cert_by_id = {str(r.id): r for r in cert_rows}
+
+    today = date.today()
+    soon = today + timedelta(days=30)
+    rows: list[str] = []
+    img_candidates: list[tuple[str, str]] = []  # (storage_key, 标题)
+
+    def _status_mark(cert: Any) -> str:
+        if cert.status == "revoked":
+            return "❌已吊销"
+        if cert.expiry_date and cert.expiry_date < today:
+            return "❌已过期"
+        if cert.expiry_date and cert.expiry_date <= soon:
+            return f"⚠️{cert.expiry_date:%m-%d}到期"
+        return "✔有效"
+
+    for p in permit.persons or []:
+        role_key = str(p.get("role") or "")
+        role_label = PERSON_ROLE_LABELS.get(role_key, role_key)
+        prefix = "🛡 " if "guardian" in role_key else ""
+        name = str(p.get("name") or "—")
+        cid = str(p.get("certificate_id") or "")
+        cert = cert_by_id.get(cid) if cid else None
+        if cert is not None:
+            cat = cat_labels.get(cert.certificate_category, cert.certificate_category)
+            expiry = (
+                cert.expiry_date.strftime("%Y-%m-%d") if cert.expiry_date else "长期"
+            )
+            mark = _status_mark(cert)
+            rows.append(
+                f"{prefix}{role_label}：{name}｜{cat} {cert.certificate_no or '—'}"
+                f"｜有效至 {expiry} {mark}"
+            )
+            files = (
+                (
+                    await db.execute(
+                        select(SpecialWorkCertificateFile).where(
+                            SpecialWorkCertificateFile.certificate_id == cert.id,
+                            SpecialWorkCertificateFile.is_deleted.is_(False),
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            for f in files:
+                ct = (f.content_type or "").lower()
+                if ct.startswith("image/"):
+                    img_candidates.append((f.storage_key, f"{name}·{cat}证件"))
+                    break
+                if ct == "application/pdf":
+                    rows.append(f"　📎 附件：{f.file_name}（PDF 请在平台查看）")
+                    break
+        elif p.get("certificate_no"):
+            rows.append(
+                f"{prefix}{role_label}：{name}｜证件号 {p['certificate_no']}"
+                + ("〔外部人员〕" if p.get("external") else "")
+            )
+        else:
+            needs_cert = role_key in PERSON_ROLE_CERT_CATEGORIES
+            rows.append(
+                f"{prefix}{role_label}：{name}"
+                + ("　⚠️ 未关联证件" if needs_cert else "")
+            )
+
+    if not rows:
+        return []
+    lines: list[str] = ["**人员与证件核验**", *rows]
+
+    elements: list[dict[str, Any]] = [_md("\n".join(lines))]
+
+    if with_images:
+        from app.modules.safety.feishu.notification import (
+            upload_image_bytes_to_feishu,
+        )
+        from app.modules.safety.service.work_permit_files import read_object
+
+        uploaded = 0
+        import asyncio
+
+        for storage_key, title in img_candidates[:_CERT_IMAGE_MAX]:
+            found = await asyncio.to_thread(
+                read_object, "work-certificates", storage_key
+            )
+            if not found:
+                continue
+            data, _ct = found
+            image_key = await upload_image_bytes_to_feishu(
+                data, cache_key=storage_key, filename="certificate.jpg"
+            )
+            if image_key:
+                elements.append(
+                    {
+                        "tag": "img",
+                        "img_key": image_key,
+                        "alt": {"tag": "plain_text", "content": title},
+                    }
+                )
+                uploaded += 1
+    return elements
 
 
 async def _gas_records_markdown(db: AsyncSession, permit: WorkPermit) -> str:

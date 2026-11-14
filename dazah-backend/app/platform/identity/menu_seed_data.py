@@ -107,6 +107,11 @@ _LEGACY_SEED_MENUS: list[dict[str, Any]] = [
                         "/safety/work-certificates",
                     ),
                     _n(
+                        "guardian-roster",
+                        "监护人名单",
+                        "/safety/guardian-roster",
+                    ),
+                    _n(
                         "daily-risk-report",
                         "关键风险作业报备",
                         "/safety/risk-reporting",

@@ -35,71 +35,110 @@ PAGE_VISIBLE_SECTIONS = {
     - {"FL", "sales_plan"},
 }
 PAGE_SCOPE_TYPES = frozenset(
-    {"not_applicable", "department_tree", "departments", "all", "self",
-     "production_fermentation", "production_extraction"}
+    {
+        "not_applicable",
+        "department_tree",
+        "departments",
+        "all",
+        "self",
+        "production_fermentation",
+        "production_extraction",
+    }
 )
 FIRST_BATCH_MODULES = frozenset({"hr", "warehouse", "quality", "procurement"})
 PENDING_SCOPE_MODULES = frozenset({"equipment", "energy", "safety", "research"})
 # These pages now have a reviewed personal-task read adapter. Keep the legacy
 # option for existing grants; other endpoints in these modules remain subject
 # to their existing registration checks.
-PERSONAL_TODO_SCOPE_PAGES = frozenset({
-    "equipment:maintenance",
-    "safety:risk-hazard:hazard-inspection:hazard-inspection-ledger",
-    "safety:emergency-accident:accident-ledger", "safety:training-check:safety-check",
-})
-QUALITY_INSPECTION_GLOBAL_PAGES = frozenset(
-    f"quality:inspection:inspection-items:inspection-items-{suffix}"
-    for suffix in ("inventory", "inbound", "outbound")
-) | frozenset(
-    f"quality:inspection:inspection-instruments:inspection-instruments-{suffix}"
-    for suffix in (
-        "equipment", "maintenance", "repair", "contracts", "plans",
-        "calibration", "cal-plan", "cal-external",
+PERSONAL_TODO_SCOPE_PAGES = frozenset(
+    {
+        "equipment:maintenance",
+        "safety:risk-hazard:hazard-inspection:hazard-inspection-ledger",
+        "safety:emergency-accident:accident-ledger",
+        "safety:training-check:safety-check",
+    }
+)
+QUALITY_INSPECTION_GLOBAL_PAGES = (
+    frozenset(
+        f"quality:inspection:inspection-items:inspection-items-{suffix}"
+        for suffix in ("inventory", "inbound", "outbound")
     )
-) | frozenset(
-    f"quality:inspection:inspection-finished:inspection-finished-{suffix}"
-    for suffix in (
-        "mpa", "mvt", "lft", "dls", "lkms", "bbas", "formulations",
-        "tryptophan", "water", "pf",
+    | frozenset(
+        f"quality:inspection:inspection-instruments:inspection-instruments-{suffix}"
+        for suffix in (
+            "equipment",
+            "maintenance",
+            "repair",
+            "contracts",
+            "plans",
+            "calibration",
+            "cal-plan",
+            "cal-external",
+        )
     )
-) | frozenset({
-    "quality:inspection:inspection-solid",
-    "quality:inspection:inspection-liquid",
-})
-QUALITY_VALIDATION_GLOBAL_PAGES = frozenset({
-    "quality:validation:validation-plans",
-    "quality:validation:equipment-qualification",
-    "quality:validation:process-validation",
-    "quality:validation:cleaning-validation",
-    "quality:validation:other-validations",
-    "quality:validation:qc-validation",
-    "quality:validation:validation-ai-review",
-})
-GLOBAL_RESOURCE_PAGES = frozenset({
-    "warehouse:ai-analysis",
-    "warehouse:warehouse-settings",
-    "hr:employee-management:feishu-contacts",
-    "hr:hr-settings:hr-settings-feishu",
-    "hr:hr-settings:hr-settings-reminder",
-    "hr:hr-settings:hr-settings-approval",
-    "hr:hr-settings:hr-settings-dept-mapping",
-    "hr:hr-settings:hr-settings-dept-scopes",
-    "quality:complaints:complaint-ledger",
-    "quality:deviations:deviation-records",
-    "quality:deviations:deviation-investigations",
-    "quality:deviations:deviation-history",
-    "quality:deviations:deviation-workbench",
-    "quality:oos-oot:oot-limits",
-    "quality:oos-oot:product-departments",
-    "quality:oos-oot:oos-ledger",
-    "quality:oos-oot:oot-ledger",
-    "quality:oos-oot:oos-oot-report-records",
-    "quality:oos-oot:oos-oot-investigation-push",
-    "quality:anomaly-report:anomaly-report-ledger",
-    "quality:return-recalls:return-application",
-    "quality:return-recalls:return-ledger",
-}) | QUALITY_INSPECTION_GLOBAL_PAGES | QUALITY_VALIDATION_GLOBAL_PAGES
+    | frozenset(
+        f"quality:inspection:inspection-finished:inspection-finished-{suffix}"
+        for suffix in (
+            "mpa",
+            "mvt",
+            "lft",
+            "dls",
+            "lkms",
+            "bbas",
+            "formulations",
+            "tryptophan",
+            "water",
+            "pf",
+        )
+    )
+    | frozenset(
+        {
+            "quality:inspection:inspection-solid",
+            "quality:inspection:inspection-liquid",
+        }
+    )
+)
+QUALITY_VALIDATION_GLOBAL_PAGES = frozenset(
+    {
+        "quality:validation:validation-plans",
+        "quality:validation:equipment-qualification",
+        "quality:validation:process-validation",
+        "quality:validation:cleaning-validation",
+        "quality:validation:other-validations",
+        "quality:validation:qc-validation",
+        "quality:validation:validation-ai-review",
+    }
+)
+GLOBAL_RESOURCE_PAGES = (
+    frozenset(
+        {
+            "warehouse:ai-analysis",
+            "warehouse:warehouse-settings",
+            "hr:employee-management:feishu-contacts",
+            "hr:hr-settings:hr-settings-feishu",
+            "hr:hr-settings:hr-settings-reminder",
+            "hr:hr-settings:hr-settings-approval",
+            "hr:hr-settings:hr-settings-dept-mapping",
+            "hr:hr-settings:hr-settings-dept-scopes",
+            "quality:complaints:complaint-ledger",
+            "quality:deviations:deviation-records",
+            "quality:deviations:deviation-investigations",
+            "quality:deviations:deviation-history",
+            "quality:deviations:deviation-workbench",
+            "quality:oos-oot:oot-limits",
+            "quality:oos-oot:product-departments",
+            "quality:oos-oot:oos-ledger",
+            "quality:oos-oot:oot-ledger",
+            "quality:oos-oot:oos-oot-report-records",
+            "quality:oos-oot:oos-oot-investigation-push",
+            "quality:anomaly-report:anomaly-report-ledger",
+            "quality:return-recalls:return-application",
+            "quality:return-recalls:return-ledger",
+        }
+    )
+    | QUALITY_INSPECTION_GLOBAL_PAGES
+    | QUALITY_VALIDATION_GLOBAL_PAGES
+)
 QUALITY_PRODUCT_PAGES = tuple(
     f"quality:product-quality:product-quality-{code}"
     for code in ("mfn", "dljs", "lftt", "mftt", "yslkms", "bbas", "sas")
@@ -442,10 +481,9 @@ def page_api_catalog_issues(
         signature_routes = SAFETY_SIGNATURE_ROUTES if module_code == "safety" else ()
         for (method, path), count in sorted(Counter(actual_routes).items()):
             target = f"{method} {path}"
-            if (
-                (method, path) not in signature_routes
-                and api_binding_for_route(method, path) is None
-            ):
+            if (method, path) not in signature_routes and api_binding_for_route(
+                method, path
+            ) is None:
                 gaps.add("接口", target, target, "业务接口未完成有效的页面权限登记")
             if count > 1:
                 gaps.add(
@@ -484,7 +522,9 @@ _ACTION_DEFINITIONS = {
         "bulk_import", "批量导入或覆盖", "bulk_change", "批量导入、覆盖或清空数据"
     ),
     "schedule-archive": SensitiveActionDefinition(
-        "schedule-archive", "排产历史修正", "bulk_change",
+        "schedule-archive",
+        "排产历史修正",
+        "bulk_change",
         "以新排产文件修正今天之前的历史列，必须填写修正原因并记录审计",
     ),
     "sensitive_export": SensitiveActionDefinition(
@@ -587,27 +627,37 @@ def _sensitive_actions(
         ),
         # 安全操规台账：批量导入操规文档、删除台账/修订记录、导出标准化 PDF
         "safety:risk-hazard:regulation:regulation-list": (
-            "bulk_import", "delete", "sensitive_export",
-        ),
-        # 标准化生成编辑器页共用操规 PDF 导出端点
-        "safety:risk-hazard:regulation:regulation-generator": (
+            "bulk_import",
+            "delete",
             "sensitive_export",
         ),
+        # 标准化生成编辑器页共用操规 PDF 导出端点
+        "safety:risk-hazard:regulation:regulation-generator": ("sensitive_export",),
         "safety:risk-hazard:hazard-inspection:hazard-inspection-ledger": (
-            "approve", "reject",
+            "approve",
+            "reject",
         ),
         # 8 大特殊作业票：逐级审批同意/驳回、删除草稿属于高风险动作
         "safety:ops-safety:work-permits": (
-            "approve", "reject", "delete",
+            "approve",
+            "reject",
+            "delete",
         ),
         # 特种作业证件：删除证件及附件属于破坏性动作
         "safety:ops-safety:work-certificates": ("delete",),
+        # 监护人名单：删除名单人员属于破坏性动作
+        "safety:ops-safety:guardian-roster": ("delete",),
         "safety:ops-safety:daily-risk-report": ("approve", "reject", "delete"),
         "safety:ops-safety:special-ops-mgmt": (
-            "approve", "reject", "delete", "sensitive_export",
+            "approve",
+            "reject",
+            "delete",
+            "sensitive_export",
         ),
         "safety:risk-hazard:risk-grading:hazard-identification": (
-            "approve", "reject", "delete",
+            "approve",
+            "reject",
+            "delete",
         ),
         "safety:emergency-accident:accident-ledger": ("approve",),
         "safety:training-check:safety-check": ("approve", "reject", "delete"),
@@ -625,9 +675,7 @@ def _sensitive_actions(
         (
             "quality:inspection:inspection-instruments:"
             "inspection-instruments-maintenance"
-        ): (
-            "sensitive_export",
-        ),
+        ): ("sensitive_export",),
         "warehouse:warehouse-settings": ("delete",),
         "hr:departments": ("delete", "sync_config"),
         "hr:recruitment": ("delete", "sensitive_export", "sync_config"),
@@ -969,20 +1017,22 @@ _REVIEWED_DYNAMIC_ROUTE_ALIASES = tuple(
 # Discovery metadata for existing concrete-page renderers. This does not grant
 # access. A new dynamic template must be reviewed even if its pattern happens
 # to match an existing menu URL; broad catch-all pages must not pass by inference.
-FRONTEND_CONCRETE_PAGE_TEMPLATES = frozenset({
-    "/purchasing/approval/[category]/[step]",
-    "/purchasing/contract-generation/[category]",
-    "/purchasing/request/[category]",
-    "/quality/capas/[id]",
-    "/quality/change/[id]",
-    "/quality/deviations/[id]",
-    "/quality/product-quality/[productCode]",
-    "/registration/certificate-management/[sheetKey]",
-    "/registration/declaration-progress/[sheetKey]",
-    "/registration/project-ledger/[sheetKey]",
-    "/registration/review/[sheetKey]",
-    "/warehouse/hardware/[slug]",
-})
+FRONTEND_CONCRETE_PAGE_TEMPLATES = frozenset(
+    {
+        "/purchasing/approval/[category]/[step]",
+        "/purchasing/contract-generation/[category]",
+        "/purchasing/request/[category]",
+        "/quality/capas/[id]",
+        "/quality/change/[id]",
+        "/quality/deviations/[id]",
+        "/quality/product-quality/[productCode]",
+        "/registration/certificate-management/[sheetKey]",
+        "/registration/declaration-progress/[sheetKey]",
+        "/registration/project-ledger/[sheetKey]",
+        "/registration/review/[sheetKey]",
+        "/warehouse/hardware/[slug]",
+    }
+)
 
 
 def frontend_page_catalog_issues(
@@ -1077,26 +1127,40 @@ PAGE_API_BINDINGS = _purchase_request_bindings() + tuple(
 
 PAGE_API_BINDINGS += tuple(
     PageApiBinding(
-        route_path=f"/api/v1/{module_code}/my-todos", method="GET",
-        page_keys=pages, permission="query", sensitive_action=None,
+        route_path=f"/api/v1/{module_code}/my-todos",
+        method="GET",
+        page_keys=pages,
+        permission="query",
+        sensitive_action=None,
         scope_adapter=f"{module_code}.personal_todos",
     )
     for module_code, pages in (
         ("hr", ("hr:training:plan-tracking", "hr:position-transfer")),
-        ("registration", (
-            "registration:project:declaration-progress:international-planned-in-progress",
-        )),
-        ("quality", (
-            "quality:deviations:deviation-ledger", "quality:capas:capa-ledger",
-            "quality:capas:capa-plans", "quality:change:change-action-plans",
-        )),
+        (
+            "registration",
+            (
+                "registration:project:declaration-progress:international-planned-in-progress",
+            ),
+        ),
+        (
+            "quality",
+            (
+                "quality:deviations:deviation-ledger",
+                "quality:capas:capa-ledger",
+                "quality:capas:capa-plans",
+                "quality:change:change-action-plans",
+            ),
+        ),
         # 巡检待办 kind 已下线，my-todos 仅维保页可读
         ("equipment", ("equipment:maintenance",)),
-        ("safety", (
-            "safety:risk-hazard:hazard-inspection:hazard-inspection-ledger",
-            "safety:emergency-accident:accident-ledger",
-            "safety:training-check:safety-check",
-        )),
+        (
+            "safety",
+            (
+                "safety:risk-hazard:hazard-inspection:hazard-inspection-ledger",
+                "safety:emergency-accident:accident-ledger",
+                "safety:training-check:safety-check",
+            ),
+        ),
     )
 )
 
@@ -1267,13 +1331,16 @@ PAGE_API_BINDINGS += tuple(
         ("POST", "/document-entries/attachments/auto-bind", "operate", None),
         ("POST", "/document-entries/{entry_id}/attachments", "operate", None),
         (
-            "DELETE", "/document-entries/{entry_id}/attachments/{storage_key:path}",
-            "operate", "delete",
+            "DELETE",
+            "/document-entries/{entry_id}/attachments/{storage_key:path}",
+            "operate",
+            "delete",
         ),
         (
             "GET",
             "/document-entries/{entry_id}/attachments/{storage_key:path}/content",
-            "query", None,
+            "query",
+            None,
         ),
     )
 )
@@ -3108,9 +3175,7 @@ def _quality_remaining_api_bindings() -> tuple[PageApiBinding, ...]:
     capa_ledger = ("quality:capas:capa-ledger",)
     capa_plans = ("quality:capas:capa-plans",)
     complaint_ledger = ("quality:complaints:complaint-ledger",)
-    item_inventory = (
-        "quality:inspection:inspection-items:inspection-items-inventory",
-    )
+    item_inventory = ("quality:inspection:inspection-items:inspection-items-inventory",)
     item_inbound = ("quality:inspection:inspection-items:inspection-items-inbound",)
     item_outbound = ("quality:inspection:inspection-items:inspection-items-outbound",)
     # The item dashboard is part of the inventory page, not a separate menu leaf.
@@ -3385,9 +3450,7 @@ def _production_api_bindings() -> tuple[PageApiBinding, ...]:
     dr_page = ("production:batches:workshop-201-3",)
     fa_page = ("production:batches:workshop-203",)
     # 概览页承载 FL 氟苯尼考看板的同步设置入口（无独立车间页）
-    sync_config_pages = (
-        workshop_pages + sales_plan_page + scheduling_page + overview
-    )
+    sync_config_pages = workshop_pages + sales_plan_page + scheduling_page + overview
 
     rules: list[tuple[str, str, tuple[str, ...], str, str | None, str]] = []
 
@@ -4597,10 +4660,13 @@ PAGE_API_BINDINGS += tuple(
         binding,
         sensitive_action=None,
         action_selector=EnumActionSelector(
-            "status", (("approved", "approve"), ("rejected", "reject")),
+            "status",
+            (("approved", "approve"), ("rejected", "reject")),
         ),
     )
-    if binding.method == "PATCH" and binding.route_path in {
+    if binding.method == "PATCH"
+    and binding.route_path
+    in {
         "/api/v1/production/pressure/records/{record_id}/audit",
         "/api/v1/production/pressure/records/batch-audit",
     }
@@ -7505,22 +7571,70 @@ _WORK_CERTIFICATES_PAGE = "safety:ops-safety:work-certificates"
 PAGE_API_BINDINGS += _module_api_bindings(
     "safety",
     [
-        ("GET", "/work-permits/meta", (_WORK_PERMITS_PAGE,), "query", None,
-         "not_applicable"),
-        ("GET", "/work-permits/stats", (_WORK_PERMITS_PAGE,), "query", None,
-         "not_applicable"),
-        ("GET", "/work-permits", (_WORK_PERMITS_PAGE,), "query", None,
-         "not_applicable"),
-        ("POST", "/work-permits", (_WORK_PERMITS_PAGE,), "operate", None,
-         "not_applicable"),
-        ("GET", "/work-permits/{permit_id}", (_WORK_PERMITS_PAGE,), "query",
-         None, "not_applicable"),
-        ("PUT", "/work-permits/{permit_id}", (_WORK_PERMITS_PAGE,), "operate",
-         None, "not_applicable"),
-        ("DELETE", "/work-permits/{permit_id}", (_WORK_PERMITS_PAGE,),
-         "operate", "delete", "not_applicable"),
-        ("POST", "/work-permits/{permit_id}/submit", (_WORK_PERMITS_PAGE,),
-         "operate", None, "not_applicable"),
+        (
+            "GET",
+            "/work-permits/meta",
+            (_WORK_PERMITS_PAGE,),
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "GET",
+            "/work-permits/stats",
+            (_WORK_PERMITS_PAGE,),
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "GET",
+            "/work-permits",
+            (_WORK_PERMITS_PAGE,),
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "POST",
+            "/work-permits",
+            (_WORK_PERMITS_PAGE,),
+            "operate",
+            None,
+            "not_applicable",
+        ),
+        (
+            "GET",
+            "/work-permits/{permit_id}",
+            (_WORK_PERMITS_PAGE,),
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "PUT",
+            "/work-permits/{permit_id}",
+            (_WORK_PERMITS_PAGE,),
+            "operate",
+            None,
+            "not_applicable",
+        ),
+        (
+            "DELETE",
+            "/work-permits/{permit_id}",
+            (_WORK_PERMITS_PAGE,),
+            "operate",
+            "delete",
+            "not_applicable",
+        ),
+        (
+            "POST",
+            "/work-permits/{permit_id}/submit",
+            (_WORK_PERMITS_PAGE,),
+            "operate",
+            None,
+            "not_applicable",
+        ),
         (
             "POST",
             "/work-permits/{permit_id}/nodes/{node_id}/approve",
@@ -7537,10 +7651,22 @@ PAGE_API_BINDINGS += _module_api_bindings(
             "reject",
             "not_applicable",
         ),
-        ("POST", "/work-permits/{permit_id}/verify", (_WORK_PERMITS_PAGE,),
-         "operate", None, "not_applicable"),
-        ("POST", "/work-permits/{permit_id}/accept", (_WORK_PERMITS_PAGE,),
-         "operate", None, "not_applicable"),
+        (
+            "POST",
+            "/work-permits/{permit_id}/verify",
+            (_WORK_PERMITS_PAGE,),
+            "operate",
+            None,
+            "not_applicable",
+        ),
+        (
+            "POST",
+            "/work-permits/{permit_id}/accept",
+            (_WORK_PERMITS_PAGE,),
+            "operate",
+            None,
+            "not_applicable",
+        ),
         (
             "POST",
             "/work-permits/{permit_id}/nodes/{node_id}/reassign",
@@ -7549,8 +7675,14 @@ PAGE_API_BINDINGS += _module_api_bindings(
             None,
             "not_applicable",
         ),
-        ("POST", "/work-permits/{permit_id}/cancel", (_WORK_PERMITS_PAGE,),
-         "operate", None, "not_applicable"),
+        (
+            "POST",
+            "/work-permits/{permit_id}/cancel",
+            (_WORK_PERMITS_PAGE,),
+            "operate",
+            None,
+            "not_applicable",
+        ),
         (
             "POST",
             "/work-permits/{permit_id}/gas-analyses",
@@ -7615,17 +7747,49 @@ PAGE_API_BINDINGS += _module_api_bindings(
             "delete",
             "not_applicable",
         ),
-        ("GET", "/work-permit-configs", (_WORK_PERMITS_PAGE,), "query", None,
-         "not_applicable"),
-        ("PUT", "/work-permit-configs", (_WORK_PERMITS_PAGE,), "operate", None,
-         "not_applicable"),
-        ("GET", "/work-permit-settings", (_WORK_PERMITS_PAGE,), "query", None,
-         "not_applicable"),
-        ("PUT", "/work-permit-settings", (_WORK_PERMITS_PAGE,), "operate",
-         None, "not_applicable"),
+        (
+            "GET",
+            "/work-permit-configs",
+            (_WORK_PERMITS_PAGE,),
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "PUT",
+            "/work-permit-configs",
+            (_WORK_PERMITS_PAGE,),
+            "operate",
+            None,
+            "not_applicable",
+        ),
+        (
+            "GET",
+            "/work-permit-settings",
+            (_WORK_PERMITS_PAGE,),
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "PUT",
+            "/work-permit-settings",
+            (_WORK_PERMITS_PAGE,),
+            "operate",
+            None,
+            "not_applicable",
+        ),
         (
             "GET",
             "/work-certificates/categories",
+            (_WORK_CERTIFICATES_PAGE,),
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "GET",
+            "/work-certificates/export",
             (_WORK_CERTIFICATES_PAGE,),
             "query",
             None,
@@ -7639,10 +7803,22 @@ PAGE_API_BINDINGS += _module_api_bindings(
             None,
             "not_applicable",
         ),
-        ("GET", "/work-certificates", (_WORK_CERTIFICATES_PAGE,), "query",
-         None, "not_applicable"),
-        ("POST", "/work-certificates", (_WORK_CERTIFICATES_PAGE,), "operate",
-         None, "not_applicable"),
+        (
+            "GET",
+            "/work-certificates",
+            (_WORK_CERTIFICATES_PAGE,),
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "POST",
+            "/work-certificates",
+            (_WORK_CERTIFICATES_PAGE,),
+            "operate",
+            None,
+            "not_applicable",
+        ),
         (
             "POST",
             "/work-certificates/import/parse",
@@ -7726,6 +7902,72 @@ PAGE_API_BINDINGS += _module_api_bindings(
     ],
 )
 
+# ── 作业安全监护人名单 ──
+# 列表/导出/导入解析随页面查询权限放行；新建、编辑、执行导入归操作
+# 权限，删除是已登记的破坏性动作。
+_GUARDIAN_ROSTER_PAGE = "safety:ops-safety:guardian-roster"
+PAGE_API_BINDINGS += _module_api_bindings(
+    "safety",
+    [
+        (
+            "GET",
+            "/guardian-roster",
+            (_GUARDIAN_ROSTER_PAGE,),
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "GET",
+            "/guardian-roster/export",
+            (_GUARDIAN_ROSTER_PAGE,),
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "POST",
+            "/guardian-roster/import/parse",
+            (_GUARDIAN_ROSTER_PAGE,),
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "POST",
+            "/guardian-roster",
+            (_GUARDIAN_ROSTER_PAGE,),
+            "operate",
+            None,
+            "not_applicable",
+        ),
+        (
+            "POST",
+            "/guardian-roster/import",
+            (_GUARDIAN_ROSTER_PAGE,),
+            "operate",
+            None,
+            "not_applicable",
+        ),
+        (
+            "PUT",
+            "/guardian-roster/{guardian_id}",
+            (_GUARDIAN_ROSTER_PAGE,),
+            "operate",
+            None,
+            "not_applicable",
+        ),
+        (
+            "DELETE",
+            "/guardian-roster/{guardian_id}",
+            (_GUARDIAN_ROSTER_PAGE,),
+            "operate",
+            "delete",
+            "not_applicable",
+        ),
+    ],
+)
+
 PAGE_API_BINDINGS += _module_api_bindings("safety", tuple(safety_route_rules()))
 PAGE_API_BINDINGS += tuple(
     PageApiBinding(
@@ -7748,26 +7990,86 @@ _SAFETY_COMMITMENT_PAGE = "safety:safety-commitment"
 PAGE_API_BINDINGS += _module_api_bindings(
     "safety",
     [
-        ("GET", "/safety-commitments/today", (_SAFETY_COMMITMENT_PAGE,),
-         "query", None, "not_applicable"),
-        ("GET", "/safety-commitments/list", (_SAFETY_COMMITMENT_PAGE,),
-         "query", None, "not_applicable"),
-        ("GET", "/safety-commitments/by-date/{report_date}",
-         (_SAFETY_COMMITMENT_PAGE,), "query", None, "not_applicable"),
-        ("PUT", "/safety-commitments/{report_id}",
-         (_SAFETY_COMMITMENT_PAGE,), "operate", None, "not_applicable"),
-        ("POST", "/safety-commitments/{report_id}/publish",
-         (_SAFETY_COMMITMENT_PAGE,), "operate", None, "not_applicable"),
-        ("POST", "/safety-commitments/{report_id}/risk-assessment",
-         (_SAFETY_COMMITMENT_PAGE,), "operate", None, "not_applicable"),
-        ("GET", "/safety-commitment-cards", (_SAFETY_COMMITMENT_PAGE,),
-         "query", None, "not_applicable"),
-        ("POST", "/safety-commitment-cards", (_SAFETY_COMMITMENT_PAGE,),
-         "operate", None, "not_applicable"),
-        ("PUT", "/safety-commitment-cards/{card_id}",
-         (_SAFETY_COMMITMENT_PAGE,), "operate", None, "not_applicable"),
-        ("DELETE", "/safety-commitment-cards/{card_id}",
-         (_SAFETY_COMMITMENT_PAGE,), "operate", "delete", "not_applicable"),
+        (
+            "GET",
+            "/safety-commitments/today",
+            (_SAFETY_COMMITMENT_PAGE,),
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "GET",
+            "/safety-commitments/list",
+            (_SAFETY_COMMITMENT_PAGE,),
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "GET",
+            "/safety-commitments/by-date/{report_date}",
+            (_SAFETY_COMMITMENT_PAGE,),
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "PUT",
+            "/safety-commitments/{report_id}",
+            (_SAFETY_COMMITMENT_PAGE,),
+            "operate",
+            None,
+            "not_applicable",
+        ),
+        (
+            "POST",
+            "/safety-commitments/{report_id}/publish",
+            (_SAFETY_COMMITMENT_PAGE,),
+            "operate",
+            None,
+            "not_applicable",
+        ),
+        (
+            "POST",
+            "/safety-commitments/{report_id}/risk-assessment",
+            (_SAFETY_COMMITMENT_PAGE,),
+            "operate",
+            None,
+            "not_applicable",
+        ),
+        (
+            "GET",
+            "/safety-commitment-cards",
+            (_SAFETY_COMMITMENT_PAGE,),
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "POST",
+            "/safety-commitment-cards",
+            (_SAFETY_COMMITMENT_PAGE,),
+            "operate",
+            None,
+            "not_applicable",
+        ),
+        (
+            "PUT",
+            "/safety-commitment-cards/{card_id}",
+            (_SAFETY_COMMITMENT_PAGE,),
+            "operate",
+            None,
+            "not_applicable",
+        ),
+        (
+            "DELETE",
+            "/safety-commitment-cards/{card_id}",
+            (_SAFETY_COMMITMENT_PAGE,),
+            "operate",
+            "delete",
+            "not_applicable",
+        ),
     ],
 )
 
@@ -7792,33 +8094,104 @@ PAGE_API_BINDINGS += _module_api_bindings(
     "administration",
     [
         ("GET", "/", _ADMIN_ALL_PAGES, "query", None, "not_applicable"),
-        ("GET", "/feishu-config", _ADMIN_FEISHU_SETTINGS,
-         "query", None, "not_applicable"),
-        ("PUT", "/feishu-config", _ADMIN_FEISHU_SETTINGS,
-         "operate", "sync_config", "not_applicable"),
-        ("POST", "/feishu-config/test", _ADMIN_FEISHU_SETTINGS,
-         "operate", "sync_config", "not_applicable"),
-        ("GET", "/feishu-read/roots", _ADMIN_FEISHU_SETTINGS,
-         "query", None, "not_applicable"),
-        ("POST", "/feishu-read/roots", _ADMIN_FEISHU_SETTINGS,
-         "operate", "sync_config", "not_applicable"),
-        ("DELETE", "/feishu-read/roots/{root_id}", _ADMIN_FEISHU_SETTINGS,
-         "operate", "delete", "not_applicable"),
-        ("POST", "/feishu-read/roots/{root_id}/discover", _ADMIN_FEISHU_SETTINGS,
-         "operate", "sync_config", "not_applicable"),
-        ("GET", "/feishu-read/resources", _ADMIN_FEISHU_SETTINGS,
-         "query", None, "not_applicable"),
-        ("POST", "/feishu-read/resources/{resource_id}/sync",
-         _ADMIN_FEISHU_SETTINGS, "operate", "sync_config", "not_applicable"),
-        ("PUT", "/feishu-read/page-bindings/{page_key}", _ADMIN_FEISHU_SETTINGS,
-         "operate", "sync_config", "not_applicable"),
+        (
+            "GET",
+            "/feishu-config",
+            _ADMIN_FEISHU_SETTINGS,
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "PUT",
+            "/feishu-config",
+            _ADMIN_FEISHU_SETTINGS,
+            "operate",
+            "sync_config",
+            "not_applicable",
+        ),
+        (
+            "POST",
+            "/feishu-config/test",
+            _ADMIN_FEISHU_SETTINGS,
+            "operate",
+            "sync_config",
+            "not_applicable",
+        ),
+        (
+            "GET",
+            "/feishu-read/roots",
+            _ADMIN_FEISHU_SETTINGS,
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "POST",
+            "/feishu-read/roots",
+            _ADMIN_FEISHU_SETTINGS,
+            "operate",
+            "sync_config",
+            "not_applicable",
+        ),
+        (
+            "DELETE",
+            "/feishu-read/roots/{root_id}",
+            _ADMIN_FEISHU_SETTINGS,
+            "operate",
+            "delete",
+            "not_applicable",
+        ),
+        (
+            "POST",
+            "/feishu-read/roots/{root_id}/discover",
+            _ADMIN_FEISHU_SETTINGS,
+            "operate",
+            "sync_config",
+            "not_applicable",
+        ),
+        (
+            "GET",
+            "/feishu-read/resources",
+            _ADMIN_FEISHU_SETTINGS,
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "POST",
+            "/feishu-read/resources/{resource_id}/sync",
+            _ADMIN_FEISHU_SETTINGS,
+            "operate",
+            "sync_config",
+            "not_applicable",
+        ),
+        (
+            "PUT",
+            "/feishu-read/page-bindings/{page_key}",
+            _ADMIN_FEISHU_SETTINGS,
+            "operate",
+            "sync_config",
+            "not_applicable",
+        ),
         # 绑定配置回显：设置页维护「页面数据表映射」时要读取两个镜像页的绑定
         # （仓储同款：material_pages + settings_page）；仅此路由包含设置页。
-        ("GET", "/page-data/{page_key}",
-         (*_ADMIN_TOBACCO_GIFT_TABLE_PAGES, *_ADMIN_FEISHU_SETTINGS),
-         "query", None, "not_applicable"),
-        ("GET", "/page-data/{page_key}/{binding_id}/records",
-         _ADMIN_TOBACCO_GIFT_TABLE_PAGES, "query", None, "not_applicable"),
+        (
+            "GET",
+            "/page-data/{page_key}",
+            (*_ADMIN_TOBACCO_GIFT_TABLE_PAGES, *_ADMIN_FEISHU_SETTINGS),
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "GET",
+            "/page-data/{page_key}/{binding_id}/records",
+            _ADMIN_TOBACCO_GIFT_TABLE_PAGES,
+            "query",
+            None,
+            "not_applicable",
+        ),
         (
             "GET",
             "/page-data/{page_key}/{binding_id}/record/{record_id}"
@@ -7828,7 +8201,13 @@ PAGE_API_BINDINGS += _module_api_bindings(
             None,
             "not_applicable",
         ),
-        ("GET", "/tobacco-gift/dashboard-stats", (_ADMIN_TOBACCO_GIFT_DASHBOARD,),
-         "query", None, "not_applicable"),
+        (
+            "GET",
+            "/tobacco-gift/dashboard-stats",
+            (_ADMIN_TOBACCO_GIFT_DASHBOARD,),
+            "query",
+            None,
+            "not_applicable",
+        ),
     ],
 )

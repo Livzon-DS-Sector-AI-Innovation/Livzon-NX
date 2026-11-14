@@ -3502,3 +3502,227 @@ class TestRelayPdfUrlFallback:
         assert (
             await notify._relay_or_local_pdf_url(object(), permit) == "http://local/dl"
         )
+
+
+class TestPersonsCertSection:
+    """审批卡"人员与证件核验"区块：有证/临期/过期/吊销/无证/外部/空人员/降级。"""
+
+    @staticmethod
+    def _cert(
+        *,
+        status: str = "valid",
+        expiry: Any = None,
+        category: str = "welding_cutting",
+    ) -> Any:
+        from types import SimpleNamespace
+
+        return SimpleNamespace(
+            id=uuid4(),
+            certificate_category=category,
+            certificate_no="DJ-2026-0157",
+            expiry_date=expiry,
+            status=status,
+        )
+
+    @staticmethod
+    def _fake_db(cert: Any, files: list[Any] | None = None) -> Any:
+        class _Result:
+            def __init__(self, rows: list[Any]) -> None:
+                self._rows = rows
+
+            def scalars(self) -> Any:
+                return self
+
+            def all(self) -> list[Any]:
+                return self._rows
+
+        class _DB:
+            def __init__(self) -> None:
+                self.calls = 0
+
+            async def execute(self, *_a: Any, **_kw: Any) -> Any:
+                self.calls += 1
+                if self.calls == 1:  # 证件表查询
+                    return _Result([cert])
+                return _Result(files or [])  # 附件表查询
+
+        return _DB()
+
+    @staticmethod
+    def _permit(persons: list[dict[str, Any]]) -> Any:
+        permit = _gap_permit("pending")
+        permit.persons = persons
+        return permit
+
+    async def test_valid_cert_line_with_images(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from types import SimpleNamespace
+
+        import app.modules.safety.feishu.notification as notif_mod
+        import app.modules.safety.service.work_permit_files as files_mod
+        from app.modules.safety.service import work_permit_notify as notify
+
+        cert = self._cert(expiry=(datetime.now(UTC) + timedelta(days=200)).date())
+        file_row = SimpleNamespace(
+            file_name="scan.jpg",
+            storage_key="certs/abc.jpg",
+            content_type="image/jpeg",
+        )
+
+        def _fake_read(_sub: str, key: str) -> tuple[bytes, str]:
+            assert key == "certs/abc.jpg"
+            return b"imgbytes", "image/jpeg"
+
+        uploaded: list[str] = []
+
+        async def _fake_upload(
+            data: bytes, cache_key: str | None = None, filename: str = "cert.jpg"
+        ) -> str | None:
+            uploaded.append(cache_key or "")
+            assert data == b"imgbytes"
+            return "img_v3_test"
+
+        monkeypatch.setattr(files_mod, "read_object", _fake_read)
+        monkeypatch.setattr(notif_mod, "upload_image_bytes_to_feishu", _fake_upload)
+
+        permit = self._permit(
+            [{"role": "work_leader", "name": "张三", "certificate_id": str(cert.id)}]
+        )
+        elements = await notify._persons_cert_section(
+            self._fake_db(cert, [file_row]), permit, with_images=True
+        )
+        md = "".join(
+            str(e.get("content", "")) for e in elements if e.get("tag") == "markdown"
+        )
+        assert "**人员与证件核验**" in md
+        assert "DJ-2026-0157" in md
+        assert "✔有效" in md
+        imgs = [e for e in elements if e.get("tag") == "img"]
+        assert len(imgs) == 1 and imgs[0]["img_key"] == "img_v3_test"
+        assert uploaded == ["certs/abc.jpg"]
+
+    async def test_status_marks(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from app.modules.safety.service import work_permit_notify as notify
+
+        cases = [
+            ("valid", datetime.now(UTC).date() + timedelta(days=10), "⚠️"),
+            ("valid", datetime.now(UTC).date() - timedelta(days=1), "❌已过期"),
+            ("revoked", None, "❌已吊销"),
+        ]
+        for status, expiry, mark in cases:
+            cert = self._cert(status=status, expiry=expiry)
+            permit = self._permit(
+                [{"role": "worker", "name": "张三", "certificate_id": str(cert.id)}]
+            )
+            elements = await notify._persons_cert_section(
+                self._fake_db(cert), permit, with_images=False
+            )
+            md = elements[0]["content"]
+            assert mark in md, (status, expiry, md)
+
+    async def test_missing_and_external(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from app.modules.safety.service import work_permit_notify as notify
+
+        permit = self._permit(
+            [
+                {"role": "guardian", "name": "李四"},
+                {
+                    "role": "worker",
+                    "name": "王五",
+                    "certificate_no": "T-999",
+                    "external": True,
+                },
+                {"role": "helper", "name": "赵六"},
+            ]
+        )
+
+        class _EmptyDB:
+            async def execute(self, *_a: Any, **_kw: Any) -> Any:
+                class _R:
+                    def scalars(self) -> Any:
+                        return self
+
+                    def all(self) -> list[Any]:
+                        return []
+
+                return _R()
+
+        elements = await notify._persons_cert_section(
+            _EmptyDB(), permit, with_images=False
+        )
+        md = elements[0]["content"]
+        assert "🛡 监护人" in md
+        assert "⚠️ 未关联证件" in md
+        assert "证件号 T-999" in md
+        assert "〔外部人员〕" in md
+
+    async def test_no_persons_empty(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from app.modules.safety.service import work_permit_notify as notify
+
+        permit = self._permit([])
+        assert (
+            await notify._persons_cert_section(object(), permit, with_images=True) == []
+        )
+
+    async def test_next_stage_degrades_on_error(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from app.modules.safety.service import work_permit_notify as notify
+        from app.modules.safety.service.work_permit_templates import (
+            PERMIT_STATUS_PENDING,
+        )
+
+        async def _boom(*_a: Any, **_kw: Any) -> list[dict[str, Any]]:
+            raise RuntimeError("cert query down")
+
+        async def _no_records(db: Any, permit: Any) -> str:
+            return ""
+
+        async def _no_node(db: Any, permit: Any) -> Any:
+            return None
+
+        monkeypatch.setattr(notify, "_persons_cert_section", _boom)
+        monkeypatch.setattr(notify, "_sign_records_markdown", _no_records)
+        monkeypatch.setattr(notify, "_pending_node", _no_node)
+        recipient, elements, title = await notify._next_stage_elements(
+            object(), _gap_permit(PERMIT_STATUS_PENDING)
+        )
+        assert recipient is None and title == ""  # 降级不抛错
+
+    async def test_summary_card_person_line_upgraded(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        md = forms.ticket_document_markdown(
+            "hot_work",
+            {
+                "persons": [
+                    {
+                        "role": "work_leader",
+                        "name": "张三",
+                        "certificate_category": "welding_cutting",
+                        "certificate_no": "DJ-2026-0157",
+                        "certificate_expiry": "2027-05-12",
+                    },
+                    {
+                        "role": "guardian",
+                        "name": "李四",
+                        "external": True,
+                        "certificate_no": "T-888",
+                    },
+                ],
+                "levels": ["grade2"],
+                "level": "grade2",
+                "apply_department": "一车间",
+                "work_location": "罐区",
+                "work_description": "测试",
+                "work_unit": "检修班",
+                "planned_start": "2026-11-13 08:00",
+                "planned_end": "2026-11-13 17:00",
+                "apply_time": "2026-11-13 08:00",
+            },
+            permit_no="DH-TEST-1",
+        )
+        assert "焊接与热切割作业" in md or "焊" in md
+        assert "有效至 2027-05-12" in md
+        assert "〔外部人员〕" in md

@@ -4044,8 +4044,7 @@ class SafetyFacilityInspection(BaseModel):
 
     __tablename__ = "safety_facility_inspections"
     __table_args__ = (
-        Index("ix_safety_facility_inspections_facility", "facility_id",
-        "inspected_at"),
+        Index("ix_safety_facility_inspections_facility", "facility_id", "inspected_at"),
         Index("ix_safety_facility_inspections_inspected_at", "inspected_at"),
         {"schema": "safety"},
     )
@@ -5464,8 +5463,7 @@ class SafetyCommitmentReport(BaseModel):
     risk_assessment: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB,
         nullable=True,
-        comment=
-            "AI 风险研判结果（risk_level/summary/key_risks/suggestions/data_basis）",
+        comment="AI 风险研判(risk_level/summary/key_risks/suggestions)",
     )
     status: Mapped[str] = mapped_column(
         String(20),
@@ -5517,4 +5515,47 @@ class SafetyCommitmentCard(BaseModel):
         default=0,
         server_default="0",
         comment="排序（同类型内升序）",
+    )
+
+
+class GuardianRoster(BaseModel):
+    """作业安全监护人名单（按车间区分，监护人考试合格人员台账）。
+
+    数据口径：以最新一次 Excel 导入为准（导入整表替换）；行级手工
+    增删改在两次导入之间生效。车间为自由文本（同 EmergencyCard.workshop
+    惯例），来源是导入表的「部门/车间」列；不与作业票联动校验。
+    """
+
+    __tablename__ = "guardian_roster"
+    __table_args__ = (
+        Index("ix_guardian_roster_workshop", "workshop"),
+        {"schema": "safety"},
+    )
+
+    person_name: Mapped[str] = mapped_column(
+        String(100), nullable=False, comment="监护人姓名"
+    )
+    workshop: Mapped[str] = mapped_column(
+        String(100), nullable=False, comment="车间/部门（自由文本）"
+    )
+    phone: Mapped[str | None] = mapped_column(
+        String(32), nullable=True, comment="联系电话"
+    )
+    position: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, comment="岗位"
+    )
+    score: Mapped[int | None] = mapped_column(
+        Integer, nullable=True, comment="考试分数"
+    )
+    exam_name: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, comment="考试名称（如监护人考试）"
+    )
+    exam_date: Mapped[date | None] = mapped_column(
+        Date, nullable=True, comment="考试/合格日期"
+    )
+    remark: Mapped[str | None] = mapped_column(
+        String(200), nullable=True, comment="备注"
+    )
+    source_file: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, comment="来源导入文件名"
     )
