@@ -418,39 +418,43 @@ def build_step_card(
 
     if step == 2:
         # 人员阶段：每个岗位一张卡，下拉全量加载证书名单（可滚动选中
-        # 所有人）；名单超长由 select 自带滚动承载，卡片元素数恒定
+        # 所有人）；名单超长由 select 自带滚动承载，卡片元素数恒定。
+        # 作业人/司索人等多人角色（multi）支持多选 + 多行外部人员
         roles = list(template.person_roles)
         idx = max(0, min(int(person_role_idx), len(roles) - 1))
         role = roles[idx]
         role_key = str(role["role"])
+        is_multi = bool(role.get("multi"))
         label = str(role["label"]) + ("（需持证）" if role.get("cert") else "")
-        existing_map = {str(p.get("role")): p for p in (values.get("persons") or [])}
-        existing = existing_map.get(role_key) or {}
+        role_persons = [
+            p for p in (values.get("persons") or []) if str(p.get("role")) == role_key
+        ]
+        existing = role_persons[0] if role_persons else {}
 
+        current_text = ""
+        if role_persons:
+            parts = []
+            for p in role_persons:
+                part = str(p.get("name") or "—")
+                if p.get("certificate_no"):
+                    part += f"｜{p.get('certificate_no')}"
+                if p.get("external"):
+                    part += "〔外部〕"
+                parts.append(part)
+            current_text = f"　已选：{'、'.join(parts)}"
         elements.append(
-            _md(
-                f"**② 人员（{idx + 1}/{len(roles)}）：{label}**"
-                + (
-                    f"　当前：{existing.get('name')}"
-                    + (
-                        f"｜证号 {existing.get('certificate_no')}"
-                        if existing.get("certificate_no")
-                        else ""
-                    )
-                    if existing.get("name")
-                    else ""
-                )
-            )
+            _md(f"**② 人员（{idx + 1}/{len(roles)}）：{label}**{current_text}")
         )
         elements.append(
             _md(
                 "下拉为**特种作业证书名单**（全量，滚动查找），选中即自动带出"
                 "证件号；名单没有的外部人员填下方姓名与证件号。"
+                + ("本岗位可**多选**。" if is_multi else "")
             )
         )
         elements.append(_hr())
 
-        # 全量证书名单下拉（按姓名排序，全部加载）
+        # 全量证书名单下拉（按姓名排序，全部加载；multi 角色可多选）
         roster = values.get("cert_roster") or []
         roster_options = [
             {
@@ -467,31 +471,77 @@ def build_step_card(
         form_elements.append(
             _select(
                 f"person__{role_key}",
-                f"从证书名单选择{label}",
+                f"从证书名单选择{label}" + ("（可多选）" if is_multi else ""),
                 roster_options,
                 placeholder="点击展开全部持证人员",
+                multi=is_multi,
             )
         )
-        is_external = bool(existing.get("external"))
-        form_elements.append(
-            _input(
-                f"person_ext_name__{role_key}",
-                "外部人员姓名（证书名单没有时填）",
-                default=(str(existing.get("name") or "") if is_external else None),
-                placeholder="系统无此人时填",
+        if is_multi:
+            # 外部人员多行：行数存 values["ext_rows_{role}"]（ext_add/ext_del 调整）
+            ext_rows = max(1, int(values.get(f"ext_rows_{role_key}") or 1))
+            for i in range(ext_rows):
+                form_elements.append(
+                    _input(
+                        f"person_ext_name__{role_key}__{i}",
+                        f"外部人员{i + 1}姓名（名单没有时填）",
+                        placeholder="系统无此人时填，可留空",
+                    )
+                )
+                form_elements.append(
+                    _input(
+                        f"person_ext_cert__{role_key}__{i}",
+                        f"外部人员{i + 1}证件号",
+                        placeholder="外部人员持证件号，可留空",
+                    )
+                )
+        else:
+            is_external = bool(existing.get("external"))
+            form_elements.append(
+                _input(
+                    f"person_ext_name__{role_key}",
+                    "外部人员姓名（证书名单没有时填）",
+                    default=(str(existing.get("name") or "") if is_external else None),
+                    placeholder="系统无此人时填",
+                )
             )
-        )
-        form_elements.append(
-            _input(
-                f"person_ext_cert__{role_key}",
-                "外部人员证件号",
-                default=(
-                    str(existing.get("certificate_no") or "") if is_external else None
-                ),
-                placeholder="外部人员持证件号",
+            form_elements.append(
+                _input(
+                    f"person_ext_cert__{role_key}",
+                    "外部人员证件号",
+                    default=(
+                        str(existing.get("certificate_no") or "")
+                        if is_external
+                        else None
+                    ),
+                    placeholder="外部人员持证件号",
+                )
             )
-        )
         elements.append(_form(form_elements, _form_submit("保存并下一位", "step_save")))
+        if is_multi:
+            # 外部人员行数调整（快动作，立即重渲染本岗位卡）
+            ext_rows_now = max(1, int(values.get(f"ext_rows_{role_key}") or 1))
+            elements.append(
+                _btn(
+                    "＋再加一名外部人员",
+                    {
+                        **nav,
+                        "act": "ext_add",
+                        "person_role_idx": idx,
+                    },
+                )
+            )
+            if ext_rows_now > 1:
+                elements.append(
+                    _btn(
+                        "－移除末行",
+                        {
+                            **nav,
+                            "act": "ext_del",
+                            "person_role_idx": idx,
+                        },
+                    )
+                )
         # 上一步：第 1 位 → 第①步；否则回上一岗位
         if idx > 0:
             elements.append(

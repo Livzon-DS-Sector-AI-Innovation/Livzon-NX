@@ -42,6 +42,8 @@ class SafetyFeishuAppSettingsDetail(BaseModel):
     commitment_notify_enabled: bool = False
     commitment_push_time: str = "08:30"
     commitment_user_ids: list[str] = Field(default_factory=list)
+    commitment_signer_open_id: str | None = None
+    commitment_remind_interval_minutes: int = 30
     is_enabled: bool = True
     knowledge_last_sync_status: str | None = None
     knowledge_last_sync_error: str | None = None
@@ -92,6 +94,8 @@ class UpdateSafetyFeishuAppSettingsRequest(BaseModel):
     commitment_notify_enabled: bool = False
     commitment_push_time: str = Field(default="08:30", max_length=5)
     commitment_user_ids: list[str] = Field(default_factory=list)
+    commitment_signer_open_id: str | None = Field(default=None, max_length=100)
+    commitment_remind_interval_minutes: int = Field(default=30, ge=5, le=720)
     is_enabled: bool = True
 
 

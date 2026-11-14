@@ -16,6 +16,7 @@ import {
   Card,
   Col,
   DatePicker,
+  Drawer,
   Input,
   InputNumber,
   Modal,
@@ -24,6 +25,7 @@ import {
   Row,
   Space,
   Spin,
+  Switch,
   Tag,
   Typography,
 } from 'antd'
@@ -33,19 +35,23 @@ import {
   PlusOutlined,
   ReloadOutlined,
   SendOutlined,
+  SettingOutlined,
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import PlatformNotice from '@/components/shared/PlatformNotice'
 import { usePagePermissions } from '@/hooks/usePagePermissions'
-import { SAFETY_COMMITMENT_PAGE_KEY, formatCnDateTime, todayStr, type CommitmentCardType, type EnterpriseStatus, type SafetyCommitmentCard, type SafetyCommitmentReport } from '@/lib/safety-commitment'
+import { SAFETY_COMMITMENT_PAGE_KEY, formatCnDateTime, todayStr, type CommitmentCardType, type EnterpriseStatus, type SafetyCommitmentCard, type SafetyCommitmentReport, type WorkshopConfig, type WorkshopFillsProgress } from '@/lib/safety-commitment'
 import {
   createCommitmentCard,
   deleteCommitmentCard,
   getCommitmentByDate,
   getCommitmentCards,
   getCommitmentToday,
+  getCommitmentWorkshopFills,
+  getCommitmentWorkshops,
   publishCommitment,
   regenerateCommitmentRiskAssessment,
+  saveCommitmentWorkshops,
   updateCommitment,
   updateCommitmentCard,
 } from '@/actions/safety'
@@ -191,6 +197,14 @@ export function SafetyCommitmentPanel({
   // ── AI 研判 ──
   const [assessing, setAssessing] = useState(false)
 
+  // ── 车间分填报 ──
+  const [wsProgress, setWsProgress] = useState<WorkshopFillsProgress | null>(
+    null
+  )
+  const [wsConfigOpen, setWsConfigOpen] = useState(false)
+  const [wsConfigs, setWsConfigs] = useState<WorkshopConfig[]>([])
+  const [wsSaving, setWsSaving] = useState(false)
+
   // ── 信息卡 ──
   const [cardEditingId, setCardEditingId] = useState<string | null>(null)
   const [cardDraft, setCardDraft] = useState({ title: '', content: '' })
@@ -201,9 +215,10 @@ export function SafetyCommitmentPanel({
   const readOnly = !isToday || !permissions.canOperate
 
   const reload = useCallback(async () => {
-    const [todayRes, cardsRes] = await Promise.all([
+    const [todayRes, cardsRes, fillsRes] = await Promise.all([
       getCommitmentToday(PAGE_KEY),
       getCommitmentCards(undefined, PAGE_KEY),
+      getCommitmentWorkshopFills(isToday ? null : viewDate, PAGE_KEY),
     ])
     if (todayRes.code === 200 && todayRes.data) {
       setReport(todayRes.data.report)
@@ -219,7 +234,10 @@ export function SafetyCommitmentPanel({
     if (cardsRes.code === 200 && cardsRes.data) {
       setCards(cardsRes.data.cards)
     }
-  }, [])
+    if (fillsRes.code === 200 && fillsRes.data) {
+      setWsProgress(fillsRes.data)
+    }
+  }, [isToday, viewDate])
 
   const loadByDate = useCallback(async (date: string) => {
     setError(null)
@@ -240,6 +258,39 @@ export function SafetyCommitmentPanel({
       setError(res.message || '该日期暂无安全承诺日报')
     }
   }, [reload])
+
+  const openWsConfig = useCallback(async () => {
+    setWsConfigOpen(true)
+    const res = await getCommitmentWorkshops(PAGE_KEY)
+    if (res.code === 200 && res.data) {
+      setWsConfigs(res.data)
+    } else {
+      message.error(res.message || '车间配置加载失败')
+    }
+  }, [])
+
+  const saveWsConfigs = async () => {
+    setWsSaving(true)
+    const res = await saveCommitmentWorkshops(
+      wsConfigs.map((row, idx) => ({
+        id: row.id,
+        workshop_name: row.workshop_name,
+        reporter_open_id: row.reporter_open_id,
+        reporter_name: row.reporter_name,
+        sort_order: idx,
+        is_enabled: row.is_enabled,
+      })),
+      PAGE_KEY
+    )
+    setWsSaving(false)
+    if (res.code === 200 && res.data) {
+      setWsConfigs(res.data)
+      message.success('车间填报配置已保存')
+      await reload()
+    } else {
+      message.error(res.message || '保存失败')
+    }
+  }
 
   const saveStatus = async () => {
     if (!report) return
@@ -707,10 +758,27 @@ export function SafetyCommitmentPanel({
             <Tag color="orange">草稿</Tag>
           )}
           {report?.fill_source && (
-            <Tag>{report.fill_source === 'feishu' ? '飞书填报' : '网页填报'}</Tag>
+            <Tag>
+              {report.fill_source === 'feishu_summary'
+                ? '车间汇总'
+                : report.fill_source === 'feishu'
+                  ? '飞书填报'
+                  : '网页填报'}
+            </Tag>
+          )}
+          {wsProgress && (
+            <Tag color={wsProgress.filled >= wsProgress.total ? 'green' : 'blue'}>
+              车间填报 {wsProgress.filled}/{wsProgress.total}
+            </Tag>
           )}
         </Space>
         <Space wrap>
+          <Button
+            icon={<SettingOutlined />}
+            onClick={() => void openWsConfig()}
+          >
+            车间填报配置
+          </Button>
           {!readOnly && report && (
             <>
               <Button
@@ -730,13 +798,42 @@ export function SafetyCommitmentPanel({
                   icon={<SendOutlined />}
                   onClick={() => setPublishOpen(true)}
                 >
-                  发布承诺公告
+                  发布并推送签署
                 </Button>
               )}
             </>
           )}
         </Space>
       </div>
+
+      {/* ── 车间分填报进度 ── */}
+      {wsProgress && wsProgress.total > 0 && (
+        <Card
+          size="small"
+          title="车间填报进度"
+          extra={
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              全部车间填齐后自动汇总；未填车间按催办间隔自动催办
+            </Typography.Text>
+          }
+        >
+          <div
+            style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}
+            data-testid="ws-progress"
+          >
+            {wsProgress.workshops.map((row) => (
+              <Tag
+                key={row.workshop_name}
+                color={row.filled ? 'green' : 'default'}
+                style={{ fontSize: 12 }}
+              >
+                {row.workshop_name}
+                {row.filled ? ` ✓ ${row.filled_by_name || ''}` : ' 未填'}
+              </Tag>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {!report && !error && (
         <div style={{ textAlign: 'center', padding: 48 }}>
@@ -1040,6 +1137,43 @@ export function SafetyCommitmentPanel({
                 {formatCnDateTime(report.published_at)} 发布
               </Typography.Paragraph>
             )}
+            <div style={{ marginBottom: 8 }}>
+              <Space wrap>
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  主要负责人签名：
+                </Typography.Text>
+                {isToday && (
+                  <Button size="small" icon={<SendOutlined />}>
+                    <a
+                      href={`/api/v1/safety/safety-commitments/signature-image?date=${viewDate}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ textDecoration: 'none', color: 'inherit' }}
+                    >
+                      查看签名
+                    </a>
+                  </Button>
+                )}
+                <Button size="small" icon={<SendOutlined />}>
+                  <a
+                    href={`/api/v1/safety/safety-commitments/${report.id}/download`}
+                    style={{ textDecoration: 'none', color: 'inherit' }}
+                  >
+                    下载承诺公告（PDF）
+                  </a>
+                </Button>
+              </Space>
+              <div style={{ marginTop: 8 }}>
+                <img
+                  src={`/api/v1/safety/safety-commitments/signature-image?date=${viewDate}`}
+                  alt="承诺签名"
+                  style={{ maxHeight: 90 }}
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = 'none'
+                  }}
+                />
+              </div>
+            </div>
             {commitmentEditing ? (
               <Input.TextArea
                 rows={10}
@@ -1084,6 +1218,121 @@ export function SafetyCommitmentPanel({
           </div>
         </Space>
       </Modal>
+
+
+      {/* ── 车间填报配置抽屉 ── */}
+      <Drawer
+        title="车间填报配置"
+        size={720}
+        destroyOnHidden
+        open={wsConfigOpen}
+        onClose={() => setWsConfigOpen(false)}
+        footer={
+          <Space>
+            <Button
+              type="primary"
+              loading={wsSaving}
+              onClick={() => void saveWsConfigs()}
+            >
+              保存配置
+            </Button>
+            <Button onClick={() => setWsConfigOpen(false)}>关闭</Button>
+          </Space>
+        }
+      >
+        <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
+          每日推送时间到后，各车间负责人收到本车间企业状态填报卡；全部车间填齐后
+          自动汇总并推送到飞书设置的汇总群，由安全员在本页整理发布。车间名含括号
+          身份（如 201-2车间（MC）），请勿删改括号。
+        </Typography.Paragraph>
+        {wsConfigs.map((row, idx) => (
+          <Card
+            key={row.id}
+            size="small"
+            style={{ marginBottom: 8 }}
+            title={row.workshop_name}
+            extra={
+              <Space>
+                <Switch
+                  size="small"
+                  checked={row.is_enabled}
+                  onChange={(checked) =>
+                    setWsConfigs((prev) =>
+                      prev.map((item, i) =>
+                        i === idx ? { ...item, is_enabled: checked } : item
+                      )
+                    )
+                  }
+                />
+                <Button
+                  type="text"
+                  size="small"
+                  danger
+                  icon={<DeleteOutlined />}
+                  onClick={() =>
+                    setWsConfigs((prev) => prev.filter((_, i) => i !== idx))
+                  }
+                />
+              </Space>
+            }
+          >
+            <Space direction="vertical" style={{ width: '100%' }} size={6}>
+              <Input
+                value={row.workshop_name}
+                placeholder="车间名称"
+                onChange={(e) =>
+                  setWsConfigs((prev) =>
+                    prev.map((item, i) =>
+                      i === idx ? { ...item, workshop_name: e.target.value } : item
+                    )
+                  )
+                }
+              />
+              <Input
+                value={row.reporter_name}
+                placeholder="填报负责人姓名"
+                onChange={(e) =>
+                  setWsConfigs((prev) =>
+                    prev.map((item, i) =>
+                      i === idx ? { ...item, reporter_name: e.target.value } : item
+                    )
+                  )
+                }
+              />
+              <Input
+                value={row.reporter_open_id}
+                placeholder="负责人飞书 open_id（ou_ 开头，人员管理页可查）"
+                onChange={(e) =>
+                  setWsConfigs((prev) =>
+                    prev.map((item, i) =>
+                      i === idx ? { ...item, reporter_open_id: e.target.value } : item
+                    )
+                  )
+                }
+              />
+            </Space>
+          </Card>
+        ))}
+        <Button
+          block
+          icon={<PlusOutlined />}
+          onClick={() =>
+            setWsConfigs((prev) => [
+              ...prev,
+              {
+                id: '',
+                workshop_name: '',
+                reporter_open_id: '',
+                reporter_name: '',
+                sort_order: prev.length,
+                is_enabled: true,
+              },
+            ])
+          }
+        >
+          新增车间
+        </Button>
+      </Drawer>
 
       {/* ── 新增信息卡弹窗 ── */}
       <Modal

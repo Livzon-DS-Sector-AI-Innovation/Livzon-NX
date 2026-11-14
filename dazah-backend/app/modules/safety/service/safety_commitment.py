@@ -113,6 +113,7 @@ def _to_item(report: SafetyCommitmentReport) -> dict[str, Any]:
         "publisher_name": report.publisher_name,
         "published_at": report.published_at,
         "fill_source": report.fill_source,
+        "workshop_summary": list(report.workshop_summary or []) or None,
         "created_at": report.created_at,
         "updated_at": report.updated_at,
     }
@@ -197,11 +198,8 @@ async def get_or_create_report(
     db.add(report)
     await db.flush()
 
-    # 首次创建时自动生成一次 AI 研判；失败不影响日报创建
-    try:
-        await safety_commitment_risk.generate_risk_assessment(db, report)
-    except Exception:
-        logger.exception("安全承诺日报自动 AI 研判失败 date=%s", report_date)
+    # AI 研判不再在创建时自动生成（数据不全时无意义），改由车间汇总
+    # 完成时自动生成一次；网页端保留手动「重新研判」。
     await _audit(db, "create", resource_id=report.id, user_id=user_id)
     await db.commit()
     await db.refresh(report)

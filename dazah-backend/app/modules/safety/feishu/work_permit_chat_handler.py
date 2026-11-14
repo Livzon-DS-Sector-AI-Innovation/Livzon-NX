@@ -62,6 +62,8 @@ _FAST_ACTS = frozenset(
         "choose_cert",
         "person_prev",
         "clear_search",
+        "ext_add",
+        "ext_del",
     }
 )
 _HEAVY_ACTS = frozenset(
@@ -355,6 +357,11 @@ async def _run_fast_action(
                 )
             elif act == "person_prev":
                 card = await flow.person_prev(
+                    permit_type, int(value.get("person_role_idx") or 0)
+                )
+            elif act in ("ext_add", "ext_del"):
+                adjust = getattr(flow, act)
+                card = await adjust(
                     permit_type, int(value.get("person_role_idx") or 0)
                 )
             elif act == "clear_search":

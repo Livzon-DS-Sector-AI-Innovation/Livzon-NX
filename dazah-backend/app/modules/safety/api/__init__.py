@@ -27,6 +27,9 @@ from app.modules.safety.api.oh_detection_reports import oh_detection_reports_rou
 from app.modules.safety.api.oh_hazard_monitors import oh_hazard_monitors_router
 from app.modules.safety.api.oh_health_exams import oh_health_exams_router
 from app.modules.safety.api.page_table import page_table_router
+from app.modules.safety.api.commitment_workshops import (
+    commitment_workshops_router,
+)
 from app.modules.safety.api.regulations import regulations_router
 from app.modules.safety.api.safety_commitments import safety_commitments_router
 from app.modules.safety.api.scheduled_tasks import scheduled_tasks_router
@@ -64,6 +67,7 @@ router.include_router(oh_detection_reports_router)
 router.include_router(oh_hazard_monitors_router)
 router.include_router(oh_health_exams_router)
 router.include_router(page_table_router)
+router.include_router(commitment_workshops_router)
 router.include_router(regulations_router)
 router.include_router(safety_commitments_router)
 router.include_router(safety_targets_router)

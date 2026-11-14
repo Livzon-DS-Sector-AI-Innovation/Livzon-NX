@@ -304,6 +304,7 @@ describe("safety feishu settings actions", () => {
       cert_expiry_notify_enabled: false,
       commitment_notify_enabled: false,
       commitment_push_time: "08:30",
+      commitment_remind_interval_minutes: 30,
     };
     await saveSafetyFeishuSettings(payload);
     expect(fetchMock).toHaveBeenCalledWith(

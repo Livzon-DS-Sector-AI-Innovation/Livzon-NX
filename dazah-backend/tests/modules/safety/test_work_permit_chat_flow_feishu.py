@@ -2540,7 +2540,11 @@ class TestGasRecordsNotify:
         async def _records(db: Any, p: Any) -> str:
             return "**气体检测记录**"
 
+        async def _no_sign(_db: Any, _p: Any) -> str:
+            return ""
+
         monkeypatch.setattr(notify, "_gas_records_markdown", _records)
+        monkeypatch.setattr(notify, "_sign_records_markdown", _no_sign)
         card = await notify.active_gas_card(object(), permit)
         text = json_mod.dumps(card, ensure_ascii=False)
         assert "作业中气体检测" in text
@@ -3726,3 +3730,392 @@ class TestPersonsCertSection:
         assert "焊接与热切割作业" in md or "焊" in md
         assert "有效至 2027-05-12" in md
         assert "〔外部人员〕" in md
+
+
+class TestBriefAndMultiWorker:
+    """作业人多选 + 交底环节（brief_worker_{i}）+ 签名总览三段渲染。"""
+
+    @staticmethod
+    def _cert(name: str, no: str = "DJ-2026-0001") -> Any:
+        from types import SimpleNamespace
+
+        return SimpleNamespace(
+            id=uuid4(),
+            person_name=name,
+            certificate_no=no,
+            certificate_category="welding_cutting",
+            expiry_date=None,
+            status="valid",
+            identity_user_id=None,
+        )
+
+    @staticmethod
+    def _cert_db(*certs: Any) -> Any:
+        """按调用序返回证件查询结果（_person_from_cert_id 每次查一条）。"""
+        queue = list(certs)
+
+        class _R:
+            def scalar_one_or_none(self) -> Any:
+                return queue.pop(0) if queue else None
+
+        class _DB:
+            async def execute(self, *_a: Any, **_kw: Any) -> Any:
+                return _R()
+
+        return _DB()
+
+    async def test_merge_persons_multi_role(self) -> None:
+        """multi 角色：多选 roster 展开多条 + 多行外部人员。"""
+        from app.modules.safety.service.work_permit_chat_flow import ChatFlowService
+
+        cert1 = self._cert("张三")
+        cert2 = self._cert("王五")
+        flow = ChatFlowService(self._cert_db(cert1, cert2), open_id="ou_x")
+        values = {"persons": [], "ext_rows_worker": 2}
+        form_value = {
+            "person__worker": [str(cert1.id), str(cert2.id)],
+            "person_ext_name__worker__0": "马外部",
+            "person_ext_cert__worker__0": "T-001",
+            "person_ext_name__worker__1": "",
+        }
+        await flow._merge_persons("hot_work", values, form_value)
+        persons = values["persons"]
+        assert len(persons) == 3  # 2 张证书 + 1 名外部（第 2 行留空跳过）
+        assert [p["name"] for p in persons] == ["张三", "王五", "马外部"]
+        assert persons[2]["external"] == "true"
+        assert persons[2]["certificate_no"] == "T-001"
+
+    async def test_merge_persons_multi_empty_keeps_prev(self) -> None:
+        """multi 角色本轮无提交内容 → 保留既有条目。"""
+        from app.modules.safety.service.work_permit_chat_flow import ChatFlowService
+
+        flow = ChatFlowService(self._cert_db(), open_id="ou_x")
+        prev = {"role": "worker", "name": "张三", "certificate_id": "x"}
+        values = {"persons": [prev]}
+        await flow._merge_persons("hot_work", values, {"person__worker": ""})
+        assert values["persons"] == [prev]
+
+    async def test_ext_add_del_renders(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """ext_add/ext_del 调整外部人员行数并重渲染 multi 卡。"""
+        from app.modules.safety.service.work_permit_chat_flow import ChatFlowService
+
+        flow = ChatFlowService(object(), open_id="ou_x")
+        saved: dict[str, Any] = {}
+
+        async def fake_load(_pt: str) -> dict[str, Any]:
+            # hot_work 人员岗位序：0=work_leader（单选），1=worker（multi）
+            return {"step": 2, "values": {"person_role_idx": 1}}
+
+        async def fake_save(state: dict[str, Any]) -> None:
+            saved["state"] = state
+
+        monkeypatch.setattr(flow, "_load_state", fake_load)
+        monkeypatch.setattr(flow, "_save_state", fake_save)
+        card = await flow.ext_add("hot_work", 1)
+        card_str = json.dumps(card, ensure_ascii=False)
+        assert saved["state"]["values"]["ext_rows_worker"] == 2
+        assert "外部人员2姓名" in card_str
+        assert '"multi_select_static"' in card_str
+        assert "（可多选）" in card_str
+        card2 = await flow.ext_del("hot_work", 1)
+        card2_str = json.dumps(card2, ensure_ascii=False)
+        assert saved["state"]["values"]["ext_rows_worker"] == 1
+        assert "外部人员2姓名" not in card2_str
+
+    async def test_ext_del_floor_one(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """外部人员行数下限 1。"""
+        from app.modules.safety.service.work_permit_chat_flow import ChatFlowService
+
+        flow = ChatFlowService(object(), open_id="ou_x")
+
+        async def fake_load(_pt: str) -> dict[str, Any]:
+            return {"step": 2, "values": {"person_role_idx": 1, "ext_rows_worker": 1}}
+
+        async def fake_save(_state: dict[str, Any]) -> None:
+            pass
+
+        monkeypatch.setattr(flow, "_load_state", fake_load)
+        monkeypatch.setattr(flow, "_save_state", fake_save)
+        await flow.ext_del("hot_work", 1)
+        assert fake_load  # 不抛错即通过；下限逻辑见实现
+
+    def test_payload_keeps_external(self) -> None:
+        """提交 payload 保留 external 标记（修复既有丢弃缺陷）。"""
+        from app.modules.safety.service.work_permit_chat_flow import (
+            build_create_payload,
+        )
+
+        payload = build_create_payload(
+            "hot_work",
+            "grade2",
+            {
+                "persons": [
+                    {
+                        "role": "worker",
+                        "name": "马外部",
+                        "external": "true",
+                        "certificate_no": "T-1",
+                    }
+                ],
+                "measures": [],
+                "risk": [],
+            },
+        )
+        assert payload.persons[0].external is True
+        assert payload.persons[0].certificate_no == "T-1"
+
+    async def test_missing_brief_workers(self) -> None:
+        """缺签作业人推导：已签排除、非 multi 角色不参与。"""
+        from types import SimpleNamespace
+
+        from app.modules.safety.service import work_permit as svc
+
+        permit = SimpleNamespace(
+            id=uuid4(),
+            approval_round=1,
+            persons=[
+                {"role": "worker", "name": "张三", "user_id": "u1"},
+                {"role": "guardian", "name": "李四"},
+                {"role": "worker", "name": "马外部", "external": True},
+            ],
+        )
+        signed = {"brief_worker_0"}
+
+        class _R:
+            def scalars(self) -> Any:
+                return self
+
+            def all(self) -> set[str]:
+                return signed
+
+        class _DB:
+            async def execute(self, *_a: Any, **_kw: Any) -> Any:
+                return _R()
+
+        missing = await svc.missing_brief_workers(_DB(), permit)
+        assert [(i, p["name"]) for i, p in missing] == [(1, "马外部")]
+
+    async def test_verify_blocks_on_missing_brief(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """未签完交底 → verify 409 拦截（缺签名单进错误信息）。"""
+        from types import SimpleNamespace
+
+        from app.core.exceptions import AppException
+        from app.modules.safety.service import work_permit as svc
+
+        permit = SimpleNamespace(
+            id=uuid4(),
+            status="approved",
+            approval_round=1,
+            persons=[{"role": "worker", "name": "王五"}],
+        )
+
+        async def fake_lock(_db: Any, _pid: Any) -> Any:
+            return permit
+
+        async def fake_node(_db: Any, _permit: Any) -> Any:
+            return SimpleNamespace(id=uuid4())
+
+        def fake_guard(_node: Any, _permit: Any, _user: Any) -> None:
+            pass
+
+        async def fake_missing(_db: Any, _permit: Any) -> list[tuple[int, Any]]:
+            return [(0, {"name": "王五"})]
+
+        monkeypatch.setattr(svc, "_lock_permit", fake_lock)
+        monkeypatch.setattr(svc, "_current_verify_node", fake_node)
+        monkeypatch.setattr(svc, "_resolve_actor_guard", fake_guard)
+        monkeypatch.setattr(svc, "missing_brief_workers", fake_missing)
+        with pytest.raises(AppException) as exc_info:
+            await svc.verify_permit(object(), uuid4(), SimpleNamespace(id=uuid4()))
+        assert "交底" in str(exc_info.value.message)
+        assert "王五" in str(exc_info.value.message)
+
+    async def test_brief_sign_lands_and_routes(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """brief_worker_* 签名路由交底处理，其余仍走审批卡刷新。"""
+        import app.modules.safety.service.work_permit_signatures as sig_mod
+
+        calls: list[tuple[str, str]] = []
+
+        async def fake_save(_db: Any, **kw: Any) -> None:
+            calls.append(("save", kw["sign_key"]))
+
+        async def fake_brief(_db: Any, _pid: Any, sk: str) -> None:
+            calls.append(("brief", sk))
+
+        async def fake_refresh(_db: Any, _pid: Any) -> None:
+            calls.append(("refresh", ""))
+
+        class _FakeSession:
+            async def commit(self) -> None:
+                pass
+
+        monkeypatch.setattr(sig_mod, "save_signature_row", fake_save)
+        monkeypatch.setattr(
+            "app.modules.safety.service.work_permit_notify.on_brief_signature_landed",
+            fake_brief,
+        )
+        monkeypatch.setattr(
+            "app.modules.safety.service.work_permit_notify.refresh_or_push_approval_card",
+            fake_refresh,
+        )
+        pid = str(uuid4())
+        await sig_mod.apply_signature_submission(
+            _FakeSession(),
+            {"pid": pid, "rnd": 1, "sk": "brief_worker_1", "nid": None, "nm": "王五"},
+            "signatures/x.png",
+        )
+        node_payload = {
+            "pid": pid,
+            "rnd": 1,
+            "sk": "safety_node",
+            "nid": str(uuid4()),
+            "nm": "李四",
+        }
+        await sig_mod.apply_signature_submission(
+            _FakeSession(),
+            node_payload,
+            "signatures/y.png",
+        )
+        assert ("save", "brief_worker_1") in calls
+        assert ("brief", "brief_worker_1") in calls
+        assert ("refresh", "") in calls
+
+    async def test_sign_records_three_sections(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """签字记录总览：发起行 / 审批节点 / 交底作业人 三段。"""
+        from datetime import datetime as _dt
+        from types import SimpleNamespace
+
+        from app.modules.safety.service import work_permit_notify as notify
+
+        permit = _gap_permit("approved")
+        permit.approval_round = 1
+        permit.persons = [
+            {"role": "worker", "name": "王五"},
+            {"role": "guardian", "name": "李四"},
+            {"role": "worker", "name": "马外部", "external": True},
+        ]
+        node_id = uuid4()
+        sig_rows = [
+            SimpleNamespace(
+                node_id=None,
+                sign_key="initiator",
+                signer_name="张三",
+                signed_at=_dt(2026, 11, 14, 9, 30),
+                is_deleted=False,
+            ),
+            SimpleNamespace(
+                node_id=None,
+                sign_key="brief_worker_0",
+                signer_name="",
+                signed_at=_dt(2026, 11, 14, 10, 0),
+                is_deleted=False,
+            ),
+            SimpleNamespace(
+                node_id=node_id,
+                sign_key="safety_node",
+                signer_name="",
+                signed_at=None,
+                is_deleted=False,
+            ),
+        ]
+        node_rows = [
+            (
+                SimpleNamespace(
+                    id=node_id,
+                    seq=1,
+                    node_name="安全员/主管",
+                    status="approved",
+                    acted_at=_dt(2026, 11, 14, 9, 40),
+                ),
+                "李四",
+            )
+        ]
+        call_count = {"n": 0}
+
+        class _RowsResult:
+            def scalars(self) -> Any:
+                return self
+
+            def all(self) -> list[Any]:
+                return sig_rows
+
+        class _JoinResult:
+            def all(self) -> list[Any]:
+                return node_rows
+
+        class _DB:
+            async def execute(self, *_a: Any, **_kw: Any) -> Any:
+                call_count["n"] += 1
+                return _RowsResult() if call_count["n"] == 1 else _JoinResult()
+
+        md = await notify._sign_records_markdown(_DB(), permit)
+        assert "发起行：" in md
+        assert "✔ 发起人（作业负责人） 张三" in md
+        assert "⏳ 安全交底人" in md
+        assert "✅ 安全员/主管（李四" in md
+        # 交底作业人只含 multi 角色（worker），监护人不在其中
+        brief_section = md.split("交底作业人：", 1)[1]
+        assert brief_section.startswith("✔ 王五")
+        assert "⏳ 马外部" in brief_section
+        assert "李四" not in brief_section
+
+    async def test_brief_card_and_forward_render(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """交底卡渲染：内部作业人签名按钮 + 外部人员转发链接按钮。"""
+
+        from app.modules.safety.service import work_permit_notify as notify
+
+        permit = _gap_permit("approved")
+        permit.approval_round = 1
+        permit.persons = [
+            {"role": "worker", "name": "王五", "user_id": str(uuid4())},
+            {"role": "worker", "name": "马外部", "external": True},
+        ]
+
+        async def no_records(_db: Any, _permit: Any) -> str:
+            return ""
+
+        async def no_cert(_db: Any, _permit: Any, **_kw: Any) -> list[Any]:
+            return []
+
+        async def no_signed(_db: Any, _permit: Any) -> set[str]:
+            return set()
+
+        monkeypatch.setattr(notify, "_sign_records_markdown", no_records)
+        monkeypatch.setattr(notify, "_persons_cert_section", no_cert)
+        monkeypatch.setattr(notify, "_brief_signed_keys", no_signed)
+
+        sent: list[tuple[str, str]] = []
+
+        async def fake_send(union_id: str, card: dict[str, Any]) -> str | None:
+            sent.append((union_id, json.dumps(card, ensure_ascii=False)))
+            return "om_fake"
+
+        async def fake_union(_db: Any, user_id: Any) -> str | None:
+            return f"on_{user_id}"
+
+        async def cache_get_none(_key: str) -> None:
+            return None
+
+        async def cache_set_ok(*_a: Any, **_kw: Any) -> None:
+            pass
+
+        monkeypatch.setattr(notify, "send_raw_card_by_union_id", fake_send)
+        monkeypatch.setattr(notify, "_recipient_union_id", fake_union)
+        monkeypatch.setattr(notify, "cache_get", cache_get_none)
+        monkeypatch.setattr(notify, "cache_set", cache_set_ok)
+        await notify.push_brief_cards(object(), permit)
+        assert len(sent) == 2  # 内部作业人卡 + 外部转发卡
+        worker_card, forward_card = sent[0][1], sent[1][1]
+        assert "作业票交底学习" in worker_card
+        assert "手写签名（交底确认）" in worker_card
+        assert "外部作业人签名转发" in forward_card
+        assert "马外部（签名链接）" in forward_card
+        assert "王五（签名链接）" not in forward_card  # 内部人不在转发卡

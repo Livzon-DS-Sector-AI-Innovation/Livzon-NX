@@ -24,6 +24,9 @@ from app.modules.safety import router as safety_router
 from app.modules.safety.api.sign_relay_public import (
     sign_relay_public_router,
 )
+from app.modules.safety.api.commitment_sign_public import (
+    commitment_sign_public_router,
+)
 from app.modules.safety.api.work_permit_sign_public import (
     work_permit_sign_public_router,
 )
@@ -106,6 +109,12 @@ api_router.include_router(
     work_permit_sign_public_router,
     prefix="/safety",
     tags=["安全作业票免登签名"],
+)
+# 企业安全承诺签署免登手写板（HMAC token 保护，同作业票签名口径）
+api_router.include_router(
+    commitment_sign_public_router,
+    prefix="/safety",
+    tags=["安全承诺免登签署"],
 )
 # 手写签名公网中转网关（仅 SIGN_RELAY_GATEWAY_ENABLED 环境生效；
 # 内网环境的签名链接指向公网网关，由内网轮询拉回落库）

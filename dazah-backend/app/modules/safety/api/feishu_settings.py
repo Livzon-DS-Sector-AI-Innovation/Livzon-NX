@@ -102,25 +102,29 @@ async def test_commitment_notify(
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
 ) -> ApiResponseEnvelope[dict[str, Any]]:
-    """向已配置的第一个填报人员发送一张样例填报卡，验证推送通道。"""
+    """向第一个配置了负责人的车间发送样例填报卡，验证推送通道。"""
     from app.core.exceptions import AppException
     from app.modules.safety.service.commitment_notify import (
         get_commitment_settings,
-        send_test_fill_card,
+        send_test_workshop_card,
     )
+    from app.modules.safety.service.commitment_workshops import list_configs
 
     settings = await get_commitment_settings(db)
     if settings is None or not settings.commitment_notify_enabled:
         raise AppException(message="请先启用安全承诺填报推送并保存配置")
-    user_ids = [uid for uid in (settings.commitment_user_ids or []) if uid]
-    if not user_ids:
-        raise AppException(message="请先保存安全承诺填报人员再测试发送")
-    ok = await send_test_fill_card(db, str(user_ids[0]))
+    configs = await list_configs(db, ensure=True)
+    target = next((c for c in configs if c.reporter_open_id), None)
+    if target is None:
+        raise AppException(message="请先在车间填报配置中设置至少一个车间的负责人")
+    ok = await send_test_workshop_card(
+        db, str(target.reporter_open_id), target.workshop_name
+    )
     return ApiResponseEnvelope(
         data={
             "success": ok,
             "message": (
-                "测试卡片已发送给第一个填报人员，请到飞书查收"
+                f"测试填报卡已发送给「{target.workshop_name}」负责人，请到飞书查收"
                 if ok
                 else "测试卡片发送失败，请检查飞书配置与网络"
             ),

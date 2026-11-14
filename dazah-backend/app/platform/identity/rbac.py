@@ -209,6 +209,8 @@ PUBLIC_PATH_PREFIXES: tuple[str, ...] = (
     # 8大作业票免登签名与PDF下载（HMAC token 保护，非无鉴权开放）
     "/api/v1/safety/work-permit-sign/",
     "/api/v1/safety/work-permit-sign",
+    "/api/v1/safety/commitment-sign/",
+    "/api/v1/safety/commitment-sign",
     "/api/v1/safety/work-permit-file/",
     "/api/v1/safety/sign-relay/",
 )

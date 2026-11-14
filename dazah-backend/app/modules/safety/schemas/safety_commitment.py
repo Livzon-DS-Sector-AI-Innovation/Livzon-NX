@@ -26,6 +26,7 @@ class SafetyCommitmentReportItem(BaseModel):
     publisher_name: str | None = None
     published_at: datetime | None = None
     fill_source: str | None = None
+    workshop_summary: list[dict[str, Any]] | None = None
     created_at: datetime | None = None
     updated_at: datetime | None = None
 

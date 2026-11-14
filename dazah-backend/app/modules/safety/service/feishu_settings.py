@@ -140,6 +140,10 @@ def _build_detail(
         commitment_notify_enabled=model.commitment_notify_enabled,
         commitment_push_time=model.commitment_push_time or "08:30",
         commitment_user_ids=list(model.commitment_user_ids or []),
+        commitment_signer_open_id=model.commitment_signer_open_id,
+        commitment_remind_interval_minutes=(
+            model.commitment_remind_interval_minutes or 30
+        ),
         is_enabled=model.is_enabled,
         knowledge_last_sync_status=model.knowledge_last_sync_status,
         knowledge_last_sync_error=model.knowledge_last_sync_error,
@@ -215,6 +219,12 @@ async def update_safety_feishu_app_settings(
                 commitment_notify_enabled=data.commitment_notify_enabled,
                 commitment_push_time=_clean_optional(data.commitment_push_time),
                 commitment_user_ids=list(data.commitment_user_ids or []),
+                commitment_signer_open_id=_clean_optional(
+                    data.commitment_signer_open_id
+                ),
+                commitment_remind_interval_minutes=(
+                    data.commitment_remind_interval_minutes or 30
+                ),
                 is_enabled=data.is_enabled,
             )
             db.add(model)
@@ -306,6 +316,14 @@ async def update_safety_feishu_app_settings(
                 )
             if "commitment_user_ids" in data.model_fields_set:
                 model.commitment_user_ids = list(data.commitment_user_ids or [])
+            if "commitment_signer_open_id" in data.model_fields_set:
+                model.commitment_signer_open_id = _clean_optional(
+                    data.commitment_signer_open_id
+                )
+            if "commitment_remind_interval_minutes" in data.model_fields_set:
+                model.commitment_remind_interval_minutes = (
+                    data.commitment_remind_interval_minutes or 30
+                )
         await db.commit()
         return _build_detail(model)
     except (OperationalError, ProgrammingError) as exc:

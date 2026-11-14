@@ -12,6 +12,9 @@ const mocks = vi.hoisted(() => ({
   updateCommitment: vi.fn(),
   publishCommitment: vi.fn(),
   regenerateCommitmentRiskAssessment: vi.fn(),
+  getCommitmentWorkshopFills: vi.fn(),
+  getCommitmentWorkshops: vi.fn(),
+  saveCommitmentWorkshops: vi.fn(),
   createCommitmentCard: vi.fn(),
   updateCommitmentCard: vi.fn(),
   deleteCommitmentCard: vi.fn(),
@@ -27,6 +30,9 @@ vi.mock('@/actions/safety', () => ({
   updateCommitment: mocks.updateCommitment,
   publishCommitment: mocks.publishCommitment,
   regenerateCommitmentRiskAssessment: mocks.regenerateCommitmentRiskAssessment,
+  getCommitmentWorkshopFills: mocks.getCommitmentWorkshopFills,
+  getCommitmentWorkshops: mocks.getCommitmentWorkshops,
+  saveCommitmentWorkshops: mocks.saveCommitmentWorkshops,
   createCommitmentCard: mocks.createCommitmentCard,
   updateCommitmentCard: mocks.updateCommitmentCard,
   deleteCommitmentCard: mocks.deleteCommitmentCard,
@@ -83,6 +89,7 @@ vi.mock('@ant-design/icons', () => {
     PlusOutlined: Icon,
     ReloadOutlined: Icon,
     SendOutlined: Icon,
+    SettingOutlined: Icon,
   }
 })
 
@@ -187,6 +194,18 @@ beforeEach(() => {
   mocks.getCommitmentCards.mockResolvedValue({
     code: 200,
     data: { cards: CARDS },
+  })
+  mocks.getCommitmentWorkshopFills.mockResolvedValue({
+    code: 200,
+    data: {
+      report_date: todayStr(),
+      total: 2,
+      filled: 1,
+      workshops: [
+        { workshop_name: '锅炉', reporter_name: '', reporter_open_id: '', filled: true, filled_by_name: '张起智', filled_at: null, fields: {}, remark: '', source: 'feishu' },
+        { workshop_name: '动力部', reporter_name: '', reporter_open_id: '', filled: false, filled_by_name: '', filled_at: null, fields: {}, remark: '', source: '' },
+      ],
+    },
   })
   mocks.updateCommitment.mockResolvedValue({
     code: 200,
@@ -489,7 +508,7 @@ describe('SafetyCommitmentPanel：发布与 AI 研判失败分支', () => {
     mocks.publishCommitment.mockResolvedValue({ code: 500, message: '发布失败' })
     await renderPanel()
     act(() => {
-      buttons('发布承诺公告')[0]?.click()
+      buttons('发布并推送签署')[0]?.click()
     })
     await flush()
     await act(async () => {
