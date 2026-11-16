@@ -1,7 +1,9 @@
 /* @vitest-environment happy-dom */
 
+import { act } from 'react'
+import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { switchWorkspaceIdentity } from './WorkspaceIdentitySync'
+import { switchWorkspaceIdentity, WorkspaceIdentitySync } from './WorkspaceIdentitySync'
 import { WORKSPACE_IDENTITY_TRANSITION_KEY, workspaceIdentityTransitionInitScript } from '@/lib/workspaceIdentityTransition'
 
 const root = document.documentElement
@@ -69,6 +71,35 @@ it('unlocks the current page after a failed switch', async () => {
   expect(root.dataset.workspaceIdentityTransition).toBeUndefined()
   expect(sessionStorage.getItem(WORKSPACE_IDENTITY_TRANSITION_KEY)).toBeNull()
   expect(window.location.replace).not.toHaveBeenCalled()
+})
+
+it('reloads the workspace after another tab switches or a stale page returns from cache', async () => {
+  const changeKey = 'dazah.workspace-identity-change'
+  localStorage.setItem(changeKey, 'previous-identity')
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  const container = document.createElement('div')
+  document.body.append(container)
+  const syncRoot = createRoot(container)
+  try {
+    await act(async () => syncRoot.render(<WorkspaceIdentitySync />))
+    window.dispatchEvent(new StorageEvent('storage', { key: 'unrelated' }))
+    window.dispatchEvent(Object.assign(new Event('pageshow'), { persisted: true }))
+    expect(window.location.replace).not.toHaveBeenCalled()
+
+    localStorage.setItem(changeKey, 'current-identity')
+    window.dispatchEvent(Object.assign(new Event('pageshow'), { persisted: false }))
+    expect(window.location.replace).not.toHaveBeenCalled()
+    window.dispatchEvent(Object.assign(new Event('pageshow'), { persisted: true }))
+    expect(window.location.replace).toHaveBeenCalledExactlyOnceWith('/')
+    window.dispatchEvent(new StorageEvent('storage', { key: changeKey }))
+    expect(vi.mocked(window.location.replace).mock.calls).toEqual([['/'], ['/']])
+  } finally {
+    await act(async () => syncRoot.unmount())
+    container.remove()
+    vi.unstubAllGlobals()
+  }
+  window.dispatchEvent(new StorageEvent('storage', { key: changeKey }))
+  expect(window.location.replace).toHaveBeenCalledTimes(2)
 })
 
 it('navigates immediately when reduced motion is enabled', async () => {

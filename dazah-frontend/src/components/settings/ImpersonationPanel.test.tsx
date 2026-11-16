@@ -4,7 +4,7 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { describe, expect, it, vi } from 'vitest'
 import { ConfigProvider, theme } from 'antd'
-import { listImpersonationTargets } from '@/lib/api/client/impersonation'
+import { listImpersonationTargets, startImpersonation } from '@/lib/api/client/impersonation'
 import { finishImpersonationListReturn, saveImpersonationListState } from '@/lib/impersonationListState'
 import ImpersonationPanel from './ImpersonationPanel'
 
@@ -109,6 +109,48 @@ it('shows and recovers from a target list request failure', async () => {
   } finally {
     await act(async () => root.unmount())
     host.remove()
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  }
+})
+
+it('keeps the confirmation open and permits retry after a failed identity switch', async () => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  vi.useFakeTimers()
+  const start = vi.mocked(startImpersonation)
+  start.mockRejectedValueOnce(new Error('目标用户已停用'))
+  const navigate = vi.spyOn(window.location, 'replace').mockImplementation(() => {})
+  const host = document.createElement('div')
+  document.body.append(host)
+  const root = createRoot(host)
+  try {
+    await act(async () => root.render(<ConfigProvider theme={{ token: { motion: false } }}>
+      <ImpersonationPanel roles={[]} />
+    </ConfigProvider>))
+    await act(async () => { await vi.advanceTimersByTimeAsync(100) })
+    const target = host.querySelector<HTMLButtonElement>('[aria-label="模拟登录 角色验收用户"]')
+    if (!target) throw new Error('缺少模拟登录操作')
+    await act(async () => target.click())
+    const dialog = document.querySelector('[role="dialog"]')
+    const confirm = [...(dialog?.querySelectorAll('button') ?? [])].find(button => button.textContent?.includes('切换身份'))
+    if (!confirm) throw new Error('缺少切换身份操作')
+    expect(start).not.toHaveBeenCalled()
+    await act(async () => confirm.click())
+    expect(start).toHaveBeenCalledWith('with-roles')
+    expect(dialog?.querySelector('[aria-live="assertive"]')?.textContent).toBe('目标用户已停用')
+    expect(confirm.disabled).toBe(false)
+    expect(navigate).not.toHaveBeenCalled()
+
+    await act(async () => confirm.click())
+    expect(start).toHaveBeenCalledTimes(2)
+    expect(navigate).toHaveBeenCalledWith('/')
+  } finally {
+    await act(async () => root.unmount())
+    host.remove()
+    navigate.mockRestore()
+    sessionStorage.clear()
+    localStorage.clear()
+    delete document.documentElement.dataset.workspaceIdentityDeparting
     vi.useRealTimers()
     vi.unstubAllGlobals()
   }
