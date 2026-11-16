@@ -48,6 +48,7 @@ __all__ = [
     "ParsedCertificate",
     "SheetParseResult",
     "match_sheet_rule",
+    "normalize_department",
     "parse_certificate_workbook",
     "parse_date_cell",
     "parse_sheet",
@@ -109,9 +110,7 @@ SHEET_RULES: tuple[SheetCategoryRule, ...] = (
     SheetCategoryRule(keywords=("电工",), category="electrician"),
     SheetCategoryRule(keywords=("仪表",), category="instrument"),
     SheetCategoryRule(keywords=("司炉",), category="boiler_operator"),
-    SheetCategoryRule(
-        keywords=("水质", "化验"), category="water_quality_analyst"
-    ),
+    SheetCategoryRule(keywords=("水质", "化验"), category="water_quality_analyst"),
     SheetCategoryRule(keywords=("叉车",), category="forklift"),
     SheetCategoryRule(
         keywords=("压力容器",),
@@ -128,12 +127,85 @@ SHEET_RULES: tuple[SheetCategoryRule, ...] = (
 )
 
 
+def _canonical_sheet_key(text: str) -> str:
+    """子表名归一比较键：去空白并统一全/半角括号。"""
+    return re.sub(r"[\s（）()]+", "", text or "")
+
+
+# 类别中文 label 归一键 → 类别 code（导出子表名回导时精确命中）
+_LABEL_TO_CATEGORY: dict[str, str] = {
+    _canonical_sheet_key(label): category
+    for category, label in CERTIFICATE_CATEGORY_LABELS.items()
+}
+
+
 def match_sheet_rule(sheet_name: str) -> SheetCategoryRule | None:
-    normalized = re.sub(r"\s+", "", sheet_name or "")
+    """子表名 → 类别规则。
+
+    先按证件类别中文 label 精确匹配（导出文件的子表名即类别 label，
+    保证导出台账再导入时类别 100% 准确，也覆盖「起重司索工」这类
+    会被「起重」关键词误判的表名），未命中再走关键词规则。
+    """
+    normalized = _canonical_sheet_key(sheet_name)
+    category = _LABEL_TO_CATEGORY.get(normalized)
+    if category:
+        return SheetCategoryRule(keywords=(normalized,), category=category)
+    compact = re.sub(r"\s+", "", sheet_name or "")
     for rule in SHEET_RULES:
-        if any(keyword in normalized for keyword in rule.keywords):
+        if any(keyword in compact for keyword in rule.keywords):
             return rule
     return None
+
+
+# ── 车间名称归一化（汇总表车间列常见数字简写/括号变体） ──
+
+# 阿拉伯序号 → 中文序号（201-1 → 201一车间）
+_SEQ_DIGITS = {"1": "一", "2": "二", "3": "三", "4": "四", "5": "五"}
+
+# 数字车间简写：101 / 201一 / 201-1（可带「车间」尾缀）
+_DEPT_NUMERIC_RE = re.compile(r"^(\d{2,4})(?:[-—/])?([一二三四五1-5])?(?:车间)?$")
+# 括号变体：201二（多拉）→ 核心词归一 + 括号内容保留
+_DEPT_PAREN_RE = re.compile(r"^([^（(]+)([（(][^）)]*[）)])$")
+
+
+def normalize_department(raw: str | None) -> tuple[str | None, bool]:
+    """归一化车间名称，返回 (归一值, 是否发生变化)。
+
+    口径（对齐真实《持证人员汇总表》车间列写法）：
+    - 数字简写补全：``101`` → ``101车间``、``201一`` → ``201一车间``、
+      ``201-1`` → ``201一车间``（阿拉伯序号转中文）；
+    - 括号内容是车间区分标识（201二车间实际存在多拉等多个车间），
+      必须保留：``201二（多拉）`` → ``201二车间（多拉）``（括号统一全角）；
+    - ``机修工``/``机修班长`` 等机修前缀统一 ``机修``（仅无括号时）；
+    - 已是标准写法（``101车间``）不变；``动力科``/``热动站``/``QC``/
+      ``102预混剂`` 等无法判断的保留原值（仅去空白）。
+
+    仅内容变化计入 changed（去空白不算），供调用方把原始写法记入备注。
+    """
+    text = re.sub(r"[\s\u3000]+", "", raw or "")
+    if not text:
+        return None, False
+
+    suffix = ""
+    core = text
+    paren = _DEPT_PAREN_RE.match(text)
+    if paren:
+        core = paren.group(1)
+        inner = paren.group(2)[1:-1]
+        if inner:
+            suffix = f"（{inner}）"
+
+    numeric = _DEPT_NUMERIC_RE.match(core)
+    if numeric:
+        number, seq = numeric.group(1), numeric.group(2) or ""
+        seq = _SEQ_DIGITS.get(seq, seq)
+        normalized = f"{number}{seq}车间{suffix}"
+        return normalized, normalized != text
+
+    if not suffix and core.startswith("机修") and core != "机修":
+        return "机修", True
+
+    return text, False
 
 
 # ── 表头列名 → 字段 ──
@@ -256,9 +328,7 @@ def parse_date_cell(value: Any, *, month_end: bool) -> date | None:
         if len(parts) >= 3:
             return date(int(parts[0]), int(parts[1]), int(parts[2]))
         if len(parts) == 2:
-            return _parse_year_month(
-                int(parts[0]), int(parts[1]), month_end=month_end
-            )
+            return _parse_year_month(int(parts[0]), int(parts[1]), month_end=month_end)
     except ValueError:
         return None
     return None
@@ -350,9 +420,7 @@ def _map_columns(matrix: SheetMatrix, header_row: int) -> dict[str, list[int]]:
     return columns
 
 
-def parse_sheet(
-    matrix: SheetMatrix, rule: SheetCategoryRule
-) -> SheetParseResult:
+def parse_sheet(matrix: SheetMatrix, rule: SheetCategoryRule) -> SheetParseResult:
     result = SheetParseResult(
         name=matrix.name,
         category=rule.category,
@@ -377,14 +445,18 @@ def parse_sheet(
                 continue  # 整行空
             if any(keyword in joined for keyword in _FOOTER_KEYWORDS):
                 continue  # 尾注/制表行
-            result.errors.append(
-                {"row": excel_row, "reason": "缺少姓名，已跳过"}
-            )
+            result.errors.append({"row": excel_row, "reason": "缺少姓名，已跳过"})
             continue
 
         department: str | None = None
+        department_note: str | None = None
         if "department" in columns:
-            department = _cell_text(row[columns["department"][0]]) or None
+            raw_department = _cell_text(row[columns["department"][0]]) or None
+            if raw_department:
+                department, dept_changed = normalize_department(raw_department)
+                if dept_changed:
+                    # 归一化改变了原表写法（如 201二（多拉）→201二车间），留痕备查
+                    department_note = f"车间原值{raw_department}"
 
         expiry_raw = ""
         expiry_date: date | None = None
@@ -407,9 +479,7 @@ def parse_sheet(
 
         issue_date: date | None = None
         if "issue_date" in columns:
-            issue_date = parse_date_cell(
-                row[columns["issue_date"][0]], month_end=False
-            )
+            issue_date = parse_date_cell(row[columns["issue_date"][0]], month_end=False)
 
         certificate_no = None
         if "certificate_no" in columns:
@@ -443,6 +513,8 @@ def parse_sheet(
         scope = _fit("qualification_scope", scope)
 
         remark_parts: list[str] = []
+        if department_note:
+            remark_parts.append(department_note)
         if "position" in columns:
             position = _cell_text(row[columns["position"][0]])
             if position:
@@ -509,9 +581,7 @@ def merge_records(records: list[ParsedCertificate]) -> list[ParsedCertificate]:
                     note = f"{base.sheet}有效期至{base.expiry_date.isoformat()}"
                     base.remark = _fit(
                         "remark",
-                        "；".join(
-                            part for part in (base.remark, note) if part
-                        ),
+                        "；".join(part for part in (base.remark, note) if part),
                     )
                 base.expiry_date = record.expiry_date
             elif record.expiry_date > base.expiry_date:
@@ -524,9 +594,7 @@ def merge_records(records: list[ParsedCertificate]) -> list[ParsedCertificate]:
     return [merged[key] for key in order]
 
 
-def parse_certificate_workbook(
-    content: bytes, filename: str
-) -> dict[str, Any]:
+def parse_certificate_workbook(content: bytes, filename: str) -> dict[str, Any]:
     """解析工作簿：每个子表映射到证件类别并解析行；未识别子表列入跳过。"""
     matrices = load_workbook_matrices(content, filename)
     sheets: list[dict[str, Any]] = []
@@ -578,9 +646,7 @@ class CertificateImportService:
         for matrix in matrices:
             rule = match_sheet_rule(matrix.name)
             if rule is None:
-                skipped_sheets.append(
-                    {"sheet": matrix.name, "reason": "未识别的子表"}
-                )
+                skipped_sheets.append({"sheet": matrix.name, "reason": "未识别的子表"})
                 continue
             if selected is not None and matrix.name not in selected:
                 continue
@@ -685,9 +751,7 @@ class CertificateImportService:
         if record.department and cert.department != record.department:
             cert.department = record.department
             changed = True
-        if record.certificate_no and (
-            cert.certificate_no != record.certificate_no
-        ):
+        if record.certificate_no and (cert.certificate_no != record.certificate_no):
             cert.certificate_no = record.certificate_no
             changed = True
         if record.issue_date and cert.issue_date != record.issue_date:
@@ -703,9 +767,7 @@ class CertificateImportService:
         ]
         merged_scope = "、".join(dict.fromkeys(scopes)) or None
         if merged_scope != cert.qualification_scope:
-            cert.qualification_scope = _fit(
-                "qualification_scope", merged_scope
-            )
+            cert.qualification_scope = _fit("qualification_scope", merged_scope)
             changed = True
         if record.remark:
             existing_remark = cert.remark or ""
@@ -713,9 +775,7 @@ class CertificateImportService:
                 cert.remark = _fit(
                     "remark",
                     "；".join(
-                        part
-                        for part in (existing_remark, record.remark)
-                        if part
+                        part for part in (existing_remark, record.remark) if part
                     ),
                 )
                 changed = True

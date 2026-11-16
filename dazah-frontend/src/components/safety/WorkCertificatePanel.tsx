@@ -32,7 +32,7 @@ import {
   Upload,
 } from 'antd'
 import dayjs from 'dayjs'
-import { ImportOutlined } from '@ant-design/icons'
+import { DownloadOutlined, ImportOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import type { UploadFile } from 'antd/es/upload/interface'
 
@@ -41,6 +41,7 @@ import WorkCertificateImportModal from '@/components/safety/WorkCertificateImpor
 import {
   createWorkCertificate,
   deleteWorkCertificate,
+  exportWorkCertificates,
   getCertificateCategories,
   getCertificateExpirySummary,
   getWorkCertificates,
@@ -119,6 +120,7 @@ export function WorkCertificatePanel({
   const [aiError, setAiError] = useState<string | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
+  const [exporting, setExporting] = useState(false)
 
   const load = useCallback(
     async (
@@ -170,6 +172,46 @@ export function WorkCertificatePanel({
       return () => clearTimeout(timer)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // ── base64 → Blob → 触发下载（客户端） ──
+  const downloadBase64 = (base64: string, filename: string, mimeType: string) => {
+    const byteCharacters = atob(base64)
+    const byteNumbers = new Array(byteCharacters.length)
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i)
+    }
+    const blob = new Blob([new Uint8Array(byteNumbers)], { type: mimeType })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    window.URL.revokeObjectURL(url)
+  }
+
+  const handleExport = useCallback(async () => {
+    setExporting(true)
+    try {
+      const response = await exportWorkCertificates(
+        WORK_CERTIFICATES_PAGE_KEY
+      )
+      if (response.code !== 200 && response.code !== 0) {
+        message.error(response.message ?? '导出失败')
+        return
+      }
+      const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+      downloadBase64(
+        response.data ?? '',
+        `持证人员汇总表_${stamp}.xlsx`,
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      )
+      message.success('导出成功')
+    } finally {
+      setExporting(false)
+    }
   }, [])
 
   const openCreate = useCallback(() => {
@@ -416,6 +458,13 @@ export function WorkCertificatePanel({
             }}
           />
           <Button onClick={() => void load(page)}>刷新</Button>
+          <Button
+            icon={<DownloadOutlined />}
+            loading={exporting}
+            onClick={() => void handleExport()}
+          >
+            导出 Excel
+          </Button>
           {permissions.canOperate && (
             <Button icon={<ImportOutlined />} onClick={() => setImportOpen(true)}>
               Excel 导入

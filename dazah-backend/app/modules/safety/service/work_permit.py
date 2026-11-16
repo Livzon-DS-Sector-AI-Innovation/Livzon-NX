@@ -955,12 +955,46 @@ async def reject_node(
     return permit
 
 
+async def missing_brief_workers(
+    db: AsyncSession, permit: WorkPermit
+) -> list[tuple[int, dict[str, Any]]]:
+    """未完成交底签字的作业人条目（批准后 → 确认开工前必须全部签署）。"""
+    from app.modules.safety.models import WorkPermitSignature
+    from app.modules.safety.service.work_permit_templates import (
+        brief_sign_key,
+        brief_worker_entries,
+    )
+
+    entries = brief_worker_entries(permit.persons)
+    if not entries:
+        return []
+    keys = [brief_sign_key(i) for i, _ in entries]
+    rows = await db.execute(
+        select(WorkPermitSignature.sign_key).where(
+            WorkPermitSignature.permit_id == permit.id,
+            WorkPermitSignature.round == permit.approval_round,
+            WorkPermitSignature.sign_key.in_(keys),
+            WorkPermitSignature.is_deleted.is_(False),
+        )
+    )
+    signed = set(rows.scalars().all())
+    return [(i, p) for i, p in entries if brief_sign_key(i) not in signed]
+
+
 async def verify_permit(
     db: AsyncSession, permit_id: UUID, current_user: User
 ) -> WorkPermit:
     permit = await _lock_permit(db, permit_id)
     if permit.status != PERMIT_STATUS_APPROVED:
         raise AppException(status_code=409, message="作业票尚未完成全部审批")
+    # 交底门禁：全部作业人完成学习签字后才能确认开工
+    missing = await missing_brief_workers(db, permit)
+    if missing:
+        names = "、".join(str(p.get("name") or "—") for _, p in missing)
+        raise AppException(
+            status_code=409,
+            message=f"以下作业人尚未完成交底学习签字：{names}，暂不能确认开工",
+        )
     node = await _current_verify_node(db, permit)
     _resolve_actor_guard(node, permit, current_user)
     now = _utcnow()

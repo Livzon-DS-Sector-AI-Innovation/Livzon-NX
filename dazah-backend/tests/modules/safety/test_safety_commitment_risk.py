@@ -156,7 +156,7 @@ async def test_collect_daily_context_bounded(db_session: AsyncSession) -> None:
         db_session, date.today()
     )
     assert context["ops_report_total"] == 0
-    assert context["permit_total"] == 0
+    assert context["risk_report_total"] == 0
     assert context["hazard_total"] >= 0
     assert isinstance(context["over_limit_items"], list)
     assert isinstance(context["accidents"], list)

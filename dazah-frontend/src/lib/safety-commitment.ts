@@ -130,3 +130,31 @@ export function formatCnDateTime(value: string | null | undefined): string {
   if (Number.isNaN(parsed.getTime())) return '—'
   return CN_DATETIME.format(parsed)
 }
+
+export type WorkshopConfig = {
+  id: string
+  workshop_name: string
+  reporter_open_id: string
+  reporter_name: string
+  sort_order: number
+  is_enabled: boolean
+}
+
+export type WorkshopFillRow = {
+  workshop_name: string
+  reporter_name: string
+  reporter_open_id: string
+  filled: boolean
+  filled_by_name: string
+  filled_at: string | null
+  fields: Partial<EnterpriseStatus>
+  remark: string
+  source: string
+}
+
+export type WorkshopFillsProgress = {
+  report_date: string
+  total: number
+  filled: number
+  workshops: WorkshopFillRow[]
+}

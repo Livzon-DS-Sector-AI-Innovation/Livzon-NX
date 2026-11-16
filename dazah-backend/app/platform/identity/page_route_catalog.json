@@ -278,6 +278,7 @@
     "/safety/feeding-inspection",
     "/safety/fire-inspection",
     "/safety/fire-inspection/scan/[equipment_id]",
+    "/safety/guardian-roster",
     "/safety/hazard",
     "/safety/hazard-duty",
     "/safety/hazard-identification",

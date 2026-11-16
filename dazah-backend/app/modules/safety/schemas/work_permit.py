@@ -26,6 +26,9 @@ class PermitPersonInput(BaseModel):
     )
     certificate_no: str | None = Field(default=None, max_length=100)
     certificate_category: str | None = Field(default=None, max_length=64)
+    external: bool = Field(
+        default=False, description="外部人员（证书名单外手工录入）"
+    )
 
 
 class PermitMeasureInput(BaseModel):

@@ -5415,6 +5415,17 @@
           "category": "destructive"
         }
       }
+    },
+    "safety:ops-safety:guardian-roster": {
+      "status": "active",
+      "module_code": "safety",
+      "route_path": "/safety/guardian-roster",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        }
+      }
     }
   }
 }

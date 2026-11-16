@@ -8,6 +8,9 @@ from fastapi import APIRouter
 from app.modules.safety.api.accidents import accidents_router
 from app.modules.safety.api.ai_workflow import ai_workflow_router
 from app.modules.safety.api.checks import checks_router
+from app.modules.safety.api.commitment_workshops import (
+    commitment_workshops_router,
+)
 from app.modules.safety.api.contractors import contractors_router
 from app.modules.safety.api.daily_risk_reports import daily_risk_reports_router
 from app.modules.safety.api.dashboard import safety_dashboard_router
@@ -18,6 +21,7 @@ from app.modules.safety.api.enums import enums_router
 from app.modules.safety.api.facilities import safety_facilities_router
 from app.modules.safety.api.feishu_settings import feishu_settings_router
 from app.modules.safety.api.fire_equipment import fire_equipment_router
+from app.modules.safety.api.guardian_roster import guardian_roster_router
 from app.modules.safety.api.hazard_identifications import hazard_identifications_router
 from app.modules.safety.api.hazards import hazards_router
 from app.modules.safety.api.hazchem import hazchem_router
@@ -53,6 +57,7 @@ router.include_router(emergency_plan_ai_router)
 router.include_router(feishu_settings_router)
 router.include_router(safety_facilities_router)
 router.include_router(fire_equipment_router)
+router.include_router(guardian_roster_router)
 router.include_router(hazchem_router)
 router.include_router(enums_router)
 router.include_router(hazard_identifications_router)
@@ -62,6 +67,7 @@ router.include_router(oh_detection_reports_router)
 router.include_router(oh_hazard_monitors_router)
 router.include_router(oh_health_exams_router)
 router.include_router(page_table_router)
+router.include_router(commitment_workshops_router)
 router.include_router(regulations_router)
 router.include_router(safety_commitments_router)
 router.include_router(safety_targets_router)

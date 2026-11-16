@@ -7,12 +7,14 @@
 
 from __future__ import annotations
 
+import io
 import json
 from pathlib import Path
 from urllib.parse import quote
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Form, Query, Response, UploadFile
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -32,6 +34,7 @@ from app.modules.safety.schemas.work_certificate import (
     SpecialWorkCertificateUpdate,
 )
 from app.modules.safety.service import work_certificate as cert_service
+from app.modules.safety.service import work_certificate_export as cert_export
 from app.modules.safety.service.work_certificate_extract import (
     extract_certificate_suggestion,
 )
@@ -69,9 +72,7 @@ async def list_certificate_categories(
     current_user: CurrentUser | None = Depends(get_current_user),
 ) -> ApiResponseEnvelope[CertificateStatusOptionsResponse]:
     return ApiResponseEnvelope(
-        data=CertificateStatusOptionsResponse(
-            categories=list(CERTIFICATE_CATEGORIES)
-        )
+        data=CertificateStatusOptionsResponse(categories=list(CERTIFICATE_CATEGORIES))
     )
 
 
@@ -85,6 +86,27 @@ async def get_certificate_expiry_summary(
     current_user: CurrentUser | None = Depends(get_current_user),
 ) -> ApiResponseEnvelope[CertificateExpirySummaryResponse]:
     return ApiResponseEnvelope(data=await cert_service.get_expiry_summary(db))
+
+
+@work_certificates_router.get(
+    "/work-certificates/export",
+    response_model=None,
+    summary="导出持证人员台账 Excel（按证件类别分子表，可再导入）",
+)
+async def export_work_certificates(
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser | None = Depends(get_current_user),
+) -> StreamingResponse:
+    content, filename = await cert_export.export_certificates_workbook(db)
+    return StreamingResponse(
+        io.BytesIO(content),
+        media_type=(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        ),
+        headers={
+            "Content-Disposition": (f"attachment; filename*=UTF-8''{quote(filename)}")
+        },
+    )
 
 
 @work_certificates_router.get(
@@ -188,14 +210,10 @@ async def parse_certificate_import(
         what="证件导入文件",
     )
     try:
-        preview = await CertificateImportService(db).preview(
-            file_name, content
-        )
+        preview = await CertificateImportService(db).preview(file_name, content)
     except ValueError as exc:
         raise AppException(status_code=400, message=str(exc)) from exc
-    return ApiResponseEnvelope(
-        data=CertificateImportPreview.model_validate(preview)
-    )
+    return ApiResponseEnvelope(data=CertificateImportPreview.model_validate(preview))
 
 
 @work_certificates_router.post(
@@ -219,9 +237,7 @@ async def import_work_certificates(
         try:
             parsed_sheets = json.loads(sheets)
         except json.JSONDecodeError:
-            raise AppException(
-                status_code=400, message="子表参数格式错误"
-            ) from None
+            raise AppException(status_code=400, message="子表参数格式错误") from None
         if not isinstance(parsed_sheets, list) or not all(
             isinstance(item, str) for item in parsed_sheets
         ):
@@ -241,9 +257,7 @@ async def import_work_certificates(
     except ValueError as exc:
         raise AppException(status_code=400, message=str(exc)) from exc
     await db.commit()
-    return ApiResponseEnvelope(
-        data=CertificateImportResult.model_validate(result)
-    )
+    return ApiResponseEnvelope(data=CertificateImportResult.model_validate(result))
 
 
 @work_certificates_router.post(
@@ -269,9 +283,7 @@ async def upload_certificate_file(
     cert = await cert_service.get_certificate(db, certificate_id)
     storage_key = store_object(
         "work-certificates",
-        build_certificate_file_key(
-            str(cert.id), Path(file_name).suffix.lower()
-        ),
+        build_certificate_file_key(str(cert.id), Path(file_name).suffix.lower()),
         content,
         content_type,
     )
@@ -294,9 +306,7 @@ async def upload_certificate_file(
     return ApiResponseEnvelope(
         data=CertificateUploadResponse(
             file=CertificateFileItem.model_validate(file_obj),
-            files=[
-                CertificateFileItem.model_validate(item) for item in files
-            ],
+            files=[CertificateFileItem.model_validate(item) for item in files],
             ai_suggestion=suggestion,
             ai_error=ai_error,
         )
@@ -314,9 +324,7 @@ async def extract_certificate_file(
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
 ) -> ApiResponseEnvelope[CertificateUploadResponse]:
-    file_obj = await cert_service.get_certificate_file(
-        db, certificate_id, file_id
-    )
+    file_obj = await cert_service.get_certificate_file(db, certificate_id, file_id)
     stored = read_object("work-certificates", file_obj.storage_key)
     if stored is None:
         raise NotFoundException("证件附件文件")
@@ -327,9 +335,7 @@ async def extract_certificate_file(
     return ApiResponseEnvelope(
         data=CertificateUploadResponse(
             file=CertificateFileItem.model_validate(file_obj),
-            files=[
-                CertificateFileItem.model_validate(item) for item in files
-            ],
+            files=[CertificateFileItem.model_validate(item) for item in files],
             ai_suggestion=suggestion,
             ai_error=ai_error,
         )
@@ -347,9 +353,7 @@ async def download_certificate_file(
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
 ) -> Response:
-    file_obj = await cert_service.get_certificate_file(
-        db, certificate_id, file_id
-    )
+    file_obj = await cert_service.get_certificate_file(db, certificate_id, file_id)
     stored = read_object("work-certificates", file_obj.storage_key)
     if stored is None:
         raise NotFoundException("证件附件文件")
@@ -376,9 +380,7 @@ async def preview_certificate_file(
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser | None = Depends(get_current_user),
 ) -> Response:
-    file_obj = await cert_service.get_certificate_file(
-        db, certificate_id, file_id
-    )
+    file_obj = await cert_service.get_certificate_file(db, certificate_id, file_id)
     stored = read_object("work-certificates", file_obj.storage_key)
     if stored is None:
         raise NotFoundException("证件附件文件")
@@ -393,9 +395,7 @@ async def preview_certificate_file(
         content=preview_data,
         media_type=preview_type,
         headers={
-            "Content-Disposition": (
-                f"inline; filename*=UTF-8''{quote(preview_name)}"
-            )
+            "Content-Disposition": (f"inline; filename*=UTF-8''{quote(preview_name)}")
         },
     )
 

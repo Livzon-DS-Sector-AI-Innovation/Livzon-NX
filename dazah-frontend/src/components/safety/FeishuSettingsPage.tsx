@@ -110,6 +110,10 @@ export default function FeishuSettingsPage({
       initialSettings?.commitment_notify_enabled ?? false,
     commitment_push_time: initialSettings?.commitment_push_time || '08:30',
     commitment_user_ids: initialSettings?.commitment_user_ids ?? [],
+    commitment_signer_open_id:
+      initialSettings?.commitment_signer_open_id ?? null,
+    commitment_remind_interval_minutes:
+      initialSettings?.commitment_remind_interval_minutes ?? 30,
     is_enabled: initialSettings?.is_enabled ?? true,
   })
   const [notifyChatIdsText, setNotifyChatIdsText] = useState(
@@ -235,6 +239,9 @@ export default function FeishuSettingsPage({
       commitment_notify_enabled: form.commitment_notify_enabled,
       commitment_push_time: form.commitment_push_time,
       commitment_user_ids: form.commitment_user_ids,
+      commitment_signer_open_id: form.commitment_signer_open_id,
+      commitment_remind_interval_minutes:
+        form.commitment_remind_interval_minutes,
     }),
     [form, notifyChatIdsText, notifyUserIdsText, dueChatIdsText, dueUserIdsText, milestonesText, fireChatIdsText, fireUserIdsText, fireMilestonesText]
   )
@@ -843,8 +850,9 @@ export default function FeishuSettingsPage({
               }
             />
             <Typography.Text type="secondary">
-              到达下方推送时间后，向填报人员推送当日「企业状态 + 承诺确认」
-              分步填报卡；同一自然日只推一次（非生产环境自动跳过）
+              到达下方推送时间后，向各车间负责人推送当日企业状态填报卡
+              （车间名单在「安全承诺」页管理）；同一自然日只推一次，
+              超过催办间隔仍未填报的车间自动催办（非生产环境自动跳过）
             </Typography.Text>
           </Space>
           <Space.Compact block>

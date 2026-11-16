@@ -12,12 +12,13 @@ token、不落业务库。
 
 from __future__ import annotations
 
+import base64
 import json
 import logging
 from typing import Any
 
 from fastapi import APIRouter, Header, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 from app.core.config import get_settings
 from app.core.redis import redis_client
@@ -29,6 +30,7 @@ sign_relay_public_router = APIRouter()
 _INBOX_KEY = "safety:signrelay:inbox"
 _INBOX_TTL_SECONDS = 7 * 24 * 3600
 _PULL_BATCH_MAX = 50
+_PDF_TTL_SECONDS = 7 * 24 * 3600
 
 
 def _disabled_response() -> JSONResponse:
@@ -109,6 +111,77 @@ async def sign_relay_submit(request: Request) -> JSONResponse:
             "message": "签名成功，请回到聊天窗口继续",
             "data": None,
         },
+    )
+
+
+@sign_relay_public_router.post(
+    "/sign-relay/pdf/{pdf_key}",
+    summary="内网上传完工 PDF 到公网中转（共享密钥认证，7 天有效）",
+)
+async def sign_relay_pdf_upload(
+    pdf_key: str,
+    request: Request,
+    x_relay_key: str | None = Header(default=None, alias="X-Relay-Key"),
+) -> JSONResponse:
+    settings = get_settings()
+    if not _gateway_enabled() or not settings.SIGN_RELAY_KEY:
+        return _disabled_response()
+    if not x_relay_key or x_relay_key != settings.SIGN_RELAY_KEY:
+        return JSONResponse(
+            status_code=403,
+            content={"code": 403, "message": "中转密钥不匹配", "data": None},
+        )
+    body = await request.body()
+    if not body or body[:5] != b"%PDF-":
+        return JSONResponse(
+            status_code=400,
+            content={"code": 400, "message": "PDF 内容无效", "data": None},
+        )
+    if len(body) > 20 * 1024 * 1024:
+        return JSONResponse(
+            status_code=400,
+            content={"code": 400, "message": "PDF 超过大小限制", "data": None},
+        )
+    await redis_client.set(
+        f"safety:signrelay:pdf:{pdf_key}",
+        base64.b64encode(body).decode("ascii"),
+        ex=_PDF_TTL_SECONDS,
+    )
+    return JSONResponse(
+        status_code=200,
+        content={"code": 200, "message": "PDF 已上传", "data": None},
+    )
+
+
+@sign_relay_public_router.get(
+    "/sign-relay/pdf/{pdf_key}",
+    summary="公网下载完工 PDF（中转 7 天有效）",
+    response_class=Response,
+)
+async def sign_relay_pdf_download(
+    pdf_key: str,
+    name: str = "permit.pdf",
+) -> Response:
+    if not _gateway_enabled():
+        return _disabled_response()
+    data = await redis_client.get(f"safety:signrelay:pdf:{pdf_key}")
+    if not data:
+        return JSONResponse(
+            status_code=404,
+            content={
+                "code": 404,
+                "message": "下载链接已失效（7 天有效），请联系办票人重新分享",
+                "data": None,
+            },
+        )
+    pdf_bytes = base64.b64decode(data)
+    from urllib.parse import quote
+
+    filename = quote(name if name.endswith(".pdf") else f"{name}.pdf")
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": (f"attachment; filename*=UTF-8''{filename}")},
     )
 
 

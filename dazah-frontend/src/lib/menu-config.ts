@@ -202,6 +202,7 @@ export const moduleMenus: ModuleMenu[] = [
           { key: "special-ops-mgmt", label: "特殊作业管理", path: "/safety/special-ops" },
           { key: "work-permits", label: "作业票审批", path: "/safety/work-permits" },
           { key: "work-certificates", label: "特种作业证件", path: "/safety/work-certificates" },
+          { key: "guardian-roster", label: "监护人名单", path: "/safety/guardian-roster" },
           { key: "daily-risk-report", label: "关键风险作业报备", path: "/safety/risk-reporting" },
           { key: "special-danger-work", label: "次日特殊危险作业审批", path: "/safety/special-danger-work" },
           { key: "risk-work-registration", label: "关键风险作业报备表", path: "/safety/risk-work-registration" },

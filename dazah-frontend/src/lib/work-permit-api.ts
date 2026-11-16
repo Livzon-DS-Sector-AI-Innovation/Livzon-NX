@@ -5,6 +5,7 @@
 
 export const WORK_PERMITS_PAGE_KEY = 'safety:ops-safety:work-permits'
 export const WORK_CERTIFICATES_PAGE_KEY = 'safety:ops-safety:work-certificates'
+export const GUARDIAN_ROSTER_PAGE_KEY = 'safety:ops-safety:guardian-roster'
 
 export function certificateFileContentUrl(
   certificateId: string,

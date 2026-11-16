@@ -159,6 +159,7 @@ async def apply_signature_submission(
     node_id = (
         uuid_module.UUID(str(node_id_raw)) if node_id_raw else None
     )
+    sign_key = str(payload.get("sk") or "")
     signer_user_id_raw = payload.get("uid")
     signer_user_id = (
         uuid_module.UUID(str(signer_user_id_raw)) if signer_user_id_raw else None
@@ -167,7 +168,7 @@ async def apply_signature_submission(
         session,
         permit_id=permit_id,
         round_no=round_no,
-        sign_key=str(payload.get("sk") or ""),
+        sign_key=sign_key,
         node_id=node_id,
         signer_user_id=signer_user_id,
         signer_name=str(payload.get("nm") or ""),
@@ -175,9 +176,14 @@ async def apply_signature_submission(
     )
     await session.commit()
     from app.modules.safety.service.work_permit_notify import (
+        on_brief_signature_landed,
         refresh_or_push_approval_card,
     )
 
+    if sign_key.startswith("brief_worker_"):
+        # 交底作业人签名：PATCH 本人卡 + 刷新申请人转发卡（不影响审批卡）
+        await on_brief_signature_landed(session, permit_id, sign_key)
+        return
     await refresh_or_push_approval_card(session, permit_id)
 
 
