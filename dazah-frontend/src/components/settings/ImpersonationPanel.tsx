@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { Button, Input, Modal, Select, Table, Tag, Typography } from 'antd'
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query'
 import { switchWorkspaceIdentity } from '@/components/auth/WorkspaceIdentitySync'
+import PlatformNotice from '@/components/shared/PlatformNotice'
 import { listImpersonationTargets, startImpersonation, type ImpersonationTarget } from '@/lib/api/client/impersonation'
 import { saveImpersonationListState, takeRestoredImpersonationListState } from '@/lib/impersonationListState'
 import type { RoleItem } from '@/lib/api/server/admin'
@@ -105,10 +106,12 @@ function ImpersonationTargets({ roles }: { roles: RoleOption[] }) {
       />
     </div>
     {query.isError
-      ? <div role="alert" className="flex flex-wrap items-center gap-2">
-        <span>{query.error.message}</span>
-        <Button disabled={query.isFetching} onClick={() => void query.refetch()}>重试</Button>
-      </div>
+      ? <PlatformNotice
+        type="error"
+        title={query.error.message}
+        showRulesLink={false}
+        action={<Button disabled={query.isFetching} onClick={() => void query.refetch()}>重试</Button>}
+      />
       : <Table<ImpersonationTarget>
         rowKey="id"
         size="small"
@@ -159,7 +162,9 @@ function ImpersonationTargets({ roles }: { roles: RoleOption[] }) {
     >
       {target && <p>切换到 <strong>{target.name}（{target.username || target.employee_no || target.id}）</strong>，以该用户的权限访问页面和数据。</p>}
       <p>提交、审批、同步等操作会实际生效，审计会记录发起管理员和目标用户。当前浏览器的其他平台标签页也会切换身份。</p>
-      {error && <p role="alert">{error}</p>}
+      <div aria-live="assertive">
+        {error && <Typography.Text type="danger">{error}</Typography.Text>}
+      </div>
     </Modal>
   </div>
 }

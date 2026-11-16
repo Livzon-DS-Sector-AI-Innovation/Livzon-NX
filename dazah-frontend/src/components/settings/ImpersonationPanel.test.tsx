@@ -83,3 +83,33 @@ it('restores the filters and moves to the last available page if results shrank'
     vi.unstubAllGlobals()
   }
 })
+
+it('shows and recovers from a target list request failure', async () => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  vi.useFakeTimers()
+  vi.mocked(listImpersonationTargets).mockRejectedValueOnce(new Error('暂时无法获取模拟用户'))
+  const host = document.createElement('div')
+  document.body.append(host)
+  const root = createRoot(host)
+  try {
+    await act(async () => root.render(<ConfigProvider theme={{ token: { motion: false } }}>
+      <ImpersonationPanel roles={[]} />
+    </ConfigProvider>))
+    await act(async () => { await vi.advanceTimersByTimeAsync(100) })
+    const notice = host.querySelector('[data-platform-notice="error"]')
+    expect(notice?.textContent).toContain('暂时无法获取模拟用户')
+    const retry = [...host.querySelectorAll('button')].find(button => button.textContent?.replace(/\s/g, '') === '重试')
+    if (!retry) throw new Error('缺少重试操作')
+    await act(async () => {
+      retry.click()
+      await vi.advanceTimersByTimeAsync(100)
+    })
+    expect(host.querySelector('[data-platform-notice="error"]')).toBeNull()
+    expect(host.querySelector('[data-row-key="with-roles"]')).not.toBeNull()
+  } finally {
+    await act(async () => root.unmount())
+    host.remove()
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  }
+})
