@@ -2,11 +2,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   revalidatePath: vi.fn(),
+  getCookie: vi.fn<(name: string) => { value: string } | undefined>(),
 }))
 
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }))
 vi.mock('next/headers', () => ({
-  cookies: vi.fn(async () => ({ get: vi.fn(() => undefined) })),
+  cookies: vi.fn(async () => ({ get: mocks.getCookie })),
   headers: vi.fn(async () => new Headers({ 'X-Dazah-Page-Path': '/hr/employee-management' })),
 }))
 
@@ -33,6 +34,7 @@ describe('hr actions', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     vi.clearAllMocks()
+    mocks.getCookie.mockReset()
   })
 
   it('lists employees with query params via action', async () => {
@@ -118,6 +120,16 @@ describe('hr actions', () => {
       `${API_BASE}/api/v1/hr/feishu-settings/app?purpose=contact`,
       expect.objectContaining({ method: 'PUT', body: JSON.stringify(data) }),
     )
+  })
+
+  it('uses the simulation identity on HR settings writes', async () => {
+    mocks.getCookie.mockImplementation((name) => ({ value: name === 'auth_token' ? 'real-login' : 'synthetic-switch' }))
+    const fetchMock = vi.fn(() => jsonResponse({ detail: '无权修改配置' }, 403))
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(updateHrFeishuAppSettings({ app_id: 'demo', app_secret: 'synthetic', is_enabled: true })).rejects.toThrow('无权修改配置')
+    expect(fetchMock).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      headers: expect.objectContaining({ Authorization: 'Bearer synthetic-switch' }),
+    }))
   })
 
   it('tests HR feishu app connection with a purpose', async () => {

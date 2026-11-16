@@ -8,10 +8,16 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import jwt
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
+from app.platform.identity.impersonation import (
+    ImpersonationSession,
+    current_impersonation,
+    validate_impersonation,
+)
 from app.platform.identity.models import ExternalIdentityBinding, User
 
 _AUDIENCE = "dazah-agent-tools"
@@ -33,6 +39,12 @@ def issue_agent_delegation(
 ) -> str:
     """Called after web authentication or verified external identity resolution."""
     now = datetime.now(UTC)
+    switch = current_impersonation.get() if source == "web" else None
+    if switch is not None and switch.target_id != user.id:
+        raise HTTPException(403, "Agent 用户与模拟登录身份不一致")
+    expires_at = now + timedelta(minutes=10)
+    if switch is not None:
+        expires_at = min(expires_at, switch.expires_at)
     return jwt.encode(
         {
             "iss": _ISSUER,
@@ -43,8 +55,9 @@ def issue_agent_delegation(
             "binding": str(external_binding_id) if external_binding_id else None,
             "session_version": user.session_version or 0,
             "iat": now,
-            "exp": now + timedelta(minutes=10),
+            "exp": expires_at,
             "jti": str(uuid4()),
+            **({"impersonation": switch.model_dump(mode="json")} if switch else {}),
         },
         _signing_key(settings),
         algorithm="HS256",
@@ -60,6 +73,7 @@ async def require_agent_delegation(
     tenant_id: str,
     source: str | None = None,
     external_binding_id: UUID | None = None,
+    request: Request | None = None,
 ) -> User:
     """Check signed identity and current revocation state before any business call."""
     try:
@@ -124,4 +138,16 @@ async def require_agent_delegation(
             raise HTTPException(
                 403, "Agent external identity binding is no longer valid"
             )
+    if "impersonation" in claims:
+        try:
+            switch = ImpersonationSession.model_validate(claims["impersonation"])
+        except ValidationError as exc:
+            raise HTTPException(401, "Invalid Agent impersonation delegation") from exc
+        if claims["source"] != "web" or switch.target_id != user.id:
+            raise HTTPException(403, "Agent 用户与模拟登录身份不一致")
+        await validate_impersonation(db, switch)
+        current_impersonation.set(switch)
+        if request is not None:
+            request.state.impersonation = switch
+            request.state.audit_user_id = user.id
     return user

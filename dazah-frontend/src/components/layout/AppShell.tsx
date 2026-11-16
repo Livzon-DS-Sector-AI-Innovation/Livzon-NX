@@ -21,6 +21,7 @@ import { PageNavigation } from "./PageNavigation"
 import type { User } from "@/types/user"
 import { isSystemAdministrator } from "@/lib/administrator-role"
 import { useAuthStore } from "@/stores/auth"
+import { ImpersonationBanner } from '@/components/auth/ImpersonationBanner'
 
 interface AppShellProps {
   children: React.ReactNode
@@ -89,7 +90,9 @@ export function AppShell({ children, user }: AppShellProps) {
 
   return (
     <div className="h-screen flex flex-col overflow-hidden">
-      <TopNav user={user} modules={authorizedModules} />
+      <TopNav user={user} modules={authorizedModules} impersonationNotice={user.impersonation && (
+        <ImpersonationBanner inToolbar name={user.name} expiresAt={user.impersonation.expires_at} />
+      )} />
       <div className="flex flex-1 overflow-hidden">
         <div className={`${nativeEnergyPage ? 'hidden min-[701px]:flex' : 'flex'} shrink-0`}>
         <Suspense

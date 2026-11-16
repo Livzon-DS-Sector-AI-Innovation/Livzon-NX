@@ -1,3 +1,24 @@
+.roleTags {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.roleTags :global(.ant-tag) {
+  display: block;
+  min-width: 0;
+  margin-inline-end: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.roleTags .moreRoles {
+  flex: none;
+  height: auto;
+  padding: 0;
+  font-size: inherit;
+}
+
 .drawer {
   --assignment-drawer-width: 620px;
 }

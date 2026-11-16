@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import dynamic from "next/dynamic"
 import { App, Button, Checkbox, ConfigProvider, Dropdown, Empty, Input, Radio, Select, Spin, Tag, type InputRef } from "antd"
 import { AppstoreOutlined, BlockOutlined, CheckCircleFilled, CheckOutlined, DatabaseOutlined, DownOutlined, FileTextOutlined, FolderFilled, HistoryOutlined, LeftOutlined, RightOutlined, SearchOutlined, SwapOutlined, TeamOutlined, UpOutlined, WarningOutlined } from "@ant-design/icons"
-import { AuthorizationReasonInput } from "@/components/shared/AuthorizationReasonInput"
 import PlatformNotice from "@/components/shared/PlatformNotice"
 import {
   getRolePagePermissions,
@@ -31,6 +30,7 @@ const PagePermissionHistoryDrawer = dynamic(() => import("@/components/shared/Pa
 
 type InitialLoad = { ok: true; data: RolePagePermissionsOut } | { ok: false; message: string }
 const mismatchedRoleMessage = "角色授权返回对象不一致，请重新加载"
+const reasonPresets = ["岗位权限调整", "数据范围调整", "收紧高风险权限"]
 
 type Level = "access" | "query" | "operate"
 type Grant = {
@@ -724,9 +724,18 @@ export function RolePagePermissionsWorkbench({ role, roles, departments, onClose
       <span className={styles.draftStatus} role="status" data-dirty={hasChanges}>
         {hasChanges ? `未保存调整 ${changes.length} 个页面` : "暂无未保存调整"}
       </span>
-      <AuthorizationReasonInput className={styles.reason} aria-label="角色授权调整原因（必填）"
-        disabled={controlsDisabled} value={reason} onChange={setReason} placeholder="填写角色授权调整原因"
-        presets={["岗位权限调整", "数据范围调整", "收紧高风险权限"]} />
+      <div className={styles.reasonControls}>
+        <Input className={styles.reason} aria-label="角色授权调整原因（必填）"
+          disabled={controlsDisabled} value={reason} onChange={(event) => setReason(event.target.value)}
+          placeholder="填写角色授权调整原因" maxLength={20} showCount />
+        <div className={styles.reasonPresets} role="group" aria-label="快捷授权调整原因">
+          {reasonPresets.map((preset) => (
+            <Button key={preset} size="small" disabled={controlsDisabled} onClick={() => setReason(preset)}>
+              {preset}
+            </Button>
+          ))}
+        </div>
+      </div>
       <div className={styles.footerActions}>
         <Button loading={pendingAction === "preview"} onClick={() => void previewChanges("preview")} disabled={controlsDisabled}>预览</Button>
         <Button type="primary" aria-label="保存" aria-busy={savePending} loading={savePending}

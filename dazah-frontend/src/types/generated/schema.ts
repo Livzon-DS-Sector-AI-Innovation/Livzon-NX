@@ -8249,6 +8249,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/identity/admin/impersonation/targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查询可模拟登录的用户 */
+        get: operations["list_impersonation_targets_api_v1_identity_admin_impersonation_targets_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/identity/admin/menus": {
         parameters: {
             query?: never;
@@ -8285,40 +8302,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/identity/admin/page-permissions/health": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** 检查页面权限健康状态 */
-        get: operations["get_page_permission_health_api_v1_identity_admin_page_permissions_health_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/identity/admin/page-permissions/health/remediate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** 修复页面权限健康问题 */
-        post: operations["remediate_page_permission_health_issue_api_v1_identity_admin_page_permissions_health_remediate_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/identity/admin/page-permissions/modules": {
         parameters: {
             query?: never;
@@ -8347,23 +8330,6 @@ export interface paths {
         get: operations["preview_page_permission_rollout_api_v1_identity_admin_page_permissions_modules__module_code__preview_get"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/identity/admin/page-permissions/simulate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** 按页面和业务动作验证权限 */
-        post: operations["simulate_page_permission_api_v1_identity_admin_page_permissions_simulate_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -8766,6 +8732,40 @@ export interface paths {
         get: operations["auth_callback_api_v1_identity_auth_callback_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/identity/auth/impersonation/exit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 退出模拟登录 */
+        post: operations["exit_browser_impersonation_api_v1_identity_auth_impersonation_exit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/identity/auth/impersonation/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 开始模拟登录 */
+        post: operations["start_browser_impersonation_api_v1_identity_auth_impersonation_start_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -32005,6 +32005,24 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** ApiResponseEnvelope[CurrentUserResponse] */
+        ApiResponseEnvelope_CurrentUserResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["CurrentUserResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** ApiResponseEnvelope[DeclarationProgressEntryResponse] */
         ApiResponseEnvelope_DeclarationProgressEntryResponse_: {
             /**
@@ -33021,6 +33039,60 @@ export interface components {
              */
             code: number;
             data: components["schemas"]["HistoricalDeviationDetail"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[ImpersonationExit] */
+        ApiResponseEnvelope_ImpersonationExit_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["ImpersonationExit"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[ImpersonationTargets] */
+        ApiResponseEnvelope_ImpersonationTargets_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["ImpersonationTargets"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[ImpersonationView] */
+        ApiResponseEnvelope_ImpersonationView_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["ImpersonationView"];
             /**
              * Message
              * @default success
@@ -42823,6 +42895,84 @@ export interface components {
              */
             investigators: string[];
         };
+        /** CurrentUserResponse */
+        CurrentUserResponse: {
+            /**
+             * Auth Source
+             * @default feishu
+             * @enum {string}
+             */
+            auth_source: "local" | "feishu";
+            /** Avatar Big */
+            avatar_big?: string | null;
+            /** Avatar Middle */
+            avatar_middle?: string | null;
+            /** Avatar Thumb */
+            avatar_thumb?: string | null;
+            /** Avatar Url */
+            avatar_url?: string | null;
+            /** Department */
+            department?: string | null;
+            /** Email */
+            email?: string | null;
+            /** Employee No */
+            employee_no?: string | null;
+            /** En Name */
+            en_name?: string | null;
+            /** Enterprise Email */
+            enterprise_email?: string | null;
+            /** Feishu Open Id */
+            feishu_open_id?: string | null;
+            /** Feishu Union Id */
+            feishu_union_id?: string | null;
+            /** Feishu User Id */
+            feishu_user_id?: string | null;
+            /**
+             * Grant Version
+             * @default 0
+             */
+            grant_version: number;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            impersonation?: components["schemas"]["ImpersonationView"] | null;
+            /** Mobile */
+            mobile?: string | null;
+            /** Module Codes */
+            module_codes?: string[];
+            /** Name */
+            name: string;
+            /** Page Permission Rollouts */
+            page_permission_rollouts?: {
+                [key: string]: string;
+            };
+            /** Page Permissions */
+            page_permissions?: components["schemas"]["EffectivePageGrantOut"][];
+            /** Permissions */
+            permissions?: string[];
+            /** Position */
+            position?: string | null;
+            /**
+             * Role
+             * @default user
+             * @enum {string}
+             */
+            role: "admin" | "user";
+            /** Roles */
+            roles?: string[];
+            /**
+             * Status
+             * @default active
+             * @enum {string}
+             */
+            status: "active" | "disabled";
+            /** Tenant Key */
+            tenant_key?: string | null;
+            /** Username */
+            username?: string | null;
+        };
         /**
          * CustomTrainingDepartmentCreate
          * @description 自定义培训部门 - 创建
@@ -50782,6 +50932,62 @@ export interface components {
             /** System Field */
             system_field: string;
         };
+        /** ImpersonationExit */
+        ImpersonationExit: {
+            /** Administrator Restored */
+            administrator_restored: boolean;
+        };
+        /** ImpersonationStart */
+        ImpersonationStart: {
+            /**
+             * Target Id
+             * Format: uuid
+             */
+            target_id: string;
+        };
+        /** ImpersonationTarget */
+        ImpersonationTarget: {
+            /** Department */
+            department: string | null;
+            /** Employee No */
+            employee_no: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Roles */
+            roles: components["schemas"]["ImpersonationTargetRole"][];
+            /** Username */
+            username: string | null;
+        };
+        /** ImpersonationTargetRole */
+        ImpersonationTargetRole: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+        };
+        /** ImpersonationTargets */
+        ImpersonationTargets: {
+            /** Items */
+            items: components["schemas"]["ImpersonationTarget"][];
+            /** Total */
+            total: number;
+        };
+        /** ImpersonationView */
+        ImpersonationView: {
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+        };
         /** ImportConfirm */
         ImportConfirm: {
             /** Mappings */
@@ -56823,98 +57029,6 @@ export interface components {
             /** Supported Scope Types */
             supported_scope_types?: ("not_applicable" | "department_tree" | "departments" | "all" | "self" | "production_fermentation" | "production_extraction")[];
         };
-        /** PagePermissionHealthIssueOut */
-        PagePermissionHealthIssueOut: {
-            /**
-             * Code
-             * @enum {string}
-             */
-            code: "retired_page" | "invalid_department" | "missing_module_access" | "redundant_user_override";
-            /** Detail */
-            detail: string;
-            /** Grant Version */
-            grant_version: number;
-            /** Module Code */
-            module_code?: string | null;
-            /** Page Key */
-            page_key: string;
-            /** Page Name */
-            page_name: string;
-            /**
-             * Remediation
-             * @enum {string}
-             */
-            remediation: "remove_grant" | "prune_departments" | "edit";
-            /**
-             * Severity
-             * @enum {string}
-             */
-            severity: "warning" | "error";
-            /**
-             * Target Id
-             * Format: uuid
-             */
-            target_id: string;
-            /** Target Name */
-            target_name: string;
-            /**
-             * Target Type
-             * @enum {string}
-             */
-            target_type: "role" | "user";
-        };
-        /** PagePermissionHealthOut */
-        PagePermissionHealthOut: {
-            /**
-             * Checked At
-             * Format: date-time
-             */
-            checked_at: string;
-            /** Error Count */
-            error_count: number;
-            /** Issue Count */
-            issue_count: number;
-            /** Issues */
-            issues?: components["schemas"]["PagePermissionHealthIssueOut"][];
-            /** Warning Count */
-            warning_count: number;
-        };
-        /** PagePermissionHealthRemediationOut */
-        PagePermissionHealthRemediationOut: {
-            /**
-             * Fixed
-             * @default true
-             */
-            fixed: boolean;
-            /** Grant Version */
-            grant_version: number;
-            /** Message */
-            message: string;
-        };
-        /** PagePermissionHealthRemediationRequest */
-        PagePermissionHealthRemediationRequest: {
-            /**
-             * Code
-             * @enum {string}
-             */
-            code: "retired_page" | "invalid_department" | "redundant_user_override";
-            /** Expected Grant Version */
-            expected_grant_version: number;
-            /** Page Key */
-            page_key: string;
-            /** Reason */
-            reason: string;
-            /**
-             * Target Id
-             * Format: uuid
-             */
-            target_id: string;
-            /**
-             * Target Type
-             * @enum {string}
-             */
-            target_type: "role" | "user";
-        };
         /** PagePermissionHistoryActorOut */
         PagePermissionHistoryActorOut: {
             /**
@@ -57076,31 +57190,6 @@ export interface components {
             idempotency_key?: string | null;
             /** Reason */
             reason: string;
-        };
-        /** PagePermissionSimulationOut */
-        PagePermissionSimulationOut: {
-            /** Allowed */
-            allowed: boolean;
-            effective?: components["schemas"]["EffectivePageGrantOut"] | null;
-            /** Reason */
-            reason: string;
-        };
-        /** PagePermissionSimulationRequest */
-        PagePermissionSimulationRequest: {
-            /** Page Key */
-            page_key: string;
-            /**
-             * Permission
-             * @enum {string}
-             */
-            permission: "access" | "query" | "operate";
-            /** Sensitive Action */
-            sensitive_action?: string | null;
-            /**
-             * User Id
-             * Format: uuid
-             */
-            user_id: string;
         };
         /** PageTableAttachmentItem */
         PageTableAttachmentItem: {
@@ -93416,6 +93505,43 @@ export interface operations {
             };
         };
     };
+    list_impersonation_targets_api_v1_identity_admin_impersonation_targets_get: {
+        parameters: {
+            query?: {
+                keyword?: string;
+                /** @description 按有效角色筛选 */
+                role_id?: string | null;
+                offset?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_ImpersonationTargets_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_menus_api_v1_identity_admin_menus_get: {
         parameters: {
             query?: never;
@@ -93552,72 +93678,6 @@ export interface operations {
             };
         };
     };
-    get_page_permission_health_api_v1_identity_admin_page_permissions_health_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PagePermissionHealthOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    remediate_page_permission_health_issue_api_v1_identity_admin_page_permissions_health_remediate_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PagePermissionHealthRemediationRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PagePermissionHealthRemediationOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     list_page_permission_rollouts_api_v1_identity_admin_page_permissions_modules_get: {
         parameters: {
             query?: never;
@@ -93669,41 +93729,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PermissionModuleRolloutPreviewOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    simulate_page_permission_api_v1_identity_admin_page_permissions_simulate_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["PagePermissionSimulationRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PagePermissionSimulationOut"];
                 };
             };
             /** @description Validation Error */
@@ -94709,6 +94734,61 @@ export interface operations {
             };
         };
     };
+    exit_browser_impersonation_api_v1_identity_auth_impersonation_exit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_ImpersonationExit_"];
+                };
+            };
+        };
+    };
+    start_browser_impersonation_api_v1_identity_auth_impersonation_start_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImpersonationStart"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_ImpersonationView_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     local_login_api_v1_identity_auth_local_login_post: {
         parameters: {
             query?: never;
@@ -95278,7 +95358,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_CurrentUserResponse_"];
                 };
             };
             /** @description Validation Error */

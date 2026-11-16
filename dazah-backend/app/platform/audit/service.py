@@ -15,6 +15,7 @@ from app.platform.audit.schemas import (
     GeneralAuditLogItem,
     GeneralAuditLogPage,
 )
+from app.platform.identity.impersonation import current_impersonation
 from app.platform.identity.models import User
 
 _CONVERSATION_ACTIONS = frozenset(
@@ -276,7 +277,7 @@ class GeneralAuditLogService:
                 detail.ip_address = detail.ip_address or operation.ip_address
                 detail.user_agent = detail.user_agent or operation.user_agent
                 operation_extra = redact_sensitive(operation.extra) or {}
-                for key in ("request", "response"):
+                for key in ("request", "response", "impersonation"):
                     if extra.get(key) is None and key in operation_extra:
                         extra[key] = operation_extra[key]
                 detail.extra = extra
@@ -326,6 +327,9 @@ async def record_audit_log(
     new_value: dict[str, Any] | None = None,
     extra: dict[str, Any] | None = None,
 ) -> AuditLog:
+    switch = current_impersonation.get()
+    if switch is not None:
+        extra = {**(extra or {}), "impersonation": switch.audit_fields()}
     audit_log = AuditLog(
         request_id=request_id or current_audit_request_id.get(),
         user_id=user_id,

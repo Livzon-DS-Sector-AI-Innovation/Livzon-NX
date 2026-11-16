@@ -1,20 +1,26 @@
 """A service token alone must never authorize a caller-selected user."""
 
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from httpx import ASGITransport, AsyncClient
 
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.modules.agent import api
 from app.modules.agent.schemas import AgentToolExecuteResponse, AgentTrustedSubject
+from app.platform.identity import agent_delegation
 from app.platform.identity.agent_delegation import (
     issue_agent_delegation,
     require_agent_delegation,
+)
+from app.platform.identity.impersonation import (
+    ImpersonationSession,
+    current_impersonation,
 )
 from app.platform.identity.models import User
 
@@ -162,6 +168,70 @@ async def test_valid_delegation_reaches_executor_without_logging_credential(
     )
     assert "delegation_token" not in subject.model_dump()
     assert token not in repr(subject)
+
+
+async def test_simulated_tool_delegation_rechecks_the_originating_session(monkeypatch):
+    user = _identity()
+    settings = SimpleNamespace(
+        SECRET_KEY="x" * 40, AGENT_TOOL_TOKEN="synthetic-service"
+    )
+    switch = ImpersonationSession(
+        session_id=uuid4(), administrator_id=uuid4(), administrator_version=0,
+        target_id=user.id, target_version=user.session_version, login_digest="test",
+        exp=int((datetime.now(UTC) + timedelta(minutes=5)).timestamp()),
+    )
+    context = current_impersonation.set(switch)
+    try:
+        delegation = issue_agent_delegation(settings, user, source="web")
+    finally:
+        current_impersonation.reset(context)
+
+    execute = AsyncMock(return_value=AgentToolExecuteResponse(
+        ok=True, operation="agent.get_current_time"
+    ))
+    monkeypatch.setattr(
+        api, "AgentService", lambda _: SimpleNamespace(execute_tool=execute)
+    )
+    validate = AsyncMock(side_effect=[user, HTTPException(401, "switch revoked")])
+    monkeypatch.setattr(agent_delegation, "validate_impersonation", validate)
+    app = FastAPI()
+    app.include_router(api.router, prefix="/agent")
+    app.dependency_overrides[get_settings] = lambda: settings
+    app.dependency_overrides[get_db] = lambda: SimpleNamespace(
+        get=AsyncMock(return_value=user)
+    )
+
+    @app.middleware("http")
+    async def capture_audit_state(request, call_next):
+        response = await call_next(request)
+        if hasattr(request.state, "impersonation"):
+            response.headers["X-Test-Administrator"] = str(
+                request.state.impersonation.administrator_id
+            )
+        return response
+
+    start_args = {
+        "headers": {
+            "Authorization": "Bearer synthetic-service",
+            "X-Dazah-Delegation": delegation,
+        },
+        "json": {
+            "operation": "agent.get_current_time",
+            "subject": {
+                "user_id": str(user.id), "tenant_id": "factory", "source": "web",
+            },
+        },
+    }
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        accepted = await client.post("/agent/tools/execute", **start_args)
+        revoked = await client.post("/agent/tools/execute", **start_args)
+    assert accepted.status_code == 200
+    assert accepted.headers["X-Test-Administrator"] == str(switch.administrator_id)
+    assert revoked.status_code == 401
+    assert validate.await_count == 2
+    execute.assert_awaited_once()
 
 
 @pytest.mark.parametrize("operation", ["search", "describe", "confirmation"])

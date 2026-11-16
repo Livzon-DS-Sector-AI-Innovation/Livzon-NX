@@ -25,6 +25,20 @@ describe('system permission server actions', () => {
     }))
     expect(mocks.revalidatePath.mock.calls).toEqual([['/system/roles'], ['/settings']])
   })
+  it('does not forward the suspended administrator session during simulation', async () => {
+    mocks.cookies.mockResolvedValueOnce({
+      get: vi.fn((name: string) => ({
+        value: name === 'auth_token' ? 'system-admin-token' : 'synthetic-switch',
+      })),
+    })
+    const request = vi.fn().mockResolvedValue(new Response(null, { status: 403 }))
+    vi.stubGlobal('fetch', request)
+    await expect(adminActions.deleteRole('role-1')).rejects.toThrow()
+    expect(request).toHaveBeenCalledWith(expect.stringContaining('/roles/role-1'), expect.objectContaining({
+      headers: expect.objectContaining({ Authorization: 'Bearer synthetic-switch' }),
+    }))
+    expect(mocks.revalidatePath).not.toHaveBeenCalled()
+  })
   it.each([undefined, { value: '' }])('blocks unauthenticated writes and exports before contacting the backend (%j)', async (token) => {
     mocks.cookies.mockResolvedValueOnce({ get: vi.fn().mockReturnValue(token) })
       .mockResolvedValueOnce({ get: vi.fn().mockReturnValue(token) })
@@ -131,22 +145,20 @@ describe('system permission server actions', () => {
     expect(mocks.revalidatePath).not.toHaveBeenCalled()
   })
 
-  it('loads role authorization history, health results and performs a versioned rollback', async () => {
+  it('loads role authorization history and performs a versioned rollback', async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ data: {
         items: [{ id: 'audit-1', grants: [] }], total: 1, page: 1, page_size: 20,
       } })))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ data: { issue_count: 1, issues: [] } })))
       .mockResolvedValueOnce(new Response(JSON.stringify({ data: { grant_version: 5 } })))
     vi.stubGlobal('fetch', fetchMock)
     await expect(adminActions.getRolePagePermissionHistory('role-1')).resolves.toEqual({
       items: [{ id: 'audit-1', grants: [] }], total: 1, page: 1, page_size: 20,
     })
-    await expect(adminActions.getPagePermissionHealth()).resolves.toEqual({ issue_count: 1, issues: [] })
     const payload = { audit_id: 'audit-1', expected_grant_version: 4, reason: '回滚误配权限' }
     await expect(adminActions.rollbackRolePagePermissions('role-1', payload)).resolves.toEqual({ ok: true, data: { grant_version: 5 } })
-    expect(fetchMock.mock.calls[2][0]).toEqual(expect.stringContaining('/roles/role-1/page-permissions/rollback'))
-    expect(fetchMock.mock.calls[2][1]).toEqual(expect.objectContaining({ method: 'POST', body: JSON.stringify(payload) }))
+    expect(fetchMock.mock.calls[1][0]).toEqual(expect.stringContaining('/roles/role-1/page-permissions/rollback'))
+    expect(fetchMock.mock.calls[1][1]).toEqual(expect.objectContaining({ method: 'POST', body: JSON.stringify(payload) }))
   })
 
   it('filters, previews and exports role authorization history', async () => {
@@ -175,24 +187,6 @@ describe('system permission server actions', () => {
     await expect(adminActions.exportRolePagePermissionHistory('role-1')).resolves.toEqual({
       filename: 'role-history.csv', content: '时间,操作人\n2026-09-16,管理员',
     })
-  })
-
-  it('sends a versioned permission health remediation request', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
-      data: { fixed: true, grant_version: 6, message: '已恢复角色基线' },
-    })))
-    vi.stubGlobal('fetch', fetchMock)
-    const payload = {
-      code: 'redundant_user_override' as const, target_type: 'user' as const,
-      target_id: 'user-1', page_key: 'hr:employee-management:profile',
-      expected_grant_version: 5, reason: '健康检查自动修复',
-    }
-    await expect(adminActions.remediatePagePermissionHealth(payload)).resolves.toEqual({
-      ok: true, data: { fixed: true, grant_version: 6, message: '已恢复角色基线' },
-    })
-    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining(
-      '/page-permissions/health/remediate',
-    ), expect.objectContaining({ method: 'POST', body: JSON.stringify(payload) }))
   })
 
   it('reads live module integration results', async () => {

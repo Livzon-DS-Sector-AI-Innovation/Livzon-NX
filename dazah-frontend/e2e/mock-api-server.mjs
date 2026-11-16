@@ -34,6 +34,19 @@ const currentUser = {
   ],
 }
 
+const simulatedUser = {
+  id: '00000000-0000-0000-0000-000000000042',
+  name: '采购验收用户',
+  username: 'procurement-test',
+  employee_no: 'CI-042',
+  department: '采购部',
+}
+const simulationRoles = [
+  { id: 'procurement-reader', name: '采购查询员', code: 'procurement_reader', is_system: false, permissions: [] },
+  { id: 'supplier-reviewer', name: '供应商审核员', code: 'supplier_reviewer', is_system: false, permissions: [] },
+  { id: 'finance-reviewer', name: '财务复核员', code: 'finance_reviewer', is_system: false, permissions: [] },
+]
+
 const pendingPurchaseRequest = {
   id: '22222222-2222-2222-2222-222222222222',
   category: 'hardware',
@@ -219,7 +232,61 @@ const server = createServer(async (request, response) => {
     return
   }
 
+  if (pageTestToken === 'impersonation-admin') {
+    if (request.url === '/api/v1/identity/admin/roles') {
+      response.end(JSON.stringify({ code: 200, data: simulationRoles }))
+      return
+    }
+    if (request.url?.startsWith('/api/v1/identity/admin/impersonation/targets')) {
+      const params = new URL(request.url, 'http://localhost').searchParams
+      const keyword = params.get('keyword') || ''
+      const roleId = params.get('role_id')
+      const roles = simulationRoles.slice(0, 2).map(({ id, name }) => ({ id, name }))
+      const matchingKeyword = [simulatedUser.name, simulatedUser.username, simulatedUser.employee_no]
+        .some(value => value.includes(keyword))
+      const items = matchingKeyword && (!roleId || roles.some(role => role.id === roleId))
+        ? [{ ...simulatedUser, roles }] : []
+      if (items.length && keyword === simulatedUser.username && roleId === roles[0].id) {
+        const earlierUsers = Array.from({ length: 20 }, (_, index) => ({
+          ...simulatedUser, roles, id: `pagination-user-${index}`,
+          name: `分页验收用户 ${index + 1}`, username: `${keyword}-${index + 1}`,
+        }))
+        items.unshift(...earlierUsers)
+      }
+      const offset = Number(params.get('offset') || 0)
+      const limit = Number(params.get('limit') || 20)
+      response.end(JSON.stringify({ code: 200, data: { items: items.slice(offset, offset + limit), total: items.length } }))
+      return
+    }
+  }
+  if (request.url === '/api/v1/identity/auth/impersonation/start' && request.method === 'POST') {
+    const payload = await readJsonBody(request)
+    if (!request.headers.cookie?.includes('auth_token=impersonation-admin') || payload.target_id !== simulatedUser.id) {
+      response.statusCode = 403
+      response.end(JSON.stringify({ message: '无权开始模拟' }))
+      return
+    }
+    response.setHeader('Set-Cookie', 'impersonation_token=impersonation-procurement; HttpOnly; SameSite=Lax; Path=/')
+    response.end(JSON.stringify({ code: 200, data: { expires_at: new Date(Date.now() + 1800000).toISOString() } }))
+    return
+  }
+  if (request.url === '/api/v1/identity/auth/impersonation/exit' && request.method === 'POST') {
+    response.setHeader('Set-Cookie', 'impersonation_token=; Max-Age=0; Path=/')
+    response.end(JSON.stringify({ code: 200, data: { administrator_restored: true } }))
+    return
+  }
+
   if (request.url?.startsWith('/api/v1/identity/me')) {
+    if (pageTestToken === 'impersonation-procurement') {
+      response.end(JSON.stringify({ code: 200, data: {
+        ...currentUser, ...simulatedUser, role: 'user', module_codes: ['procurement'],
+        page_permissions: [{ page_key: 'purchasing:supplier', module_code: 'procurement',
+          permissions: ['access', 'query'], sensitive_actions: [], source: 'user',
+          data_scope: { scope_type: 'not_applicable' } }],
+        impersonation: { expires_at: new Date(Date.now() + 1800000).toISOString() },
+      } }))
+      return
+    }
     if (pageTestToken === 'ordinary-admin-feedback') {
       response.end(JSON.stringify({ code: 200, data: { ...currentUser, roles: ['ordinary_admin'] } }))
       return

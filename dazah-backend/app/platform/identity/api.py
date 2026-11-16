@@ -13,6 +13,7 @@ from fastapi import (
     HTTPException,
     Query,
     Request,
+    Response,
     status,
 )
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -28,8 +29,20 @@ from app.platform.audit.middleware import current_audit_request_id
 from app.platform.audit.service import record_audit_log
 from app.platform.identity.authorization_guard import lock_authorization_actor
 from app.platform.identity.data_scope import publish_data_scope_changed
-from app.platform.identity.deps import CurrentUser, RequiredUser
+from app.platform.identity.deps import CurrentUser, RequiredUser, require_system_admin
 from app.platform.identity.deps import SystemAdminUser as AdminUser
+from app.platform.identity.impersonation import (
+    COOKIE as IMPERSONATION_COOKIE,
+)
+from app.platform.identity.impersonation import (
+    authentication_token,
+    bearer_token,
+    decode_login,
+    end_impersonation,
+    is_impersonating_request,
+    is_system_administrator,
+    start_impersonation,
+)
 from app.platform.identity.models import Department, Role, UserRole
 from app.platform.identity.permission_cache import publish_permissions_changed
 from app.platform.identity.permission_repository import PermissionGrantRepository
@@ -45,6 +58,7 @@ from app.platform.identity.repository import (
     UserRepository,
 )
 from app.platform.identity.schemas import (
+    CurrentUserResponse,
     DepartmentResponse,
     DepartmentTreeNode,
     ExternalIdentityBindingCreate,
@@ -55,6 +69,12 @@ from app.platform.identity.schemas import (
     FeishuConfigUpsert,
     FeishuDiagnosticApiResponse,
     FeishuGatewayRestartApiResponse,
+    ImpersonationExit,
+    ImpersonationStart,
+    ImpersonationTarget,
+    ImpersonationTargetRole,
+    ImpersonationTargets,
+    ImpersonationView,
     LivzonAccessScopeOut,
     LocalLoginRequest,
     LocalUserCreate,
@@ -71,6 +91,7 @@ from app.platform.identity.schemas import (
     UserResponse,
 )
 from app.shared.module_registry import MODULES_BY_CODE
+from app.shared.schemas import ApiResponseEnvelope
 
 logger = logging.getLogger(__name__)
 OAUTH_STATE_COOKIE = "feishu_oauth_state"
@@ -294,22 +315,135 @@ async def logout(
 
 @auth_router.post("/session/logout", summary="撤销当前用户会话")
 async def revoke_session(
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: RequiredUser = None,
 ) -> JSONResponse:
     from app.platform.identity.service import revoke_user_sessions
 
+    if getattr(request.state, "impersonation", None) is not None:
+        raise HTTPException(409, "请先返回管理员身份")
     await revoke_user_sessions(db, current_user.id)
     response = success_response(data={"message": "已退出登录"})
     response.delete_cookie(AUTH_TOKEN_COOKIE, path="/")
     return response
 
 
+@user_router.get(
+    "/admin/impersonation/targets",
+    summary="查询可模拟登录的用户",
+    response_model=ApiResponseEnvelope[ImpersonationTargets],
+)
+async def list_impersonation_targets(
+    administrator: AdminUser,
+    keyword: str = Query("", max_length=100),
+    role_id: UUID | None = Query(None, description="按有效角色筛选"),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+) -> ApiResponseEnvelope[ImpersonationTargets]:
+    rows, total = await UserRepository().list_impersonation_targets(
+        db, administrator_id=administrator.id,
+        keyword=keyword.strip(), role_id=role_id, offset=offset, limit=limit,
+    )
+    roles_by_user = await resolve_users_roles(db, rows)
+    items = [
+        ImpersonationTarget(
+            id=row.id,
+            name=row.name,
+            username=row.username,
+            employee_no=row.employee_no,
+            department=row.department,
+            roles=[
+                ImpersonationTargetRole(id=role.id, name=role.name)
+                for role in sorted(
+                    roles_by_user[row.id], key=lambda role: (role.name, role.code)
+                )
+            ],
+        )
+        for row in rows
+    ]
+    return ApiResponseEnvelope(data=ImpersonationTargets(items=items, total=total))
+
+
+@auth_router.post(
+    "/impersonation/start",
+    summary="开始模拟登录",
+    response_model=ApiResponseEnvelope[ImpersonationView],
+)
+async def start_browser_impersonation(
+    request: Request,
+    response: Response,
+    payload: ImpersonationStart,
+    current_user: CurrentUser,
+    db: AsyncSession = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> ApiResponseEnvelope[ImpersonationView]:
+    token = authentication_token(request, request.cookies.get(AUTH_TOKEN_COOKIE))
+    if is_impersonating_request(request, token):
+        raise HTTPException(409, "请先退出当前模拟登录")
+    administrator = await require_system_admin(current_user, db)
+    session, switch_token = await start_impersonation(
+        db, settings, login_token=token or "",
+        administrator=administrator, target_id=payload.target_id,
+    )
+    request.state.impersonation = session
+    request.state.audit_user_id = administrator.id
+    response.headers["Cache-Control"] = "no-store"
+    # Keep expired switches explicit until the administrator chooses to exit.
+    response.set_cookie(
+        IMPERSONATION_COOKIE, switch_token, path="/", httponly=True,
+        samesite="lax", secure=_is_secure_request(request),
+    )
+    return ApiResponseEnvelope(data=ImpersonationView(expires_at=session.expires_at))
+
+
+@auth_router.post(
+    "/impersonation/exit",
+    summary="退出模拟登录",
+    response_model=ApiResponseEnvelope[ImpersonationExit],
+)
+async def exit_browser_impersonation(
+    request: Request,
+    response: Response,
+    db: AsyncSession = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> ApiResponseEnvelope[ImpersonationExit]:
+    switch = request.cookies.get(IMPERSONATION_COOKIE)
+    login_token = request.cookies.get(AUTH_TOKEN_COOKIE) or bearer_token(request)
+    if switch is None:
+        # A retry after cookie removal can safely recover an already-restored session.
+        claims = decode_login(login_token, settings) if login_token else None
+        subject = claims.get("sub") if claims else None
+        administrator = (
+            await UserRepository().get_by_id(db, subject) if subject else None
+        )
+        restored = bool(
+            administrator and claims and administrator.status == "active"
+            and administrator.session_version == claims.get("session_version")
+            and await is_system_administrator(db, administrator)
+        )
+    else:
+        session, restored = await end_impersonation(db, settings, switch, login_token)
+        if session is not None:
+            request.state.impersonation = session
+            request.state.audit_user_id = session.administrator_id
+    response.headers["Cache-Control"] = "no-store"
+    response.delete_cookie(IMPERSONATION_COOKIE, path="/")
+    if not restored and switch is not None:
+        response.delete_cookie(AUTH_TOKEN_COOKIE, path="/")
+    return ApiResponseEnvelope(data=ImpersonationExit(administrator_restored=restored))
+
+
 # ── Current User ────────────────────────────────────────────────────
 
 
-@user_router.get("/me", summary="获取当前平台用户信息")
+@user_router.get(
+    "/me", summary="获取当前平台用户信息",
+    response_model=ApiResponseEnvelope[CurrentUserResponse],
+)
 async def get_me(
+    request: Request,
     current_user: CurrentUser,
     db: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_settings),
@@ -325,7 +459,10 @@ async def get_me(
         module_codes_from_page_grants,
     )
 
-    response = UserResponse.model_validate(current_user)
+    response = CurrentUserResponse.model_validate(current_user)
+    switch = getattr(request.state, "impersonation", None)
+    if switch is not None:
+        response.impersonation = ImpersonationView(expires_at=switch.expires_at)
     roles = await resolve_user_roles(db, current_user.id)
     response.roles = [role.code for role in roles]
     response.permissions = await resolve_user_permissions(db, current_user.id)
