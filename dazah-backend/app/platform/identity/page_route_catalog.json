@@ -7,6 +7,7 @@
     "/admin/tobacco-gift",
     "/admin/tobacco-gift/items",
     "/admin/tobacco-gift/records",
+    "/auth/impersonation",
     "/energy",
     "/energy/analysis",
     "/energy/data-quality",
