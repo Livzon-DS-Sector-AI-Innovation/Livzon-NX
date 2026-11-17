@@ -164,6 +164,7 @@ export default function GeneralAuditLogClient({ category }: { category: GeneralA
   const [range, setRange] = useState<[Dayjs, Dayjs] | null>(null)
   const [module, setModule] = useState<string | undefined>()
   const [detail, setDetail] = useState<GeneralAuditLogDetail | null>(null)
+  const impersonation = detail?.extra?.impersonation
   const [detailLoading, setDetailLoading] = useState(false)
   const config = categoryConfig[category]
 
@@ -428,6 +429,11 @@ export default function GeneralAuditLogClient({ category }: { category: GeneralA
               <Descriptions.Item label="原始动作标识"><Text copyable>{detail.action}</Text></Descriptions.Item>
               {category === 'agent_tools' && Boolean(detail.extra?.operation) && <Descriptions.Item label="原始工具标识"><Text copyable>{String(detail.extra?.operation)}</Text></Descriptions.Item>}
               <Descriptions.Item label="操作人">{actor(detail)}</Descriptions.Item>
+              {typeof impersonation === 'object' && impersonation !== null && 'administrator_id' in impersonation && <>
+                <Descriptions.Item label="发起管理员 ID">{String(impersonation.administrator_id)}</Descriptions.Item>
+                <Descriptions.Item label="模拟用户 ID">{'target_id' in impersonation ? String(impersonation.target_id) : '-'}</Descriptions.Item>
+                <Descriptions.Item label="模拟会话 ID">{'session_id' in impersonation ? String(impersonation.session_id) : '-'}</Descriptions.Item>
+              </>}
               <Descriptions.Item label={category === 'operations' ? '影响模块' : '资源类型'}>{category === 'operations' ? auditModuleLabels[detail.resource_type || ''] || detail.resource_type || '-' : detail.resource_type || '-'}</Descriptions.Item>
               <Descriptions.Item label="资源 ID">{detail.resource_id || (['list_agent_automations', 'search_agent_tools'].includes(detail.action) ? '列表查询，不对应单个资源' : '-')}</Descriptions.Item>
               <Descriptions.Item label="请求">{detail.method || '-'} {detail.path || ''}</Descriptions.Item>

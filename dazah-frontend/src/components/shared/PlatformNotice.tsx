@@ -12,6 +12,8 @@ export interface PlatformNoticeProps extends AlertProps {
   rulesDisabled?: boolean
   /** 数据提醒类提示可关闭「了解访问规则」入口；默认保持原行为 */
   showRulesLink?: boolean
+  /** Use the supplied class for the surface background and corner radius. */
+  surface?: 'theme' | 'custom'
 }
 
 /** Platform-wide notices keep the summary visible and open complete details on demand. */
@@ -26,6 +28,7 @@ export default function PlatformNotice({
   onLearnRules,
   rulesDisabled = false,
   showRulesLink = true,
+  surface = 'theme',
   ...alertProps
 }: PlatformNoticeProps) {
   const [rulesOpen, setRulesOpen] = useState(false)
@@ -41,7 +44,12 @@ export default function PlatformNotice({
   return <>
     <Alert {...alertProps} type={type} banner={false} showIcon icon={undefined}
       className={`${styles.notice} ${className || ''}`} data-platform-notice={type}
-      style={{ ...style, background: colors.background, borderColor: 'transparent', borderRadius: token.borderRadiusLG, color: token.colorText }}
+      style={{
+        ...style,
+        ...(surface === 'theme' ? { background: colors.background, borderRadius: token.borderRadiusLG } : {}),
+        borderColor: 'transparent',
+        color: token.colorText,
+      }}
       title={<span className={styles.summary}>{heading}</span>}
       action={<div className={styles.actions}>
         {action}

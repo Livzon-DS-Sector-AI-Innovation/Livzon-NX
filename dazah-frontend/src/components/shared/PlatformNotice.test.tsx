@@ -99,3 +99,13 @@ it('hides the rules entry when showRulesLink is disabled', async () => {
   expect(notice.querySelector('.ant-btn-link')).toBeNull()
   expect(document.querySelector('.ant-modal')).toBeNull()
 })
+
+it('lets an opt-in surface apply its own background and radius', async () => {
+  await act(async () => root.render(<PlatformNotice type="warning" surface="custom"
+    className="glass-surface" title="模拟视角" showRulesLink={false} />))
+  const notice = host.querySelector<HTMLElement>('[data-platform-notice]')
+  expect(notice?.classList.contains('glass-surface')).toBe(true)
+  expect(notice?.style.background).toBe('')
+  expect(notice?.style.borderRadius).toBe('')
+  expect(notice?.querySelector('.ant-alert-icon')).not.toBeNull()
+})

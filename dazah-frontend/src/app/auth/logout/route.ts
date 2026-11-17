@@ -2,8 +2,12 @@ import { NextRequest, NextResponse } from "next/server"
 
 import { getPublicOrigin } from "@/lib/public-origin"
 import { getBackendFallbackUrls } from "@/lib/server-api"
+import { IMPERSONATION_COOKIE, IMPERSONATION_RECOVERY_PATH } from "@/lib/impersonation"
 
 export async function GET(request: NextRequest) {
+  if (request.cookies.get(IMPERSONATION_COOKIE)) {
+    return NextResponse.redirect(new URL(IMPERSONATION_RECOVERY_PATH, getPublicOrigin(request)))
+  }
   const token = request.cookies.get("auth_token")?.value
   if (token) {
     let revoked = false

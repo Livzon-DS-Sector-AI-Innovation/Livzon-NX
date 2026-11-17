@@ -465,13 +465,11 @@ it('offers three reasons in the footer and sends the selected reason through sav
   mocks.replace.mockResolvedValue({ ok: true, data: { ...result('A'), grant_version: 4 } })
   await show('A')
   const input = host.querySelector<HTMLInputElement>('footer input[placeholder="填写角色授权调整原因"]')!
-  const shortcuts = host.querySelector<HTMLButtonElement>('footer button[aria-label="快捷授权调整原因"]')!
+  const shortcuts = [...host.querySelectorAll<HTMLButtonElement>('footer [aria-label="快捷授权调整原因"] button')]
   expect(input.maxLength).toBe(20)
   expect(host.querySelector('footer')?.textContent).toContain('0 / 20')
-  await act(async () => shortcuts.click())
-  const options = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
-  expect(options.map((item) => item.textContent)).toEqual(['岗位权限调整', '数据范围调整', '收紧高风险权限'])
-  await act(async () => options[1].click())
+  expect(shortcuts.map((item) => item.textContent)).toEqual(['岗位权限调整', '数据范围调整', '收紧高风险权限'])
+  await act(async () => shortcuts[1].click())
   expect(input.value).toBe('数据范围调整')
   expect(mocks.preview).not.toHaveBeenCalled()
 
@@ -508,7 +506,8 @@ it('disables both actions during preview and ignores a late preview for a previo
   await act(async () => button('预览').click())
   expect(button('预览').disabled).toBe(true)
   expect(button('保存').disabled).toBe(true)
-  expect(host.querySelector<HTMLButtonElement>('button[aria-label="快捷授权调整原因"]')?.disabled).toBe(true)
+  const shortcuts = [...host.querySelectorAll<HTMLButtonElement>('[aria-label="快捷授权调整原因"] button')]
+  expect(shortcuts.map((shortcut) => shortcut.disabled)).toEqual([true, true, true])
   await show('B')
   await act(async () => pending.resolve({ role_id: 'A', grant_version: 3, member_count: 2,
     affected_user_count: 1, expanded_user_count: 1, restricted_user_count: 0,

@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urlsplit
 
-import jwt
+from fastapi import HTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -27,6 +27,13 @@ from app.core.database import async_session_factory
 from app.core.response import error_response
 from app.platform.identity.access_check import check_access
 from app.platform.identity.deps import get_current_user
+from app.platform.identity.impersonation import COOKIE as IMPERSONATION_COOKIE
+from app.platform.identity.impersonation import (
+    authentication_token,
+    decode_login,
+    is_impersonating_request,
+    resolve_impersonation,
+)
 from app.platform.identity.rbac import (
     is_public_path,
     match_module,
@@ -102,7 +109,7 @@ def _trusted_browser_write_origin(request: Request, allowed_origins: list[str]) 
         return origin in allowed_origins
     if request.headers.get("sec-fetch-site") == "cross-site":
         return False
-    if not request.cookies.get("auth_token"):
+    if not {"auth_token", IMPERSONATION_COOKIE}.intersection(request.cookies):
         return True
     referer = request.headers.get("referer", "")
     parsed = urlsplit(referer)
@@ -185,7 +192,9 @@ class PermissionMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         # 开发绕过：全部放行
-        if settings.DEV_BYPASS_AUTH:
+        token = authentication_token(request, request.cookies.get("auth_token"))
+        impersonating = is_impersonating_request(request, token)
+        if settings.DEV_BYPASS_AUTH and not impersonating:
             return await call_next(request)
 
         # Internal Agent routes authenticate with their own service token at
@@ -204,25 +213,14 @@ class PermissionMiddleware(BaseHTTPMiddleware):
         if getattr(request.app, "dependency_overrides", {}).get(get_current_user):
             return await call_next(request)
 
-        # 解析 JWT（Bearer header 或 auth_token cookie）
-        token = None
-        auth = request.headers.get("Authorization", "")
-        if auth.startswith("Bearer "):
-            token = auth.removeprefix("Bearer ")
-        if not token:
-            token = request.cookies.get("auth_token")
-        if not token:
+        if not token and not impersonating:
             return self._unauthorized()
 
-        try:
-            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
-        except jwt.InvalidTokenError:
+        payload = {} if impersonating else decode_login(token or "", settings)
+        if payload is None:
             return self._unauthorized()
 
         # 解析用户权限（缓存优先）
-        user_id = payload.get("sub")
-        if not user_id:
-            return self._unauthorized()
         async with async_session_factory() as db:
             from app.platform.identity.permission_cache import (
                 get_cached_permissions,
@@ -230,13 +228,28 @@ class PermissionMiddleware(BaseHTTPMiddleware):
             )
             from app.platform.identity.repository import UserRepository
 
-            user = await UserRepository().get_by_id(db, user_id)
-            if (
-                user is None
-                or user.status != "active"
-                or payload.get("session_version") != user.session_version
-            ):
-                return self._unauthorized()
+            if impersonating:
+                try:
+                    user = await resolve_impersonation(
+                        request, db, settings, token or ""
+                    )
+                except HTTPException as exc:
+                    return error_response(
+                        message=str(exc.detail), status_code=exc.status_code
+                    )
+            else:
+                subject = payload.get("sub")
+                if not isinstance(subject, str) or not subject:
+                    return self._unauthorized()
+                login_user = await UserRepository().get_by_id(db, subject)
+                if (
+                    login_user is None
+                    or login_user.status != "active"
+                    or payload.get("session_version") != login_user.session_version
+                ):
+                    return self._unauthorized()
+                user = login_user
+            user_id = str(user.id)
             request.state.audit_user_id = user.id
             # The unified identity is authoritative even if a pre-merge cache
             # still lacks the wildcard. Never trust a cached wildcard on demotion.
@@ -279,6 +292,8 @@ class PermissionMiddleware(BaseHTTPMiddleware):
     ) -> Any:
         """JWT 剩余 < 1h 时续签并 Set-Cookie。续签失败不阻断请求。"""
         response = await call_next(request)
+        if getattr(request.state, "impersonation", None) is not None:
+            return response
         try:
             exp = payload.get("exp")
             if not exp:

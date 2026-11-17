@@ -14,6 +14,7 @@ import { getCurrentUser, loginWithPassword, logout } from './auth'
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mocks.getCookie.mockReset()
   mocks.getAuthHeaders.mockResolvedValue({ Authorization: 'Bearer synthetic', 'X-Forwarded-For': '198.51.100.23' })
   vi.stubEnv('NODE_ENV', 'production')
   vi.stubEnv('API_BASE_URL', 'http://trusted.test:8000')
@@ -65,11 +66,21 @@ it('still stores the session after successful authentication', async () => {
 })
 
 it('keeps the client IP when revoking a session', async () => {
-  mocks.getCookie.mockReturnValueOnce({ value: 'synthetic' })
+  mocks.getCookie.mockImplementation((name: string) => name === 'auth_token' ? { value: 'synthetic' } : undefined)
   mocks.fetch.mockResolvedValue(new Response('{}'))
   await expect(logout()).rejects.toThrow('NEXT_REDIRECT')
   expect(mocks.fetch).toHaveBeenCalledWith(expect.stringContaining('/identity/auth/session/logout'), expect.objectContaining({
     headers: expect.objectContaining({ 'X-Forwarded-For': '198.51.100.23', Authorization: 'Bearer synthetic' }),
   }))
   expect(mocks.deleteCookie).toHaveBeenCalledWith('auth_token')
+})
+
+it('routes simulated logout to recovery without revoking either login', async () => {
+  mocks.getCookie.mockImplementation((name: string) => ({
+    value: name === 'auth_token' ? 'synthetic' : 'synthetic-switch',
+  }))
+  await expect(logout()).rejects.toThrow('NEXT_REDIRECT')
+  expect(mocks.redirect).toHaveBeenCalledWith('/auth/impersonation')
+  expect(mocks.fetch).not.toHaveBeenCalled()
+  expect(mocks.deleteCookie).not.toHaveBeenCalled()
 })

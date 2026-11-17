@@ -24,6 +24,7 @@ PAGE_PERMISSION_HISTORY_ACTIONS = (
     "rollback_user_page_permissions",
     "replace_role_page_permissions",
     "rollback_role_page_permissions",
+    # Historical audit records remain readable after the repair endpoint was removed.
     "remediate_user_page_permissions",
     "remediate_role_page_permissions",
 )
@@ -102,12 +103,6 @@ class PagePermissionRepository:
         )
         return list(result.scalars().all())
 
-    async def list_all_role_grants(self, db: AsyncSession) -> list[RolePageGrant]:
-        result = await db.execute(
-            select(RolePageGrant).where(RolePageGrant.is_deleted.is_(False))
-        )
-        return list(result.scalars().all())
-
     async def list_user_grants_for_users(
         self, db: AsyncSession, *, user_ids: list[UUID]
     ) -> list[UserPageGrant]:
@@ -118,67 +113,6 @@ class PagePermissionRepository:
                 UserPageGrant.user_id.in_(user_ids),
                 UserPageGrant.is_deleted.is_(False),
             )
-        )
-        return list(result.scalars().all())
-
-    async def list_all_user_grants(self, db: AsyncSession) -> list[UserPageGrant]:
-        result = await db.execute(
-            select(UserPageGrant).where(UserPageGrant.is_deleted.is_(False))
-        )
-        return list(result.scalars().all())
-
-    async def get_role_grant_for_update(
-        self, db: AsyncSession, *, role_id: UUID, page_key: str
-    ) -> RolePageGrant | None:
-        result = await db.execute(
-            select(RolePageGrant)
-            .where(
-                RolePageGrant.role_id == role_id,
-                RolePageGrant.page_key == page_key,
-                RolePageGrant.is_deleted.is_(False),
-            )
-            .with_for_update()
-        )
-        return result.scalar_one_or_none()
-
-    async def get_user_grant_for_update(
-        self, db: AsyncSession, *, user_id: UUID, page_key: str
-    ) -> UserPageGrant | None:
-        result = await db.execute(
-            select(UserPageGrant)
-            .where(
-                UserPageGrant.user_id == user_id,
-                UserPageGrant.page_key == page_key,
-                UserPageGrant.is_deleted.is_(False),
-            )
-            .with_for_update()
-        )
-        return result.scalar_one_or_none()
-
-    @staticmethod
-    async def remove_grant(
-        db: AsyncSession, grant: RolePageGrant | UserPageGrant
-    ) -> None:
-        await db.delete(grant)
-        await db.flush()
-
-    async def list_roles_by_ids(
-        self, db: AsyncSession, *, role_ids: set[UUID]
-    ) -> list[Role]:
-        if not role_ids:
-            return []
-        result = await db.execute(
-            select(Role).where(Role.id.in_(role_ids), Role.is_deleted.is_(False))
-        )
-        return list(result.scalars().all())
-
-    async def list_users_by_ids(
-        self, db: AsyncSession, *, user_ids: set[UUID]
-    ) -> list[User]:
-        if not user_ids:
-            return []
-        result = await db.execute(
-            select(User).where(User.id.in_(user_ids), User.is_deleted.is_(False))
         )
         return list(result.scalars().all())
 

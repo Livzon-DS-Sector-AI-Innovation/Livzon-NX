@@ -1,7 +1,6 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { cookies } from 'next/headers'
 import type { components } from '@/types/generated/schema'
 import { filenameFromDisposition } from '@/lib/download'
 import { getAuthHeaders } from '@/lib/auth'
@@ -639,12 +638,9 @@ export async function getDepartmentSyncStatus(): Promise<{ code: number; message
 // ─── HR 飞书设置 Server Actions ───
 
 async function hrActionFetch<T>(url: string, options?: RequestInit): Promise<T | null> {
-  const cookieStore = await cookies()
-  const authToken = cookieStore.get('auth_token')?.value
   const response = await authedFetch(url, {
     ...options,
     headers: {
-      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
       ...(options?.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
       ...options?.headers,
     },

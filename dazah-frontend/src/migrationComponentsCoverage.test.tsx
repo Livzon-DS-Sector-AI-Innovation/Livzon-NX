@@ -1160,7 +1160,8 @@ describe('migrated component coverage', () => {
     const userButton = (text: string) => Array.from(userView.container.querySelectorAll('button')).find((button) => button.textContent?.includes(text))
     expect(userButton('页面权限')).toBeUndefined()
     expect(userButton('模块访问')).toBeUndefined()
-    expect(userButton('有效权限')).toBeDefined()
+    expect(userButton('有效权限')).toBeUndefined()
+    expect(userButton('分配角色')).toBeDefined()
     userButton('分配角色')?.click()
     await settle()
     userView.container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]').forEach((input) => input.click())
@@ -1180,20 +1181,16 @@ describe('migrated component coverage', () => {
     await settle()
     closeRendered(deptView)
 
+    const listRollouts = getMock('actions/admin', 'listPagePermissionRollouts')
+    listRollouts.mockResolvedValue([{ module_code: 'quality', passed: true, catalog_gaps: [] }])
     const verificationView = renderClient(createElement(PermissionVerification))
     await settle()
-    const account = Array.from(verificationView.container.querySelectorAll('select')).find((select) => select.querySelector('option[value="user-1"]'))
-    if (account) {
-      account.value = 'user-1'
-      account.dispatchEvent(new Event('change', { bubbles: true }))
-    }
-    await settle()
-    verificationView.container.querySelector('button')?.click()
-    verificationView.container.querySelector('form')?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
-    await settle()
-    queryElement<HTMLButtonElement>(verificationView.container, 'button[aria-label="导出权限清单"]')?.click()
-    Array.from(verificationView.container.querySelectorAll('button')).find((button) => button.textContent?.includes('导出权限清单'))?.click()
-    await settle()
+    expect(verificationView.container.textContent).toContain('自动检查通过')
+    listRollouts.mockResolvedValue([{ module_code: 'quality', passed: false, catalog_gaps: ['接口｜GET /quality：未登记'] }])
+    const recheck = Array.from(verificationView.container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('重新检查'))
+    await act(async () => recheck?.click())
+    expect(verificationView.container.textContent).toContain('接入有缺口')
     closeRendered(verificationView)
   })
 

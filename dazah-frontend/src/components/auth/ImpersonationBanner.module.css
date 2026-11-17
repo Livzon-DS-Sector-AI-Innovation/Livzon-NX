@@ -1,0 +1,175 @@
+@property --impersonation-outline-angle {
+  syntax: "<angle>";
+  inherits: true;
+  initial-value: 100deg;
+}
+
+.container {
+  flex-shrink: 0;
+  inline-size: min(calc(100% - 24px), 34rem);
+  margin-inline: auto;
+  padding-block: 8px;
+}
+
+.notice:global(.ant-alert) {
+  --restore-color: color-mix(in srgb, var(--color-warning) 56%, var(--color-ink));
+  --impersonation-radius: var(--rounded-xxxl);
+  --impersonation-reflection-opacity: 0.25;
+  --impersonation-text-line-height: 20px;
+  --impersonation-light: conic-gradient(
+    from var(--impersonation-outline-angle),
+    #ff9d42,
+    #bd4cff 26%,
+    #6746ff 49%,
+    #bd4cff 72%,
+    #ff9d42
+  );
+  position: relative;
+  isolation: isolate;
+  padding: 7px 14px;
+  gap: 4px 0;
+  border-radius: var(--impersonation-radius);
+  background-color: color-mix(in srgb, var(--color-surface) 76%, transparent);
+  background-image: linear-gradient(
+    108deg,
+    color-mix(in srgb, var(--color-warning) 16%, transparent),
+    transparent 38%,
+    color-mix(in srgb, var(--color-primary) 14%, transparent)
+  );
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--color-ink) 9%, transparent),
+    0 4px 14px color-mix(in srgb, var(--color-ink) 8%, transparent);
+  backdrop-filter: blur(16px) saturate(82%);
+  animation: trace-outline 18s linear infinite;
+}
+
+:global(:root[data-theme="dark"]) .notice {
+  --impersonation-reflection-opacity: 0.4;
+}
+
+.notice::before,
+.notice::after {
+  position: absolute;
+  pointer-events: none;
+  border-radius: inherit;
+  background: var(--impersonation-light);
+  content: "";
+}
+
+.notice::before {
+  inset: -1px;
+  padding: 1px;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+
+.notice::after {
+  inset: 0;
+  z-index: -1;
+  filter: blur(14px) saturate(92%);
+  clip-path: inset(0 round var(--impersonation-radius));
+  mask-image: radial-gradient(ellipse 62% 88%, transparent 29%, rgb(0 0 0 / 42%) 62%, #000 100%);
+  opacity: var(--impersonation-reflection-opacity);
+}
+
+@keyframes trace-outline {
+  to { --impersonation-outline-angle: 460deg; }
+}
+
+.notice:global(.ant-alert) :global(.ant-alert-icon) {
+  margin-inline-end: 10px;
+  color: var(--restore-color);
+}
+
+.summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  line-height: var(--impersonation-text-line-height);
+}
+
+.name {
+  padding: 2px 7px;
+  border-radius: var(--rounded-full);
+  background: color-mix(in srgb, var(--color-primary) 18%, transparent);
+  color: var(--color-primary-deep);
+  font-weight: 600;
+}
+
+.notice .restore:global(.ant-btn) {
+  align-items: center;
+  height: auto;
+  min-height: 28px;
+  padding: 2px 11px;
+  border-color: color-mix(in srgb, var(--restore-color) 62%, transparent);
+  border-radius: var(--rounded-md);
+  background: color-mix(in srgb, var(--color-canvas) 78%, transparent);
+  color: var(--restore-color);
+  font-size: var(--ant-font-size);
+  font-weight: 600;
+  line-height: var(--impersonation-text-line-height);
+}
+
+.notice .restore:global(.ant-btn):hover {
+  background: color-mix(in srgb, var(--color-warning-soft) 85%, transparent);
+  border-color: var(--restore-color);
+  color: var(--restore-color);
+}
+
+.notice .restore:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.error {
+  margin: 0;
+  color: color-mix(in srgb, var(--color-error) 84%, var(--color-ink));
+  font-size: 0.875rem;
+}
+
+.error:not(:empty) {
+  margin-top: 4px;
+}
+
+.toolbar {
+  flex: none;
+  max-inline-size: min(38vw, 34rem);
+  margin-inline: 6px;
+}
+
+.toolbar .notice:global(.ant-alert) {
+  --impersonation-radius: var(--rounded-xl);
+  container-type: normal;
+  flex-wrap: nowrap;
+  padding: 4px 8px;
+}
+
+.toolbar .notice :global(.ant-alert-section),
+.toolbar .notice :global(.ant-alert-content) {
+  flex: 0 1 auto;
+}
+
+.toolbar .notice:global(.ant-alert) :global(.ant-alert-icon) {
+  margin-inline-end: 5px;
+}
+
+.toolbar .notice:global(.ant-alert) :global(.ant-alert-actions) {
+  flex: none;
+  width: auto;
+  margin: 0 0 0 7px;
+}
+
+.toolbar .summary {
+  white-space: nowrap;
+}
+
+.toolbar .name {
+  max-inline-size: 8rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notice:global(.ant-alert) {
+    animation: none;
+  }
+}

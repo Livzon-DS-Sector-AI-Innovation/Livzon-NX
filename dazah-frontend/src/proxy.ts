@@ -7,6 +7,7 @@ import type { SubMenuItem } from '@/lib/menu-config'
 import { EQUIPMENT_CONSOLE_MODULE_HEADER, isEquipmentModule } from '@/lib/equipment-page-permissions'
 import type { User } from '@/types/user'
 import { isSystemAdministrator, isSystemSettingsPath } from '@/lib/administrator-role'
+import { getEffectiveToken, IMPERSONATION_COOKIE, IMPERSONATION_RECOVERY_PATH } from '@/lib/impersonation'
 
 function firstPage(items: SubMenuItem[]): string | undefined {
   for (const item of items) {
@@ -48,8 +49,8 @@ export async function proxy(request: NextRequest) {
     target.search = request.nextUrl.search
 
     const requestHeaders = new Headers(request.headers)
-    const token = request.cookies.get('auth_token')?.value
-    if (token && !requestHeaders.has('Authorization')) {
+    const token = getEffectiveToken(request.cookies)
+    if (token && (request.cookies.get(IMPERSONATION_COOKIE) || !requestHeaders.has('Authorization'))) {
       requestHeaders.set('Authorization', `Bearer ${token}`)
     }
     const referer = request.headers.get('referer')
@@ -76,14 +77,24 @@ export async function proxy(request: NextRequest) {
     : null
   const hasConsoleModule = isEquipmentModule(consoleModule)
   if (hasConsoleModule) requestHeaders.set(EQUIPMENT_CONSOLE_MODULE_HEADER, consoleModule)
+  const simulation = request.cookies.get(IMPERSONATION_COOKIE)
+  const recovery = new URL(IMPERSONATION_RECOVERY_PATH, request.url)
+  const safeNavigation = request.method === 'GET' || request.method === 'HEAD'
+  if (simulation && safeNavigation && (
+    request.nextUrl.pathname === '/login' || request.nextUrl.pathname.startsWith('/login/')
+  )) return NextResponse.redirect(recovery)
   const currentModule = getModuleByKey(request.nextUrl.pathname.split('/')[1])
-  if (currentModule || isSystemSettingsPath(request.nextUrl.pathname)) {
+  if (currentModule || isSystemSettingsPath(request.nextUrl.pathname)
+    || (simulation && ['/', '/no-access'].includes(request.nextUrl.pathname))) {
     // This gate runs before the App Router evaluates any child Server Component.
     // Layout-only guards can render concurrently with protected data requests.
     const login = new URL('/login', request.url)
     login.searchParams.set('next', request.nextUrl.pathname + request.nextUrl.search)
-    const token = request.cookies.get('auth_token')?.value
-    if (!token) return NextResponse.redirect(login)
+    const token = getEffectiveToken(request.cookies)
+    if (!token) {
+      if (simulation && !safeNavigation) return denied('模拟登录已失效，请返回管理员身份。', 401)
+      return NextResponse.redirect(simulation ? recovery : login)
+    }
 
     let user: User | undefined
     try {
@@ -93,13 +104,20 @@ export async function proxy(request: NextRequest) {
         signal: AbortSignal.timeout(10000),
       })
       if (response.status === 401) {
+        if (simulation) {
+          return safeNavigation
+            ? NextResponse.redirect(recovery)
+            : denied('模拟登录已失效，请返回管理员身份。', 401)
+        }
         return NextResponse.redirect(login)
       }
+      if (response.status === 503 && simulation && safeNavigation) return NextResponse.redirect(recovery)
       if (!response.ok) return denied('暂时无法验证页面权限，请稍后重试。', 503)
       const payload = await response.json() as { data?: User }
       user = payload.data
       if (!user) return denied('无法获取当前用户的页面权限。', 503)
     } catch {
+      if (simulation && safeNavigation) return NextResponse.redirect(recovery)
       return denied('暂时无法验证页面权限，请稍后重试。', 503)
     }
     if (isSystemSettingsPath(request.nextUrl.pathname)) {

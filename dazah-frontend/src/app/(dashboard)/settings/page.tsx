@@ -13,12 +13,12 @@ export const dynamic = 'force-dynamic'
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string | string[] }>
+  searchParams: Promise<{ tab?: string | string[]; view?: string | string[] }>
 }) {
   const user = await getCurrentUser()
   if (!user || !isSystemAdministrator(user)) notFound()
 
-  const requestedTab = (await searchParams).tab
+  const { tab: requestedTab, view } = await searchParams
   const activeTab = typeof requestedTab === 'string' ? requestedTab : 'users'
   const systemPermissions = activeTab === 'permissions'
     ? await Promise.all([
@@ -32,6 +32,7 @@ export default async function SettingsPage({
     <SettingsAdminClient
       activeTab={activeTab}
       systemPermissions={systemPermissions}
+      permissionView={view === 'impersonation' ? view : undefined}
     />
   )
 }

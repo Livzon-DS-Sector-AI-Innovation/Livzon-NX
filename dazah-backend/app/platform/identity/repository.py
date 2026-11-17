@@ -3,7 +3,9 @@ from datetime import UTC, datetime
 from typing import cast
 from uuid import UUID
 
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import and_, case, delete, func, or_, select
+from sqlalchemy import cast as sql_cast
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
@@ -32,6 +34,69 @@ def _user_directory_keyword_filter(
         fields.append(User.department)
     pattern = f"%{keyword}%"
     return or_(*(field.ilike(pattern) for field in fields))
+
+
+def _user_has_resolved_role(role_id: UUID) -> ColumnElement[bool]:
+    from app.platform.identity.rbac import (
+        ORDINARY_ADMIN_ROLE_CODE,
+        SUPER_ADMIN_ROLE_CODE,
+    )
+
+    manual_assignment = (
+        select(UserRole.user_id)
+        .where(
+            UserRole.user_id == User.id,
+            UserRole.role_id == role_id,
+            UserRole.source == "manual",
+            UserRole.is_deleted.is_(False),
+        )
+        .correlate(User)
+        .exists()
+    )
+    # Department IDs are stored as text for legacy accounts. Guard invalid JSON
+    # before checking exact string membership in the department array.
+    department_ids = case(
+        (
+            func.pg_input_is_valid(User.feishu_department_ids, "jsonb"),
+            sql_cast(User.feishu_department_ids, JSONB),
+        )
+    )
+    department_assignment = (
+        select(DepartmentRoleRule.id)
+        .where(
+            DepartmentRoleRule.role_id == role_id,
+            DepartmentRoleRule.is_deleted.is_(False),
+            or_(
+                and_(
+                    DepartmentRoleRule.department_name != "",
+                    DepartmentRoleRule.department_name == User.department,
+                ),
+                and_(
+                    DepartmentRoleRule.feishu_department_id != "",
+                    func.jsonb_typeof(department_ids) == "array",
+                    department_ids.bool_op("?")(DepartmentRoleRule.feishu_department_id),
+                ),
+            ),
+        )
+        .correlate(User)
+        .exists()
+    )
+    return (
+        select(Role.id)
+        .where(
+            Role.id == role_id,
+            Role.is_deleted.is_(False),
+            or_(
+                manual_assignment,
+                and_(
+                    Role.code.not_in((SUPER_ADMIN_ROLE_CODE, ORDINARY_ADMIN_ROLE_CODE)),
+                    department_assignment,
+                ),
+            ),
+        )
+        .correlate(User)
+        .exists()
+    )
 
 
 class ExternalIdentityConflictError(ValueError):
@@ -229,6 +294,53 @@ class ExternalIdentityBindingRepository:
 
 
 class UserRepository:
+    async def list_impersonation_targets(
+        self,
+        session: AsyncSession,
+        *,
+        administrator_id: UUID,
+        keyword: str,
+        offset: int,
+        limit: int,
+        role_id: UUID | None = None,
+    ) -> tuple[list[User], int]:
+        from app.platform.identity.rbac import ORDINARY_ADMIN_ROLE_CODE
+
+        ordinary_admins = (
+            select(UserRole.user_id)
+            .join(Role, Role.id == UserRole.role_id)
+            .where(
+                Role.code == ORDINARY_ADMIN_ROLE_CODE,
+                Role.is_deleted.is_(False),
+                UserRole.is_deleted.is_(False),
+            )
+        )
+        filters = [
+            User.id != administrator_id,
+            User.status == "active",
+            User.is_deleted.is_(False),
+            or_(User.role != "admin", User.id.in_(ordinary_admins)),
+        ]
+        if keyword:
+            filters.append(or_(
+                User.name.icontains(keyword, autoescape=True),
+                User.username.icontains(keyword, autoescape=True),
+                User.employee_no.icontains(keyword, autoescape=True),
+            ))
+        if role_id is not None:
+            filters.append(_user_has_resolved_role(role_id))
+        total = await session.scalar(
+            select(func.count()).select_from(User).where(*filters)
+        )
+        rows = await session.scalars(
+            select(User)
+            .where(*filters)
+            .order_by(User.name, User.id)
+            .offset(offset)
+            .limit(limit)
+        )
+        return list(rows), total or 0
+
     async def get_by_id(
         self, session: AsyncSession, user_id: UUID | str
     ) -> User | None:

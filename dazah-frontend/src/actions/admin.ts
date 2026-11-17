@@ -1,6 +1,5 @@
 "use server"
 
-import { cookies } from "next/headers"
 import { revalidatePath } from "next/cache"
 import type { components } from "@/types/generated/schema"
 import { permissionActionResult, type PermissionActionResult } from "@/lib/permission-action-result"
@@ -26,35 +25,29 @@ type PermissionSimulateRequest = components["schemas"]["PermissionSimulateReques
 export type RolePagePermissionsOut = components["schemas"]["RolePagePermissionsOut"]
 export type RolePagePermissionsPreviewOut = components["schemas"]["RolePagePermissionsPreviewOut"]
 export type RolePagePermissionsUpdate = components["schemas"]["RolePagePermissionsUpdate"]
-export type PagePermissionSimulationRequest = components["schemas"]["PagePermissionSimulationRequest"]
-export type PagePermissionSimulationOut = components["schemas"]["PagePermissionSimulationOut"]
 export type PagePermissionHistoryItemOut = components["schemas"]["PagePermissionHistoryItemOut"]
 export type PagePermissionHistoryPageOut = components["schemas"]["PagePermissionHistoryPageOut"]
 export type PagePermissionRollbackRequest = components["schemas"]["PagePermissionRollbackRequest"]
 export type PagePermissionRollbackPreviewRequest = components["schemas"]["PagePermissionRollbackPreviewRequest"]
 export type PagePermissionRollbackPreviewOut = components["schemas"]["PagePermissionRollbackPreviewOut"]
-export type PagePermissionHealthOut = components["schemas"]["PagePermissionHealthOut"]
-export type PagePermissionHealthRemediationRequest = components["schemas"]["PagePermissionHealthRemediationRequest"]
-export type PagePermissionHealthRemediationOut = components["schemas"]["PagePermissionHealthRemediationOut"]
 export type PermissionModuleIntegrationOut = components["schemas"]["PermissionModuleIntegrationOut"]
 export type PermissionModuleRolloutPreviewOut = components["schemas"]["PermissionModuleRolloutPreviewOut"]
 
 /**
  * 权限管理 Server Actions（写操作）。
  * 所有写操作必须通过本文件（前端规范§写操作必须用 Server Actions）。
- * 认证：读取 auth_token cookie 并携带 Bearer 头转发。
+ * 转发当前工作台身份。
  */
 
 async function authedFetch(path: string, init?: RequestInit): Promise<Response> {
-  const cookieStore = await cookies()
-  const token = cookieStore.get("auth_token")
-  if (!token?.value) {
+  const { Authorization, ...authHeaders } = await getAuthHeaders()
+  if (!Authorization) {
     throw new Error("未登录或登录已过期")
   }
   const headers: Record<string, string> = {
-    ...await getAuthHeaders(),
+    ...authHeaders,
     ...(init?.headers as Record<string, string> | undefined),
-    Authorization: `Bearer ${token.value}`,
+    Authorization,
   }
   return fetch(`${API_BASE}/api/v1${path}`, { ...init, headers })
 }
@@ -500,35 +493,6 @@ export async function rollbackRolePagePermissions(
   ))
   if (result.ok) revalidatePath("/system/roles")
   return result
-}
-
-export async function getPagePermissionHealth() {
-  const res = await authedFetch("/identity/admin/page-permissions/health")
-  return handleResponse(res) as Promise<PagePermissionHealthOut>
-}
-
-export async function remediatePagePermissionHealth(
-  data: PagePermissionHealthRemediationRequest
-) {
-  const result = await permissionActionResult<PagePermissionHealthRemediationOut>(
-    () => authedFetch("/identity/admin/page-permissions/health/remediate", {
-      method: "POST",
-      body: JSON.stringify(data),
-    })
-  )
-  if (result.ok) {
-    revalidatePath("/system/roles")
-    revalidatePath("/settings")
-  }
-  return result
-}
-
-export async function simulatePagePermission(data: PagePermissionSimulationRequest) {
-  const res = await authedFetch("/identity/admin/page-permissions/simulate", {
-    method: "POST",
-    body: JSON.stringify(data),
-  })
-  return handleResponse(res) as Promise<PagePermissionSimulationOut>
 }
 
 export async function listPagePermissionRollouts() {

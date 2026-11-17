@@ -459,8 +459,21 @@
   border-top: 1px solid var(--workbench-border);
 }
 
-.reason { flex: 1 1 220px; }
-.reason :global(.ant-input-prefix) { color: var(--workbench-accent); font-size: 17px; }
+.reasonControls, .reasonPresets {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.reason:global(.ant-input-affix-wrapper) {
+  width: clamp(210px, 25vw, 320px);
+  max-width: 100%;
+  height: var(--ant-control-height);
+}
+
+.reasonPresets button { min-height: 32px; }
 .search input::placeholder, .reason input::placeholder { color: var(--color-steel); opacity: 1; }
 .draftStatus { color: var(--workbench-muted); font-size: 12px; }
 .footerActions { margin-inline-start: auto; }
@@ -569,6 +582,11 @@
   .stats { width: 100%; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; }
 }
 
+@media (max-width: 600px) {
+  .reasonControls { flex-basis: 100%; order: -1; }
+  .reason:global(.ant-input-affix-wrapper) { width: 100%; }
+}
+
 @media (max-width: 480px) {
   .heading { flex-basis: 100%; gap: 8px; }
   .headerContext .heading { flex-basis: 100%; }
@@ -577,6 +595,5 @@
   .roleSelect:global(.ant-select), .roleDisplay { width: 100%; }
   .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
   .stat { min-height: 45px; }
-  .reason { flex-basis: 100%; }
   .footerActions button { min-width: 88px; }
 }
