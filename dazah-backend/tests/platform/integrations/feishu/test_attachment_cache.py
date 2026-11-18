@@ -6,9 +6,11 @@
 from __future__ import annotations
 
 import asyncio
+from unittest.mock import Mock
 
 import pytest
 
+from app.platform.integrations.feishu import attachment_cache
 from app.platform.integrations.feishu.attachment_cache import AttachmentCache
 
 
@@ -209,7 +211,7 @@ async def test_disk_only_fetch_warms_disk_without_retaining_bytes(
 
 async def test_unusable_disk_skips_repeated_writes_and_foreground_stays_available(
     tmp_path,
-    caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     cache_path = tmp_path / "blocked"
     cache_path.write_text("file")
@@ -220,8 +222,13 @@ async def test_unusable_disk_skips_repeated_writes_and_foreground_stays_availabl
         max_disk_mb=2,
         ttl_seconds=3600,
     )
+    warning = Mock()
+    probe = Mock(wraps=cache._probe_disk)
+    monkeypatch.setattr(attachment_cache.logger, "warning", warning)
+    monkeypatch.setattr(cache, "_probe_disk", probe)
     assert await cache.prepare_disk() is False
     assert await cache.prepare_disk() is False
     assert await cache.get_or_fetch("e", "r", "f", _fetch_ok) is not None
     assert await cache.get("e", "r", "f") is not None
-    assert len(caplog.records) == 1
+    probe.assert_called_once()
+    warning.assert_called_once()
