@@ -1,5 +1,7 @@
+import tempfile
 from contextlib import asynccontextmanager
 from io import BytesIO
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from uuid import uuid4
@@ -107,9 +109,11 @@ async def test_workbook_upload_uses_http_status_for_generic_errors(workbook_http
 
 
 async def test_workbook_invalid_excel_package_returns_stable_code_before_writes(
-    workbook_http,
+    workbook_http, tmp_path
 ):
     client, url, _, seed = workbook_http
+    import_dir = Path(tempfile.gettempdir())
+    assert import_dir.is_relative_to(tmp_path)
     with BytesIO() as file:
         with ZipFile(file, "w") as archive:
             archive.writestr("xl/workbook.xml", "<workbook />")
@@ -122,6 +126,7 @@ async def test_workbook_invalid_excel_package_returns_stable_code_before_writes(
         "error_code": "REGISTRATION_WORKBOOK_UNREADABLE"
     }
     seed.assert_not_awaited()
+    assert list(import_dir.iterdir()) == []
 
 
 async def test_workbook_template_mismatch_needs_a_different_correction(

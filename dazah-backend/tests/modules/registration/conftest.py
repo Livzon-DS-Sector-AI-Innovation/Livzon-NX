@@ -1,4 +1,6 @@
-from collections.abc import AsyncIterator
+import tempfile
+from collections.abc import AsyncIterator, Iterator
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -7,6 +9,16 @@ from httpx import AsyncClient
 from app.main import app
 from app.platform.identity.deps import get_current_user
 from app.platform.identity.models import User
+
+
+@pytest.fixture(autouse=True)
+def _isolate_registration_temp_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> Iterator[None]:
+    """Clean up temporary files from service tests that bypass FileResponse."""
+    with tempfile.TemporaryDirectory(dir=tmp_path) as temp_dir:
+        monkeypatch.setattr(tempfile, "tempdir", temp_dir)
+        yield
 
 
 @pytest.fixture(autouse=True)

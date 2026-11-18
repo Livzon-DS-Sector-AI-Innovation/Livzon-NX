@@ -15,6 +15,10 @@ from app.modules.registration.workbook_error_contract import (
 
 def load_registration_workbook(source: Path | BytesIO, *, data_only: bool) -> Workbook:
     try:
+        if isinstance(source, Path):
+            # A failed parse may retain the ZIP reader in its exception traceback.
+            with source.open("rb") as stream:
+                return load_workbook(stream, data_only=data_only)
         return load_workbook(source, data_only=data_only)
     except (
         BadZipFile,
