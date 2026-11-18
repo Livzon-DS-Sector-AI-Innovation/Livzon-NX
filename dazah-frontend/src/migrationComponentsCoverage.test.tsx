@@ -563,6 +563,21 @@ async function settle() {
   })
 }
 
+async function expectSafeRequestFailure(
+  request: ReturnType<typeof vi.fn>,
+  trigger: () => void | Promise<void>,
+) {
+  const details = 'TypeError: internal adapter failure'
+  const requestCount = request.mock.calls.length
+  const errorCount = mocks.message.error.mock.calls.length
+  request.mockRejectedValueOnce(new Error(details))
+  await trigger()
+  await settle()
+  expect(request).toHaveBeenCalledTimes(requestCount + 1)
+  expect(mocks.message.error).toHaveBeenCalledTimes(errorCount + 1)
+  expect(mocks.message.error).toHaveBeenLastCalledWith('操作未完成，请稍后重试')
+}
+
 function closeRendered(rendered: { root: Root; client: QueryClient; container: HTMLDivElement }) {
   act(() => rendered.root.unmount())
   rendered.client.clear()
@@ -1801,6 +1816,62 @@ describe('migrated component coverage', () => {
     closeRendered(stats)
   })
 
+  it('keeps training ledger rows and edit forms available after failed actions', async () => {
+    const props = { department: '质量部', dateFrom: '2026-01-01', dateTo: '2026-12-31', periodLabel: '全年', printRequest: 0 }
+    const read = getMock('lib/api/hr', 'fetchTrainingLedgersByDept')
+    const hr = (name: string) => getMock('actions/hr', name)
+    read.mockRejectedValueOnce(new Error('TypeError: internal ledger read failure'))
+    const offline = renderClient(createElement(AnnualTrainingStatsClient, props))
+    await settle()
+    expect(mocks.message.error).toHaveBeenCalledWith('操作未完成，请稍后重试')
+    closeRendered(offline)
+
+    read.mockResolvedValue({
+      data: [{
+        id: 'ledger-1', training_date: '2026-08-20', training_datetime: '2026-08-20 09:00',
+        training_content: 'GMP培训', teaching_dept: '质量部', session_id: 'session-1',
+        second_level_status: 'pending', is_presented: true,
+      }],
+      meta: { total: 1 },
+    })
+    const rendered = renderClient(createElement(AnnualTrainingStatsClient, props))
+    try {
+      await settle()
+      const click = (text: string) => Array.from(rendered.container.querySelectorAll('button'))
+        .find(button => button.textContent?.trim() === text)?.click()
+      await expectSafeRequestFailure(
+        getMock('lib/api/client/hr', 'fetchSessionDocuments'),
+        () => click('资料'),
+      )
+      await expectSafeRequestFailure(hr('updateTrainingLedger'), () => click('已完成二级'))
+      await expectSafeRequestFailure(hr('updateTrainingLedger'), async () => {
+        const toggle = Array.from(rendered.container.querySelectorAll<HTMLInputElement>('tbody input[type="checkbox"]')).at(-1)
+        expect(toggle?.checked).toBe(true)
+        await act(async () => toggle?.click())
+      })
+      await expectSafeRequestFailure(hr('deleteTrainingLedger'), () => click('删除'))
+      expect(rendered.container.textContent).toContain('GMP培训')
+      rendered.container.querySelector<HTMLTableRowElement>('tbody tr')?.click()
+      await settle()
+      await expectSafeRequestFailure(hr('batchDeleteTrainingLedgers'), () => {
+        findBtn(rendered, '批量删除')?.click()
+      })
+
+      click('编辑')
+      await settle()
+      await expectSafeRequestFailure(hr('updateTrainingLedger'), () => click('确定'))
+      expect(rendered.container.querySelector('[role="dialog"]')).not.toBeNull()
+      click('取消')
+      await settle()
+      click('新增台账记录')
+      await settle()
+      await expectSafeRequestFailure(hr('createTrainingLedger'), () => click('确定'))
+      expect(rendered.container.querySelector('[role="dialog"]')).not.toBeNull()
+    } finally {
+      closeRendered(rendered)
+    }
+  })
+
   it('drives OOS/OOT investigation push filters, pull, edit, detail and delete flows', async () => {
     const record = {
       record_id: 'push-1', oos_oot_code: 'INV-1', push_round: '第1次', department: '质量部', submitter: '张三',
@@ -1889,27 +1960,44 @@ describe('migrated component coverage', () => {
     const deptButton = Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent?.includes('质量部'))
     deptButton?.click()
     await settle()
+    await expectSafeRequestFailure(
+      getMock('lib/api/client/quality', 'fetchDocumentCatalogExport'),
+      () => findButton('导出')?.click(),
+    )
     findButton('导出')?.click()
+    await expectSafeRequestFailure(getMock('actions/quality', 'importDocumentCatalogExcel'), () => findButton('导入文件目录')?.click())
     findButton('导入文件目录')?.click()
+    await expectSafeRequestFailure(getMock('actions/quality', 'batchImportDocumentAttachments'), () => findButton('导入附件')?.click())
     findButton('导入附件')?.click()
     findButton('新增条目')?.click()
     await settle()
-    Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent === '确定')?.click()
+    const confirm = () => Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent === '确定')?.click()
+    await expectSafeRequestFailure(getMock('actions/quality', 'createDocumentEntry'), confirm)
+    confirm()
     await settle()
     findButton('编辑')?.click()
     await settle()
-    Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent === '确定')?.click()
+    await expectSafeRequestFailure(getMock('actions/quality', 'updateDocumentEntry'), confirm)
+    confirm()
     await settle()
+    await expectSafeRequestFailure(getMock('actions/quality', 'deleteDocumentEntry'), () => findButton('删除')?.click())
+    expect(rendered.container.textContent).toContain('SOP管理程序')
     findButton('删除')?.click()
     await settle()
-    const attachment = queryElement<HTMLSpanElement>(rendered.container, 'span[title]')
+    const attachment = Array.from(rendered.container.querySelectorAll('span'))
+      .find(item => item.textContent?.trim() === '制度文件.pdf' && item.classList.contains('cursor-pointer'))
+    await expectSafeRequestFailure(
+      getMock('lib/api/client/quality', 'fetchDocumentEntryAttachmentContent'),
+      () => attachment?.click(),
+    )
     attachment?.click()
     await settle()
     findButton('管理')?.click()
     await settle()
     Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent === '新增')?.click()
     await settle()
-    Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent === '确定')?.click()
+    await expectSafeRequestFailure(getMock('actions/quality', 'createDocumentDepartment'), confirm)
+    confirm()
     await settle()
     rendered.container.querySelector('button')?.click()
     await settle()
@@ -3206,26 +3294,34 @@ describe('migrated component coverage', () => {
         await settle()
       }
     }
+    await expectSafeRequestFailure(getMock('lib/api/client/registration', 'fetchAuthorizationFdaExport'), () => clickText('导出FDA授权'))
     await clickText('导出FDA授权')
+    await expectSafeRequestFailure(getMock('lib/api/client/registration', 'fetchAuthorizationLedgerExport'), () => clickText('导出市场授权'))
     await clickText('导出市场授权')
     await clickText('编辑选中')
     await clickText('确定')
     await clickText('新增FDA授权')
+    await expectSafeRequestFailure(getMock('actions/registration', 'createAuthorizationFdaEntry'), () => clickText('确定'))
     await clickText('确定')
     const nativeLedgerRows = Array.from(rendered.container.querySelectorAll('table')).at(-1)?.querySelectorAll('tbody tr')
     nativeLedgerRows?.[0]?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     await settle()
     await clickText('新增更新')
+    await expectSafeRequestFailure(getMock('actions/registration', 'createAuthorizationLedgerUpdate'), () => clickText('确定'))
     await clickText('确定')
     await clickText('编辑主记录')
     await clickText('确定')
     await clickText('编辑更新')
     await clickText('确定')
     const selects = Array.from(rendered.container.querySelectorAll('select'))
-    const statusSelect = selects.find((item) => item.querySelector('option[value="已递交"]'))
+    const statusSelect = selects.find((item) => item.parentElement?.textContent?.includes('主记录状态'))
     if (statusSelect) {
-      statusSelect.value = '已递交'
-      statusSelect.dispatchEvent(new Event('change', { bubbles: true }))
+      const updateStatus = () => {
+        statusSelect.value = '已递交'
+        statusSelect.dispatchEvent(new Event('change', { bubbles: true }))
+      }
+      await expectSafeRequestFailure(getMock('actions/registration', 'updateAuthorizationLedgerMain'), updateStatus)
+      updateStatus()
       await settle()
     }
     await clickText('删除更新')
@@ -3286,6 +3382,56 @@ describe('migrated component coverage', () => {
     expect(getMock('actions/hr', 'updateEmployeeTrainingMember')).toHaveBeenCalled()
     expect(getMock('actions/hr', 'removeEmployeeTrainingMember')).toHaveBeenCalled()
     closeRendered(rendered)
+  })
+
+  it('keeps personnel and pending inputs when training list operations fail', async () => {
+    const hr = (name: string) => getMock('actions/hr', name)
+    const reads = (name: string) => getMock('lib/api/client/hr', name)
+    reads('fetchTrainingDepartments').mockResolvedValue(['质量部', '生产部'])
+    reads('fetchEmployeeTrainingMembers')
+      .mockRejectedValueOnce(new Error('TypeError: internal list failure'))
+      .mockResolvedValue([{ id: 'member-1', name: '李四', department: '生产部', source: 'manual' }])
+    const rendered = renderClient(createElement(EmployeeTrainingListClient))
+    try {
+      await settle()
+      expect(mocks.message.error).toHaveBeenCalledWith('操作未完成，请稍后重试')
+      const click = (text: string) => findBtn(rendered, text)?.click()
+      click('生产部')
+      await settle()
+      expect(rendered.container.textContent).toContain('李四')
+      await expectSafeRequestFailure(hr('importFeishuMembers'), () => click('拉取飞书人员'))
+
+      const addInput = rendered.container.querySelector<HTMLInputElement>('input[placeholder*="可添加离职人员"]')
+      expect(addInput).not.toBeNull()
+      if (addInput) {
+        await act(async () => {
+          Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(addInput, '赵六')
+          addInput.dispatchEvent(new Event('input', { bubbles: true }))
+        })
+      }
+      await settle()
+      await expectSafeRequestFailure(hr('addEmployeeTrainingMember'), () => click('添加'))
+      expect(addInput?.value).toBe('赵六')
+
+      await expectSafeRequestFailure(reads('fetchEmployeeTrainingRecords'), () => {
+        Array.from(rendered.container.querySelectorAll('li')).find(item => item.textContent?.includes('李四'))?.click()
+      })
+      await expectSafeRequestFailure(hr('removeEmployeeTrainingMember'), () => click('清除'))
+      await expectSafeRequestFailure(hr('removeEmployeeTrainingMember'), () => {
+        rendered.container.querySelector<HTMLButtonElement>('button[title="移除"]')?.click()
+      })
+      rendered.container.querySelector<HTMLInputElement>('input[type=checkbox]')?.click()
+      await settle()
+      await expectSafeRequestFailure(hr('removeEmployeeTrainingMember'), () => click('批量删除'))
+      expect(rendered.container.textContent).toContain('李四')
+
+      rendered.container.querySelector<HTMLButtonElement>('button[title="编辑姓名"]')?.click()
+      await settle()
+      await expectSafeRequestFailure(hr('updateEmployeeTrainingMember'), () => click('确定'))
+      expect(rendered.container.querySelector<HTMLInputElement>('input[placeholder="输入新姓名"]')?.value).toBe('李四')
+    } finally {
+      closeRendered(rendered)
+    }
   })
 
   it('drives HR department data-scope search, add, save, clear and remove flows', async () => {

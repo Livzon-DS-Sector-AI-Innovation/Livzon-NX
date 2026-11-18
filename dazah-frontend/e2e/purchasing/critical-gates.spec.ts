@@ -33,7 +33,8 @@ test.describe('采购高风险操作门禁', () => {
     await opinion.fill('预算资料不完整')
     await dialog.getByRole('button', { name: '确认驳回' }).click()
 
-    await expect(page.getByText('模拟审批服务暂时不可用')).toBeVisible()
+    await expect(page.getByText(/暂未确认采购审批驳回结果，请先查看业务记录后再决定是否重试/)).toBeVisible()
     await expect(dialog).toBeVisible()
+    await expect(opinion).toHaveValue('预算资料不完整')
   })
 })

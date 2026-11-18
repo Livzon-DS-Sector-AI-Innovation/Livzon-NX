@@ -110,6 +110,17 @@ describe('validation audit server actions', () => {
     await expect(fetchTaskByIdServer('task-1')).resolves.toEqual({ ok: false, message: '没有执行此操作的权限，请联系管理员' })
   })
 
+  it('preserves successful read envelopes for validation audit detail and files', async () => {
+    const detail = { code: 200, message: 'ok', data: { id: 'task-1' } }
+    const files = { code: 200, message: 'ok', data: [{ id: 'file-1' }] }
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(Response.json(detail))
+      .mockResolvedValueOnce(Response.json(files)))
+
+    await expect(fetchTaskByIdServer('task-1')).resolves.toEqual({ ok: true, data: detail })
+    await expect(fetchFilesServer('task-1')).resolves.toEqual({ ok: true, data: files })
+  })
+
   it.each([
     [uploadValidationAuditFiles, 400, 'VALIDATION_AUDIT_FILE_LIMIT', '本次上传的文件过多，请分批上传'],
     [parseValidationAuditFiles, 409, 'VALIDATION_AUDIT_NO_FILES', '请先上传审核文件，再执行解析'],

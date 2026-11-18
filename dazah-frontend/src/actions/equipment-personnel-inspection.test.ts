@@ -4,7 +4,10 @@ vi.mock('@/lib/auth', () => ({ getAuthHeaders: vi.fn().mockResolvedValue({
 }) }))
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn() }))
 import { uploadWorkOrderImages } from './equipment'
-import { createRole } from './equipment-personnel'
+import {
+  addPersonnel, assignCategories, assignRoles, createRole, deletePersonnel, deleteRole,
+  refreshFeishu, updateRole,
+} from './equipment-personnel'
 import { revalidatePath } from 'next/cache'
 
 afterEach(() => vi.unstubAllGlobals())
@@ -41,5 +44,26 @@ it.each([
   const upload = new FormData()
   upload.append('files', new Blob(['fixture']), 'fixture.jpg')
   await expect(uploadWorkOrderImages('fixture-order', upload)).resolves.toEqual({ ok: false, message })
+  expect(revalidatePath).not.toHaveBeenCalled()
+})
+
+it.each([
+  ['更新角色', () => updateRole('role/1', { name: '维修员' }), '/roles/role%2F1', 'PUT', { name: '维修员' }],
+  ['删除角色', () => deleteRole('role/1'), '/roles/role%2F1', 'DELETE', undefined],
+  ['添加人员', () => addPersonnel({ user_ids: ['user-1'] }), '', 'POST', { user_ids: ['user-1'] }],
+  ['移除人员', () => deletePersonnel('user/1'), '/user%2F1', 'DELETE', undefined],
+  ['分配角色', () => assignRoles('user/1', { role_ids: ['role-1'] }), '/user%2F1/roles', 'POST', { role_ids: ['role-1'] }],
+  ['保存分类', () => assignCategories('user/1', { categories: [] }), '/user%2F1/categories', 'POST', { categories: [] }],
+  ['刷新飞书', () => refreshFeishu(), '/refresh-feishu', 'POST', undefined],
+] as const)('保留%s的请求契约并处理被拒的写入', async (_, mutate, path, method, body) => {
+  const fetcher = vi.fn().mockResolvedValueOnce(Response.json({ message: 'internal authorization failure' }, { status: 403 }))
+  vi.stubGlobal('fetch', fetcher)
+  vi.mocked(revalidatePath).mockClear()
+
+  await expect(mutate()).resolves.toEqual({ ok: false, message: '没有执行此操作的权限，请联系管理员' })
+  expect(fetcher).toHaveBeenCalledWith(
+    expect.stringMatching(new RegExp(`/api/v1/equipment/personnel${path}$`)),
+    expect.objectContaining({ method, body: body === undefined ? undefined : JSON.stringify(body) }),
+  )
   expect(revalidatePath).not.toHaveBeenCalled()
 })
