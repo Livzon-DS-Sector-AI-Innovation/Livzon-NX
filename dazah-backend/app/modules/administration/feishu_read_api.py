@@ -31,7 +31,9 @@ from app.modules.administration.service import (
     AdministrationFeishuService,
     AdministrationTobaccoGiftService,
     build_read_mirror_service,
+    decorate_records_for_display,
     prune_resource_history,
+    resolve_person_avatars,
 )
 from app.platform.identity.data_scope import current_page_key
 from app.platform.identity.deps import RequireUser
@@ -211,6 +213,20 @@ async def list_read_resources(
     )
 
 
+@router.get(
+    "/feishu-read/person-avatars",
+    summary="按企业邮箱批量解析镜像人员头像",
+    response_model=ApiResponseEnvelope[dict[str, str]],
+)
+async def get_person_avatars(
+    emails: list[str] = Query(default=[]),
+    db: AsyncSession = Depends(get_db),
+    _current_user: CurrentUser | None = Depends(get_current_user),
+) -> ApiResponseEnvelope[dict[str, str]]:
+    avatars = await resolve_person_avatars(db, emails)
+    return ApiResponseEnvelope(data=avatars)
+
+
 @router.post(
     "/feishu-read/resources/{resource_id}/sync",
     summary="同步数据表镜像",
@@ -278,21 +294,26 @@ async def get_read_page_records(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=1, le=100),
     keyword: str | None = None,
+    sort_field: str | None = Query(default=None, max_length=255),
+    sort_direction: str = Query(default="desc", pattern="^(asc|desc)$"),
     db: AsyncSession = Depends(get_db),
     _current_user: CurrentUser | None = Depends(get_current_user),
 ) -> ApiResponse:
     _validate_page_key(page_key)
     _require_page_context(page_key)
     service = await build_read_mirror_service(db)
-    return ApiResponse(
-        data=await service.page_records(
-            page_key=page_key,
-            binding_id=binding_id,
-            page=page,
-            page_size=page_size,
-            keyword=keyword,
-        )
+    data = await service.page_records(
+        page_key=page_key,
+        binding_id=binding_id,
+        page=page,
+        page_size=page_size,
+        keyword=keyword,
+        sort_field=sort_field,
+        sort_direction=sort_direction,
     )
+    # 关联字段（领用物品）只回 ID，装饰成物品名称供表格与详情直接展示
+    data = await decorate_records_for_display(db, data)
+    return ApiResponse(data=data)
 
 
 @router.get(

@@ -32,6 +32,8 @@ vi.mock('@/actions/administration', () => ({
 
 import AdminPage from './(dashboard)/admin/page'
 import AdministrationFeishuSettingsPage from './(dashboard)/admin/settings/feishu/page'
+import ScrapMaterialsPage from './(dashboard)/admin/scrap-materials/page'
+import SealsPage from './(dashboard)/admin/seals/page'
 import TobaccoGiftItemsPage from './(dashboard)/admin/tobacco-gift/items/page'
 import TobaccoGiftDashboardPage from './(dashboard)/admin/tobacco-gift/page'
 import TobaccoGiftRecordsPage from './(dashboard)/admin/tobacco-gift/records/page'
@@ -85,6 +87,28 @@ describe('administration pages', () => {
       moduleCode: 'administration',
       pageKey: 'admin:tobacco-gift:records',
       title: '领用记录',
+    })
+  })
+
+  it('renders the seals mirror without any extra form entry', () => {
+    const element = SealsPage() as unknown as ElementLike
+    expect(element.props).toMatchObject({
+      moduleCode: 'administration',
+      pageKey: 'admin:seals',
+      title: '印章管理',
+      enableAdvancedQuery: false,
+      enablePersonAvatars: true,
+    })
+  })
+
+  it('renders the scrap-materials mirror for tab-switched bindings', () => {
+    const element = ScrapMaterialsPage() as unknown as ElementLike
+    expect(element.props).toMatchObject({
+      moduleCode: 'administration',
+      pageKey: 'admin:scrap-materials',
+      title: '废旧物资',
+      enableAdvancedQuery: false,
+      enablePersonAvatars: true,
     })
   })
 

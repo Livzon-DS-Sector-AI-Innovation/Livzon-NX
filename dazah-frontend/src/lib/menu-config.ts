@@ -622,6 +622,18 @@ export const moduleMenus: ModuleMenu[] = [
           },
         ],
       },
+      {
+        key: "seals",
+        label: "印章管理",
+        path: "/admin/seals",
+        feishuPageKey: "admin:seals",
+      },
+      {
+        key: "scrap-materials",
+        label: "废旧物资",
+        path: "/admin/scrap-materials",
+        feishuPageKey: "admin:scrap-materials",
+      },
       { key: "notice", label: "公告通知（开发中）", path: "/admin/notice", disabled: true },
       { key: "meeting", label: "会议管理（开发中）", path: "/admin/meeting", disabled: true },
       { key: "approval", label: "文件审批（开发中）", path: "/admin/approval", disabled: true },

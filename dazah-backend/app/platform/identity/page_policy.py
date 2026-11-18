@@ -8124,10 +8124,16 @@ _ADMIN_TOBACCO_GIFT_TABLE_PAGES = (
     "admin:tobacco-gift:items",
     "admin:tobacco-gift:records",
 )
+# 印章管理（单表）与废旧物资（放置/领用两表按页签绑定）同属只读镜像页。
+_ADMIN_MIRROR_TABLE_PAGES = (
+    "admin:seals",
+    "admin:scrap-materials",
+)
 _ADMIN_FEISHU_SETTINGS = ("admin:feishu-settings",)
 _ADMIN_ALL_PAGES = (
     _ADMIN_TOBACCO_GIFT_DASHBOARD,
     *_ADMIN_TOBACCO_GIFT_TABLE_PAGES,
+    *_ADMIN_MIRROR_TABLE_PAGES,
     *_ADMIN_FEISHU_SETTINGS,
 )
 PAGE_API_BINDINGS += _module_api_bindings(
@@ -8214,12 +8220,25 @@ PAGE_API_BINDINGS += _module_api_bindings(
             "sync_config",
             "not_applicable",
         ),
-        # 绑定配置回显：设置页维护「页面数据表映射」时要读取两个镜像页的绑定
+        # 镜像页人员头像解析（复用 hr 通讯录公开能力），供各镜像页渲染人员字段
+        (
+            "GET",
+            "/feishu-read/person-avatars",
+            (*_ADMIN_TOBACCO_GIFT_TABLE_PAGES, *_ADMIN_MIRROR_TABLE_PAGES),
+            "query",
+            None,
+            "not_applicable",
+        ),
+        # 绑定配置回显：设置页维护「页面数据表映射」时要读取镜像页的绑定
         # （仓储同款：material_pages + settings_page）；仅此路由包含设置页。
         (
             "GET",
             "/page-data/{page_key}",
-            (*_ADMIN_TOBACCO_GIFT_TABLE_PAGES, *_ADMIN_FEISHU_SETTINGS),
+            (
+                *_ADMIN_TOBACCO_GIFT_TABLE_PAGES,
+                *_ADMIN_MIRROR_TABLE_PAGES,
+                *_ADMIN_FEISHU_SETTINGS,
+            ),
             "query",
             None,
             "not_applicable",
@@ -8227,7 +8246,7 @@ PAGE_API_BINDINGS += _module_api_bindings(
         (
             "GET",
             "/page-data/{page_key}/{binding_id}/records",
-            _ADMIN_TOBACCO_GIFT_TABLE_PAGES,
+            (*_ADMIN_TOBACCO_GIFT_TABLE_PAGES, *_ADMIN_MIRROR_TABLE_PAGES),
             "query",
             None,
             "not_applicable",
@@ -8236,7 +8255,7 @@ PAGE_API_BINDINGS += _module_api_bindings(
             "GET",
             "/page-data/{page_key}/{binding_id}/record/{record_id}"
             "/attachments/{field_id}/{file_token}",
-            _ADMIN_TOBACCO_GIFT_TABLE_PAGES,
+            (*_ADMIN_TOBACCO_GIFT_TABLE_PAGES, *_ADMIN_MIRROR_TABLE_PAGES),
             "query",
             None,
             "not_applicable",

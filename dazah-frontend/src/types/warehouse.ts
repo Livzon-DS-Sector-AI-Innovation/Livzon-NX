@@ -424,6 +424,8 @@ export interface WarehouseFeishuField {
   field_id: string
   field_name: string
   field_type?: string | number | null
+  /** 镜像字段快照返回的飞书字段类型 ID（5=日期，1001/1002=创建/修改时间）。 */
+  type?: number | string | null
 }
 
 export interface WarehouseDatasetRecord {

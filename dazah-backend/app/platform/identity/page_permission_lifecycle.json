@@ -16,6 +16,18 @@
         }
       }
     },
+    "admin:scrap-materials": {
+      "status": "active",
+      "module_code": "administration",
+      "route_path": "/admin/scrap-materials",
+      "actions": {}
+    },
+    "admin:seals": {
+      "status": "active",
+      "module_code": "administration",
+      "route_path": "/admin/seals",
+      "actions": {}
+    },
     "admin:tobacco-gift:dashboard": {
       "status": "active",
       "module_code": "administration",
