@@ -16,9 +16,6 @@ from app.core.redis import cache_delete, cache_get, cache_set
 from app.modules.quality import repository
 from app.modules.quality.models import CapaPlanTrack, ChangeControl
 from app.modules.quality.service import (
-    quality_feishu_settings as feishu_settings_service,
-)
-from app.modules.quality.service import (
     quality_feishu_sync as feishu_sync_service,
 )
 from app.modules.quality.service import (
@@ -100,9 +97,9 @@ async def _resolve_runtime_entity(
     feishu_sync_service.QualityFeishuRuntimeConfig,
     feishu_sync_service.QualityFeishuEntityRuntimeConfig,
 ]:
-    # 确保实体配置存在（自动创建缺失的配置，防止数据丢失）
-    await feishu_settings_service.ensure_quality_feishu_entity_settings(db)
-    runtime = await feishu_sync_service.feishu_sync._resolve_runtime(db)
+    runtime = await feishu_sync_service.feishu_sync._resolve_runtime(
+        db, entity_code=entity_code, ensure_defaults=True
+    )
     entity = runtime.get_entity_config(entity_code, direction=direction)
     if (
         not runtime.is_enabled()
@@ -122,22 +119,16 @@ async def _search_entity_records(
     field_names: list[str] | None = None,
     user_id_type: str = "open_id",
 ) -> list[dict[str, Any]]:
-    filter_str = None
-    if filters:
-        conditions = [
-            (str(key), str(value))
-            for key, value in filters.items()
-            if value not in (None, "", [])
-        ]
-        if conditions:
-            runtime = await feishu_sync_service.feishu_sync._resolve_runtime(db)
-            entity = runtime.get_entity_config(entity_code, direction="pull")
-            filter_str = feishu_sync_service._build_search_filter(entity, conditions)
+    conditions = [
+        (str(key), str(value))
+        for key, value in (filters or {}).items()
+        if value not in (None, "", [])
+    ]
     return await feishu_sync_service.feishu_sync.search_records(
         db,
         entity_code,
         None,
-        filter_str=filter_str,
+        filter_conditions=conditions,
         field_names=field_names,
         user_id_type=user_id_type,
     )

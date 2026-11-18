@@ -171,12 +171,17 @@ def test_release_bundles_gate_and_checks_before_reopening():
     ("new", "old", False, 1),
     ("new", "old", True, 0),
     ("new\nother", "old", True, 1),
+    ("f9a3d5c7e1b2", "4bd62e5d78a1", None, 0),
+    ("f9a3d5c7e1b2", "e7c2a9f4b6d8", None, 1),
 ])
 def test_migration_preconditions_block_writers_before_unapproved_change(tmp_path, head, before, approved, expected):
     script = (ROOT / "scripts/deploy-production-remote.sh").read_text(encoding="utf-8")
     function = re.search(r"quiesce_and_migrate\(\) \{.*?\n\}", script, re.DOTALL).group()
-    policy = {"transitions": [{"from_revision": "old", "to_revision": "new", "backward_compatible": approved,
-                              "review_reference": "test review"}]}
+    if approved is None:
+        policy = json.loads((ROOT / "deploy/migration-policy.json").read_text(encoding="utf-8"))
+    else:
+        policy = {"transitions": [{"from_revision": "old", "to_revision": "new", "backward_compatible": approved,
+                                  "review_reference": "test review"}]}
     (tmp_path / "migration-policy.json").write_text(json.dumps(policy))
     revision = tmp_path / "revision"
     revision.write_text(before)

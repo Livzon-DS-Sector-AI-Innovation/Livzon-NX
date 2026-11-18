@@ -25,11 +25,16 @@ from app.modules.quality.models.inspection_items_mirror import (
 from app.modules.quality.service.feishu_attachment_thumbnail import (
     get_attachment_thumbnail,
 )
+from app.platform.integrations.feishu.attachment_cache import (
+    AttachmentCacheDiskError,
+    get_attachment_cache,
+)
 
 logger = logging.getLogger(__name__)
 
 _MAX_WARMUP_TOKENS = 2000
-_WARMUP_CONCURRENCY = 5
+_WARMUP_CONCURRENCY = 2
+_WARMUP_FETCH_ROWS = 128
 # 单条回源超时（飞书慢/挂时不无限等待）；总预算必须低于 scheduler 的 300s
 # 任务槽超时，超时即停止新预热、保留已缓存部分并返回统计。
 _SINGLE_WARMUP_TIMEOUT_SECONDS = 60
@@ -69,9 +74,12 @@ def _cron_to_time_of_day(expr: str) -> str:
 async def warmup_attachment_cache(
     max_tokens: int = _MAX_WARMUP_TOKENS,
 ) -> dict[str, int | bool]:
-    """预热全部镜像行附件到本地缓存（独立 session，适合后台任务直接调用）。"""
+    """有界读取可见镜像行，并仅向磁盘预热附件。"""
     settings = get_settings()
-    if not settings.QUALITY_ATTACHMENT_WARMUP_ENABLED:
+    if (
+        not settings.QUALITY_ATTACHMENT_WARMUP_ENABLED
+        or not await get_attachment_cache().prepare_disk()
+    ):
         return {
             "enabled": False,
             "collected": 0,
@@ -82,97 +90,89 @@ async def warmup_attachment_cache(
             "budget_hit": False,
         }
 
-    async with async_session_factory() as session:
-        rows = (
-            await session.execute(
-                select(
-                    QualityItemsPageRow.source_record_id,
-                    QualityItemsPageRow.cells,
-                    QualityItemsPageSnapshot.page_key,
-                )
-                .join(
-                    QualityItemsPageSnapshot,
-                    QualityItemsPageSnapshot.id
-                    == QualityItemsPageRow.page_snapshot_id,
-                )
-                .where(QualityItemsPageSnapshot.is_deleted.is_(False))
-            )
-        ).all()
-
-    targets: list[tuple[str, str, str]] = []
-    seen: set[tuple[str, str, str]] = set()
-    for source_record_id, cells, page_key in rows:
-        for token in _extract_file_tokens(cells):
-            key = (str(page_key), str(source_record_id), token)
-            if key not in seen:
-                seen.add(key)
-                targets.append(key)
-                if len(targets) >= max_tokens:
-                    break
-        if len(targets) >= max_tokens:
-            break
-
-    sem = asyncio.Semaphore(_WARMUP_CONCURRENCY)
+    targets: dict[tuple[str, str, str], None] = {}
     warmed = skipped = failed = timed_out = 0
+    disk_failed = False
 
-    async def _warm(entity_code: str, record_id: str, file_token: str) -> None:
-        nonlocal warmed, skipped, failed, timed_out
-        async with sem:
+    async def collect_targets() -> None:
+        if max_tokens <= 0:
+            return
+        stmt = (
+            select(
+                QualityItemsPageRow.source_record_id,
+                QualityItemsPageRow.cells,
+                QualityItemsPageSnapshot.page_key,
+            )
+            .join(
+                QualityItemsPageSnapshot,
+                QualityItemsPageSnapshot.id == QualityItemsPageRow.page_snapshot_id,
+            )
+            .where(
+                QualityItemsPageSnapshot.is_deleted.is_(False),
+                QualityItemsPageRow.is_deleted.is_(False),
+            )
+            .execution_options(yield_per=_WARMUP_FETCH_ROWS)
+        )
+        async with async_session_factory() as session:
+            result = await session.stream(stmt)
+            try:
+                async for source_record_id, cells, page_key in result:
+                    for token in _extract_file_tokens(cells):
+                        targets[(page_key, source_record_id, token)] = None
+                        if len(targets) >= max_tokens:
+                            return
+            finally:
+                await result.close()
+
+    async def _warm() -> None:
+        nonlocal warmed, skipped, failed, timed_out, disk_failed
+        while not disk_failed:
+            target = next(pending, None)
+            if target is None:
+                return
             try:
                 async with async_session_factory() as session:
-                    await asyncio.wait_for(
-                        get_attachment_thumbnail(
-                            session, entity_code, record_id, file_token
-                        ),
-                        timeout=_SINGLE_WARMUP_TIMEOUT_SECONDS,
-                    )
-                warmed += 1
+                    async with asyncio.timeout(_SINGLE_WARMUP_TIMEOUT_SECONDS):
+                        thumb = await get_attachment_thumbnail(
+                            session, *target, disk_only=True
+                        )
+                if thumb is None:
+                    skipped += 1
+                else:
+                    warmed += 1
+            except AttachmentCacheDiskError:
+                failed += 1
+                disk_failed = True
             except AppException as exc:
                 skipped += 1
-                logger.info(
-                    "附件预热跳过 (%s/%s/%s): %s",
-                    entity_code,
-                    record_id,
-                    file_token,
-                    exc,
-                )
+                logger.debug("附件预热跳过: status=%s", exc.status_code)
             except TimeoutError:
                 timed_out += 1
-                logger.info(
-                    "附件预热单条超时 (%s/%s/%s)",
-                    entity_code,
-                    record_id,
-                    file_token,
-                )
-            except Exception:
+            except Exception as exc:
                 failed += 1
-                logger.warning(
-                    "附件预热失败 (%s/%s/%s)",
-                    entity_code,
-                    record_id,
-                    file_token,
-                    exc_info=True,
-                )
+                logger.debug("附件预热回源失败: %s", type(exc).__name__)
 
     budget_hit = False
     try:
-        await asyncio.wait_for(
-            asyncio.gather(
-                *(_warm(*target) for target in targets),
-                return_exceptions=True,
-            ),
-            timeout=_TOTAL_BUDGET_SECONDS,
-        )
+        async with asyncio.timeout(_TOTAL_BUDGET_SECONDS):
+            await collect_targets()
+            pending = iter(targets)
+            async with asyncio.TaskGroup() as workers:
+                for _ in range(min(len(targets), _WARMUP_CONCURRENCY)):
+                    workers.create_task(_warm())
     except TimeoutError:
         budget_hit = True
-        logger.info(
-            "附件预热达到总预算 %ss，提前结束（预热 %s/跳过 %s/失败 %s/超时 %s）",
-            _TOTAL_BUDGET_SECONDS,
-            warmed,
-            skipped,
-            failed,
-            timed_out,
-        )
+    logger.info(
+        "附件预热结束: collected=%s warmed=%s skipped=%s failed=%s "
+        "timed_out=%s budget_hit=%s disk_failed=%s",
+        len(targets),
+        warmed,
+        skipped,
+        failed,
+        timed_out,
+        budget_hit,
+        disk_failed,
+    )
     return {
         "enabled": True,
         "collected": len(targets),

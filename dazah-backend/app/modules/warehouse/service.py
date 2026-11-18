@@ -9,6 +9,7 @@ import statistics
 import time
 from datetime import UTC, date, datetime, timedelta
 from datetime import time as dt_time
+from functools import partial
 from typing import Any
 from uuid import NAMESPACE_URL, UUID, uuid5
 from zoneinfo import ZoneInfo
@@ -70,7 +71,7 @@ from app.modules.warehouse.page_access import (
     assert_record_department,
     material_page_scope,
 )
-from app.modules.warehouse.repository import WarehouseRepository
+from app.modules.warehouse.repository import InventorySnapshotModel, WarehouseRepository
 from app.modules.warehouse.schemas import (
     WarehouseFeishuColumn,
     WarehouseFeishuConnectivityStep,
@@ -461,6 +462,95 @@ _TABLE_FIELDS_CACHE: dict[str, tuple[datetime, list[dict[str, Any]]]] = {}
 _DASHBOARD_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 
 
+class _MaterialPageStats:
+    """Accumulate exact statistics in display order, one material row at a time."""
+
+    def __init__(self) -> None:
+        self.now = datetime.now(CHINA_TIMEZONE)
+        self.total = 0
+        self.warning_count = 0
+        self.low_stock_count = 0
+        self.severe_low_stock_count = 0
+        self.has_warning_field = False
+        self.quality_counts: dict[str, int] = {}
+        self.has_quality_field = False
+        self.stock_count = 0
+        self.amount_total = 0.0
+        self.has_amount_field = False
+        self.date_keys: list[str] = []
+        self.today_count = 0
+        self.month_count = 0
+
+    def add(self, row: dict[str, object | None]) -> None:
+        self.total += 1
+        if "预警" in row:
+            self.has_warning_field = True
+            warning = _normalize_text(row.get("预警"))
+            if warning not in ("", "-", "正常"):
+                self.warning_count += 1
+            if warning == "库存不足":
+                self.low_stock_count += 1
+            elif warning == "库存严重不足":
+                self.severe_low_stock_count += 1
+
+        if "质量状态" in row:
+            self.has_quality_field = True
+            quality = _normalize_text(row.get("质量状态"))
+            if quality:
+                self.quality_counts[quality] = self.quality_counts.get(quality, 0) + 1
+
+        for key in ("金额（元）", "金额"):
+            if key in row:
+                parsed = _parse_number(row.get(key))
+                if parsed is not None:
+                    self.amount_total += parsed
+                    self.has_amount_field = True
+                break
+
+        for key in ("结存量", "本日结存", "库存量", "库存", "库存数量"):
+            if key in row:
+                quantity = _parse_number(row.get(key))
+                if quantity is not None and quantity > 0:
+                    self.stock_count += 1
+                break
+
+        if not self.date_keys:
+            self.date_keys = [
+                key
+                for key in row.keys()
+                if key != "__record_id" and is_material_page_date_field(key)
+            ]
+        if self.date_keys:
+            for key in self.date_keys:
+                day = _parse_date_value(row.get(key))
+                if day is not None:
+                    if day == self.now.date():
+                        self.today_count += 1
+                    if day.year == self.now.year and day.month == self.now.month:
+                        self.month_count += 1
+                    break
+
+    def result(self) -> dict[str, Any]:
+        stats: dict[str, Any] = {"total": self.total}
+        if self.has_warning_field:
+            stats["warning_count"] = self.warning_count
+            stats["low_stock_count"] = self.low_stock_count
+            stats["severe_low_stock_count"] = self.severe_low_stock_count
+        if self.has_quality_field:
+            stats["quality_counts"] = self.quality_counts
+            stats["qualified_count"] = self.quality_counts.get("合格", 0)
+            stats["pending_count"] = self.quality_counts.get("待验", 0)
+            stats["failed_count"] = self.quality_counts.get("不合格", 0)
+        if self.stock_count > 0 or self.total == 0:
+            stats["stock_count"] = self.stock_count
+        if self.has_amount_field:
+            stats["amount_total"] = round(self.amount_total, 2)
+        if self.date_keys:
+            stats["today_count"] = self.today_count
+            stats["month_count"] = self.month_count
+        return stats
+
+
 class WarehouseService:
     def __init__(self, session: AsyncSession) -> None:
         self.repo = WarehouseRepository(session)
@@ -508,6 +598,7 @@ class WarehouseService:
             app_id=client.app_id,
             app_secret=client.app_secret,
         )
+
     async def list_raw_materials(self) -> list[RawMaterialInventory]:
         return await self.repo.list_raw_materials()
 
@@ -788,93 +879,10 @@ class WarehouseService:
         page_key: str,
         rows: list[dict[str, object | None]],
     ) -> dict[str, Any]:
-        """基于过滤后的全量行计算页面业务统计概览。
-
-        统计仓储业务指标而非纯记录数：库存不足/严重不足、合格/待验/不合格
-        质量分布、本月/今日记录、金额合计等；页面据此渲染可点击筛选的卡片。
-        """
-        stats: dict[str, Any] = {"total": len(rows)}
-        now = datetime.now(CHINA_TIMEZONE)
-        today = now.date()
-
-        warning_count = 0
-        low_stock_count = 0
-        severe_low_stock_count = 0
-        has_warning_field = False
-        quality_counts: dict[str, int] = {}
-        has_quality_field = False
-        stock_count = 0
-        amount_total = 0.0
-        has_amount_field = False
-        date_keys: list[str] = []
-        today_count = 0
-        month_count = 0
-
+        stats = _MaterialPageStats()
         for row in rows:
-            if "预警" in row:
-                has_warning_field = True
-                warning = _normalize_text(row.get("预警"))
-                if warning not in ("", "-", "正常"):
-                    warning_count += 1
-                if warning == "库存不足":
-                    low_stock_count += 1
-                elif warning == "库存严重不足":
-                    severe_low_stock_count += 1
-
-            if "质量状态" in row:
-                has_quality_field = True
-                quality = _normalize_text(row.get("质量状态"))
-                if quality:
-                    quality_counts[quality] = quality_counts.get(quality, 0) + 1
-
-            for key in ("金额（元）", "金额"):
-                if key in row:
-                    parsed = _parse_number(row.get(key))
-                    if parsed is not None:
-                        amount_total += parsed
-                        has_amount_field = True
-                    break
-
-            for key in ("结存量", "本日结存", "库存量", "库存", "库存数量"):
-                if key in row:
-                    quantity = _parse_number(row.get(key))
-                    if quantity is not None and quantity > 0:
-                        stock_count += 1
-                    break
-
-            if not date_keys:
-                date_keys = [
-                    key
-                    for key in row.keys()
-                    if key != "__record_id" and is_material_page_date_field(key)
-                ]
-            if date_keys:
-                for key in date_keys:
-                    day = _parse_date_value(row.get(key))
-                    if day is not None:
-                        if day == today:
-                            today_count += 1
-                        if day.year == now.year and day.month == now.month:
-                            month_count += 1
-                        break
-
-        if has_warning_field:
-            stats["warning_count"] = warning_count
-            stats["low_stock_count"] = low_stock_count
-            stats["severe_low_stock_count"] = severe_low_stock_count
-        if has_quality_field:
-            stats["quality_counts"] = quality_counts
-            stats["qualified_count"] = quality_counts.get("合格", 0)
-            stats["pending_count"] = quality_counts.get("待验", 0)
-            stats["failed_count"] = quality_counts.get("不合格", 0)
-        if stock_count > 0 or not rows:
-            stats["stock_count"] = stock_count
-        if has_amount_field:
-            stats["amount_total"] = round(amount_total, 2)
-        if date_keys:
-            stats["today_count"] = today_count
-            stats["month_count"] = month_count
-        return stats
+            stats.add(row)
+        return stats.result()
 
     def _invalidate_page_cache(self, page_key: str) -> None:
         self._page_cache.pop(page_key, None)
@@ -1216,9 +1224,12 @@ class WarehouseService:
         app_token: str,
         table_id: str,
         page_size: int,
+        require_complete: bool = False,
     ) -> list[dict[str, Any]]:
         items: list[dict[str, Any]] = []
         page_token = ""
+        seen_tokens: set[str] = set()
+        seen_records: set[str] = set()
         batch_size = min(max(page_size, 100), 500)
 
         # 全量拉取必须走 GET /records 列表接口：records/search 无过滤条件时
@@ -1240,18 +1251,64 @@ class WarehouseService:
                 f"/bitable/v1/apps/{app_token}/tables/{table_id}/records",
                 params=params,
             )
-            new_items = data.get("items", [])
+            new_items = data.get("items") if require_complete else data.get("items", [])
+            if require_complete:
+                if (
+                    new_items is None
+                    and data.get("has_more") is False
+                    and data.get("total") == 0
+                ):
+                    new_items = []
+                if (
+                    not isinstance(data.get("has_more"), bool)
+                    or not isinstance(new_items, list)
+                    or len(new_items) > batch_size
+                ):
+                    raise HTTPException(status_code=502, detail="仓储飞书分页响应无效")
+                for item in new_items:
+                    if (
+                        not isinstance(item, dict)
+                        or not isinstance(item.get("record_id"), str)
+                        or not item["record_id"]
+                        or len(item["record_id"]) > 64
+                        or not isinstance(item.get("fields", {}), dict)
+                    ):
+                        raise HTTPException(
+                            status_code=502, detail="仓储飞书分页包含无效记录"
+                        )
+                    seen_records.add(item["record_id"])
             items.extend(new_items)
 
             if not data.get("has_more"):
+                total = data.get("total")
+                if (
+                    require_complete
+                    and isinstance(total, int)
+                    and len(seen_records) < total
+                ):
+                    raise HTTPException(
+                        status_code=502, detail="仓储飞书分页未拉取完整"
+                    )
                 return items
             remote_total = data.get("total", 0)
-            if remote_total and len(items) >= remote_total:
+            if not require_complete and remote_total and len(items) >= remote_total:
                 return items[:remote_total]
             page_token = data.get("page_token", "")
+            if require_complete:
+                if (
+                    not isinstance(page_token, str)
+                    or not page_token
+                    or page_token in seen_tokens
+                ):
+                    raise HTTPException(
+                        status_code=502, detail="仓储飞书分页游标缺失或重复"
+                    )
+                seen_tokens.add(page_token)
             if not page_token:
                 return items
 
+        if require_complete:
+            raise HTTPException(status_code=502, detail="仓储飞书超过全量同步分页上限")
         return items
 
     async def fetch_feishu_table_records_incremental(
@@ -1352,6 +1409,8 @@ class WarehouseService:
     async def fetch_material_page_from_feishu(
         self,
         page_key: str,
+        *,
+        require_complete: bool = False,
     ) -> tuple[
         FeishuWarehouseMaterialPage,
         list[WarehouseFeishuColumn],
@@ -1368,10 +1427,13 @@ class WarehouseService:
             app_token=page_config.app_token,
             table_id=page_config.table_id,
         )
+        if require_complete and not fields_response:
+            raise HTTPException(status_code=502, detail="仓储飞书字段结构未拉取完整")
         records_response = await self.fetch_feishu_table_records(
             app_token=page_config.app_token,
             table_id=page_config.table_id,
             page_size=500,
+            require_complete=require_complete,
         )
         option_map = await self._build_page_option_map(page_config, fields_response)
         columns = self._build_columns(fields_response)
@@ -1403,7 +1465,9 @@ class WarehouseService:
             )
         sort_field = _DATE_SORT_DESC_FIELDS.get(page_key)
         if not sort_field or not last_synced_at:
-            return await self.fetch_material_page_from_feishu(page_key)
+            return await self.fetch_material_page_from_feishu(
+                page_key, require_complete=True
+            )
         fields_response = await self.fetch_feishu_table_fields(
             app_token=page_config.app_token,
             table_id=page_config.table_id,
@@ -1450,12 +1514,6 @@ class WarehouseService:
                 detail="本地仓储页面快照不存在，请先执行同步脚本",
             )
 
-        rows, total = await self.repo.list_material_page_rows(
-            snapshot.id,
-            keyword=None,
-            offset=0,
-            limit=None,
-        )
         columns = [
             WarehouseFeishuColumn(
                 key=str(column.get("key", "")),
@@ -1468,16 +1526,9 @@ class WarehouseService:
             for column in snapshot.columns
             if column.get("key") and column.get("title")
         ]
-        normalized_rows: list[dict[str, object | None]] = []
-        for row in rows:
-            normalized_row = dict(row.cells)
-            normalized_row["__record_id"] = row.source_record_id
-            normalized_rows.append(normalized_row)
-
-        normalized_rows = self._scope_material_rows(page_key, normalized_rows, scope)
-        filtered_rows = self._filter_material_page_rows(
+        filter_rows = partial(
+            self._filter_material_page_rows,
             page_key,
-            normalized_rows,
             keyword=keyword,
             start_date=start_date,
             end_date=end_date,
@@ -1489,18 +1540,32 @@ class WarehouseService:
             material_category=material_category,
             advanced_filters=advanced_filters,
         )
-
-        sort_date_field = _DATE_SORT_DESC_FIELDS.get(page_key)
-        if sort_date_field:
-            filtered_rows.sort(
-                key=lambda r: _numeric_sort_value(r, sort_date_field),
-                reverse=True,
-            )
-
-        total = len(filtered_rows)
+        # Validate the request even if the mirror has no rows.
+        filter_rows([])
+        departments = (
+            scope.department_names
+            if page_key in HARDWARE_DEPT_PAGE_KEYS
+            and scope is not None
+            and not scope.is_all
+            else None
+        )
         start = (page - 1) * page_size
         end = start + page_size
-        paged_rows = filtered_rows[start:end]
+        paged_rows: list[dict[str, object | None]] = []
+        stats = _MaterialPageStats()
+        async for batch in self.repo.iter_material_page_rows(
+            snapshot.id,
+            sort_date_field=_DATE_SORT_DESC_FIELDS.get(page_key),
+            department_names=departments,
+        ):
+            normalized_rows = [
+                {**cells, "__record_id": record_id} for record_id, cells in batch
+            ]
+            scoped_rows = self._scope_material_rows(page_key, normalized_rows, scope)
+            for row in filter_rows(scoped_rows):
+                if start <= stats.total < end:
+                    paged_rows.append(row)
+                stats.add(row)
 
         return self._build_material_page_response(
             page_key=snapshot.page_key,
@@ -1508,13 +1573,13 @@ class WarehouseService:
             table_name=snapshot.table_name,
             columns=columns,
             rows=paged_rows,
-            total=total,
+            total=stats.total,
             page=page,
             page_size=page_size,
             last_sync_time=snapshot.last_synced_at,
             source="local_snapshot",
             base_name=self._get_base_name(page_key),
-            stats=self._build_page_stats(page_key, filtered_rows),
+            stats=stats.result(),
         )
 
     async def get_finished_inbound_kg_total(
@@ -1855,7 +1920,9 @@ class WarehouseService:
                     columns,
                     normalized_rows,
                     _option_map,
-                ) = await self.fetch_material_page_from_feishu(page_key)
+                ) = await self.fetch_material_page_from_feishu(
+                    page_key, require_complete=True
+                )
         except HTTPException:
             raise
         except Exception as exc:
@@ -1872,7 +1939,9 @@ class WarehouseService:
             table_name=page_config.title,
             table_id=page_config.table_id,
             columns=[column.model_dump(mode="python") for column in columns],
-            total_rows=len(normalized_rows),
+            total_rows=prev_snapshot.total_rows
+            if use_incremental and prev_snapshot
+            else len(normalized_rows),
             source="feishu_bitable",
             last_synced_at=now,
             last_error=None,
@@ -1912,11 +1981,7 @@ class WarehouseService:
                 page_key=page_config.page_key,
                 record_meta=record_meta,
             )
-            _, total_rows = await self.repo.list_material_page_rows(
-                snapshot.id, limit=1
-            )
-            # 建快照时写入的 total_rows 是本批变更行数（非表总量），
-            # 用本地存量修正，避免增量轮次把快照行数元数据覆盖成小值
+            total_rows = await self.repo.count_material_page_rows(snapshot.id)
             snapshot.total_rows = total_rows
         else:
             await self.repo.upsert_material_page_rows(
@@ -2010,7 +2075,7 @@ class WarehouseService:
             columns,
             normalized_rows,
             _option_map,
-        ) = await self.fetch_material_page_from_feishu(page_key)
+        ) = await self.fetch_material_page_from_feishu(page_key, require_complete=True)
         field_map = self._INVENTORY_FIELD_MAP[page_key]
         # 列键名（中文字段）→ 库存表字段名；过滤未知列
         col_to_field = {
@@ -2019,6 +2084,12 @@ class WarehouseService:
             if column.key in field_map
         }
 
+        models: dict[str, type[InventorySnapshotModel]] = {
+            "raw-summary": RawMaterialInventory,
+            "packaging-summary": PackagingMaterialInventory,
+            "product-summary": ProductInventory,
+        }
+        snapshots: dict[str, dict[str, object]] = {}
         count = 0
         for row in normalized_rows:
             source_id = self._safe_str(row.get("__record_id"))
@@ -2034,65 +2105,55 @@ class WarehouseService:
             name = self._safe_str(fields.get("name")) or ""
             if not code and not name:
                 continue
-            product_line = self._safe_str(fields.get("product_line"))
-
-            if page_key == "raw-summary":
-                await self.upsert_raw_material_snapshot(
-                    source_id=source_id,
+            spec = self._safe_str(fields.get("spec"))
+            values: dict[str, object] = {
+                "source_id": source_id,
+                "name": name,
+                "spec": spec,
+                "remark": None,
+                "source": "feishu_bitable",
+            }
+            if page_key == "product-summary":
+                unit = self._safe_str(fields.get("unit"))
+                import_key = build_warehouse_import_key(source_id, name, spec, unit)
+                values["unit"] = unit
+                for field in (
+                    "order_quantity",
+                    "pending_quantity",
+                    "qualified_quantity",
+                    "subtotal_quantity",
+                    "remaining_quantity",
+                ):
+                    values[field] = _safe_number(_parse_number(fields.get(field)))
+            else:
+                product_line = self._safe_str(fields.get("product_line"))
+                import_key = build_warehouse_import_key(
+                    source_id, code, name, product_line
+                )
+                values.update(
                     code=code,
-                    name=name,
-                    spec=self._safe_str(fields.get("spec")),
-                    unit=self._safe_str(fields.get("unit")),
-                    available=_parse_number(fields.get("available")),
-                    safety=_parse_number(fields.get("safety")),
-                    last_month=0,
-                    two_months_ago=0,
-                    today_balance=_parse_number(fields.get("today_balance")),
-                    front_stock=_parse_number(fields.get("front_stock")),
-                    this_month_use=0,
-                    warning=self._safe_str(fields.get("warning")),
                     product_line=product_line,
                     erp_no=self._safe_str(fields.get("erp_no")),
                     delivery=None,
-                    remark=None,
-                    source="feishu_bitable",
-                )
-            elif page_key == "packaging-summary":
-                await self.upsert_packaging_snapshot(
-                    source_id=source_id,
-                    code=code,
-                    name=name,
-                    spec=self._safe_str(fields.get("spec")),
-                    batch=None,
-                    available=_parse_number(fields.get("available")),
-                    safety=_parse_number(fields.get("safety")),
-                    last_month=0,
-                    two_months_ago=0,
-                    today_balance=_parse_number(fields.get("today_balance")),
-                    front_stock=_parse_number(fields.get("front_stock")),
-                    this_month_use=0,
                     warning=self._safe_str(fields.get("warning")),
-                    product_line=product_line,
-                    erp_no=self._safe_str(fields.get("erp_no")),
-                    delivery=None,
-                    remark=None,
-                    source="feishu_bitable",
+                    last_month=0.0,
+                    two_months_ago=0.0,
+                    this_month_use=0.0,
                 )
-            else:  # product-summary
-                await self.upsert_product_snapshot(
-                    source_id=source_id,
-                    name=name,
-                    spec=self._safe_str(fields.get("spec")),
-                    order_quantity=_parse_number(fields.get("order_quantity")),
-                    pending_quantity=_parse_number(fields.get("pending_quantity")),
-                    qualified_quantity=_parse_number(fields.get("qualified_quantity")),
-                    subtotal_quantity=_parse_number(fields.get("subtotal_quantity")),
-                    remaining_quantity=_parse_number(fields.get("remaining_quantity")),
-                    unit=self._safe_str(fields.get("unit")),
-                    remark=None,
-                    source="feishu_bitable",
-                )
+                if page_key == "raw-summary":
+                    values["unit"] = self._safe_str(fields.get("unit"))
+                else:
+                    values["batch"] = None
+                for field in ("available", "safety", "today_balance", "front_stock"):
+                    values[field] = _safe_number(_parse_number(fields.get(field)))
+            snapshots[import_key] = values
             count += 1
+
+        await self.repo.upsert_inventory_snapshots(
+            models[page_key],
+            snapshots,
+            synced_at=datetime.now(UTC),
+        )
         return count
 
     async def sync_inventory_from_feishu(self) -> dict[str, int]:
@@ -2104,7 +2165,8 @@ class WarehouseService:
         summary_pages = ("raw-summary", "packaging-summary", "product-summary")
         for page_key in summary_pages:
             try:
-                result[page_key] = await self._sync_inventory_page(page_key)
+                async with self.repo.session.begin_nested():
+                    result[page_key] = await self._sync_inventory_page(page_key)
                 logger.info(
                     "warehouse inventory synced from feishu",
                     extra={"page": page_key, "count": result[page_key]},

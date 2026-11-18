@@ -157,27 +157,46 @@ async def test_attachment_warmup_budget_cancellation_leaves_no_database_entries(
 ):
     from app.modules.quality.service import feishu_attachment_warmup as warmup
 
-    rows = [("fixture-record", {"file_token": "fixture-file"}, "fixture-page")]
+    class Targets:
+        close = AsyncMock()
+
+        async def __aiter__(self):
+            yield "fixture-record", {"file_token": "fixture-file"}, "fixture-page"
+
+    targets = Targets()
     monkeypatch.setattr(
         database.MaintenanceSession,
-        "execute",
-        AsyncMock(return_value=SimpleNamespace(all=lambda: rows)),
+        "stream",
+        AsyncMock(return_value=targets),
     )
     monkeypatch.setattr(warmup, "async_session_factory", database.async_session_factory)
     monkeypatch.setattr(
         warmup.get_settings(), "QUALITY_ATTACHMENT_WARMUP_ENABLED", True
     )
-    monkeypatch.setattr(warmup, "_TOTAL_BUDGET_SECONDS", 0.05)
-    monkeypatch.setattr(warmup, "_SINGLE_WARMUP_TIMEOUT_SECONDS", 10)
+    cache = SimpleNamespace(prepare_disk=AsyncMock(return_value=True))
+    monkeypatch.setattr(warmup, "get_attachment_cache", lambda: cache)
+    budget = asyncio.timeout(None)
+
+    def timeout(delay):
+        if delay == warmup._TOTAL_BUDGET_SECONDS:
+            return budget
+        return asyncio.timeout(delay)
+
+    monkeypatch.setattr(
+        warmup, "asyncio", SimpleNamespace(timeout=timeout, TaskGroup=asyncio.TaskGroup)
+    )
     fetching = asyncio.Event()
 
-    async def fetch_thumbnail(*_args):
+    async def fetch_thumbnail(*_args, disk_only):
+        assert disk_only is True
         fetching.set()
+        budget.reschedule(asyncio.get_running_loop().time())
         await asyncio.Event().wait()
 
     monkeypatch.setattr(warmup, "get_attachment_thumbnail", fetch_thumbnail)
-    async with maintenance.business_activity("scheduler"):
+    async with asyncio.timeout(5), maintenance.business_activity("scheduler"):
         result = await warmup.warmup_attachment_cache()
+    targets.close.assert_awaited_once()
     assert fetching.is_set()
     assert result["budget_hit"] is True
     assert result["warmed"] == 0

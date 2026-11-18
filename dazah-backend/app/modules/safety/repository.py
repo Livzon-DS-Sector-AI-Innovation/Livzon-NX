@@ -4,7 +4,18 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import Integer, cast, func, select, true, update
+from sqlalchemy import (
+    ARRAY,
+    Integer,
+    String,
+    all_,
+    bindparam,
+    cast,
+    func,
+    select,
+    true,
+    update,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import InstrumentedAttribute, selectinload
 from sqlalchemy.sql.elements import ColumnElement
@@ -23,6 +34,7 @@ from app.modules.safety.models import (
     RegulationRevision,
     SafetyCheck,
     SafetyKnowledgeArticle,
+    SafetyPageTableMirrorRecord,
     SafetyTraining,
     ScheduledTask,
     ScheduledTaskLog,
@@ -64,6 +76,50 @@ class SafetyRepository:
 
     def __init__(self, session: AsyncSession):
         self.session = session
+
+    async def get_page_mirror_batch(
+        self,
+        page_key: str,
+        table_id: str,
+        record_ids: set[str],
+    ) -> dict[str, SafetyPageTableMirrorRecord]:
+        mirror = SafetyPageTableMirrorRecord
+        result = await self.session.execute(
+            select(mirror)
+            .where(
+                mirror.page_key == page_key,
+                mirror.table_id == table_id,
+                mirror.record_id.in_(record_ids),
+            )
+            .distinct(mirror.record_id)
+            .order_by(
+                mirror.record_id,
+                mirror.is_deleted,
+                mirror.updated_at.desc(),
+                mirror.id.desc(),
+            )
+        )
+        # 软删行可能保留多个版本，优先使用有效记录，否则选择最近的历史版本。
+        return {row.record_id: row for row in result.scalars().all()}
+
+    async def soft_delete_missing_page_mirror_rows(
+        self,
+        page_key: str,
+        table_id: str,
+        seen: set[str],
+    ) -> None:
+        mirror = SafetyPageTableMirrorRecord
+        await self.session.execute(
+            update(mirror)
+            .where(
+                mirror.page_key == page_key,
+                mirror.table_id == table_id,
+                mirror.is_deleted.is_(False),
+                mirror.record_id
+                != all_(bindparam("seen", list(seen), type_=ARRAY(String))),
+            )
+            .values(is_deleted=True)
+        )
 
     async def _ledger_department_filter(
         self, column: InstrumentedAttribute[str | None]

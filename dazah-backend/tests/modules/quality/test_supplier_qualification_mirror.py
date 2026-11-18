@@ -128,9 +128,16 @@ async def test_list_reads_mirror_and_applies_filters(
 
 @pytest.mark.anyio
 async def test_statistics_aggregate_from_mirror(
-    db_session: AsyncSession, seed_mirror: None
+    db_session: AsyncSession, seed_mirror: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    avatars = AsyncMock()
+    monkeypatch.setattr(supplier, "_attach_responsible_avatars", avatars)
+    execute = AsyncMock(wraps=db_session.execute)
+    monkeypatch.setattr(db_session, "execute", execute)
     stats = await get_supplier_statistics(db_session)
+    avatars.assert_not_awaited()
+    execute.assert_awaited_once()
+    assert "GROUPING SETS" in str(execute.await_args.args[0])
     assert stats["total"] == 3
     assert stats["completed"] == 1
     assert stats["pending"] == 2
@@ -139,6 +146,10 @@ async def test_statistics_aggregate_from_mirror(
     assert stats["due_30_count"] == 1  # t-c 30 天内到期
     assert stats["normal_count"] == 1  # t-b 远期
     assert stats["completion_rate"] == 33.3
+    assert stats["supplier_risk_ranking"][0]["risk_score"] == 3
+    assert sum(item["total"] for item in stats["material_type_compliance"]) == 3
+    assert sum(item["total"] for item in stats["qualification_compliance"]) == 3
+    assert sum(item["count"] for item in stats["expiry_timeline"]) == 3
 
 
 # ── 写路径回写镜像（create/update/delete 仍直写飞书 + 同步镜像） ────────────

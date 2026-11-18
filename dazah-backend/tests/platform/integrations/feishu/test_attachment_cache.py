@@ -6,9 +6,11 @@
 from __future__ import annotations
 
 import asyncio
+from unittest.mock import Mock
 
 import pytest
 
+from app.platform.integrations.feishu import attachment_cache
 from app.platform.integrations.feishu.attachment_cache import AttachmentCache
 
 
@@ -191,3 +193,42 @@ async def test_memory_lru_eviction(tmp_path) -> None:
     await cache.get_or_fetch("entity", "rec_2", "t2", fetcher_b)
     assert cache.stats()["memory_entries"] == 1
     assert cache.stats()["memory_bytes"] <= 1 * 1024 * 1024
+
+
+async def test_disk_only_fetch_warms_disk_without_retaining_bytes(
+    cache: AttachmentCache,
+) -> None:
+    assert await cache.prepare_disk() is True
+    assert await cache.get_or_fetch("e", "r", "f", _fetch_ok, disk_only=True) == (
+        b"image-bytes",
+        "image/jpeg",
+        "photo.jpg",
+    )
+    assert cache.stats()["memory_bytes"] == 0
+    assert not cache._locks
+    assert await cache.get("e", "r", "f") == (b"image-bytes", "image/jpeg", "photo.jpg")
+
+
+async def test_unusable_disk_skips_repeated_writes_and_foreground_stays_available(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cache_path = tmp_path / "blocked"
+    cache_path.write_text("file")
+    cache = AttachmentCache(
+        enabled=True,
+        cache_dir=str(cache_path),
+        max_memory_mb=1,
+        max_disk_mb=2,
+        ttl_seconds=3600,
+    )
+    warning = Mock()
+    probe = Mock(wraps=cache._probe_disk)
+    monkeypatch.setattr(attachment_cache.logger, "warning", warning)
+    monkeypatch.setattr(cache, "_probe_disk", probe)
+    assert await cache.prepare_disk() is False
+    assert await cache.prepare_disk() is False
+    assert await cache.get_or_fetch("e", "r", "f", _fetch_ok) is not None
+    assert await cache.get("e", "r", "f") is not None
+    probe.assert_called_once()
+    warning.assert_called_once()

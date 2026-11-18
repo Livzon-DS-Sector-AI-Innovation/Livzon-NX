@@ -29,6 +29,10 @@ from app.modules.quality.models import (
 from app.modules.quality.service.quality_feishu_material_groups import (
     MATERIAL_ENTITY_CODES,
 )
+from app.modules.quality.service.quality_feishu_settings import (
+    RETIRED_QUALITY_FEISHU_ENTITY_CODES,
+    get_quality_feishu_runtime_entity,
+)
 from app.platform.integrations.feishu.bitable import (
     BitableClient,
     fields_need_union_user_id,
@@ -622,7 +626,13 @@ def _build_conflict_message(source_updated_at: datetime | None) -> str:
 
 
 class QualityFeishuSync:
-    async def _resolve_runtime(self, db: AsyncSession) -> QualityFeishuRuntimeConfig:
+    async def _resolve_runtime(
+        self,
+        db: AsyncSession,
+        *,
+        entity_code: str | None = None,
+        ensure_defaults: bool = False,
+    ) -> QualityFeishuRuntimeConfig:
         app_model = None
         rows: list[QualityFeishuEntitySetting] = []
         try:
@@ -638,17 +648,17 @@ class QualityFeishuSync:
                 .scalars()
                 .first()
             )
-            rows = list(
-                (
-                    await db.execute(
-                        select(QualityFeishuEntitySetting).where(
-                            QualityFeishuEntitySetting.is_deleted.is_(False)
-                        )
-                    )
+            if entity_code is not None:
+                model = await get_quality_feishu_runtime_entity(
+                    db, entity_code, ensure_defaults=ensure_defaults
                 )
-                .scalars()
-                .all()
-            )
+                rows = [model] if model is not None else []
+            else:
+                stmt = select(QualityFeishuEntitySetting).where(
+                    QualityFeishuEntitySetting.is_deleted.is_(False)
+                )
+                rows = list((await db.execute(stmt)).scalars().all())
+
         except (OperationalError, ProgrammingError):
             # 无模块配置时禁用同步；不得回退登录应用。
             app_model = None
@@ -684,10 +694,21 @@ class QualityFeishuSync:
             is_app_enabled = app_model.is_enabled
 
         entity_models = {row.entity_code: row for row in rows}
+        codes = (
+            [entity_code]
+            if entity_code is not None
+            else dict.fromkeys([*QUALITY_FEISHU_ENTITY_ENV_FALLBACKS, *entity_models])
+        )
         entity_configs: dict[str, QualityFeishuEntityRuntimeConfig] = {}
-        for entity_code, env_name in QUALITY_FEISHU_ENTITY_ENV_FALLBACKS.items():
-            model = entity_models.get(entity_code)
+        for code in codes:
+            if code == "capa_ledger" or (
+                ensure_defaults and code in RETIRED_QUALITY_FEISHU_ENTITY_CODES
+            ):
+                continue
+            model = entity_models.get(code)
             if model is not None:
+                if model.is_deleted:
+                    continue
                 table_id = (model.base_table_id or "").strip() or None
                 app_token = (model.app_token or "").strip() or legacy_app_token
                 field_mappings = {
@@ -697,7 +718,7 @@ class QualityFeishuSync:
                     and item.get("system_field")
                     and item.get("feishu_field")
                 }
-                entity_configs[entity_code] = QualityFeishuEntityRuntimeConfig(
+                entity_configs[code] = QualityFeishuEntityRuntimeConfig(
                     app_token=app_token,
                     table_id=table_id,
                     is_enabled=model.is_enabled and bool(table_id) and bool(app_token),
@@ -707,40 +728,17 @@ class QualityFeishuSync:
                 )
                 continue
 
+            env_name = QUALITY_FEISHU_ENTITY_ENV_FALLBACKS.get(code)
+            if env_name is None:
+                continue
             fallback_table_id = getattr(settings, env_name, None)
-            entity_configs[entity_code] = QualityFeishuEntityRuntimeConfig(
+            entity_configs[code] = QualityFeishuEntityRuntimeConfig(
                 app_token=legacy_app_token,
                 table_id=fallback_table_id,
                 is_enabled=bool(fallback_table_id and legacy_app_token),
                 enable_push_to_feishu=bool(fallback_table_id),
                 enable_pull_from_feishu=bool(fallback_table_id),
                 field_mappings={},
-            )
-
-        # 加载数据库中存在但不在 QUALITY_FEISHU_ENTITY_ENV_FALLBACKS 中的实体
-        # （如成品检验 qc_finished_internal、固体/液体物料 qc_solid_ys001 等）
-        for entity_code, model in entity_models.items():
-            if entity_code in entity_configs:
-                continue
-            if entity_code == "capa_ledger":
-                # CAPA 台账已本地化，不再读写飞书；历史配置行不参与运行时
-                continue
-            table_id = (model.base_table_id or "").strip() or None
-            app_token = (model.app_token or "").strip() or legacy_app_token
-            field_mappings = {
-                str(item.get("system_field")): str(item.get("feishu_field"))
-                for item in (model.field_mappings or [])
-                if isinstance(item, dict)
-                and item.get("system_field")
-                and item.get("feishu_field")
-            }
-            entity_configs[entity_code] = QualityFeishuEntityRuntimeConfig(
-                app_token=app_token,
-                table_id=table_id,
-                is_enabled=model.is_enabled and bool(table_id) and bool(app_token),
-                enable_push_to_feishu=model.enable_push_to_feishu,
-                enable_pull_from_feishu=model.enable_pull_from_feishu,
-                field_mappings=field_mappings,
             )
 
         return QualityFeishuRuntimeConfig(
@@ -762,7 +760,7 @@ class QualityFeishuSync:
         search_conditions: list[tuple[str, str]] | None = None,
         user_id_type: str | None = None,
     ) -> tuple[str, str]:
-        runtime = await self._resolve_runtime(db)
+        runtime = await self._resolve_runtime(db, entity_code=entity_code)
         entity = runtime.get_entity_config(entity_code, direction="push")
         if not runtime.is_enabled() or not entity or not entity.app_token:
             raise AppException(
@@ -855,13 +853,16 @@ class QualityFeishuSync:
         table_id: str | None = None,
         *,
         filter_str: str | None = None,
+        filter_conditions: list[tuple[str, str]] | None = None,
         field_names: list[str] | None = None,
         user_id_type: str = "open_id",
     ) -> list[dict[str, Any]]:
-        runtime = await self._resolve_runtime(db)
+        runtime = await self._resolve_runtime(db, entity_code=entity_code)
         entity = runtime.get_entity_config(entity_code, direction="pull")
         if not runtime.is_enabled() or not entity or not entity.app_token:
             return []
+        if filter_conditions:
+            filter_str = _build_search_filter(entity, filter_conditions)
         resolved_table_id = _require_table_id(entity)
         client = BitableClient(
             app_token=entity.app_token,

@@ -6,7 +6,9 @@ import uuid
 from datetime import datetime
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import load_only
 
 from app.core.llm import llm_client
 from app.modules.safety.ai_workflow_configs import SAFETY_WORKFLOW_CONFIGS
@@ -30,6 +32,7 @@ from app.platform.integrations.ai.prompts import (
 )
 
 logger = logging.getLogger(__name__)
+_CRITICAL_BATCH_SIZE = 300
 
 
 class SpecialOperationReportService:
@@ -330,65 +333,75 @@ class SpecialOperationReportService:
         受限空间的「涉及有毒有害、易燃易爆」判断取自镜像表里飞书「作业分级」
         原文，避免转录时丢失该信息。
         """
-        from sqlalchemy import select
-
+        mirror = SafetyPageTableMirrorRecord
         hazardous_report_nos: set[str] = set()
-        mirror_rows = (
-            (
-                await self.session.execute(
-                    select(SafetyPageTableMirrorRecord.fields).where(
-                        SafetyPageTableMirrorRecord.page_key
-                        == "safety:ops-safety:special-danger-work",
-                        SafetyPageTableMirrorRecord.is_deleted.is_(False),
-                    )
-                )
+        hazard_rows = await self.session.stream(
+            select(mirror.fields["作业分级"], mirror.fields["申请编号"])
+            .where(
+                mirror.page_key == "safety:ops-safety:special-danger-work",
+                mirror.is_deleted.is_(False),
             )
-            .scalars()
-            .all()
+            .execution_options(yield_per=_CRITICAL_BATCH_SIZE)
         )
-        for fields in mirror_rows:
-            if not isinstance(fields, dict):
-                continue
-            level = fields.get("作业分级")
-            if not is_hazardous_confined_level(
-                level if isinstance(level, str) else None
-            ):
-                continue
-            application_no = fields.get("申请编号")
-            text = (
-                application_no.get("text")
-                if isinstance(application_no, dict)
-                else application_no
-            )
-            if isinstance(text, str) and text.strip():
-                hazardous_report_nos.add(text.strip())
+        try:
+            async for level, application_no in hazard_rows:
+                if not is_hazardous_confined_level(
+                    level if isinstance(level, str) else None
+                ):
+                    continue
+                number = (
+                    application_no.get("text")
+                    if isinstance(application_no, dict)
+                    else application_no
+                )
+                if isinstance(number, str) and number.strip():
+                    hazardous_report_nos.add(number.strip())
+        finally:
+            await hazard_rows.close()
 
-        rows = (
-            (
-                await self.session.execute(
-                    select(SpecialOperationReport).where(
-                        SpecialOperationReport.is_deleted.is_(False)
-                    )
+        report = SpecialOperationReport
+        reports = await self.session.stream_scalars(
+            select(report)
+            .options(
+                load_only(
+                    report.report_no,
+                    report.operation_type,
+                    report.operation_level,
+                    report.notes,
+                    report.is_critical,
+                    report.is_critical_reason,
+                    report.is_critical_updated_by,
                 )
             )
-            .scalars()
-            .all()
+            .where(report.is_deleted.is_(False))
+            .execution_options(yield_per=_CRITICAL_BATCH_SIZE)
         )
-        critical_count = 0
-        for row in rows:
-            decision = evaluate_from_notes(
-                operation_type=row.operation_type,
-                operation_level=row.operation_level,
-                notes=row.notes,
-                hazardous_confined=row.report_no in hazardous_report_nos,
-            )
-            row.is_critical = decision.is_critical
-            row.is_critical_reason = decision.reason
-            row.is_critical_updated_by = None
-            if decision.is_critical:
-                critical_count += 1
+        checked = critical_count = 0
+        try:
+            async for batch in reports.partitions():
+                checked += len(batch)
+                for row in batch:
+                    decision = evaluate_from_notes(
+                        operation_type=row.operation_type,
+                        operation_level=row.operation_level,
+                        notes=row.notes,
+                        hazardous_confined=row.report_no in hazardous_report_nos,
+                    )
+                    if decision.is_critical:
+                        critical_count += 1
+                    if (
+                        row.is_critical != decision.is_critical
+                        or row.is_critical_reason != decision.reason
+                        or row.is_critical_updated_by is not None
+                    ):
+                        row.is_critical = decision.is_critical
+                        row.is_critical_reason = decision.reason
+                        row.is_critical_updated_by = None
+                await self.session.flush()
+        finally:
+            await reports.close()
         await self.session.commit()
-        return {"total": len(rows), "critical": critical_count}
+        return {"total": checked, "critical": critical_count}
 
     async def get_ledger_stats(
         self,
