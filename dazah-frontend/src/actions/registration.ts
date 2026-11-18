@@ -1,6 +1,9 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { serverActionResult } from '@/lib/server-action-result'
+import { uncertainWriteMessage } from '@/lib/user-error'
+import type { components } from '@/types/generated/schema'
 import { registrationProjectLedgerSheets } from '@/lib/registration-project-ledger'
 import {
   serverApiPost,
@@ -315,13 +318,40 @@ export async function testCertificateReminderSettings(
   )
 }
 
-export async function importCertificateWorkbook(formData: FormData) {
-  const result = await serverApiPostFormData<CertificateWorkbookImportResult>(
-    '/api/v1/registration/certificate-management/workbook/import',
-    formData
+const workbookErrorMessages = {
+  REGISTRATION_WORKBOOK_UNREADABLE: '无法读取工作簿，请用 Excel 打开并另存为 .xlsx 后重新上传',
+  REGISTRATION_WORKBOOK_TEMPLATE_MISMATCH: '工作簿与台账模板不匹配，请使用对应模板并保留子表名称和表头',
+  REGISTRATION_WORKBOOK_CERTIFICATE_NAME_REQUIRED: '工作簿中有记录缺少证照名称，请补齐后重新导入',
+} satisfies Record<components['schemas']['RegistrationWorkbookErrorCode'], string>
+
+async function importRegistrationWorkbook<T>(
+  ledger: string,
+  operation: string,
+  formData: FormData,
+  sheetPaths: readonly string[] = [],
+) {
+  return serverActionResult(
+    operation,
+    async () => {
+      const data = await serverApiPostFormData<T>(
+        `/api/v1/registration/${ledger}/workbook/import`,
+        formData,
+        { 422: workbookErrorMessages },
+      )
+      revalidatePath(`/registration/${ledger}`)
+      for (const path of sheetPaths) revalidatePath(path)
+      return data
+    },
+    uncertainWriteMessage(operation),
   )
-  revalidatePath('/registration/certificate-management')
-  return result
+}
+
+export async function importCertificateWorkbook(formData: FormData) {
+  return importRegistrationWorkbook<CertificateWorkbookImportResult>(
+    'certificate-management',
+    '药政证书台账导入',
+    formData,
+  )
 }
 
 export async function createProjectLedgerEntry(data: ProjectLedgerEntryInput) {
@@ -367,15 +397,12 @@ export async function deleteProjectLedgerEntry(recordId: string, sheetKey: strin
 }
 
 export async function importProjectLedgerWorkbook(formData: FormData) {
-  const result = await serverApiPostFormData<ProjectLedgerWorkbookImportResult>(
-    '/api/v1/registration/project-ledger/workbook/import',
-    formData
+  return importRegistrationWorkbook<ProjectLedgerWorkbookImportResult>(
+    'project-ledger',
+    '申报台账导入',
+    formData,
+    registrationProjectLedgerSheets.map((sheet) => sheet.path),
   )
-  revalidatePath('/registration/project-ledger')
-  for (const sheet of registrationProjectLedgerSheets) {
-    revalidatePath(sheet.path)
-  }
-  return result
 }
 
 export async function createDeclarationProgressEntry(data: DeclarationProgressEntryInput) {
@@ -424,12 +451,11 @@ export async function deleteDeclarationProgressEntry(recordId: string, sheetKey:
 }
 
 export async function importDeclarationProgressWorkbook(formData: FormData) {
-  const result = await serverApiPostFormData<DeclarationProgressWorkbookImportResult>(
-    '/api/v1/registration/declaration-progress/workbook/import',
-    formData
+  return importRegistrationWorkbook<DeclarationProgressWorkbookImportResult>(
+    'declaration-progress',
+    '申报进度台账导入',
+    formData,
   )
-  revalidatePath('/registration/declaration-progress')
-  return result
 }
 
 // ── Fee actions ────────────────────────────────────────────────────────

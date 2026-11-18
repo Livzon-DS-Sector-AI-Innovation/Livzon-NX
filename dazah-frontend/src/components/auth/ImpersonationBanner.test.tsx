@@ -38,9 +38,12 @@ it('highlights the target identity and keeps the restore action available', asyn
   }
 })
 
-it('announces a failed restore in the existing banner area', async () => {
+it.each([
+  ['暂时无法恢复', '暂时无法恢复'],
+  ['TypeError: internal restore failure', '暂时无法退出模拟'],
+])('announces a safe restore error for %s', async (error, expected) => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
-  mocks.exit.mockRejectedValueOnce(new Error('暂时无法恢复'))
+  mocks.exit.mockRejectedValueOnce(new Error(error))
   const host = document.createElement('div')
   document.body.append(host)
   const root = createRoot(host)
@@ -49,7 +52,7 @@ it('announces a failed restore in the existing banner area', async () => {
     const status = host.querySelector('[aria-live="assertive"]')
     expect(status?.textContent).toBe('')
     await act(async () => host.querySelector('button')?.click())
-    expect(status?.textContent).toBe('暂时无法恢复')
+    expect(status?.textContent).toBe(expected)
     expect(host.querySelector('button')?.disabled).toBe(false)
   } finally {
     await act(async () => root.unmount())

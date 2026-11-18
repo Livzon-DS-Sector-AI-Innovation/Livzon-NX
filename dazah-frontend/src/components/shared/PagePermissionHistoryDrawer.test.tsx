@@ -71,6 +71,17 @@ function button(label: string) {
   return found!
 }
 
+it('shows a safe error when authorization history cannot be loaded', async () => {
+  mocks.getRole.mockRejectedValueOnce(new Error('TypeError: internal history failure'))
+  await act(async () => {
+    root.render(createElement(PagePermissionHistoryDrawer, {
+      targetType: 'role', targetId: 'role-1', targetName: '质量角色', grantVersion: 5,
+      open: true, onClose: vi.fn(), onRolledBack: vi.fn(),
+    }))
+  })
+  await vi.waitFor(() => expect(mocks.message.error).toHaveBeenCalledWith('操作未完成，请稍后重试'))
+})
+
 it('shows auditable history and previews impact before a versioned rollback', async () => {
   await act(async () => {
     root.render(createElement(PagePermissionHistoryDrawer, {

@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useCallback, useEffect, useState } from 'react'
 import { App, Button, DatePicker, Descriptions, Drawer, Empty, Input, Select, Space, Table, Tag, Typography } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
@@ -202,7 +203,7 @@ export default function GeneralAuditLogClient({ category }: { category: GeneralA
     try {
       setDetail(await fetchGeneralAuditLog(record.id))
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '加载审计详情失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '加载审计详情失败'))
     } finally {
       setDetailLoading(false)
     }

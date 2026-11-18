@@ -435,7 +435,10 @@ async def test_import_certificate_workbook_rolls_back_on_invalid_header(
             },
         )
 
-    assert response.status_code == 400
+    assert response.status_code == 422
+    assert response.json()["detail"] == {
+        "error_code": "REGISTRATION_WORKBOOK_TEMPLATE_MISMATCH"
+    }
     assert "国外注册" in response.json()["message"]
 
     workbook_response = await client.get(

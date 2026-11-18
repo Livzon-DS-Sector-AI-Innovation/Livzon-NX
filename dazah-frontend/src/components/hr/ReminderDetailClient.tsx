@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useEffect, useState } from 'react'
 import { App, Card, Input, Switch, Button, Select, Space, Tag, InputNumber, Typography, Upload } from 'antd'
 import { SaveOutlined, ArrowLeftOutlined, PlusOutlined, CloseOutlined, UploadOutlined } from '@ant-design/icons'
@@ -75,7 +76,7 @@ export default function ReminderDetailClient({ params }: { params: Promise<{ ent
       message.success(res.message || '模板上传成功')
       setTemplateInfo({ exists: true, filename: file.name, updated_at: new Date().toISOString() })
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '上传失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '上传失败'))
     }
     finally { setUploading(false) }
     return false // 阻止 antd Upload 自动上传

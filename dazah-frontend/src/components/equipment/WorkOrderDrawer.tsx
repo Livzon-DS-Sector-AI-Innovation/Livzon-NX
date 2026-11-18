@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useEffect, useMemo, useState } from 'react'
 import { App, Drawer, Form, Input, Select, Button, Space } from 'antd'
 import PlatformNotice from '@/components/shared/PlatformNotice'
@@ -105,7 +106,7 @@ export function WorkOrderDrawer({ equipments, symptoms, onRefresh }: WorkOrderDr
       onRefresh?.()
     } catch (error) {
       if (error?.errorFields) return
-      if (error?.message) message.error(error.message)
+      if (error?.message) message.error(getUserErrorMessage(error.message))
     }
   }
 

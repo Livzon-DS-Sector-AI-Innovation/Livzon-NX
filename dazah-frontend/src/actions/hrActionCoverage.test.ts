@@ -71,7 +71,7 @@ describe('migrated HR server action coverage', () => {
     await call('createAnnualTrainingPlan', { year: 2026, department: '质量部', plan_level: '部门级' })
     await call('deleteAnnualTrainingPlan', 'plan-1')
     await call('batchUpdatePlanItems', 'plan-1', { items: [{ title: 'GMP' }] })
-    await call('importAnnualTrainingPlan', new File(['content'], 'annual.xlsx'), 2026, '部门级', '质量部')
+    await call('importAnnualTrainingPlan', new File(['content'], 'annual.docx'), 2026, '部门级', '质量部')
     await expect(call('createCandidateAction', formData)).rejects.toThrow('功能尚未实现')
     await expect(call('parseResumePreviewAction', formData)).rejects.toThrow('功能尚未实现')
     await expect(call('syncCandidateToFeishuAction', 'candidate-1')).rejects.toThrow('功能尚未实现')
@@ -134,11 +134,81 @@ describe('migrated HR server action coverage', () => {
     })).toBe(true)
   })
 
-  it('covers annual-plan import errors and structured conflict mapping', async () => {
-    const file = new File(['content'], 'annual.xlsx', { type: 'application/vnd.ms-excel' })
+  it.each([
+    [401, { message: 'Unauthorized' }, '登录已失效，请重新登录'],
+    [403, { message: '未获得当前高风险业务动作授权' }, '没有执行此操作的权限，请联系管理员'],
+    [403, { detail: '内部授权信息' }, '没有执行此操作的权限，请联系管理员'],
+    [400, { message: '已改写的后端诊断', detail: { error_code: 'HR_ANNUAL_PLAN_ITEMS_MISSING' } }, '文档中没有有效的培训计划数据，请使用 APP1 或 APP2 模板'],
+    [400, { detail: { error_code: 'HR_ANNUAL_PLAN_DEPARTMENT_MISSING' } }, '无法识别部门，请在部门级模板中填写部门后重新上传'],
+    [400, { message: '无法从文档中识别部门，请手动指定部门' }, '请求内容有误，请检查后重试'],
+    [400, { detail: { error_code: 'HR_FUTURE_ERROR' } }, '请求内容有误，请检查后重试'],
+    [400, { detail: { error_code: 123 } }, '请求内容有误，请检查后重试'],
+    [400, { detail: { error_code: 'constructor' } }, '请求内容有误，请检查后重试'],
+    [400, { error_code: 'HR_ANNUAL_PLAN_ITEMS_MISSING' }, '请求内容有误，请检查后重试'],
+    [413, null, '文件过大，请缩小文件后重试'],
+    [415, null, '文件格式不受支持，请检查后重试'],
+    [422, { detail: [{ loc: ['query', 'year'], msg: '内部校验信息' }] }, '填写内容有误，请检查后重试'],
+    [422, { detail: { error_code: 'HR_ANNUAL_PLAN_ITEMS_MISSING' } }, '填写内容有误，请检查后重试'],
+    [404, null, '请求的内容不存在或已被删除，请刷新后重试'],
+    [409, null, '数据已发生变化，请刷新后重试'],
+    [429, null, '操作过于频繁，请稍后重试'],
+  ])('returns a serializable annual-plan import failure for HTTP %i', async (status, body, message) => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(body ? JSON.stringify(body) : null, { status }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await actions.importAnnualTrainingPlan(new File(['content'], 'annual.docx'), 2026)
+
+    expect(JSON.parse(JSON.stringify(result))).toEqual({ ok: false, message })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('validates annual-plan import arguments before forwarding the request', async () => {
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({ detail: '年度计划格式错误' }), { status: 422 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(actions.importAnnualTrainingPlan(new File(['content'], 'annual.docx'), NaN))
+      .resolves.toEqual({ ok: false, message: '请选择有效的年度' })
+    await expect(actions.importAnnualTrainingPlan(new File(['content'], 'annual.xlsx'), 2026))
+      .resolves.toEqual({ ok: false, message: '请选择 .docx 格式的 Word 文档' })
+    await expect(actions.importAnnualTrainingPlan(new File([], 'annual.docx'), 2026))
+      .resolves.toEqual({ ok: false, message: 'Word 文档为空，请重新选择文件' })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps unexpected import failures private and returns a diagnostic reference', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response('上游内部响应', { status: 503 }))
+      .mockRejectedValueOnce(new Error('内部网络详情'))
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      for (const secret of ['上游内部响应', '内部网络详情']) {
+        const result = await actions.importAnnualTrainingPlan(new File(['content'], 'annual.docx'), 2026)
+        expect(result).toMatchObject({ ok: false, reference: expect.any(String) })
+        expect(JSON.stringify(result)).not.toContain(secret)
+      }
+      expect(log).toHaveBeenCalledTimes(2)
+    } finally {
+      log.mockRestore()
+    }
+  })
+
+  it('forwards an authorized annual-plan import and returns the success message', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => response())
+    vi.stubGlobal('fetch', fetchMock)
+    const file = new File(['content'], 'annual.docx')
+
+    await expect(actions.importAnnualTrainingPlan(file, 2026, '部门级', '质量部'))
+      .resolves.toEqual({ ok: true, data: { message: 'ok' } })
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(new URL(url).pathname).toBe('/api/v1/hr/annual-training-plans/import')
+    expect(Object.fromEntries(new URL(url).searchParams)).toEqual({ year: '2026', plan_level: '部门级', department: '质量部' })
+    expect(init).toMatchObject({ method: 'POST', headers: { Authorization: 'Bearer hr-coverage-token' } })
+    expect(init.headers).not.toHaveProperty('Content-Type')
+    expect(init.body.get('file').name).toBe('annual.docx')
+  })
+
+  it('maps structured training conflicts', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({
         code: 200,
         data: {
           has_conflict: true,
@@ -149,7 +219,6 @@ describe('migrated HR server action coverage', () => {
       }), { status: 200 }))
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(call('importAnnualTrainingPlan', file, 2026)).rejects.toThrow('年度计划格式错误')
     await expect(call('checkTrainingConflict', { training_date: '2026-08-25' })).resolves.toMatchObject({
       data: {
         has_conflict: true,
@@ -158,6 +227,51 @@ describe('migrated HR server action coverage', () => {
         suggested_times: [{ start: '2026-08-26 09:00' }],
       },
     })
+  })
+
+  it.each([
+    ['createAnnualTrainingPlan', [{ year: 2026, department: '质量部' }], 409, 'HR_ANNUAL_PLAN_DUPLICATE', '该部门本年度的培训计划已存在'],
+    ['deleteAnnualTrainingPlan', ['plan-1'], 403, null, '没有执行此操作的权限，请联系管理员'],
+    ['deleteAnnualTrainingPlan', ['plan-1'], 404, null, '请求的内容不存在或已被删除，请刷新后重试'],
+    ['importPositionTrainingLists', [new File(['content'], '岗位培训.docx')], 400, 'HR_POSITION_TRAINING_TEMPLATE_INVALID', '文档无法解析，请使用 APP9 岗位培训清单模板'],
+    ['importPositionTrainingLists', [new File(['content'], '岗位培训.docx')], 400, 'HR_POSITION_TRAINING_DATA_MISSING', '文档缺少部门或培训明细，请按 APP9 模板填写后重新上传'],
+    ['importPositionTrainingLists', [new File(['content'], '岗位培训.docx')], 403, null, '没有执行此操作的权限，请联系管理员'],
+    ['submitPositionTransferApproval', ['transfer-1', false], 409, 'HR_POSITION_TRANSFER_NOT_DRAFT', '只有草稿状态的记录才能提交审批，请刷新后查看当前状态'],
+    ['approvePositionTransferNode', ['transfer-1', '同意'], 409, 'HR_POSITION_TRANSFER_APPROVAL_COMPLETED', '该记录已完成审批，请刷新后查看审批结果'],
+    ['approvePositionTransferNode', ['transfer-1', '同意'], 423, null, '记录正在处理中，请稍后刷新查看'],
+    ['rejectPositionTransferNode', ['transfer-1', '不同意'], 409, 'HR_POSITION_TRANSFER_NOT_SUBMITTED', '该记录尚未提交审批，请刷新后查看当前状态'],
+    ['rejectPositionTransferNode', ['transfer-1', '不同意'], 403, null, '没有执行此操作的权限，请联系管理员'],
+    ['syncFeishuMembersAction', [], 403, null, '没有执行此操作的权限，请联系管理员'],
+    ['syncDepartmentsFromFeishuAction', [], 429, null, '操作过于频繁，请稍后重试'],
+    ['getDepartmentSyncStatus', [], 401, null, '登录已失效，请重新登录'],
+    ['getFeishuMembersSyncStatus', [], 403, null, '没有执行此操作的权限，请联系管理员'],
+    ['syncPositionTransferFromFeishuAction', [], 503, 'HR_POSITION_TRANSFER_FEISHU_NOT_CONFIGURED', '岗位调动的飞书数据源未配置，请联系管理员检查人事飞书设置'],
+    ['uploadPlanAttachments', ['plan-1', [new File(['content'], '培训记录.docx')]], 400, 'HR_ANNUAL_PLAN_ATTACHMENT_COUNT_EXCEEDED', '单次上传的附件过多，请减少本次选择的文件数量'],
+    ['uploadPlanAttachments', ['plan-1', [new File(['content'], '培训记录.docx')]], 413, null, '文件过大，请缩小文件后重试'],
+  ] as const)('returns a public failure for %s', async (action, args, status, errorCode, expected) => {
+    const request = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      code: status, message: '内部诊断信息', detail: errorCode ? { error_code: errorCode } : null,
+    }), { status }))
+    vi.stubGlobal('fetch', request)
+    await expect(call(action, ...args)).resolves.toEqual({ ok: false, message: expected })
+    expect(request).toHaveBeenCalledTimes(1)
+    expect(mocks.revalidatePath).not.toHaveBeenCalled()
+  })
+
+  it('keeps an ambiguous approval failure private and does not repeat the write', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const request = vi.fn().mockResolvedValue(new Response('private upstream response', { status: 504 }))
+    vi.stubGlobal('fetch', request)
+    try {
+      await expect(actions.submitPositionTransferApproval('transfer-1', false)).resolves.toEqual({
+        ok: false,
+        message: '暂未确认岗位调动审批提交结果，请先查看业务记录后再决定是否重试',
+        reference: expect.any(String),
+      })
+      expect(request).toHaveBeenCalledTimes(1)
+    } finally {
+      log.mockRestore()
+    }
   })
 
   it('maps HR action errors that only contain a message', async () => {
@@ -247,7 +361,7 @@ describe('migrated HR server action coverage', () => {
   })
 
   it('maps protected server-action failures without returning placeholder success', async () => {
-    const file = new File(['content'], 'failure.xlsx', { type: 'application/vnd.ms-excel' })
+    const file = new File(['content'], 'failure.docx', { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })
     const formData = new FormData()
     formData.append('file', file)
     const fetchMock = vi.fn().mockImplementation(async () => new Response(JSON.stringify({ message: '后端拒绝操作', detail: '数据范围不允许' }), {
@@ -313,7 +427,7 @@ describe('migrated HR server action coverage', () => {
       try {
         await call(name, ...args)
       } catch {
-        // 每个动作都应把错误变成 rejected Promise；这里只需确保错误路径被实际触达。
+        // 旧版 Action 仍使用 rejected Promise；已迁移的 Action 返回失败结果。
       }
     }
     expect(fetchMock.mock.calls.length).toBeGreaterThan(100)

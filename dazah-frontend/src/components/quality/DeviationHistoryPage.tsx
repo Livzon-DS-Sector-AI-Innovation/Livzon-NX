@@ -1,5 +1,8 @@
 'use client'
 
+import { getActionErrorMessage, unwrapServerActionResult } from '@/lib/server-action-result'
+
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useCallback, useRef, useState } from 'react'
 import { App, Button, Card, Drawer, Form, Input, Modal, Space, Spin, Table, Tag, Typography, Upload } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
@@ -125,7 +128,7 @@ function AttachmentPreviewModal({ preview, onClose }: { preview: PreviewState | 
         setState({ text: '', blobUrl: URL.createObjectURL(blob), contentType })
       }
     } catch (error) {
-      modal.error({ title: '预览失败', content: error instanceof Error ? error.message : '无法读取附件内容' })
+      modal.error({ title: '预览失败', content: getUserErrorMessage(error instanceof Error ? error.message : '无法读取附件内容') })
     } finally {
       setLoading(false)
     }
@@ -249,7 +252,7 @@ export function DeviationHistoryPage() {
         remark: detail.remark || '',
       })
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '加载失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '加载失败'))
     }
   }
 
@@ -285,7 +288,7 @@ export function DeviationHistoryPage() {
       message.success('AI 已从附件提取并保存')
       invalidate()
     } catch (error) {
-      message.warning(error instanceof Error ? error.message : 'AI 提取失败')
+      message.warning(getUserErrorMessage(error instanceof Error ? error.message : 'AI 提取失败'))
     } finally {
       autoExtractInFlight.current = false
       setDrawer((prev) => ({ ...prev, aiExtracting: false }))
@@ -344,7 +347,7 @@ export function DeviationHistoryPage() {
           try {
             const formData = new FormData()
             formData.append('file', file)
-            await uploadHistoricalDeviationAttachment(created.id, formData)
+            unwrapServerActionResult(await uploadHistoricalDeviationAttachment(created.id, formData))
             uploaded += 1
           } catch {
             uploadFailed += 1
@@ -368,7 +371,7 @@ export function DeviationHistoryPage() {
       invalidate()
       closeDrawer()
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '保存失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '保存失败'))
     }
   }
 
@@ -382,14 +385,13 @@ export function DeviationHistoryPage() {
     const formData = new FormData()
     formData.append('file', file)
     try {
-      const attachment = await uploadHistoricalDeviationAttachment(record.id, formData)
-      if (!attachment) throw new Error('上传失败')
+      const attachment = unwrapServerActionResult(await uploadHistoricalDeviationAttachment(record.id, formData))
       setDrawer((prev) => ({ ...prev, attachments: [...prev.attachments, attachment] }))
       message.success('上传成功（Word 附件已自动转标准 MD）')
       invalidate()
       maybeAutoExtract(record.id)
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '上传失败')
+      message.error(getActionErrorMessage(error, '历史偏差附件上传'))
     }
   }
 
@@ -409,7 +411,7 @@ export function DeviationHistoryPage() {
           message.success('已删除')
           invalidate()
         } catch (error) {
-          message.error(error instanceof Error ? error.message : '删除失败')
+          message.error(getUserErrorMessage(error instanceof Error ? error.message : '删除失败'))
         }
       },
     })
@@ -428,7 +430,7 @@ export function DeviationHistoryPage() {
           message.success('已删除')
           invalidate()
         } catch (error) {
-          message.error(error instanceof Error ? error.message : '删除失败')
+          message.error(getUserErrorMessage(error instanceof Error ? error.message : '删除失败'))
         }
       },
     })
@@ -444,8 +446,7 @@ export function DeviationHistoryPage() {
     try {
       const formData = new FormData()
       files.forEach((file) => formData.append('files', file))
-      const result = await batchImportHistoricalDeviations(formData)
-      if (!result) throw new Error('批量导入失败')
+      const result = unwrapServerActionResult(await batchImportHistoricalDeviations(formData))
       const failed = (result.results || []).filter((r) => r.status !== 'succeeded')
       const failedNames = failed.slice(0, 3).map((r) => r.file_name).join('、')
       // AI 提取失败不算导入失败，但必须把原因显示出来，否则用户以为字段已提取
@@ -466,7 +467,7 @@ export function DeviationHistoryPage() {
       }
       invalidate()
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '批量导入失败')
+      message.error(getActionErrorMessage(error, '历史偏差批量导入'))
     } finally {
       setBatchImporting(false)
     }
@@ -655,7 +656,7 @@ export function DeviationHistoryPage() {
             type="error"
             showIcon
             message="历史偏差加载失败"
-            description={loadError instanceof Error ? loadError.message : undefined}
+            description={loadError instanceof Error ? getUserErrorMessage(loadError.message) : undefined}
             action={
               <Button size="small" onClick={() => void refetch()}>
                 重试

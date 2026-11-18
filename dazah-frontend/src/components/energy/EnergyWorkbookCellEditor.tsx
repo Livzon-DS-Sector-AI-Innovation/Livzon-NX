@@ -1,3 +1,4 @@
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { App, Button, Input, InputNumber, Space, Typography } from 'antd'
@@ -55,7 +56,7 @@ export function EnergyWorkbookCellEditor({ date, dataset, pointId, onClose }: { 
         await client.invalidateQueries({ queryKey: ['energy-ledger'] })
         void message.success('数据已保存，关联报表已更新'); onClose()
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : '保存失败，输入已保留')
+        setError(getUserErrorMessage(cause instanceof Error ? cause.message : '保存失败，输入已保留', '保存失败，输入已保留'))
       } finally { locked.current = false; setBusy(false) }
     }, 5000)
   }

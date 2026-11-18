@@ -2,7 +2,7 @@
 
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -73,3 +73,16 @@ class HistoricalDeviationBatchImportResult(BaseModel):
     results: list[HistoricalDeviationBatchImportResultItem] = Field(
         default_factory=list
     )
+
+
+HISTORICAL_DEVIATION_BATCH_LIMIT = "QUALITY_HISTORICAL_DEVIATION_BATCH_LIMIT"
+
+
+class HistoricalDeviationBatchErrorDetail(BaseModel):
+    error_code: Literal["QUALITY_HISTORICAL_DEVIATION_BATCH_LIMIT"]
+
+
+class HistoricalDeviationBatchErrorResponse(BaseModel):
+    code: int
+    message: str
+    detail: HistoricalDeviationBatchErrorDetail | str | None = None

@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import Link from 'next/link'
 import { useMemo, useState, useTransition } from 'react'
 import {
@@ -381,7 +382,7 @@ export default function DeclarationProgressPage({ detail }: DeclarationProgressP
       const payload = await fetchDeclarationProgressRecordHistory(record.record_id)
       setHistoryPayload(payload)
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '获取历史失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '获取历史失败'))
     } finally {
       setHistoryLoading(false)
     }
@@ -452,7 +453,7 @@ export default function DeclarationProgressPage({ detail }: DeclarationProgressP
         setSelectedRecordId(null)
         router.refresh()
       } catch (error) {
-        message.error(error instanceof Error ? error.message : '删除失败')
+        message.error(getUserErrorMessage(error instanceof Error ? error.message : '删除失败'))
       }
     })
   }
@@ -476,7 +477,7 @@ export default function DeclarationProgressPage({ detail }: DeclarationProgressP
         form.resetFields()
         router.refresh()
       } catch (error) {
-        message.error(error instanceof Error ? error.message : '保存失败')
+        message.error(getUserErrorMessage(error instanceof Error ? error.message : '保存失败'))
       }
     })
   }

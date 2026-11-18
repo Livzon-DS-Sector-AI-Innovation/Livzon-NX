@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { Button, Input, Table, Tag, Card, App, Space, Popconfirm, Select } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
@@ -147,7 +148,7 @@ export function ProcessOptimizationPage({ initialOptimizations, initialTotal }: 
       setSelectedRouteId(undefined)
       message.success('优化任务已创建，开始DOE实验设计')
     } catch (error) {
-      message.error('创建失败: ' + (error instanceof Error ? error.message : '未知错误'))
+      message.error(getUserErrorMessage('创建失败: ' + (error instanceof Error ? error.message : '未知错误')))
     } finally {
       setCreating(false)
     }

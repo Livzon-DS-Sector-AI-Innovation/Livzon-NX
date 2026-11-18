@@ -81,6 +81,14 @@ describe('energy import preview flow', () => {
     expect(vi.mocked(previewLedgerImport).mock.calls.at(-1)?.[0].get('file')).toHaveProperty('name', 'energy.xlsx')
     expect(document.body.textContent).not.toContain('确认导入已映射数据')
   })
+  it('shows a safe error when the import preview action throws', async () => {
+    const technicalError = 'TypeError: internal preview failure'
+    vi.mocked(previewLedgerImport).mockRejectedValueOnce(new Error(technicalError))
+    await render(false)
+    await clickImport('预览文件')
+    expect(document.body.textContent).toContain('无法读取文件')
+    expect(document.body.textContent).not.toContain(technicalError)
+  })
 })
 
 const mappedMeter: Meter = { id: 'meter-1', version: 1, definition: {

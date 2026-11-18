@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   form: { setFieldValue: vi.fn(), resetFields: vi.fn() },
 }))
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mocks.push }) }))
+vi.mock('@/hooks/usePagePermissions', () => ({ usePagePermissions: () => ({ canImport: true }) }))
 vi.mock('@/lib/api/hr', () => ({ fetchEmployees: mocks.fetchEmployees }))
 vi.mock('@/lib/api/client/hr', () => ({
   fetchTrainingDepartments: async () => ['测试部门'],
@@ -28,7 +29,7 @@ vi.mock('antd', () => {
   return {
     App: { useApp: () => ({ message: mocks.message }) }, Form,
     Card: Wrap, Row: Wrap, Col: Wrap, Spin: () => null, Popconfirm: Wrap,
-    Modal: () => null, Upload: Wrap, Input: Wrap, AutoComplete: Wrap,
+    Modal: () => null, Upload: Wrap, Input: Wrap, AutoComplete: Wrap, Tooltip: Wrap,
     Select: ({ onChange }: { onChange?: (v: string) => void }) => <button type="button" onClick={() => onChange?.('测试部门')}>选择部门</button>,
     Button: ({ children, htmlType, onClick }: { children?: ReactNode; htmlType?: 'submit'; onClick?: () => void }) =>
       <button type={htmlType ?? 'button'} onClick={onClick}>{children}</button>,

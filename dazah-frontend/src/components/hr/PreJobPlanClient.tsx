@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useEffect, useState } from 'react'
 import { App, Button, Card, Select, Space, } from 'antd'
 import { FileTextOutlined, PrinterOutlined, DownloadOutlined } from '@ant-design/icons'
@@ -32,7 +33,7 @@ export default function PreJobPlanClient() {
         setEmployees(res.data || [])
       })
       .catch((err) => {
-        message.error('加载员工列表失败: ' + ((err instanceof Error ? err.message : '') || '未知错误'))
+        message.error(getUserErrorMessage('加载员工列表失败: ' + ((err instanceof Error ? err.message : '') || '未知错误')))
       })
       .finally(() => {
         setLoading(false)
@@ -51,7 +52,7 @@ export default function PreJobPlanClient() {
       await fetchPrejobTrainingPlan(selectedEmployee.id, selectedEmployee.name)
       message.success('岗前培训计划已导出')
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '导出失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '导出失败'))
     } finally {
       setDownloading(false)
     }

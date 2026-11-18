@@ -276,7 +276,18 @@ const server = createServer(async (request, response) => {
     return
   }
 
+  const annualPlanTest = ['annual-plan-read', 'annual-plan-import-revoked', 'annual-plan-writes'].includes(pageTestToken)
   if (request.url?.startsWith('/api/v1/identity/me')) {
+    if (annualPlanTest) {
+      response.end(JSON.stringify({ code: 200, data: { ...currentUser, role: 'user', module_codes: ['hr'],
+        page_permission_rollouts: { hr: 'enforced' },
+        page_permissions: [{ page_key: 'hr:training:annual-plan', module_code: 'hr',
+          permissions: ['access', 'query', 'operate'],
+          sensitive_actions: pageTestToken === 'annual-plan-import-revoked' ? ['bulk_import'] : pageTestToken === 'annual-plan-writes' ? ['delete'] : [],
+          source: 'user', data_scope: { scope_type: 'all' } }],
+      } }))
+      return
+    }
     if (pageTestToken === 'impersonation-procurement') {
       response.end(JSON.stringify({ code: 200, data: {
         ...currentUser, ...simulatedUser, role: 'user', module_codes: ['procurement'],
@@ -340,6 +351,40 @@ const server = createServer(async (request, response) => {
         : currentUser
     response.end(JSON.stringify({ code: 200, message: 'success', data: user }))
     return
+  }
+
+  if (annualPlanTest) {
+    const pathname = request.url?.split('?')[0]
+    if (request.method === 'GET' && pathname === '/api/v1/hr/annual-training-plans') {
+      const data = pageTestToken === 'annual-plan-writes'
+        ? [{ id: 'fixture-plan', department: '公司', plan_level: '公司级', year: new Date().getFullYear() }]
+        : []
+      response.end(JSON.stringify({ code: 200, data, meta: { total: data.length, page: 1, page_size: 200 } }))
+      return
+    }
+    if (request.method === 'GET' && pathname === '/api/v1/hr/training/departments') {
+      response.end(JSON.stringify({ code: 200, data: ['质量部'] }))
+      return
+    }
+    if (pageTestToken === 'annual-plan-writes' && request.method === 'POST' && pathname === '/api/v1/hr/annual-training-plans') {
+      request.resume()
+      response.statusCode = 409
+      response.end(JSON.stringify({
+        code: 409, message: '检测到重复年度计划', detail: { error_code: 'HR_ANNUAL_PLAN_DUPLICATE' },
+      }))
+      return
+    }
+    if (pageTestToken === 'annual-plan-writes' && request.method === 'DELETE' && pathname === '/api/v1/hr/annual-training-plans/fixture-plan') {
+      response.statusCode = 403
+      response.end(JSON.stringify({ code: 403, message: '未获得当前高风险业务动作授权' }))
+      return
+    }
+    if (request.method === 'POST' && pathname === '/api/v1/hr/annual-training-plans/import') {
+      request.resume()
+      response.statusCode = 403
+      response.end(JSON.stringify({ code: 403, message: '未获得当前高风险业务动作授权' }))
+      return
+    }
   }
 
   if (pageTestToken.startsWith('ledger-') && request.url?.startsWith('/api/v1/quality/deviations')) {

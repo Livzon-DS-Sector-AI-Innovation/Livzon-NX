@@ -16,4 +16,20 @@ describe('getUserErrorMessage', () => {
   ])('converts raw errors into actionable Chinese text', (error, status, expected) => {
     expect(getUserErrorMessage(error, undefined, status)).toBe(expected)
   })
+
+  it.each([
+    '导入失败：Minified React error #441',
+    '无法保存：An unexpected response was received from the server.',
+    '加载失败：ChunkLoadError: Loading chunk 18 failed',
+    '读取失败：TypeError: 数据对象为空',
+    '异常\n    at internalPath (C:/internal/service.ts:2:2)',
+    '请求失败 Authorization: Bearer synthetic',
+  ])('replaces framework and infrastructure details in legacy feedback', message => {
+    expect(getUserErrorMessage(message, '请重新打开页面')).toBe('请重新打开页面')
+  })
+
+  it('never displays unknown Chinese 5xx diagnostics', () => {
+    expect(getUserErrorMessage('内部数据库异常和调试详情', undefined, 503))
+      .toBe('服务暂时不可用，请稍后重试')
+  })
 })

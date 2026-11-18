@@ -6,6 +6,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { unwrapServerActionResult } from '@/lib/server-action-result'
 
 const mocks = vi.hoisted(() => {
   const functions = new Map<string, ReturnType<typeof vi.fn>>()
@@ -731,13 +732,31 @@ describe('migrated component coverage', () => {
 
     const failed = vi.fn()
     const failedView = renderClient(createElement(Harness, {
-      syncAction: vi.fn(async () => ({ data: { state: 'failed', message: '同步失败' } })),
+      syncAction: vi.fn(async () => ({ data: { state: 'failed', progress: '失败: internal Feishu response' } })),
       pollAction: vi.fn(async () => ({ data: { state: 'failed' } })), onSuccess: vi.fn(), onError: failed,
     }))
     failedView.container.querySelector('button')?.click()
     await settle()
-    expect(failed).toHaveBeenCalledWith('同步失败')
+    expect(failed).toHaveBeenCalledWith('同步失败，请查看同步任务状态')
     closeRendered(failedView)
+
+    for (const [data, message] of [
+      [{ state: 'failed', progress: '内部诊断', detail: { error_code: 'HR_FEISHU_CONTACT_NOT_CONFIGURED' } }, '人事飞书应用未配置，请联系管理员检查人事飞书设置'],
+      [{ state: 'failed', progress: '失败: 人事飞书应用未配置，请先在人事-飞书设置中填写 App ID 与 App Secret' }, '同步失败，请查看同步任务状态'],
+      [{ state: 'interrupted', progress: '内部诊断' }, '暂未确认同步结果，请先查看业务记录后再决定是否重试'],
+    ] as const) {
+      const onError = vi.fn()
+      const pollAction = vi.fn(async () => ({ data }))
+      const view = renderClient(createElement(Harness, {
+        syncAction: vi.fn(async () => ({ data: { state: 'running' } })),
+        pollAction, onSuccess: vi.fn(), onError,
+      }))
+      view.container.querySelector('button')?.click()
+      await settle()
+      expect(onError).toHaveBeenCalledWith(message)
+      expect(pollAction).toHaveBeenCalledTimes(1)
+      closeRendered(view)
+    }
 
     const polled = vi.fn()
     const pollView = renderClient(createElement(Harness, {
@@ -749,6 +768,18 @@ describe('migrated component coverage', () => {
     expect(polled).toHaveBeenCalledWith('轮询完成', undefined)
     closeRendered(pollView)
 
+    const statusError = vi.fn()
+    const deniedPoll = vi.fn(async () => unwrapServerActionResult({ ok: false, message: '登录已失效，请重新登录' }))
+    const deniedView = renderClient(createElement(Harness, {
+      syncAction: vi.fn(async () => ({ data: { state: 'running' } })),
+      pollAction: deniedPoll, onSuccess: vi.fn(), onError: statusError,
+    }))
+    deniedView.container.querySelector('button')?.click()
+    await settle()
+    expect(statusError).toHaveBeenCalledWith('登录已失效，请重新登录')
+    expect(deniedPoll).toHaveBeenCalledTimes(1)
+    closeRendered(deniedView)
+
     const networkError = vi.fn()
     const errorView = renderClient(createElement(Harness, {
       syncAction: vi.fn(async () => { throw new Error('网络失败') }),
@@ -756,7 +787,7 @@ describe('migrated component coverage', () => {
     }))
     errorView.container.querySelector('button')?.click()
     await settle()
-    expect(networkError).toHaveBeenCalledWith('网络失败')
+    expect(networkError).toHaveBeenCalledWith('暂未确认同步结果，请先查看业务记录后再决定是否重试')
     closeRendered(errorView)
   })
 
@@ -1201,7 +1232,7 @@ describe('migrated component coverage', () => {
     getMock('lib/api/client/hr', 'fetchSectionPreview').mockResolvedValue({ data: { content: '章节内容', file_name: '章节.docx' } })
     getMock('lib/api/client/hr', 'fetchAttachmentPreview').mockResolvedValue({ data: { content: '附件内容', file_name: '制度.pdf' } })
     getMock('actions/hr', 'batchUpdatePlanItems').mockResolvedValue({})
-    getMock('actions/hr', 'uploadPlanAttachments').mockResolvedValue({})
+    getMock('actions/hr', 'uploadPlanAttachments').mockResolvedValue({ ok: true, data: {} })
     getMock('actions/hr', 'deletePlanAttachment').mockResolvedValue({})
     getMock('lib/api/client/hr', 'exportAnnualTrainingPlanWord').mockResolvedValue(new Blob(['doc']))
     const rendered = renderClient(createElement(AnnualPlanDetailClient, {
@@ -1345,7 +1376,7 @@ describe('migrated component coverage', () => {
     getMock('lib/api/client/hr', 'fetchSectionPreview').mockRejectedValue(new Error('章节预览失败'))
     getMock('lib/api/client/hr', 'fetchAttachmentPreview').mockRejectedValue(new Error('附件预览失败'))
     getMock('actions/hr', 'batchUpdatePlanItems').mockRejectedValue(new Error('保存失败'))
-    getMock('actions/hr', 'uploadPlanAttachments').mockRejectedValue(new Error('上传失败'))
+    getMock('actions/hr', 'uploadPlanAttachments').mockResolvedValue({ ok: false, message: '文件过大，请缩小文件后重试' })
     getMock('actions/hr', 'deletePlanAttachment').mockRejectedValue(new Error('删除失败'))
     getMock('lib/api/client/hr', 'exportAnnualTrainingPlanWord').mockRejectedValue(new Error('导出失败'))
     const rendered = renderClient(createElement(AnnualPlanDetailClient, {
@@ -1362,6 +1393,7 @@ describe('migrated component coverage', () => {
     await settle()
     expect(getMock('actions/hr', 'batchUpdatePlanItems')).toHaveBeenCalled()
     expect(getMock('actions/hr', 'uploadPlanAttachments')).toHaveBeenCalled()
+    expect(mocks.message.error).toHaveBeenCalledWith('文件过大，请缩小文件后重试')
     expect(getMock('lib/api/client/hr', 'exportAnnualTrainingPlanWord')).toHaveBeenCalled()
     closeRendered(rendered)
   })
@@ -2092,9 +2124,9 @@ describe('migrated component coverage', () => {
     ]
     getMock('lib/api/client/hr', 'fetchAnnualTrainingPlans').mockResolvedValue({ data: plans })
     getMock('lib/api/client/hr', 'fetchTrainingDepartments').mockResolvedValue(['质量部', '生产部'])
-    getMock('actions/hr', 'createAnnualTrainingPlan').mockResolvedValue({ data: {} })
-    getMock('actions/hr', 'deleteAnnualTrainingPlan').mockResolvedValue({})
-    getMock('actions/hr', 'importAnnualTrainingPlan').mockResolvedValue({ message: '导入成功' })
+    getMock('actions/hr', 'createAnnualTrainingPlan').mockResolvedValue({ ok: false, message: '该部门本年度的培训计划已存在' })
+    getMock('actions/hr', 'deleteAnnualTrainingPlan').mockResolvedValue({ ok: false, message: '没有执行此操作的权限，请联系管理员' })
+    getMock('actions/hr', 'importAnnualTrainingPlan').mockResolvedValue({ ok: true, data: { message: '导入成功' } })
     const rendered = renderClient(createElement(AnnualPlanListClient))
     await settle()
     expect(rendered.container.textContent).toContain('公司级')
@@ -2103,6 +2135,10 @@ describe('migrated component coverage', () => {
     findButton('新建年度计划')?.click()
     await settle()
     findButton('创建')?.click()
+    await settle()
+    expect(mocks.message.error).toHaveBeenCalledWith('该部门本年度的培训计划已存在')
+    expect(mocks.message.success).not.toHaveBeenCalledWith('年度培训计划创建成功')
+    findButton('取消')?.click()
     await settle()
     findButton('导入文档')?.click()
     await settle()
@@ -2114,7 +2150,66 @@ describe('migrated component coverage', () => {
     await settle()
     expect(getMock('actions/hr', 'createAnnualTrainingPlan')).toHaveBeenCalled()
     expect(getMock('actions/hr', 'importAnnualTrainingPlan')).toHaveBeenCalledWith(expect.any(File), undefined)
+    expect(mocks.message.success).toHaveBeenCalledWith('导入成功')
+    expect(getMock('lib/api/client/hr', 'fetchAnnualTrainingPlans')).toHaveBeenCalledTimes(2)
     expect(getMock('actions/hr', 'deleteAnnualTrainingPlan')).toHaveBeenCalledWith(expect.stringContaining('plan-'))
+    expect(mocks.message.error).toHaveBeenCalledWith('没有执行此操作的权限，请联系管理员')
+    expect(rendered.container.textContent).toContain('公司级')
+    closeRendered(rendered)
+  })
+
+  it.each([
+    ['没有执行此操作的权限，请联系管理员'],
+    ['登录已失效，请重新登录'],
+    ['文档中没有有效的培训计划数据，请使用 APP1 或 APP2 模板'],
+    ['文件过大，请缩小文件后重试'],
+  ])('keeps the import dialog and file for a business rejection: %s', async (message) => {
+    const action = getMock('actions/hr', 'importAnnualTrainingPlan').mockResolvedValue({ ok: false, message })
+    getMock('lib/api/client/hr', 'fetchAnnualTrainingPlans').mockResolvedValue({ data: [] })
+    const rendered = renderClient(createElement(AnnualPlanListClient))
+    const click = async (label: string) => {
+      await act(async () => {
+        Array.from(rendered.container.querySelectorAll('button')).find(button => button.textContent === label)?.click()
+      })
+    }
+    await settle()
+    await click('导入文档')
+    await click('选择文档')
+    await click('确定')
+    expect(mocks.message.error).toHaveBeenCalledWith(message)
+    expect(rendered.container.querySelector('[role="dialog"]')?.textContent).toContain('导入年度培训计划')
+    await click('确定')
+    expect(action).toHaveBeenCalledTimes(2)
+    expect(action.mock.calls[1][0]).toBe(action.mock.calls[0][0])
+    expect(getMock('lib/api/client/hr', 'fetchAnnualTrainingPlans')).toHaveBeenCalledTimes(1)
+    closeRendered(rendered)
+  })
+
+  it('uses a safe import fallback for framework failures and reports refresh failures separately', async () => {
+    getMock('actions/hr', 'importAnnualTrainingPlan')
+      .mockRejectedValueOnce(new Error('Minified React error #441'))
+      .mockResolvedValueOnce({ ok: false, message: '内部服务详情', reference: 'import-ref' })
+      .mockResolvedValueOnce({ ok: true, data: { message: '成功导入1条明细' } })
+    getMock('lib/api/client/hr', 'fetchAnnualTrainingPlans')
+      .mockResolvedValueOnce({ data: [] })
+      .mockRejectedValueOnce(new Error('内部列表详情'))
+    const rendered = renderClient(createElement(AnnualPlanListClient))
+    const click = async (label: string) => {
+      await act(async () => {
+        Array.from(rendered.container.querySelectorAll('button')).find(button => button.textContent === label)?.click()
+      })
+    }
+    await settle()
+    await click('导入文档')
+    await click('选择文档')
+    await click('确定')
+    expect(mocks.message.error).toHaveBeenLastCalledWith('暂未确认年度培训计划的导入结果，请先查看列表后再决定是否重新导入')
+    await click('确定')
+    expect(mocks.message.error).toHaveBeenLastCalledWith('暂未确认年度培训计划的导入结果，请先查看列表后再决定是否重新导入（错误标识：import-ref）')
+    await click('确定')
+    expect(mocks.message.success).toHaveBeenCalledWith('成功导入1条明细')
+    expect(mocks.message.error).toHaveBeenLastCalledWith('年度培训计划列表加载失败，请刷新后查看')
+    expect(rendered.container.querySelector('[role="dialog"]')).toBeNull()
     closeRendered(rendered)
   })
 
@@ -2127,7 +2222,7 @@ describe('migrated component coverage', () => {
     getMock('lib/api/client/hr', 'fetchPositionTrainingLists').mockResolvedValue({ data: [list], meta: { total: 1 } })
     getMock('actions/hr', 'batchUpdatePositionTrainingListItems').mockResolvedValue({})
     getMock('actions/hr', 'createPositionTrainingList').mockResolvedValue({})
-    getMock('actions/hr', 'importPositionTrainingLists').mockResolvedValue({ message: '导入成功', data: { department: '质量部', imported: 1, skipped: 0 } })
+    getMock('actions/hr', 'importPositionTrainingLists').mockResolvedValue({ ok: false, message: '文档无法解析，请使用 APP9 岗位培训清单模板' })
     getMock('actions/hr', 'clearPositionTrainingListsByDept').mockResolvedValue({ message: '已清除' })
     const rendered = renderClient(createElement(PositionTrainingListClient))
     await settle()
@@ -2151,6 +2246,7 @@ describe('migrated component coverage', () => {
     await settle()
     expect(getMock('actions/hr', 'batchUpdatePositionTrainingListItems')).toHaveBeenCalled()
     expect(getMock('actions/hr', 'importPositionTrainingLists')).toHaveBeenCalledWith(expect.any(File))
+    expect(mocks.message.error).toHaveBeenCalledWith('文档无法解析，请使用 APP9 岗位培训清单模板')
     expect(getMock('actions/hr', 'clearPositionTrainingListsByDept')).toHaveBeenCalledWith('质量部')
     closeRendered(rendered)
   })
@@ -2737,8 +2833,8 @@ describe('migrated component coverage', () => {
     getMock('actions/hr', 'fetchDepartmentsAction').mockResolvedValue({ data: [root, child, plain], meta: { total: 3 } })
     getMock('actions/hr', 'fetchDepartmentTreeAction').mockResolvedValue({ data: [root, plain] })
     getMock('actions/hr', 'fetchOrgTreeAction').mockRejectedValue(new Error('飞书组织树暂不可用'))
-    getMock('actions/hr', 'syncDepartmentsFromFeishuAction').mockResolvedValue({ data: { state: 'completed', result: { created: 1, updated: 2, skipped: 0, failed: 0 } } })
-    getMock('actions/hr', 'getDepartmentSyncStatus').mockResolvedValue({ data: { state: 'completed' } })
+    getMock('actions/hr', 'syncDepartmentsFromFeishuAction').mockResolvedValue({ ok: true, data: { data: { state: 'completed', result: { created: 1, updated: 2, skipped: 0, failed: 0 } } } })
+    getMock('actions/hr', 'getDepartmentSyncStatus').mockResolvedValue({ ok: true, data: { data: { state: 'completed' } } })
     getMock('actions/hr', 'deleteDepartment').mockResolvedValueOnce({}).mockRejectedValueOnce(new Error('部门删除失败'))
     const rendered = renderClient(createElement(DepartmentClient, {
       initialDepartments: [plain] as never,
@@ -2816,8 +2912,8 @@ describe('migrated component coverage', () => {
       },
     ]
     getMock('lib/api/client/hr', 'fetchPositionTransfers').mockResolvedValue({ data: records, meta: { total: 2 } })
-    getMock('actions/hr', 'submitPositionTransferApproval').mockResolvedValue({})
-    getMock('actions/hr', 'syncPositionTransferFromFeishuAction').mockResolvedValue({ data: { total: 0, created: 0, updated: 0, deleted: 0 } })
+    getMock('actions/hr', 'submitPositionTransferApproval').mockResolvedValue({ ok: false, message: '只有草稿状态的记录才能提交审批，请刷新后查看当前状态' })
+    getMock('actions/hr', 'syncPositionTransferFromFeishuAction').mockResolvedValue({ ok: true, data: { data: { total: 0, created: 0, updated: 0, deleted: 0 } } })
     getMock('actions/hr', 'deletePositionTransfer').mockResolvedValueOnce({}).mockRejectedValueOnce(new Error('删除调动失败'))
     const rendered = renderClient(createElement(PositionTransferClient, { initialRecords: records as never, initialTotal: 2 }))
     await settle()
@@ -2842,7 +2938,7 @@ describe('migrated component coverage', () => {
     queryElement<HTMLButtonElement>(rendered.container, '[role="dialog"] button')?.click()
     textButton('同步飞书')?.click()
     await settle()
-    getMock('actions/hr', 'syncPositionTransferFromFeishuAction').mockRejectedValueOnce(new Error('同步失败'))
+    getMock('actions/hr', 'syncPositionTransferFromFeishuAction').mockRejectedValueOnce(new Error('Minified React error #441'))
     textButton('同步飞书')?.click()
     await settle()
 
@@ -2856,6 +2952,8 @@ describe('migrated component coverage', () => {
       await settle()
     }
     expect(getMock('actions/hr', 'submitPositionTransferApproval')).toHaveBeenCalled()
+    expect(mocks.message.error).toHaveBeenCalledWith('只有草稿状态的记录才能提交审批，请刷新后查看当前状态')
+    expect(mocks.message.error).toHaveBeenCalledWith('暂未确认飞书岗位调动同步结果，请先查看业务记录后再决定是否重试')
     expect(getMock('actions/hr', 'deletePositionTransfer')).toHaveBeenCalled()
     expect(getMock('actions/hr', 'syncPositionTransferFromFeishuAction')).toHaveBeenCalled()
     closeRendered(rendered)
@@ -3529,8 +3627,9 @@ describe('migrated component coverage', () => {
     }
     getMock('lib/api/client/registration', 'fetchProjectLedgerWorkbookExport').mockResolvedValue(new Blob(['project']))
     getMock('lib/api/client/registration', 'fetchDeclarationProgressWorkbookExport').mockResolvedValue(new Blob(['declaration']))
-    getMock('actions/registration', 'importProjectLedgerWorkbook').mockResolvedValue({ success: true })
-    getMock('actions/registration', 'importDeclarationProgressWorkbook').mockResolvedValue({ success: true })
+    const importDenied = '没有执行此操作的权限，请联系管理员'
+    getMock('actions/registration', 'importProjectLedgerWorkbook').mockResolvedValue({ ok: false, message: importDenied })
+    getMock('actions/registration', 'importDeclarationProgressWorkbook').mockResolvedValue({ ok: true, data: { imported_records: 2 } })
     const rendered = renderClient(createElement('div', null,
       createElement(ProjectLedgerDashboardPage, { key: 'project-dashboard', overview: projectOverview as never }),
       createElement(DeclarationProgressDashboardPage, { key: 'declaration-dashboard', overview: declarationOverview as never }),
@@ -3546,6 +3645,8 @@ describe('migrated component coverage', () => {
       if (!button.disabled) button.click()
     }
     await settle()
+    expect(mocks.message.error).toHaveBeenCalledWith(importDenied)
+    expect(mocks.message.success).toHaveBeenCalledWith('导入完成，共导入 2 条主记录')
     expect(getMock('lib/api/client/registration', 'fetchProjectLedgerWorkbookExport')).toHaveBeenCalled()
     expect(getMock('lib/api/client/registration', 'fetchDeclarationProgressWorkbookExport')).toHaveBeenCalled()
     closeRendered(rendered)
@@ -3830,12 +3931,12 @@ describe('quality deviation history / workbench / inspection modal coverage', ()
       ],
     })
     getMock('actions/quality-deviation-workbench', 'deleteHistoricalDeviation').mockResolvedValue({ ok: true })
-    getMock('actions/quality-deviation-workbench', 'uploadHistoricalDeviationAttachment').mockResolvedValue({
+    getMock('actions/quality-deviation-workbench', 'uploadHistoricalDeviationAttachment').mockResolvedValue({ ok: true, data: {
       id: 'att-new', file_name: 'template.pdf', url: '/api/files/att-new',
-    })
-    getMock('actions/quality-deviation-workbench', 'batchImportHistoricalDeviations').mockResolvedValue({
+    } })
+    getMock('actions/quality-deviation-workbench', 'batchImportHistoricalDeviations').mockResolvedValue({ ok: true, data: {
       total: 2, succeeded: 1, failed: 1, results: [{ status: 'failed', file_name: '坏文件.docx' }],
-    })
+    } })
     findButton('编辑')?.click()
     await settle()
     // 编辑抽屉：详情 + 附件列表 + 操作按钮
@@ -3888,9 +3989,9 @@ describe('quality deviation history / workbench / inspection modal coverage', ()
 
     // 新建模式：暂存附件后保存会先创建记录再逐个上传附件
     getMock('actions/quality-deviation-workbench', 'createHistoricalDeviation').mockResolvedValue({ id: 'hist-new' })
-    getMock('actions/quality-deviation-workbench', 'uploadHistoricalDeviationAttachment').mockResolvedValue({
+    getMock('actions/quality-deviation-workbench', 'uploadHistoricalDeviationAttachment').mockResolvedValue({ ok: true, data: {
       id: 'att-new2', file_name: 'template.pdf', url: '/api/files/new2',
-    })
+    } })
     const createView = renderClient(createElement(DeviationHistoryPage))
     await settle()
     const findCreateBtn = (text: string) => Array.from(createView.container.querySelectorAll('button')).find((b) => b.textContent?.includes(text))
@@ -3985,9 +4086,9 @@ describe('quality deviation history / workbench / inspection modal coverage', ()
     await settle()
     expect(getMock('actions/quality-deviation-workbench', 'updateDeviationWorkbenchSettings')).toHaveBeenCalled()
     // 两栏模式：左栏无内容时生成被拦截，上传附件（Upload beforeUpload 拦截）后生成成功
-    getMock('actions/quality-deviation-workbench', 'uploadDeviationWorkbenchAttachment').mockResolvedValue({
+    getMock('actions/quality-deviation-workbench', 'uploadDeviationWorkbenchAttachment').mockResolvedValue({ ok: true, data: {
       id: 'desc-1', file_name: 'template.pdf', storage_key: 'sk-1', asset_keys: [],
-    })
+    } })
     findButton('生成调查报告')?.click()
     await settle()
     expect(mocks.message.warning).toHaveBeenCalledWith('请填写偏差内容或上传附件')
@@ -4043,7 +4144,7 @@ describe('quality deviation history / workbench / inspection modal coverage', ()
     getMock('lib/api/client/quality', 'fetchDeviationWorkbenchReports').mockResolvedValue({ items: [], total: 0 })
     getMock('lib/api/client/quality', 'fetchDeviationWorkbenchSettings').mockResolvedValue(null)
     getMock('actions/quality-deviation-workbench', 'analyzeDeviationWorkbench').mockResolvedValue(null)
-    getMock('actions/quality-deviation-workbench', 'uploadDeviationWorkbenchAttachment').mockRejectedValue(new Error('容量超限'))
+    getMock('actions/quality-deviation-workbench', 'uploadDeviationWorkbenchAttachment').mockResolvedValue({ ok: false, message: '文件过大，请缩小文件后重试' })
     getMock('actions/quality-deviation-workbench', 'deleteDeviationWorkbenchAttachment').mockResolvedValue({ ok: true })
     const createView = renderClient(createElement(DeviationWorkbenchPage, { initialRecordId: null }))
     await settle()
@@ -4053,11 +4154,11 @@ describe('quality deviation history / workbench / inspection modal coverage', ()
     expect(mocks.message.warning).toHaveBeenCalledWith('请填写偏差内容或上传附件')
     cf('选择文件')?.click()
     await settle()
-    expect(mocks.message.error).toHaveBeenCalledWith('容量超限')
+    expect(mocks.message.error).toHaveBeenCalledWith('文件过大，请缩小文件后重试')
     // 上传成功 → descriptor 渲染（storage_key → 标准MD 标记）
-    getMock('actions/quality-deviation-workbench', 'uploadDeviationWorkbenchAttachment').mockResolvedValue({
+    getMock('actions/quality-deviation-workbench', 'uploadDeviationWorkbenchAttachment').mockResolvedValue({ ok: true, data: {
       id: 'desc-ok', file_name: 'report.pdf', storage_key: 'sk-1', converted_md_key: 'md-1', asset_keys: [],
-    })
+    } })
     cf('选择文件')?.click()
     await settle()
     expect(mocks.message.success).toHaveBeenCalledWith(expect.stringContaining('上传成功'))
@@ -4517,7 +4618,7 @@ describe('sidebar navigation / onboarding attachment flow / validation audit she
       audit_mode: 'protocol', status: 'completed', conclusion: 'pass',
       serious_count: 0, general_count: 2, suggestion_count: 1, created_at: '2026-08-01',
     }
-    getMock('lib/api/validation-audit', 'fetchValidationAuditTasks').mockResolvedValue({ items: [task], total: 1 })
+    getMock('actions/validation-audit', 'fetchTasksServer').mockResolvedValue({ ok: true, data: { data: { items: [task], total: 1 } } })
     getMock('actions/validation-audit', 'deleteValidationAuditTask').mockResolvedValue({ ok: true })
     const rendered = renderClient(createElement(ValidationAuditListClient, { initialTasks: [task], initialTotal: 1 } as never))
     await settle()
@@ -4530,6 +4631,23 @@ describe('sidebar navigation / onboarding attachment flow / validation audit she
     findButton('删除')?.click()
     await settle()
     expect(getMock('actions/validation-audit', 'deleteValidationAuditTask')).toHaveBeenCalledWith('vt-1')
+    closeRendered(rendered)
+  })
+
+  it('shows validation audit permission feedback and retains the task after a denied delete', async () => {
+    const task = {
+      id: 'vt-denied', task_name: '待审核任务', product_name: '示例产品', source_company: '质量部',
+      audit_mode: 'protocol', status: 'draft', created_at: '2026-08-01',
+    }
+    getMock('actions/validation-audit', 'deleteValidationAuditTask').mockResolvedValue({
+      ok: false, message: '没有执行此操作的权限，请联系管理员',
+    })
+    const rendered = renderClient(createElement(ValidationAuditListClient, { initialTasks: [task], initialTotal: 1 } as never))
+    findBtn(rendered, '删除')?.click()
+    await settle()
+    expect(mocks.message.error).toHaveBeenCalledWith('没有执行此操作的权限，请联系管理员')
+    expect(rendered.container.textContent).toContain('待审核任务')
+    expect(getMock('actions/validation-audit', 'fetchTasksServer')).not.toHaveBeenCalled()
     closeRendered(rendered)
   })
 

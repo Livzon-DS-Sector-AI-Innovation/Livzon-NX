@@ -3,6 +3,7 @@
 // 备件采购建议面板（方案C）：列表 + 批量提交采购 + 登记到货 + 取消。
 // 数据来自 GET /spare-parts/purchase-suggestions；写操作走 Server Actions。
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useCallback, useEffect, useState } from 'react'
 import { App, Button, InputNumber, Popconfirm, Select, Space, Table, Tag } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
@@ -71,7 +72,7 @@ export function PurchaseSuggestionPanel({ workshopCode }: { workshopCode: string
       }
       await load()
     } catch (e) {
-      message.error(e instanceof Error ? e.message : '提交采购失败')
+      message.error(getUserErrorMessage(e instanceof Error ? e.message : '提交采购失败'))
     } finally {
       setSubmitting(false)
     }
@@ -101,7 +102,7 @@ export function PurchaseSuggestionPanel({ workshopCode }: { workshopCode: string
           message.success('到货已入库')
           await load()
         } catch (e) {
-          message.error(e instanceof Error ? e.message : '登记到货失败')
+          message.error(getUserErrorMessage(e instanceof Error ? e.message : '登记到货失败'))
         }
       },
     })
@@ -193,7 +194,7 @@ export function PurchaseSuggestionPanel({ workshopCode }: { workshopCode: string
                   message.success('已取消')
                   await load()
                 } catch (e) {
-                  message.error(e instanceof Error ? e.message : '取消失败')
+                  message.error(getUserErrorMessage(e instanceof Error ? e.message : '取消失败'))
                 }
               }}
             >

@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Button, Skeleton } from 'antd'
 import PlatformNotice from '@/components/shared/PlatformNotice'
@@ -12,7 +13,7 @@ export function EnergyWorkbookImport({ year }: { year: number }) {
   const init = { headers: { 'X-Dazah-Page-Path': '/energy/settings' } }
   const meters = useQuery({ queryKey: ['energy-ledger', 'import-meters'], queryFn: () => ledgerRequest<Meter[]>('/input-fields', init) })
   const error = meters.error
-  if (error) return <PlatformNotice type="error" title={error.message} action={<Button onClick={() => { void meters.refetch() }}>重试</Button>} />
+  if (error) return <PlatformNotice type="error" title={getUserErrorMessage(error.message)} action={<Button onClick={() => { void meters.refetch() }}>重试</Button>} />
   if (meters.isPending) return <Skeleton active />
   return <EnergyImportClient initialYear={year} meters={meters.data} onChanged={() => client.invalidateQueries({ queryKey: ['energy-ledger'] })} />
 }

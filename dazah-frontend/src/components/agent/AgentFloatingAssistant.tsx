@@ -1,5 +1,6 @@
 "use client"
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useCallback, useEffect, useRef, useState } from "react"
 import {
   CheckOutlined,
@@ -817,7 +818,7 @@ export function AgentFloatingAssistant() {
       if (!hasReceivedContent || !hasDisplayedContent) {
         removeMessage(assistantMessageId)
       }
-      setError(err instanceof Error ? err.message : "中枢助手请求失败")
+      setError(getUserErrorMessage(err instanceof Error ? err.message : "中枢助手请求失败", "中枢助手请求失败"))
     } finally {
       window.clearTimeout(streamTimeoutId)
       if (abortControllerRef.current === abortController) {
@@ -875,7 +876,7 @@ export function AgentFloatingAssistant() {
       upsertConfirmation(result)
       addMessage({ role: "assistant", content: `已取消：${result.summary}` })
     } catch (err) {
-      setError(err instanceof Error ? err.message : "取消确认失败")
+      setError(getUserErrorMessage(err instanceof Error ? err.message : "取消确认失败", "取消确认失败"))
     } finally {
       setLoading(false)
     }
@@ -896,7 +897,7 @@ export function AgentFloatingAssistant() {
       const result = await fetchAgentSessions()
       setSessions(result.items ?? [])
     } catch (err) {
-      setError(err instanceof Error ? err.message : "加载历史会话失败")
+      setError(getUserErrorMessage(err instanceof Error ? err.message : "加载历史会话失败", "加载历史会话失败"))
     } finally {
       setHistoryLoading(false)
     }
@@ -913,7 +914,7 @@ export function AgentFloatingAssistant() {
       })
       setHistoryOpen(false)
     } catch (err) {
-      setError(err instanceof Error ? err.message : "恢复历史会话失败")
+      setError(getUserErrorMessage(err instanceof Error ? err.message : "恢复历史会话失败", "恢复历史会话失败"))
     } finally {
       setHistoryLoading(false)
     }

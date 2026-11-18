@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import dayjs, { type Dayjs } from 'dayjs'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -259,7 +260,7 @@ export default function RegulationTrackerPage({
       await queryClient.invalidateQueries({ queryKey: ['registration-regulation', 'list'] })
       message.success('法规台账已刷新')
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '法规台账刷新失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '法规台账刷新失败'))
     } finally {
       setRefreshing(false)
     }
@@ -380,7 +381,7 @@ export default function RegulationTrackerPage({
       await queryClient.invalidateQueries({ queryKey: ['registration-regulation'] })
       setDetailOpen(true)
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '触发法规分析失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '触发法规分析失败'))
     } finally {
       setAnalyzingSelected(false)
     }

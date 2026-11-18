@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { App, Button, Descriptions, Tag, Input, Select, Modal } from 'antd'
@@ -141,7 +142,7 @@ export default function CandidateDetailClient({ candidate }: CandidateDetailClie
       setIsEditing(false)
       router.refresh()
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '保存失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '保存失败'))
     } finally {
       setSaving(false)
     }
@@ -182,7 +183,7 @@ export default function CandidateDetailClient({ candidate }: CandidateDetailClie
       if (data.feishu_errors?.length) parts.push(`飞书部分失败: ${data.feishu_errors.length} 人`)
       message.success(parts.join('；') || '发送完成')
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '发送失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '发送失败'))
     } finally {
       setSendingNotice(false)
     }

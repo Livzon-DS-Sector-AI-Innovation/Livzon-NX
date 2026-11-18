@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useEffect } from 'react'
 import { App, Drawer, Form, Input, Select, Button, Space, Table, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
@@ -56,7 +57,7 @@ export function InspectionCompleteDrawer({ onRefresh }: InspectionCompleteDrawer
       closeInspectionCompleteDrawer()
       onRefresh?.()
     } catch (error) {
-      if (error?.message) message.error(error.message)
+      if (error?.message) message.error(getUserErrorMessage(error.message))
     }
   }
 

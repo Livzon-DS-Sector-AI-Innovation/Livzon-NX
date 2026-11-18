@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { App, Button, Card, Form, Input, Popconfirm, Select, Space, Table, Tag, Typography } from 'antd'
 import { DeleteOutlined, ReloadOutlined, SyncOutlined } from '@ant-design/icons'
@@ -72,7 +73,7 @@ export function ReadOnlyFeishuSourcesPanel({ moduleCode, pageOptions, configId }
       setRoots(nextRoots)
       setResources(nextResources)
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '加载只读数据源失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '加载只读数据源失败'))
     } finally {
       setLoading(false)
     }
@@ -107,7 +108,7 @@ export function ReadOnlyFeishuSourcesPanel({ moduleCode, pageOptions, configId }
       message.success(success)
       await load()
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '操作失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '操作失败'))
     } finally {
       setBusy((current) => ({ ...current, [key]: false }))
     }

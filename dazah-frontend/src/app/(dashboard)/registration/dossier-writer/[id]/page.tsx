@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import {
@@ -220,7 +221,7 @@ export default function DossierDetailPage() {
       })
       message.success('分类已更新')
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '更新分类失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '更新分类失败'))
     }
   }
 
@@ -250,7 +251,7 @@ export default function DossierDetailPage() {
       // Trigger preview refresh
       setPreviewRefreshKey(prev => prev + 1)
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '上传失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '上传失败'))
     } finally {
       setParsing(false)
     }
@@ -265,7 +266,7 @@ export default function DossierDetailPage() {
       message.success(result.message)
       loadChapterTree(dossierId)
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '匹配失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '匹配失败'))
     } finally {
       setMatching(false)
     }
@@ -285,7 +286,7 @@ export default function DossierDetailPage() {
         message.error(result.message)
       }
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '导出失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '导出失败'))
     } finally {
       setExporting(false)
     }
@@ -304,7 +305,7 @@ export default function DossierDetailPage() {
         message.error(result.message)
       }
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '导出失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '导出失败'))
     } finally {
       setExporting(false)
     }
@@ -337,7 +338,7 @@ export default function DossierDetailPage() {
       }
     } catch (error) {
       message.destroy('filling')
-      message.error((error instanceof Error ? error.message : '') || '填充失败')
+      message.error(getUserErrorMessage((error instanceof Error ? error.message : '') || '填充失败'))
     } finally {
       setFilling(false)
     }

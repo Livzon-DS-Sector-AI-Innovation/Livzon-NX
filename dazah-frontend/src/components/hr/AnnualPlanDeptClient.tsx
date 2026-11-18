@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useEffect, useState } from 'react'
 import { App, Button, Card, Row, Col, Popconfirm, Spin, } from 'antd'
 import { PlusOutlined, DeleteOutlined, EditOutlined, FileTextOutlined } from '@ant-design/icons'
@@ -7,6 +8,7 @@ import Link from 'next/link'
 import { AnnualTrainingPlan } from '@/types/hr'
 import { fetchAnnualTrainingPlans } from '@/lib/api/client/hr'
 import { deleteAnnualTrainingPlan } from '@/actions/hr'
+import { getActionErrorMessage, unwrapServerActionResult } from '@/lib/server-action-result'
 
 interface AnnualPlanDeptClientProps {
   department: string
@@ -27,7 +29,7 @@ export default function AnnualPlanDeptClient({ department }: AnnualPlanDeptClien
       })
       setPlans(res.data || [])
     } catch (err) {
-      message.error('加载计划列表失败: ' + ((err instanceof Error ? err.message : '') || '未知错误'))
+      message.error(getUserErrorMessage('加载计划列表失败: ' + ((err instanceof Error ? err.message : '') || '未知错误')))
     } finally {
       setLoading(false)
     }
@@ -39,11 +41,11 @@ export default function AnnualPlanDeptClient({ department }: AnnualPlanDeptClien
 
   const handleDelete = async (id: string) => {
     try {
-      await deleteAnnualTrainingPlan(id)
+      unwrapServerActionResult(await deleteAnnualTrainingPlan(id))
       setPlans((prev) => prev.filter((p) => p.id !== id))
       message.success('删除成功')
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '删除失败')
+      message.error(getActionErrorMessage(err, '年度培训计划删除'))
     }
   }
 

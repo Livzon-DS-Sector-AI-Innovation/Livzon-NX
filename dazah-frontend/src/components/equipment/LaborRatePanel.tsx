@@ -3,6 +3,7 @@
 // 维修工时费率配置（方案C）：人员级（优先）/岗位级 CRUD。
 // 工时成本 = 完成工单时的维修时长 × 该维修人费率（person > role > 0）。
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useCallback, useEffect, useState } from 'react'
 import { App, Button, Form, InputNumber, Modal, Popconfirm, Radio, Select, Space, Table, DatePicker, Input } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
@@ -85,7 +86,7 @@ export function LaborRatePanel() {
       setDrawerOpen(false)
       await load()
     } catch (e) {
-      if (e instanceof Error && e.message) message.error(e.message)
+      if (e instanceof Error && e.message) message.error(getUserErrorMessage(e.message))
     } finally {
       setSubmitting(false)
     }
@@ -138,7 +139,7 @@ export function LaborRatePanel() {
                 message.success('已删除')
                 await load()
               } catch (e) {
-                message.error(e instanceof Error ? e.message : '删除失败')
+                message.error(getUserErrorMessage(e instanceof Error ? e.message : '删除失败'))
               }
             }}
           >

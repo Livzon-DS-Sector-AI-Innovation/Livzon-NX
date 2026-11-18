@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -233,7 +234,7 @@ export default function EmergencyMgmtPanel({
       if (suppliesRes.code === 200 && suppliesRes.data) setSupplies(suppliesRes.data.items)
       setError(null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : '加载应急管理数据失败')
+      setError(getUserErrorMessage(err instanceof Error ? err.message : '加载应急管理数据失败', '加载应急管理数据失败'))
     } finally {
       setLoading(false)
     }
@@ -284,7 +285,7 @@ export default function EmergencyMgmtPanel({
         message.error(res.message || '保存失败')
       }
     } catch (err) {
-      message.error(err instanceof Error ? err.message : '保存失败')
+      message.error(getUserErrorMessage(err instanceof Error ? err.message : '保存失败'))
     }
   }
 
@@ -370,7 +371,7 @@ export default function EmergencyMgmtPanel({
                 const file = await fetchEmergencyPlanFileBytes(row.id)
                 downloadBase64File(file.base64, file.fileName || row.file_name || row.name)
               } catch (err) {
-                message.error(err instanceof Error ? err.message : '下载失败')
+                message.error(getUserErrorMessage(err instanceof Error ? err.message : '下载失败'))
               }
             }}
           >
@@ -392,7 +393,7 @@ export default function EmergencyMgmtPanel({
                   onError?.(new Error(res.message))
                 }
               } catch (err) {
-                message.error(err instanceof Error ? err.message : '上传失败')
+                message.error(getUserErrorMessage(err instanceof Error ? err.message : '上传失败'))
                 onError?.(err as Error)
               }
             }}
@@ -496,7 +497,7 @@ export default function EmergencyMgmtPanel({
         message.error(res.message || '保存失败')
       }
     } catch (err) {
-      message.error(err instanceof Error ? err.message : '保存失败')
+      message.error(getUserErrorMessage(err instanceof Error ? err.message : '保存失败'))
     }
   }
 
@@ -625,7 +626,7 @@ export default function EmergencyMgmtPanel({
         message.error(res.message || '保存失败')
       }
     } catch (err) {
-      message.error(err instanceof Error ? err.message : '保存失败')
+      message.error(getUserErrorMessage(err instanceof Error ? err.message : '保存失败'))
     }
   }
 

@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import {
   CloudUploadOutlined,
   FileSearchOutlined,
@@ -349,7 +350,7 @@ export function ExternalQualityManagementPage({ initialTab }: { initialTab: Exte
 
   if (loading) return <Spin size="large" />
   if (fatalError) {
-    return <Alert type="error" showIcon title="外部质量工作台加载失败" description={fatalError.message} action={<Button onClick={() => void Promise.all([refreshSuppliers(), refreshComplaints(), refreshReturnRecalls(), refreshProductQuality()])}>重试</Button>} />
+    return <Alert type="error" showIcon title="外部质量工作台加载失败" description={getUserErrorMessage(fatalError.message)} action={<Button onClick={() => void Promise.all([refreshSuppliers(), refreshComplaints(), refreshReturnRecalls(), refreshProductQuality()])}>重试</Button>} />
   }
 
   return (

@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useState, useEffect, useRef } from 'react'
 import { Button, Card, Input, Table, App, Tag } from 'antd'
 import { PlusOutlined, DeleteOutlined, DownloadOutlined } from '@ant-design/icons'
@@ -115,7 +116,7 @@ export default function TrainingAttachmentClient({
       for (const e of entries) downloadBytes(e.bytes, e.name)
       message.success('培训附件已生成')
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '生成失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '生成失败'))
     } finally {
       setExporting(false)
     }

@@ -2,46 +2,37 @@
 
 import { getServerApiBaseUrl } from '@/lib/server-api'
 import { revalidatePath } from 'next/cache'
-import { ProductCreateInput, ProductUpdateInput } from '@/types/product'
+import { getAuthHeaders } from '@/lib/auth'
+import { requireActionResponse, serverActionResult } from '@/lib/server-action-result'
+import { uncertainWriteMessage } from '@/lib/user-error'
+import type { components } from '@/types/generated/schema'
 
 const API_BASE = getServerApiBaseUrl()
 
-export async function createProduct(data: ProductCreateInput) {
-  const res = await fetch(`${API_BASE}/api/v1/product/products`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
-  })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(err.message || '创建产品失败')
-  }
-  revalidatePath('/production/products')
-  return res.json()
+function mutateProduct(operation: string, label: string, path: string, init: RequestInit) {
+  return serverActionResult(`product.${operation}`, async (): Promise<unknown> => {
+    const response = await fetch(`${API_BASE}/api/v1/product/products${path}`, {
+      ...init,
+      headers: await getAuthHeaders(),
+    })
+    await requireActionResponse(response)
+    const payload: unknown = await response.json()
+    revalidatePath('/production/products')
+    return payload
+  }, uncertainWriteMessage(label))
 }
 
-export async function updateProduct(id: string, data: ProductUpdateInput) {
-  const res = await fetch(`${API_BASE}/api/v1/product/products/${id}`, {
+export async function createProduct(data: components['schemas']['ProductCreate']) {
+  return mutateProduct('create', '产品创建', '', { method: 'POST', body: JSON.stringify(data) })
+}
+
+export async function updateProduct(id: string, data: components['schemas']['ProductUpdate']) {
+  return mutateProduct('update', '产品更新', `/${encodeURIComponent(id)}`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(err.message || '更新产品失败')
-  }
-  revalidatePath('/production/products')
-  return res.json()
 }
 
 export async function deleteProduct(id: string) {
-  const res = await fetch(`${API_BASE}/api/v1/product/products/${id}`, {
-    method: 'DELETE',
-  })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(err.message || '删除产品失败')
-  }
-  revalidatePath('/production/products')
-  return res.json()
+  return mutateProduct('delete', '产品删除', `/${encodeURIComponent(id)}`, { method: 'DELETE' })
 }

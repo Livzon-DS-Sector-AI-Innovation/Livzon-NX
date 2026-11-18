@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useEffect, useRef, useCallback, useState } from 'react'
 import { Spin, Empty, Button, App } from 'antd'
 import { DownloadOutlined, ReloadOutlined, FileWordOutlined } from '@ant-design/icons'
@@ -69,7 +70,7 @@ export function DocxPreview({ chapterId, chapterTitle, onDownload, refreshKey }:
     } catch (err) {
       if (seq !== renderSeqRef.current || !mountedRef.current) return
       console.error('DocxPreview render error:', err)
-      setError((err instanceof Error ? err.message : '') || '文档渲染失败')
+      setError(getUserErrorMessage((err instanceof Error ? err.message : '') || '文档渲染失败', '文档渲染失败'))
       setHasContent(false)
     } finally {
       if (seq === renderSeqRef.current && mountedRef.current) {

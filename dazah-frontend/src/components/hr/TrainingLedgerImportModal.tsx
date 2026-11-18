@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useState } from 'react'
 import { App, Button, Checkbox, Modal, Select, Spin, Table, Tag, Upload } from 'antd'
 import { InboxOutlined } from '@ant-design/icons'
@@ -56,7 +57,7 @@ export default function TrainingLedgerImportModal({ open, department, onClose, o
       setEditableMapping(mappingInit)
       setSelectedSheets(selectedInit)
     } catch (e) {
-      message.error((e instanceof Error ? e.message : '') || '文件分析失败')
+      message.error(getUserErrorMessage((e instanceof Error ? e.message : '') || '文件分析失败'))
     } finally {
       setAnalyzing(false)
     }
@@ -94,7 +95,7 @@ export default function TrainingLedgerImportModal({ open, department, onClose, o
       handleReset()
       onClose()
     } catch (e) {
-      message.error((e instanceof Error ? e.message : '') || '导入失败')
+      message.error(getUserErrorMessage((e instanceof Error ? e.message : '') || '导入失败'))
     } finally {
       setImporting(false)
     }

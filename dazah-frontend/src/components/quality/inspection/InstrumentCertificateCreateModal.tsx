@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useEffect, useState } from 'react'
 import dayjs, { type Dayjs } from 'dayjs'
 import { Button, Col, DatePicker, Descriptions, Form, Input, Modal, Row, Space, Spin, Typography, Upload } from 'antd'
@@ -116,7 +117,7 @@ export function InstrumentCertificateCreateModal({
     try {
       applyResult(await analyzeInstrumentCertificate(file))
     } catch (err) {
-      setErrorText(err instanceof Error ? err.message : '证书识别失败，请重试')
+      setErrorText(getUserErrorMessage(err instanceof Error ? err.message : '证书识别失败，请重试', '证书识别失败，请重试'))
     } finally {
       setAnalyzing(false)
     }
@@ -147,7 +148,7 @@ export function InstrumentCertificateCreateModal({
         }),
       )
     } catch (err) {
-      if (err instanceof Error) setErrorText(err.message)
+      if (err instanceof Error) setErrorText(getUserErrorMessage(err.message))
     } finally {
       setRematching(false)
     }

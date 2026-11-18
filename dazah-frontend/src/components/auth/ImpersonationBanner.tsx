@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useEffect, useRef, useState } from 'react'
 import { Button, Tooltip } from 'antd'
 import { ExclamationCircleOutlined, SwapOutlined } from '@ant-design/icons'
@@ -46,7 +47,7 @@ export function ImpersonationBanner({ name, expiresAt, inToolbar = false }: {
         return restored ? IMPERSONATION_SETTINGS_PATH : '/login'
       }, origin)
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : '暂时无法退出模拟')
+      setError(getUserErrorMessage(failure instanceof Error ? failure.message : '暂时无法退出模拟', '暂时无法退出模拟'))
       setPending(false)
     }
   }

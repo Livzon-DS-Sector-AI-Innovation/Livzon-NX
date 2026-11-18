@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -135,7 +136,7 @@ export default function OnboardingManagementPage() {
         window.open(url, '_blank')
       }
     } catch (e) {
-      message.error(e.message || '附件预览失败')
+      message.error(getUserErrorMessage(e.message || '附件预览失败'))
     }
   }
 
@@ -158,7 +159,7 @@ export default function OnboardingManagementPage() {
       setDraftAttachments(drafts)
       setModalOpen(true)
     } catch (e) {
-      message.error(e.message || '加载详情失败')
+      message.error(getUserErrorMessage(e.message || '加载详情失败'))
     }
   }
 
@@ -181,7 +182,7 @@ export default function OnboardingManagementPage() {
       setModalOpen(false)
       refetch()
     } catch (e) {
-      if (e?.message) message.error(e.message)
+      if (e?.message) message.error(getUserErrorMessage(e.message))
     } finally {
       setSaving(false)
     }
@@ -193,7 +194,7 @@ export default function OnboardingManagementPage() {
       message.success('删除成功')
       refetch()
     } catch (e) {
-      message.error(e.message || '删除失败')
+      message.error(getUserErrorMessage(e.message || '删除失败'))
     }
   }
 
@@ -205,7 +206,7 @@ export default function OnboardingManagementPage() {
         [fieldKey]: [...prev[fieldKey], { file_token: res.file_token, name: res.name }],
       }))
     } catch (e) {
-      message.error(e.message || '上传失败')
+      message.error(getUserErrorMessage(e.message || '上传失败'))
     }
   }
 

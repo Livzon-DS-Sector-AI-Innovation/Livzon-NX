@@ -7,6 +7,7 @@ import {
 import { PlusOutlined, EditOutlined, DeleteOutlined, SafetyCertificateOutlined } from '@ant-design/icons'
 import { useQueryClient } from '@tanstack/react-query'
 import { createRole, updateRole, deleteRole } from '@/actions/equipment-personnel'
+import { getActionErrorMessage, unwrapServerActionResult } from '@/lib/server-action-result'
 import type { EquipmentRole, CreateRoleInput, UpdateRoleInput } from '@/types/equipment-personnel'
 
 const { Text } = Typography
@@ -61,11 +62,11 @@ export function RoleManagePanel({ roles }: Props) {
 
   const handleDelete = async (id: string) => {
     try {
-      await deleteRole(id)
+      unwrapServerActionResult(await deleteRole(id))
       message.success('角色已删除')
       queryClient.invalidateQueries({ queryKey: ['equipment-roles'] })
-    } catch {
-      message.error('删除失败')
+    } catch (error) {
+      message.error(getActionErrorMessage(error, '设备角色删除'))
     }
   }
 
@@ -79,18 +80,17 @@ export function RoleManagePanel({ roles }: Props) {
         if (values.description !== editingRole.description) data.description = values.description
         if (values.scope !== editingRole.scope) data.scope = values.scope
         if (values.is_active !== editingRole.is_active) data.is_active = values.is_active
-        await updateRole(editingRole.id, data)
+        unwrapServerActionResult(await updateRole(editingRole.id, data))
         message.success('角色已更新')
       } else {
-        await createRole(values as CreateRoleInput)
+        unwrapServerActionResult(await createRole(values as CreateRoleInput))
         message.success('角色已创建')
       }
       queryClient.invalidateQueries({ queryKey: ['equipment-roles'] })
       setModalOpen(false)
-    } catch (e) {
-      if (e instanceof Error && e.message) {
-        message.error(e.message)
-      }
+    } catch (error) {
+      if (typeof error === 'object' && error !== null && 'errorFields' in error) return
+      message.error(getActionErrorMessage(error, '设备角色保存'))
     } finally {
       setSubmitting(false)
     }

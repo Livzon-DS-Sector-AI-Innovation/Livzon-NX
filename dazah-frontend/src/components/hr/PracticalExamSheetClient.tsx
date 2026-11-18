@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useEffect, useState } from 'react'
 import { App, Button, Input, Space, Upload } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
@@ -61,7 +62,7 @@ export default function PracticalExamSheetClient({ sessionData, initialPayload, 
       }
       message.success('实操试题已导入')
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '导入实操试题失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '导入实操试题失败'))
     } finally {
       setImporting(false)
     }
@@ -162,7 +163,7 @@ export default function PracticalExamSheetClient({ sessionData, initialPayload, 
       if (!entries) return
       for (const e of entries) downloadBytes(e.bytes, e.name)
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '导出失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '导出失败'))
     } finally {
       setExporting(false)
     }

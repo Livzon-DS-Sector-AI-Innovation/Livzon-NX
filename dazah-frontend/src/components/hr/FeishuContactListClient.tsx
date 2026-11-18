@@ -5,6 +5,7 @@ import { App, Card, Table, Input, Avatar, Tag, Space, Typography, Select, Button
 import { SearchOutlined, UserOutlined, SyncOutlined } from '@ant-design/icons'
 import { fetchFeishuMembers, fetchFeishuMemberDepartments, type FeishuContactVM } from '@/lib/api/client/hr'
 import { syncFeishuMembersAction, getFeishuMembersSyncStatus } from '@/actions/hr'
+import { unwrapServerActionResult } from '@/lib/server-action-result'
 import { useSyncPolling } from './useSyncPolling'
 
 const statusMap: Record<string, { label: string; color: string }> = {
@@ -35,8 +36,8 @@ export default function FeishuContactListClient() {
 
   // 飞书同步（使用共享轮询 hook）
   const { isSyncing, startSync: handleSync } = useSyncPolling({
-    syncAction: syncFeishuMembersAction,
-    pollAction: getFeishuMembersSyncStatus,
+    syncAction: async () => unwrapServerActionResult(await syncFeishuMembersAction()),
+    pollAction: async () => unwrapServerActionResult(await getFeishuMembersSyncStatus()),
     maxPolls: 90,
     interval: 2000,
     onSuccess: () => {

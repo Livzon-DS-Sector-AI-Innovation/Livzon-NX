@@ -403,9 +403,12 @@ describe('AutoSchedulingPage', () => {
     expect(document.body.textContent).toContain('生成请求失败')
   })
 
-  it('reports export failure with the error message', async () => {
+  it.each([
+    ['导出服务不可用', '导出服务不可用'],
+    ['TypeError: internal export failure', '操作未完成，请稍后重试'],
+  ])('shows a safe export error for %s', async (error, expected) => {
     actions.generateScheduleDraft.mockResolvedValue(DRAFT_RESULT)
-    actions.exportScheduleDraft.mockRejectedValue(new Error('导出服务不可用'))
+    actions.exportScheduleDraft.mockRejectedValue(new Error(error))
     await render()
     await act(async () => {
       findButton('生成草稿').click()
@@ -415,7 +418,8 @@ describe('AutoSchedulingPage', () => {
       findButton('下载 Excel').click()
       await new Promise((r) => setTimeout(r, 80))
     })
-    expect(document.body.textContent).toContain('导出服务不可用')
+    expect(document.body.textContent).toContain(expected)
+    if (error !== expected) expect(document.body.textContent).not.toContain(error)
   })
 
   it('warns when adding a tank block without a complete range', async () => {

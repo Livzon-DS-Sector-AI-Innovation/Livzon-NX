@@ -1,7 +1,8 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useEffect, useState } from 'react'
-import { Button, Input, Modal, Select, Table, Tag, Typography } from 'antd'
+import { Button, Input, Modal, Select, Table, Tag, Tooltip, Typography } from 'antd'
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query'
 import { switchWorkspaceIdentity } from '@/components/auth/WorkspaceIdentitySync'
 import PlatformNotice from '@/components/shared/PlatformNotice'
@@ -10,6 +11,7 @@ import { saveImpersonationListState, takeRestoredImpersonationListState } from '
 import type { RoleItem } from '@/lib/api/server/admin'
 
 const PAGE_SIZE = 20
+const VISIBLE_ROLE_COUNT = 2
 type RoleOption = Pick<RoleItem, 'id' | 'name'>
 
 export default function ImpersonationPanel({ roles }: { roles: RoleOption[] }) {
@@ -72,7 +74,7 @@ function ImpersonationTargets({ roles }: { roles: RoleOption[] }) {
         return '/'
       })
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : '暂时无法开始模拟')
+      setError(getUserErrorMessage(failure instanceof Error ? failure.message : '暂时无法开始模拟', '暂时无法开始模拟'))
       setPending(false)
     }
   }
@@ -130,14 +132,24 @@ function ImpersonationTargets({ roles }: { roles: RoleOption[] }) {
           {
             title: '角色',
             key: 'roles',
-            render: (_, user) => user.roles.length > 0
-              ? <div className="flex flex-wrap gap-1">
-                {user.roles.map(role => <Tag key={role.id} className="max-w-full"
+            render: (_, { roles }) => {
+              if (!roles.length) return <Typography.Text type="secondary">未分配角色</Typography.Text>
+
+              const remainingRoles = roles.slice(VISIBLE_ROLE_COUNT)
+              return <div className="flex flex-wrap items-center gap-1">
+                {roles.slice(0, VISIBLE_ROLE_COUNT).map(role => <Tag key={role.id} className="max-w-full"
                   style={{ marginInlineEnd: 0, whiteSpace: 'normal', overflowWrap: 'anywhere' }}>
                   {role.name}
                 </Tag>)}
+                {remainingRoles.length > 0 && (
+                  <Tooltip title={remainingRoles.map(role => role.name).join('、')} trigger={['hover', 'focus']}>
+                    <Button type="text" size="small" onClick={event => event.currentTarget.focus()}>
+                      更多（{remainingRoles.length}+）
+                    </Button>
+                  </Tooltip>
+                )}
               </div>
-              : <Typography.Text type="secondary">未分配角色</Typography.Text>,
+            },
           },
           { title: '操作', render: (_, user) => <Button type="link" aria-label={`模拟登录 ${user.name}`} onClick={() => {
             setError('')

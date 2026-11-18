@@ -8,6 +8,8 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
+from app.core.exceptions import NotFoundException
+from app.main import app as platform_app
 from app.modules.product.api import get_product_service, router
 from app.modules.product.schemas import ProductUpdate
 from app.modules.product.service import ProductService
@@ -59,3 +61,33 @@ async def test_api_accepts_declared_business_update():
     assert response.json()["data"]["name"] == "after"
     supplied = service.update_product.await_args.args[1]
     assert supplied.model_dump(exclude_unset=True) == {"name": "after"}
+
+
+async def test_product_write_contract_uses_http_status() -> None:
+    product_id = uuid4()
+    product = SimpleNamespace(id=product_id, name="产品")
+    missing = NotFoundException("产品", str(product_id))
+    service = SimpleNamespace(
+        create_product=AsyncMock(return_value=product),
+        update_product=AsyncMock(side_effect=missing),
+        delete_product=AsyncMock(side_effect=[None, missing]),
+    )
+    test_app = FastAPI(exception_handlers=platform_app.exception_handlers)
+    test_app.include_router(router)
+    test_app.dependency_overrides[get_product_service] = lambda: service
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        created = await client.post("/products", json={"name": "产品"})
+        assert created.status_code == 201
+        assert created.json()["data"]["id"] == str(product_id)
+        path = f"/products/{product_id}"
+        updated = await client.put(path, json={"name": "更新"})
+        deleted = await client.delete(path)
+        assert deleted.status_code == 200
+        assert deleted.json()["data"] is None
+        missing_delete = await client.delete(path)
+        for result in (updated, missing_delete):
+            assert result.status_code == 404
+            assert result.json()["code"] == 404
+            assert "detail" not in result.json()

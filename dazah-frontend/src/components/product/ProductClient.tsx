@@ -1,11 +1,13 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useState, useCallback, useEffect } from 'react'
 import { App, Table, Input, Select, Tag, Button, Space, Modal, Form } from 'antd'
 import { SearchOutlined, SyncOutlined, PlusOutlined, EditOutlined } from '@ant-design/icons'
 import { Product } from '@/types/product'
 import { fetchProducts, syncProductsFromFeishu } from '@/lib/api/product'
 import { createProduct, updateProduct } from '@/actions/product'
+import { getActionErrorMessage, unwrapServerActionResult } from '@/lib/server-action-result'
 
 interface ProductClientProps {
   initialProducts: Product[]
@@ -47,7 +49,7 @@ export default function ProductClient({ initialProducts, initialTotal }: Product
       setProducts(res.data)
       setTotal(res.meta?.total || 0)
     } catch (err) {
-      message.error(err.message || '加载数据失败')
+      message.error(getUserErrorMessage(err.message || '加载数据失败'))
     } finally {
       setLoading(false)
     }
@@ -70,7 +72,7 @@ export default function ProductClient({ initialProducts, initialTotal }: Product
       message.success(res.message)
       loadData()
     } catch (err) {
-      message.error(err.message || '同步失败')
+      message.error(getUserErrorMessage(err.message || '同步失败'))
     } finally {
       setSyncing(false)
     }
@@ -102,17 +104,17 @@ export default function ProductClient({ initialProducts, initialTotal }: Product
       const values = await form.validateFields()
       setSaving(true)
       if (editingProduct) {
-        await updateProduct(editingProduct.id, values)
+        unwrapServerActionResult(await updateProduct(editingProduct.id, values))
         message.success('修改成功')
       } else {
-        await createProduct(values)
+        unwrapServerActionResult(await createProduct(values))
         message.success('新增成功')
       }
       setModalOpen(false)
       loadData()
     } catch (err) {
-      if (err.errorFields) return
-      message.error(err.message || '操作失败')
+      if (typeof err === 'object' && err !== null && 'errorFields' in err) return
+      message.error(getActionErrorMessage(err, '产品保存'))
     } finally {
       setSaving(false)
     }

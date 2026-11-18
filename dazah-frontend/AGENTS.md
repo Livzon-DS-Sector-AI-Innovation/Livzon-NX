@@ -74,6 +74,25 @@ Server Action 示例见 `examples/server-actions.md`。
 - 后端端点、参数或请求/响应契约变化时，从项目根目录执行 `scripts/generate-api.ps1`，禁止手动编辑 OpenAPI 快照或生成类型。
 - 如果生成结果出现大量与需求无关的变化，停止并检查后端 OpenAPI 来源。
 
+### HTTP 错误与中文提示
+
+- 新接口按实际 HTTP 响应状态码复用 `src/lib/user-error.ts` 的统一中文提示。只有
+  同一状态码下的具体业务原因需要不同提示或处理方式时，才在所属模块按契约约定的
+  稳定业务错误码映射文案。统一错误响应使用 `detail.error_code` 承载该码，`code`
+  保持 HTTP 状态语义。未知或缺失的业务错误码回退到状态码提示，新增功能不得通过
+  匹配后端 `message` 或 `detail` 文本区分业务分支。
+- 浏览器请求使用相对路径 `/api/v1/...`。`src/app/api/[...path]/route.ts` 负责按
+  HTTP 状态规范化错误消息，保留响应状态和 JSON `4xx` 中的结构化错误字段。调用方
+  检查 `response.ok` 并使用规范化后的安全提示，需要进一步区分原因时读取已校验的
+  业务错误码。写操作仍走所属模块的 Server Action 或既有服务端入口。
+- Server Action 复用 `src/lib/server-action-result.ts`。在 `serverActionResult` 内对
+  后端响应调用 `requireActionResponse`。需要业务文案时，在同一封装内先校验失败响应
+  中的业务错误码，将已识别的安全文案包装为 `UserFacingError`。客户端可以直接处理
+  结构化结果，也可使用 `unwrapServerActionResult` 和 `getActionErrorMessage`。
+- 预期失败通过结构化结果跨过 Server Action 边界。UI 使用公共中文兜底处理未知异常，
+  禁止展示框架原始错误、堆栈或上游响应正文。写入结果不明时先提示核对业务记录，
+  避免自动重提。批量操作的部分成功按接口返回的逐项结果展示。
+
 ## 管理后台交互要求
 
 - 顶部、侧边栏和模块首页的名称、目标路径及入口语义保持一致；导航加载反馈、

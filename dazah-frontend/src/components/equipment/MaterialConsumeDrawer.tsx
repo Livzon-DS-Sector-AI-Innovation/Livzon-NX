@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useState, useEffect } from 'react'
 import { App, Drawer, Form, Select, InputNumber, Button, Space, Empty } from 'antd'
 import { PlusOutlined, MinusCircleOutlined } from '@ant-design/icons'
@@ -42,7 +43,7 @@ export function MaterialConsumeDrawer({ workOrderId, spareParts, onRefresh }: Ma
       setOpen(false)
       onRefresh?.()
     } catch (error) {
-      if (error?.message) message.error(error.message)
+      if (error?.message) message.error(getUserErrorMessage(error.message))
     } finally {
       setLoading(false)
     }

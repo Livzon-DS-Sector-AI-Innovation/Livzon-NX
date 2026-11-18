@@ -3,6 +3,7 @@
 // 月度健康报告面板（方案B收尾）：列表 + 生成 + Markdown 查看。
 // 数据来自 GET /health/monthly-reports；生成走 Server Action（月度调度同款逻辑）。
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useCallback, useEffect, useState } from 'react'
 import { FileTextOutlined, ReloadOutlined } from '@ant-design/icons'
 import { App, Button, DatePicker, Modal, Spin, Table, Tag } from 'antd'
@@ -42,7 +43,7 @@ export function MonthlyReportPanel() {
       message.success(`${month.format('YYYY-MM')} 报告已生成`)
       await load()
     } catch (e) {
-      message.error(e instanceof Error ? e.message : '生成失败')
+      message.error(getUserErrorMessage(e instanceof Error ? e.message : '生成失败'))
     } finally {
       setGenerating(false)
     }

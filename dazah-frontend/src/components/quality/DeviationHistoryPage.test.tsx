@@ -136,7 +136,7 @@ describe('DeviationHistoryPage', () => {
   })
 
   it('imports a batch of attachments successfully', async () => {
-    workbenchActions.batchImportHistoricalDeviations.mockResolvedValue({
+    workbenchActions.batchImportHistoricalDeviations.mockResolvedValue({ ok: true, data: {
       total: 2,
       succeeded: 2,
       failed: 0,
@@ -144,7 +144,7 @@ describe('DeviationHistoryPage', () => {
         { file_name: 'a.docx', status: 'succeeded' },
         { file_name: 'b.docx', status: 'succeeded' },
       ],
-    })
+    } })
     await renderPage()
     await act(async () => {
       triggerFileUpload([makeFile('a.docx'), makeFile('b.docx')])
@@ -157,7 +157,7 @@ describe('DeviationHistoryPage', () => {
   })
 
   it('warns with file names when part of the batch fails', async () => {
-    workbenchActions.batchImportHistoricalDeviations.mockResolvedValue({
+    workbenchActions.batchImportHistoricalDeviations.mockResolvedValue({ ok: true, data: {
       total: 3,
       succeeded: 1,
       failed: 2,
@@ -166,7 +166,7 @@ describe('DeviationHistoryPage', () => {
         { file_name: 'bad1.docx', status: 'failed' },
         { file_name: 'bad2.docx', status: 'failed' },
       ],
-    })
+    } })
     await renderPage()
     await act(async () => {
       triggerFileUpload([makeFile('ok.docx'), makeFile('bad1.docx'), makeFile('bad2.docx')])
@@ -189,19 +189,17 @@ describe('DeviationHistoryPage', () => {
   })
 
   it('surfaces import failures via toast', async () => {
-    workbenchActions.batchImportHistoricalDeviations.mockRejectedValue(
-      new Error('导入服务不可用'),
-    )
+    workbenchActions.batchImportHistoricalDeviations.mockResolvedValue({ ok: false, message: '没有执行此操作的权限，请联系管理员' })
     await renderPage()
     await act(async () => {
       triggerFileUpload([makeFile('a.docx')])
       await new Promise((resolve) => setTimeout(resolve, 100))
     })
-    expect(document.body.textContent).toContain('导入服务不可用')
+    expect(document.body.textContent).toContain('没有执行此操作的权限，请联系管理员')
   })
 
   it('reveals why AI extraction failed on a successful batch import', async () => {
-    workbenchActions.batchImportHistoricalDeviations.mockResolvedValue({
+    workbenchActions.batchImportHistoricalDeviations.mockResolvedValue({ ok: true, data: {
       total: 2,
       succeeded: 2,
       failed: 0,
@@ -213,7 +211,7 @@ describe('DeviationHistoryPage', () => {
         },
         { file_name: 'b.docx', status: 'succeeded', message: '' },
       ],
-    })
+    } })
     await renderPage()
     await act(async () => {
       triggerFileUpload([makeFile('a.docx'), makeFile('b.docx')])
@@ -231,10 +229,10 @@ describe('DeviationHistoryPage', () => {
       page_size: 20,
     })
     apiClient.fetchHistoricalDeviation.mockResolvedValue(makeDetail())
-    workbenchActions.uploadHistoricalDeviationAttachment.mockResolvedValue({
+    workbenchActions.uploadHistoricalDeviationAttachment.mockResolvedValue({ ok: true, data: {
       id: 'att1',
       file_name: 'a.docx',
-    })
+    } })
     workbenchActions.aiExtractHistoricalDeviation.mockResolvedValue(
       makeDetail({
         deviation_event: '事件',
@@ -266,10 +264,10 @@ describe('DeviationHistoryPage', () => {
     apiClient.fetchHistoricalDeviation.mockResolvedValue(
       makeDetail({ deviation_event: '已填写', deviation_content: '已填写' }),
     )
-    workbenchActions.uploadHistoricalDeviationAttachment.mockResolvedValue({
+    workbenchActions.uploadHistoricalDeviationAttachment.mockResolvedValue({ ok: true, data: {
       id: 'att1',
       file_name: 'a.docx',
-    })
+    } })
     await renderPage()
     await act(async () => {
       clickButton('编辑')
@@ -287,10 +285,10 @@ describe('DeviationHistoryPage', () => {
     workbenchActions.createHistoricalDeviation.mockResolvedValue({
       ...makeDetail({ id: 'new1', code: 'HD-202609003' }),
     })
-    workbenchActions.uploadHistoricalDeviationAttachment.mockResolvedValue({
+    workbenchActions.uploadHistoricalDeviationAttachment.mockResolvedValue({ ok: true, data: {
       id: 'att1',
       file_name: 'a.docx',
-    })
+    } })
     workbenchActions.aiExtractHistoricalDeviation.mockResolvedValue(
       makeDetail({ id: 'new1', deviation_event: '事件' }),
     )

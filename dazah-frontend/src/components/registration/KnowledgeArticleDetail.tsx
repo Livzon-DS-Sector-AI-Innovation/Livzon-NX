@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useState } from 'react'
 import { App, Avatar, Button, Card, Divider, Form, Input, List, Space, Tag, Typography, Upload, Popconfirm } from 'antd'
 import { ArrowLeftOutlined, DeleteOutlined, DownloadOutlined, EyeOutlined, FileOutlined, MessageOutlined, ThunderboltOutlined, LinkOutlined, UploadOutlined } from '@ant-design/icons'
@@ -45,7 +46,7 @@ export default function KnowledgeArticleDetail({ article }: KnowledgeArticleDeta
       commentForm.resetFields()
       router.refresh()
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '评论失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '评论失败'))
     } finally {
       setSubmitting(false)
     }
@@ -57,7 +58,7 @@ export default function KnowledgeArticleDetail({ article }: KnowledgeArticleDeta
       message.success('删除成功')
       router.refresh()
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '删除失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '删除失败'))
     }
   }
 
@@ -68,7 +69,7 @@ export default function KnowledgeArticleDetail({ article }: KnowledgeArticleDeta
       message.success('AI摘要生成成功')
       router.refresh()
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '摘要生成失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '摘要生成失败'))
     } finally {
       setSummarizing(null)
     }
@@ -80,7 +81,7 @@ export default function KnowledgeArticleDetail({ article }: KnowledgeArticleDeta
       message.success('附件已删除')
       router.refresh()
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '删除失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '删除失败'))
     }
   }
 
@@ -93,7 +94,7 @@ export default function KnowledgeArticleDetail({ article }: KnowledgeArticleDeta
       message.success('附件上传成功')
       router.refresh()
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '上传失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '上传失败'))
     } finally {
       setUploading(false)
     }

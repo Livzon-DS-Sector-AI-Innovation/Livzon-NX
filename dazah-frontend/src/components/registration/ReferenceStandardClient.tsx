@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useState, useCallback, useEffect } from 'react'
 import { Table, Input, Button, Space, App, Card, Modal, Form, Upload, Row, Col, Spin } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
@@ -43,7 +44,7 @@ export default function ReferenceStandardClient({
       setRecords(res.data)
       setTotal(res.meta?.total || 0)
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '加载数据失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '加载数据失败'))
     } finally {
       setLoading(false)
     }
@@ -93,7 +94,7 @@ export default function ReferenceStandardClient({
         message.warning('COA解析完成，但未提取到关键信息，请手动填写')
       }
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || 'COA解析失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || 'COA解析失败'))
       setParsedInfo('COA解析失败，请手动填写')
     } finally {
       setParsing(false)
@@ -143,7 +144,7 @@ export default function ReferenceStandardClient({
         message.error(result.message)
       }
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '生成失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '生成失败'))
     } finally {
       setGenerating(false)
     }
@@ -155,7 +156,7 @@ export default function ReferenceStandardClient({
       message.success('删除成功')
       loadData()
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '删除失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '删除失败'))
     }
   }
 

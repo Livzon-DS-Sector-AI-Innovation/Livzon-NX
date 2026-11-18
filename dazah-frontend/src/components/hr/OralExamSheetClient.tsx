@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useEffect, useState } from 'react'
 import { App, Button, Input, Space } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
@@ -182,7 +183,7 @@ export default function OralExamSheetClient({ sessionData, initialPayload, onSes
       if (!entries) return
       for (const e of entries) downloadBytes(e.bytes, e.name)
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '导出失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '导出失败'))
     } finally {
       setExporting(false)
     }

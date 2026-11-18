@@ -153,8 +153,11 @@ def test_load_versions_rejects_header_mismatch() -> None:
     worksheet.title = "测试表"
     worksheet.append(["标题"])
     worksheet.append(["错误", "项目名称", "产品", "药政活动", ""])
-    with pytest.raises(AppException, match="表头不匹配"):
+    with pytest.raises(
+        AppException, match="REGISTRATION_WORKBOOK_TEMPLATE_MISMATCH"
+    ) as error:
         ledger._load_versions_from_worksheet(_definition(), worksheet)
+    assert "表头不匹配" in error.value.message
 
 
 def test_load_workbook_rejects_missing_and_unexpected_sheets(
@@ -168,8 +171,11 @@ def test_load_workbook_rejects_missing_and_unexpected_sheets(
     )
     missing_path = tmp_path / "missing-sheet.xlsx"
     Workbook().save(missing_path)
-    with pytest.raises(AppException, match="缺少子表"):
+    with pytest.raises(
+        AppException, match="REGISTRATION_WORKBOOK_TEMPLATE_MISMATCH"
+    ) as error:
         ledger._load_versions_from_workbook_path(missing_path)
+    assert "缺少子表" in error.value.message
 
     unexpected_path = tmp_path / "unexpected.xlsx"
     workbook = Workbook()
@@ -180,8 +186,11 @@ def test_load_workbook_rejects_missing_and_unexpected_sheets(
     extra = workbook.create_sheet("额外表")
     extra.append(["业务数据"])
     workbook.save(unexpected_path)
-    with pytest.raises(AppException, match="未定义子表"):
+    with pytest.raises(
+        AppException, match="REGISTRATION_WORKBOOK_TEMPLATE_MISMATCH"
+    ) as error:
         ledger._load_versions_from_workbook_path(unexpected_path)
+    assert "未定义子表" in error.value.message
 
 
 def test_record_sheet_and_response_builders_cover_options() -> None:

@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useRef, useState } from 'react'
 import { App, Button, Drawer, Space, Table, Tag, Typography } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
@@ -72,7 +73,7 @@ export function InstrumentImportDrawer({
     try {
       setPreview(await previewInstrumentImport(file))
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : '预览失败')
+      setErrorMsg(getUserErrorMessage(err instanceof Error ? err.message : '预览失败', '预览失败'))
     } finally {
       setPreviewing(false)
     }
@@ -100,7 +101,7 @@ export function InstrumentImportDrawer({
       setPreview(null)
       onSuccess()
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : '导入失败')
+      setErrorMsg(getUserErrorMessage(err instanceof Error ? err.message : '导入失败', '导入失败'))
     } finally {
       setImporting(false)
     }

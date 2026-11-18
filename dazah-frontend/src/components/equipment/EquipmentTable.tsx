@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useCallback, useState, useEffect, useRef } from 'react'
 import { App, Table, Space, Input, Select, Button } from 'antd'
 import { EditOutlined, DeleteOutlined, SearchOutlined, ToolOutlined, PlusOutlined, EyeOutlined, ImportOutlined, HistoryOutlined } from '@ant-design/icons'
@@ -110,7 +111,7 @@ export function EquipmentTable({ loading = false, onPageChange, resetKey, worksh
           message.success('删除设备成功')
           onPageChange(localPage, localPageSize)
         } catch (error) {
-          message.error(error?.message || '删除设备失败')
+          message.error(getUserErrorMessage(error?.message || '删除设备失败'))
         }
       },
     })

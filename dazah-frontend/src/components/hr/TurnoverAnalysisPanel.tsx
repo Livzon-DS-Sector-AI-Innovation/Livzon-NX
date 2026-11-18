@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Button, Divider } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
@@ -100,7 +101,7 @@ export default function TurnoverAnalysisPanel() {
 
       setStage('streaming')
     } catch (err) {
-      setErrorMsg((err instanceof Error ? err.message : '') || '分析失败，请稍后重试')
+      setErrorMsg(getUserErrorMessage((err instanceof Error ? err.message : '') || '分析失败，请稍后重试', '分析失败，请稍后重试'))
       setStage('error')
     }
   }, [])

@@ -188,9 +188,9 @@ function buttons(text: string) {
 beforeEach(() => {
   mocks.getWorkPermitMeta.mockResolvedValue({ code: 200, data: META })
   mocks.getWorkPermitDetail.mockResolvedValue({ code: 200, data: DETAIL })
-  mocks.approveWorkPermitNode.mockResolvedValue({ code: 200, data: null })
-  mocks.rejectWorkPermitNode.mockResolvedValue({ code: 200, data: null })
-  mocks.submitWorkPermit.mockResolvedValue({ code: 200, data: { warnings: [] } })
+  mocks.approveWorkPermitNode.mockResolvedValue({ ok: true, data: null })
+  mocks.rejectWorkPermitNode.mockResolvedValue({ ok: true, data: null })
+  mocks.submitWorkPermit.mockResolvedValue({ ok: true, data: { warnings: [] } })
   mocks.cancelWorkPermit.mockResolvedValue({ code: 200, data: null })
   mocks.getApproverConfigs.mockResolvedValue({
     code: 200,
@@ -274,16 +274,32 @@ describe('作业票详情视图', () => {
   })
 
   it('同意失败提示错误', async () => {
-    mocks.approveWorkPermitNode.mockResolvedValue({ code: 500, message: '无权限' })
+    const message = '没有执行此操作的权限，请联系管理员'
+    mocks.approveWorkPermitNode.mockResolvedValue({ ok: false, message })
     await renderDetail()
     await act(async () => {
       buttons('同意')[0].click()
     })
     await flush()
-    expect(mocks.message.error).toHaveBeenCalledWith('无权限')
+    expect(mocks.message.error).toHaveBeenCalledWith(message)
+    expect(mocks.getWorkPermitDetail).not.toHaveBeenCalled()
   })
 
-  it('驳回需填写意见，确认后调用驳回接口', async () => {
+  it('同意已完成但详情未刷新时单独提示刷新', async () => {
+    mocks.getWorkPermitDetail.mockResolvedValue({ code: 503, message: 'upstream error' })
+    await renderDetail()
+    await act(async () => {
+      buttons('同意')[0].click()
+    })
+    await flush()
+    expect(mocks.message.success).toHaveBeenCalledWith('已签批「车间审批」')
+    expect(mocks.message.warning).toHaveBeenCalledWith('操作已完成，详情未能刷新，请手动刷新页面')
+    expect(mocks.message.error).not.toHaveBeenCalled()
+  })
+
+  it.each([true, false])('驳回需填写意见，提交成功状态为 %s', async (ok) => {
+    const errorMessage = '数据已发生变化，请刷新后重试'
+    if (!ok) mocks.rejectWorkPermitNode.mockResolvedValue({ ok: false, message: errorMessage })
     await renderDetail()
     await act(async () => {
       buttons('驳回')[0].click()
@@ -318,7 +334,14 @@ describe('作业票详情视图', () => {
       'n1',
       '安全措施不足',
     )
-    expect(mocks.message.success).toHaveBeenCalledWith('已驳回')
+    if (ok) {
+      expect(mocks.message.success).toHaveBeenCalledWith('已驳回')
+    } else {
+      expect(mocks.message.error).toHaveBeenCalledWith(errorMessage)
+      expect(textarea?.value).toBe('安全措施不足')
+      expect(buttons('确认驳回')).toHaveLength(1)
+      expect(mocks.getWorkPermitDetail).not.toHaveBeenCalled()
+    }
   })
 
   it('草稿票作废需 Popconfirm 确认', async () => {
@@ -405,7 +428,8 @@ describe('作业票详情视图：气体 / 提交 / 关联', () => {
     await flush(30)
   }
 
-  it('草稿提交审批：选派节点审批人后提交', async () => {
+  it.each([true, false])('草稿选派审批人，提交成功状态为 %s', async (ok) => {
+    if (!ok) mocks.submitWorkPermit.mockRejectedValue(new Error('Minified React error #441'))
     await renderDetail({ status: 'draft', approval_round: 0 })
     await act(async () => {
       buttons('提交审批')[0].click()
@@ -431,8 +455,15 @@ describe('作业票详情视图：气体 / 提交 / 关联', () => {
     expect(mocks.submitWorkPermit).toHaveBeenCalledWith('p1', [
       { node_key: 'apply', approver_user_id: 'ou_1' },
     ])
-    expect(mocks.message.success).toHaveBeenCalledWith('已提交审批')
-    expect(mocks.getWorkPermitDetail).toHaveBeenCalledWith('p1')
+    if (ok) {
+      expect(mocks.message.success).toHaveBeenCalledWith('已提交审批')
+      expect(mocks.getWorkPermitDetail).toHaveBeenCalledWith('p1')
+    } else {
+      expect(mocks.message.error).toHaveBeenCalledWith('暂未确认作业票提交结果，请先查看业务记录后再决定是否重试')
+      expect(document.body.textContent).toContain('提交审批（第 1 轮，逐级签批）')
+      expect(submit[submit.length - 1].disabled).toBe(false)
+      expect(mocks.getWorkPermitDetail).not.toHaveBeenCalled()
+    }
   })
 
   it('添加关联作业票：选择目标后关联', async () => {

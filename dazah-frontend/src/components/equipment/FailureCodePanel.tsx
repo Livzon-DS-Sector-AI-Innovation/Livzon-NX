@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useCallback } from 'react'
 import { App, Table, Tag, Button, Space, Tabs } from 'antd'
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons'
@@ -35,7 +36,7 @@ export function FailureCodePanel({ onRefresh }: FailureCodePanelProps) {
           message.success('删除成功')
           onRefresh?.()
         } catch (error) {
-          message.error(error?.message || '删除失败')
+          message.error(getUserErrorMessage(error?.message || '删除失败'))
         }
       },
     })

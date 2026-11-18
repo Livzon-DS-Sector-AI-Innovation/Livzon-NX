@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useState, useEffect } from 'react'
 import { App, Drawer, Descriptions, Tag, Timeline, Button, Space, Select, Input, Image, Modal, InputNumber } from 'antd'
 import {
@@ -107,7 +108,7 @@ export function WorkOrderDetailDrawer({ onRefresh }: WorkOrderDetailDrawerProps)
           message.success('指派成功')
           await refreshDetail(wo.id)
         } catch (error) {
-          message.error(error?.message || '指派失败')
+          message.error(getUserErrorMessage(error?.message || '指派失败'))
           throw error
         }
       },
@@ -120,7 +121,7 @@ export function WorkOrderDetailDrawer({ onRefresh }: WorkOrderDetailDrawerProps)
       message.success('已开始维修')
       await refreshDetail(wo.id)
     } catch (error) {
-      message.error(error?.message || '操作失败')
+      message.error(getUserErrorMessage(error?.message || '操作失败'))
     }
   }
 
@@ -166,7 +167,7 @@ export function WorkOrderDetailDrawer({ onRefresh }: WorkOrderDetailDrawerProps)
           message.success('已转派')
           onRefresh?.()
         } catch (error) {
-          message.error(error instanceof Error ? error.message : '转派失败')
+          message.error(getUserErrorMessage(error instanceof Error ? error.message : '转派失败'))
           return false
         }
       },
@@ -198,7 +199,7 @@ export function WorkOrderDetailDrawer({ onRefresh }: WorkOrderDetailDrawerProps)
           message.success('已提交验收')
           await refreshDetail(wo.id)
         } catch (error) {
-          message.error(error?.message || '操作失败')
+          message.error(getUserErrorMessage(error?.message || '操作失败'))
           throw error
         }
       },
@@ -229,7 +230,7 @@ export function WorkOrderDetailDrawer({ onRefresh }: WorkOrderDetailDrawerProps)
           message.success(result === '合格' ? '验收通过' : '已打回重修')
           await refreshDetail(wo.id)
         } catch (error) {
-          message.error(error?.message || '操作失败')
+          message.error(getUserErrorMessage(error?.message || '操作失败'))
           throw error
         }
       },
@@ -242,7 +243,7 @@ export function WorkOrderDetailDrawer({ onRefresh }: WorkOrderDetailDrawerProps)
       message.success('工单已关闭')
       await refreshDetail(wo.id)
     } catch (error) {
-      message.error(error?.message || '操作失败')
+      message.error(getUserErrorMessage(error?.message || '操作失败'))
     }
   }
 
@@ -252,7 +253,7 @@ export function WorkOrderDetailDrawer({ onRefresh }: WorkOrderDetailDrawerProps)
       message.success('抢单成功')
       await refreshDetail(wo.id)
     } catch (error) {
-      message.error(error?.message || '抢单失败')
+      message.error(getUserErrorMessage(error?.message || '抢单失败'))
     }
   }
 
@@ -493,7 +494,7 @@ function ExternalCostButton({
       message.success('外委费用已保存，刷新后生效')
       setOpen(false)
     } catch (e) {
-      message.error(e instanceof Error ? e.message : '保存失败')
+      message.error(getUserErrorMessage(e instanceof Error ? e.message : '保存失败'))
     } finally {
       setSubmitting(false)
     }

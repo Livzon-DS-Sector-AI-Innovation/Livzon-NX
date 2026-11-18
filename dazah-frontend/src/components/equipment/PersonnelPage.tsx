@@ -6,6 +6,7 @@ import { PlusOutlined, SyncOutlined, TeamOutlined, SafetyCertificateOutlined } f
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchRoles } from '@/lib/api/equipment-personnel'
 import { refreshFeishu, assignRoles as assignRolesAction } from '@/actions/equipment-personnel'
+import { getActionErrorMessage, unwrapServerActionResult } from '@/lib/server-action-result'
 import { PersonnelTable } from './PersonnelTable'
 import { RoleManagePanel } from './RoleManagePanel'
 import { PersonnelDrawer } from './PersonnelDrawer'
@@ -35,11 +36,11 @@ export function PersonnelPage({
   const handleRefresh = async () => {
     setRefreshing(true)
     try {
-      await refreshFeishu()
+      unwrapServerActionResult(await refreshFeishu())
       message.success('飞书信息刷新完成')
       queryClient.invalidateQueries({ queryKey: ['equipment-personnel'] })
-    } catch {
-      message.error('飞书信息刷新失败')
+    } catch (error) {
+      message.error(getActionErrorMessage(error, '设备人员飞书信息刷新'))
     } finally {
       setRefreshing(false)
     }
@@ -54,12 +55,12 @@ export function PersonnelPage({
     if (!rolePersonnel) return
     setRoleSaving(true)
     try {
-      await assignRolesAction(rolePersonnel.id, { role_ids: selectedRoleIds })
+      unwrapServerActionResult(await assignRolesAction(rolePersonnel.id, { role_ids: selectedRoleIds }))
       message.success('角色已更新')
       queryClient.invalidateQueries({ queryKey: ['equipment-personnel'] })
       setRolePersonnel(null)
-    } catch {
-      message.error('保存失败')
+    } catch (error) {
+      message.error(getActionErrorMessage(error, '设备人员角色分配'))
     } finally {
       setRoleSaving(false)
     }

@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import {
   App, Card, Button, Space, Table, Tabs, Tag, Typography, Select, Input,
@@ -106,7 +107,7 @@ export default function DeptMappingSettingsClient() {
       setFeishuDepts(fd)
       setTrainingDepts(td)
     } catch (e) {
-      message.error(e instanceof Error ? e.message : '加载失败')
+      message.error(getUserErrorMessage(e instanceof Error ? e.message : '加载失败'))
     } finally {
       setLoading(false)
     }
@@ -265,7 +266,7 @@ export default function DeptMappingSettingsClient() {
       setModalOpen(false)
       await afterMutate()
     } catch (e) {
-      message.error(e instanceof Error ? e.message : '保存失败')
+      message.error(getUserErrorMessage(e instanceof Error ? e.message : '保存失败'))
     } finally {
       setSaving(false)
     }
@@ -291,7 +292,7 @@ export default function DeptMappingSettingsClient() {
       }
       await afterMutate()
     } catch (e) {
-      message.error(e instanceof Error ? e.message : '保存失败')
+      message.error(getUserErrorMessage(e instanceof Error ? e.message : '保存失败'))
     }
   }
 
@@ -304,7 +305,7 @@ export default function DeptMappingSettingsClient() {
       message.success(`已删除「${row.source}」的全部映射（回退直通）`)
       await afterMutate()
     } catch (e) {
-      message.error(e instanceof Error ? e.message : '删除失败')
+      message.error(getUserErrorMessage(e instanceof Error ? e.message : '删除失败'))
     }
   }
 

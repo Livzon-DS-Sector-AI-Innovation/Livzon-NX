@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useMemo, useState, useTransition } from 'react'
 import {
   App,
@@ -276,7 +277,7 @@ export default function KnowledgeBasePage({
         message.success('AI提取成功，已自动填充表单，保存后将自动上传附件')
       }
     } catch (error) {
-      message.error(error instanceof Error ? error.message : 'AI提取失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : 'AI提取失败'))
     } finally {
       setExtracting(false)
     }
@@ -295,7 +296,7 @@ export default function KnowledgeBasePage({
         setSelectedArticleId(null)
         router.refresh()
       } catch (error) {
-        message.error(error instanceof Error ? error.message : '删除失败')
+        message.error(getUserErrorMessage(error instanceof Error ? error.message : '删除失败'))
       }
     })
   }
@@ -341,7 +342,7 @@ export default function KnowledgeBasePage({
         articleForm.resetFields()
         router.refresh()
       } catch (error) {
-        message.error(error instanceof Error ? error.message : '保存失败')
+        message.error(getUserErrorMessage(error instanceof Error ? error.message : '保存失败'))
       }
     })
   }
@@ -384,7 +385,7 @@ export default function KnowledgeBasePage({
         setSelectedCategoryId(null)
         router.refresh()
       } catch (error) {
-        message.error(error instanceof Error ? error.message : '删除失败')
+        message.error(getUserErrorMessage(error instanceof Error ? error.message : '删除失败'))
       }
     })
   }
@@ -404,7 +405,7 @@ export default function KnowledgeBasePage({
         categoryForm.resetFields()
         router.refresh()
       } catch (error) {
-        message.error(error instanceof Error ? error.message : '保存失败')
+        message.error(getUserErrorMessage(error instanceof Error ? error.message : '保存失败'))
       }
     })
   }

@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import Image from 'next/image'
 import { usePagePermissions } from '@/hooks/usePagePermissions'
 import {
@@ -164,7 +165,7 @@ export default function DocumentEntryAttachmentModal({
           message.success('已删除')
           onChanged()
         } catch (error) {
-          message.error(error instanceof Error ? error.message : '删除失败')
+          message.error(getUserErrorMessage(error instanceof Error ? error.message : '删除失败'))
         }
       },
     })

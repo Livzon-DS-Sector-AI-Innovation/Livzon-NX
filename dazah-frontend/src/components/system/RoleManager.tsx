@@ -1,5 +1,6 @@
 "use client"
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useState } from "react"
 import Link, { useLinkStatus } from "next/link"
 import { App, Button, Drawer, Form, Input, Popconfirm, Table, Tag } from "antd"
@@ -81,7 +82,7 @@ export function RoleManager({ initialRoles: roles, origin }: RoleManagerProps) {
       }
       setDrawerOpen(false)
     } catch (error) {
-      message.error(error instanceof Error ? error.message : "保存失败")
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : "保存失败"))
     } finally {
       setSaving(false)
     }
@@ -91,7 +92,7 @@ export function RoleManager({ initialRoles: roles, origin }: RoleManagerProps) {
       await deleteRole(role.id)
       message.success("角色已删除")
     } catch (error) {
-      message.error(error instanceof Error ? error.message : "删除失败")
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : "删除失败"))
     }
   }
 

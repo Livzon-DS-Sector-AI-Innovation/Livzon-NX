@@ -9,9 +9,13 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
 from starlette.datastructures import UploadFile
 
+from app.core.database import get_db
 from app.core.exceptions import AppException
+from app.main import app
 from app.modules.research import api
 
 
@@ -103,3 +107,39 @@ async def test_upload_rejects_invalid_workflow_id(tmp_path: Path) -> None:
         )
 
     assert getattr(exc_info.value, "status_code", None) == 404
+
+
+async def test_pilot_upload_and_approval_http_status_contract(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("tempfile.gettempdir", lambda: str(tmp_path))
+
+    class FakeDB(_FakeDB):
+        async def execute(self, statement):
+            if "pilot_workflow_step" in str(statement):
+                return type(
+                    "Result", (), {"scalars": lambda self: self, "all": lambda self: []}
+                )()
+            return await super().execute(statement)
+
+    db = FakeDB(_workflow())
+    test_app = FastAPI(exception_handlers=app.exception_handlers)
+    prefix = "/api/v1/research"
+    test_app.include_router(api.router, prefix=prefix)
+    test_app.dependency_overrides[get_db] = lambda: db
+    path = f"{prefix}/pilot/workflow/{uuid.uuid4()}"
+    async with AsyncClient(
+        transport=ASGITransport(app=test_app), base_url="http://test"
+    ) as client:
+        conflict = await client.post(f"{path}/approve")
+        assert conflict.status_code == conflict.json()["code"] == 409
+        assert "detail" not in conflict.json()
+        assert not db.committed
+        missing = await client.post(f"{prefix}/pilot/workflow/not-a-uuid/approve")
+        assert missing.status_code == missing.json()["code"] == 404
+        assert "detail" not in missing.json()
+        upload = await client.post(
+            f"{path}/upload", files={"file": ("test.docx", b"fixture")}
+        )
+        assert upload.status_code == 200
+        assert upload.json()["data"]["filename"] == "test.docx"

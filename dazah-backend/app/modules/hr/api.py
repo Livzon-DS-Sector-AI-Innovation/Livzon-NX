@@ -30,6 +30,7 @@ from app.core.database import get_db
 from app.core.deps import CurrentUser
 from app.core.exceptions import (
     AppException,
+    DuplicateException,
     NotFoundException,
     RecruitmentNotConfigured,
 )
@@ -45,10 +46,18 @@ from app.modules.hr.contract_api import router as contract_router
 from app.modules.hr.contract_settings_api import router as contract_settings_router
 from app.modules.hr.date_format import fmt_date_str
 from app.modules.hr.document_generator import generate_onboarding_training_record
+from app.modules.hr.error_contract import (
+    HrBusinessError,
+    HrBusinessErrorCode,
+    HrSyncJobStatusEnvelope,
+    hr_error_response,
+    hr_sync_status_response,
+)
 from app.modules.hr.esg_api import router as esg_router
 from app.modules.hr.feishu_settings_api import router as feishu_settings_router
 from app.modules.hr.feishu_settings_service import (
     HrFeishuNotConfigured,
+    feishu_contact_job_error_detail,
     get_hr_feishu_app_credentials,
 )
 from app.modules.hr.models import (
@@ -1804,25 +1813,29 @@ async def sync_departments_from_feishu(
             await session.commit()
             return stats
 
-    await submit_job(_do_sync, task_id=task_id, ttl=600)
+    await submit_job(
+        _do_sync,
+        task_id=task_id,
+        ttl=600,
+        public_error_detail=feishu_contact_job_error_detail,
+    )
     return success_response(
         data={"task_id": task_id, "state": "running"},
         message="同步任务已启动",
     )
 
 
-@router.get("/departments/sync-status", summary="查询飞书同步任务状态")
+@router.get(
+    "/departments/sync-status",
+    summary="查询飞书同步任务状态",
+    response_model=HrSyncJobStatusEnvelope,
+)
 async def get_sync_status(
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
 
-    status = await get_job_status("hr:sync:departments")
-    if not status:
-        return success_response(
-            data={"state": "idle", "progress": "无同步任务", "result": None}
-        )
-    return success_response(data=status)
+    return hr_sync_status_response(await get_job_status("hr:sync:departments"))
 
 
 @router.get("/departments/{department_id}", summary="部门详情")
@@ -2170,7 +2183,15 @@ async def list_position_transfer_approvals(
     )
 
 
-@router.post("/position-transfers/sync-from-feishu", summary="从飞书同步岗位调动数据")
+@router.post(
+    "/position-transfers/sync-from-feishu",
+    summary="从飞书同步岗位调动数据",
+    responses={
+        503: hr_error_response(
+            HrBusinessErrorCode.HR_POSITION_TRANSFER_FEISHU_NOT_CONFIGURED
+        )
+    },
+)
 async def sync_position_transfers_from_feishu(
     service: PositionTransferRecordService = Depends(get_position_transfer_service),
     current_user: CurrentUser = None,
@@ -2223,7 +2244,14 @@ async def delete_position_transfer(
     return success_response(message="岗位调动记录删除成功")
 
 
-@router.post("/position-transfers/{record_id}/submit", summary="提交审批")
+@router.post(
+    "/position-transfers/{record_id}/submit",
+    summary="提交审批",
+    responses={
+        409: hr_error_response(HrBusinessErrorCode.HR_POSITION_TRANSFER_NOT_DRAFT),
+        423: {"description": "审批正在提交"},
+    },
+)
 async def submit_position_transfer_approval(
     record_id: UUID,
     payload: PositionTransferSubmitRequest,
@@ -2253,7 +2281,17 @@ async def submit_position_transfer_approval(
     )
 
 
-@router.post("/position-transfers/{record_id}/approve-node", summary="审批通过当前节点")
+@router.post(
+    "/position-transfers/{record_id}/approve-node",
+    summary="审批通过当前节点",
+    responses={
+        409: hr_error_response(
+            HrBusinessErrorCode.HR_POSITION_TRANSFER_NOT_SUBMITTED,
+            HrBusinessErrorCode.HR_POSITION_TRANSFER_APPROVAL_COMPLETED,
+        ),
+        423: {"description": "审批正在处理"},
+    },
+)
 async def approve_position_transfer_node(
     record_id: UUID,
     payload: PositionTransferApproveNodeRequest,
@@ -2270,7 +2308,16 @@ async def approve_position_transfer_node(
     )
 
 
-@router.post("/position-transfers/{record_id}/reject-node", summary="审批拒绝当前节点")
+@router.post(
+    "/position-transfers/{record_id}/reject-node",
+    summary="审批拒绝当前节点",
+    responses={
+        409: hr_error_response(
+            HrBusinessErrorCode.HR_POSITION_TRANSFER_NOT_SUBMITTED,
+            HrBusinessErrorCode.HR_POSITION_TRANSFER_APPROVAL_COMPLETED,
+        )
+    },
+)
 async def reject_position_transfer_node(
     record_id: UUID,
     payload: PositionTransferRejectNodeRequest,
@@ -4339,14 +4386,23 @@ async def list_annual_training_plans(
     )
 
 
-@router.post("/annual-training-plans", summary="创建年度培训计划")
+@router.post(
+    "/annual-training-plans",
+    summary="创建年度培训计划",
+    responses={409: hr_error_response(HrBusinessErrorCode.HR_ANNUAL_PLAN_DUPLICATE)},
+)
 async def create_annual_training_plan(
     payload: AnnualTrainingPlanCreate,
     service: AnnualTrainingPlanService = Depends(get_annual_training_plan_service),
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
-    plan = await service.create_plan(payload)
+    try:
+        plan = await service.create_plan(payload)
+    except DuplicateException as exc:
+        raise HrBusinessError(
+            409, exc.message, HrBusinessErrorCode.HR_ANNUAL_PLAN_DUPLICATE
+        ) from exc
     return success_response(
         data=AnnualTrainingPlanResponse.model_validate(plan).model_dump(mode="json"),
         message="年度培训计划创建成功",
@@ -4604,7 +4660,16 @@ async def export_annual_training_plan(
     )
 
 
-@router.post("/annual-training-plans/import", summary="导入年度培训计划Word文档")
+@router.post(
+    "/annual-training-plans/import",
+    summary="导入年度培训计划Word文档",
+    responses={
+        400: hr_error_response(
+            HrBusinessErrorCode.HR_ANNUAL_PLAN_DEPARTMENT_MISSING,
+            HrBusinessErrorCode.HR_ANNUAL_PLAN_ITEMS_MISSING,
+        )
+    },
+)
 async def import_annual_training_plan(
     file: UploadFile = File(..., description="Word文档(.docx)"),
     year: int = Query(..., description="年度"),
@@ -4667,7 +4732,15 @@ async def list_plan_attachments(
     return success_response(data=data)
 
 
-@router.post("/annual-training-plans/{plan_id}/attachments", summary="批量上传计划附件")
+@router.post(
+    "/annual-training-plans/{plan_id}/attachments",
+    summary="批量上传计划附件",
+    responses={
+        400: hr_error_response(
+            HrBusinessErrorCode.HR_ANNUAL_PLAN_ATTACHMENT_COUNT_EXCEEDED
+        )
+    },
+)
 async def upload_plan_attachments(
     plan_id: UUID,
     files: list[UploadFile] = File(..., description="附件文件（可多选）"),
@@ -4677,8 +4750,10 @@ async def upload_plan_attachments(
     """批量上传附件；文件名含"附件X"时自动归一化编号，否则编号为空可后续展示."""
     _require_user(current_user)
     if len(files) > MAX_UPLOAD_FILES:
-        raise AppException(
-            status_code=400, message=f"单次最多上传 {MAX_UPLOAD_FILES} 个附件"
+        raise HrBusinessError(
+            400,
+            f"单次最多上传 {MAX_UPLOAD_FILES} 个附件",
+            HrBusinessErrorCode.HR_ANNUAL_PLAN_ATTACHMENT_COUNT_EXCEEDED,
         )
     created = []
     for f in files:

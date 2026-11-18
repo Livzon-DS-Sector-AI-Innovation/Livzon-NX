@@ -3,6 +3,9 @@
 import { getServerApiBaseUrl } from '@/lib/server-api'
 import { revalidatePath } from 'next/cache'
 import { getAuthHeaders } from '@/lib/auth'
+import { requireActionResponse, serverActionResult, type BusinessErrorMessages } from '@/lib/server-action-result'
+import { uncertainWriteMessage } from '@/lib/user-error'
+import type { components } from '@/types/generated/schema'
 import type {
   ContractGenerateRequest,
   InvoiceRecognitionRecordDeleteResponse,
@@ -43,49 +46,47 @@ export async function recognizeInvoicePdf(
   return parseJsonResponse<InvoiceRecognitionResponse>(response, '发票识别失败')
 }
 
-export async function importSupplierTable(
-  formData: FormData
-): Promise<SupplierImportResponse> {
-  const headers = await procurementHeaders()
+type ProcurementErrorCode = components['schemas']['ProcurementErrorCode']
 
-  const response = await fetch(`${API_BASE}/api/v1/procurement/suppliers/import`, {
-    method: 'POST',
-    headers,
-    body: formData,
-    cache: 'no-store',
-  })
-  const result = await parseJsonResponse<SupplierImportResponse>(
-    response,
-    '供应商清单导入失败'
-  )
-  if (response.ok) {
-    revalidatePath('/purchasing/supplier')
-  }
-  return result
+function procurementWrite<T>(
+  operation: string,
+  label: string,
+  path: string,
+  refreshPath: string,
+  body?: FormData | string,
+  businessMessages?: BusinessErrorMessages,
+) {
+  return serverActionResult(`procurement.${operation}`, async (): Promise<T> => {
+    const response = await fetch(`${API_BASE}/api/v1/procurement${path}`, {
+      method: 'POST',
+      headers: await procurementHeaders(typeof body === 'string'),
+      body,
+      cache: 'no-store',
+    })
+    await requireActionResponse(response, businessMessages)
+    const payload = await response.json()
+    revalidatePath(refreshPath)
+    return payload
+  }, uncertainWriteMessage(label))
 }
 
-export async function importPurchaseRequestTable(
-  formData: FormData
-): Promise<PurchaseRequestImportResponse> {
-  const headers = await procurementHeaders()
+function invalidTableMessage(message: string) {
+  const codes = { PROCUREMENT_IMPORT_TABLE_INVALID: message } satisfies Partial<Record<ProcurementErrorCode, string>>
+  return { 422: codes }
+}
 
-  const response = await fetch(
-    `${API_BASE}/api/v1/procurement/purchase-requests/import`,
-    {
-      method: 'POST',
-      headers,
-      body: formData,
-      cache: 'no-store',
-    }
+export async function importSupplierTable(formData: FormData) {
+  return procurementWrite<SupplierImportResponse>(
+    'supplier.import', '供应商清单导入', '/suppliers/import', '/purchasing/supplier', formData,
+    invalidTableMessage('无法读取供应商清单，请核对表头和数据后重新上传'),
   )
-  const result = await parseJsonResponse<PurchaseRequestImportResponse>(
-    response,
-    '采购申请导入失败'
+}
+
+export async function importPurchaseRequestTable(formData: FormData) {
+  return procurementWrite<PurchaseRequestImportResponse>(
+    'purchaseRequest.import', '采购申请导入', '/purchase-requests/import', '/purchasing', formData,
+    invalidTableMessage('无法读取采购申请表格，请使用有效的采购申请模板重新上传'),
   )
-  if (response.ok) {
-    revalidatePath('/purchasing')
-  }
-  return result
 }
 
 export async function deleteInvoiceRecognitionRecord(
@@ -160,19 +161,15 @@ export async function updatePurchaseRequest(
   return response
 }
 
-export async function submitPurchaseRequest(
-  requestId: string
-): Promise<PurchaseRequestApiResponse> {
-  const response = await procurementJsonFetch<PurchaseRequestApiResponse>(
-    `/api/v1/procurement/purchase-requests/${requestId}/submit`,
-    {
-      method: 'POST',
-      body: JSON.stringify({}),
-    },
-    '采购申请提交失败'
+export async function submitPurchaseRequest(requestId: string) {
+  const codes = {
+    PROCUREMENT_SUBMIT_ITEMS_MISSING: '请至少添加一条采购明细后重新提交',
+    PROCUREMENT_SUBMIT_AMOUNT_MISMATCH: '明细金额与数量乘以单价不一致，请核对后重新提交',
+  } satisfies Partial<Record<ProcurementErrorCode, string>>
+  return procurementWrite<PurchaseRequestApiResponse>(
+    'purchaseRequest.submit', '采购申请提交', `/purchase-requests/${encodeURIComponent(requestId)}/submit`,
+    '/purchasing', '{}', { 422: codes },
   )
-  revalidatePath('/purchasing')
-  return response
 }
 
 export async function deletePurchaseRequest(
@@ -189,36 +186,18 @@ export async function deletePurchaseRequest(
   return response
 }
 
-export async function approvePurchaseRequest(
-  requestId: string,
-  payload: PurchaseApprovalRequest
-): Promise<PurchaseRequestApiResponse> {
-  const response = await procurementJsonFetch<PurchaseRequestApiResponse>(
-    `/api/v1/procurement/purchase-requests/${requestId}/approve`,
-    {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    },
-    '审批失败'
+export async function approvePurchaseRequest(requestId: string, payload: PurchaseApprovalRequest) {
+  return procurementWrite<PurchaseRequestApiResponse>(
+    'purchaseRequest.approve', '采购审批通过', `/purchase-requests/${encodeURIComponent(requestId)}/approve`,
+    '/purchasing', JSON.stringify(payload),
   )
-  revalidatePath('/purchasing')
-  return response
 }
 
-export async function rejectPurchaseRequest(
-  requestId: string,
-  payload: PurchaseApprovalRequest
-): Promise<PurchaseRequestApiResponse> {
-  const response = await procurementJsonFetch<PurchaseRequestApiResponse>(
-    `/api/v1/procurement/purchase-requests/${requestId}/reject`,
-    {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    },
-    '驳回失败'
+export async function rejectPurchaseRequest(requestId: string, payload: PurchaseApprovalRequest) {
+  return procurementWrite<PurchaseRequestApiResponse>(
+    'purchaseRequest.reject', '采购审批驳回', `/purchase-requests/${encodeURIComponent(requestId)}/reject`,
+    '/purchasing', JSON.stringify(payload),
   )
-  revalidatePath('/purchasing')
-  return response
 }
 
 export type ContractGenerateActionResult =

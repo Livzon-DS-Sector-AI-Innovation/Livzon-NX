@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useEffect, useState } from 'react'
 import {
   App,
@@ -161,7 +162,7 @@ export default function SafetyFacilityPanel({
       const statsRes = await getSafetyFacilityStats()
       if (statsRes.code === 200) setStats(statsRes.data)
     } catch (err) {
-      setError(err instanceof Error ? err.message : '加载安全设施失败')
+      setError(getUserErrorMessage(err instanceof Error ? err.message : '加载安全设施失败', '加载安全设施失败'))
     } finally {
       setLoading(false)
     }
@@ -219,7 +220,7 @@ export default function SafetyFacilityPanel({
         message.error(res.message || '保存失败')
       }
     } catch (err) {
-      message.error(err instanceof Error ? err.message : '保存失败')
+      message.error(getUserErrorMessage(err instanceof Error ? err.message : '保存失败'))
     }
   }
 
@@ -261,7 +262,7 @@ export default function SafetyFacilityPanel({
         message.error(res.message || '提交失败')
       }
     } catch (err) {
-      message.error(err instanceof Error ? err.message : '提交失败')
+      message.error(getUserErrorMessage(err instanceof Error ? err.message : '提交失败'))
     }
   }
 

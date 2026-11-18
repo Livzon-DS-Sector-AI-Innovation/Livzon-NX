@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useState } from 'react'
 import { App, Button, InputNumber, Modal, Table, Upload } from 'antd'
 import { InboxOutlined, UploadOutlined } from '@ant-design/icons'
@@ -33,7 +34,7 @@ export default function ImportExamScoresModal({ open, recordId, onClose, onSucce
       setScores(res.data || [])
       message.success(res.message || `解析出 ${res.data?.length || 0} 条成绩`)
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '解析文件失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '解析文件失败'))
     } finally {
       setParsing(false)
     }
@@ -51,7 +52,7 @@ export default function ImportExamScoresModal({ open, recordId, onClose, onSucce
       onSuccess()
       handleClose()
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '导入成绩失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '导入成绩失败'))
     } finally {
       setConfirming(false)
     }

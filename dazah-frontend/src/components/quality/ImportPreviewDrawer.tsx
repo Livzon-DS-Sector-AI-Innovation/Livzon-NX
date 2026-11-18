@@ -166,7 +166,7 @@ export function ImportPreviewDrawer({
       a.click()
       URL.revokeObjectURL(url)
     } catch (err) {
-      setErrorMsg((err instanceof Error ? err.message : '') || "下载模板失败")
+      setErrorMsg(getUserErrorMessage((err instanceof Error ? err.message : '') || "下载模板失败", "下载模板失败"))
     }
   }
 

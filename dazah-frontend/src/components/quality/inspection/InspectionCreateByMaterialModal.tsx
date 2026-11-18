@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useEffect, useMemo, useState } from 'react'
 import { App, Form, Modal, Select, Space, Spin, Tag } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
@@ -136,7 +137,7 @@ export function InspectionCreateByMaterialModal({
       })
       onClose()
     } catch (err) {
-      if (err instanceof Error) message.error(err.message)
+      if (err instanceof Error) message.error(getUserErrorMessage(err.message))
     } finally {
       setSubmitting(false)
     }

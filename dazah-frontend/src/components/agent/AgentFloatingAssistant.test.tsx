@@ -210,6 +210,14 @@ describe("agent session history", () => {
     expect(errors.mock.calls.flat().join(" ")).not.toContain("[antd: List]")
   })
 
+  it("shows a safe message if loading session history fails", async () => {
+    const technicalError = "TypeError: internal history failure"
+    mocks.fetchAgentSessions.mockRejectedValueOnce(new Error(technicalError))
+    await openHistory()
+    expect(document.body.textContent).toContain("加载历史会话失败")
+    expect(document.body.textContent).not.toContain(technicalError)
+  })
+
   it("restores the selected conversation", async () => {
     await openHistory()
     const restoreButtons = [...document.body.querySelectorAll("button")].filter(

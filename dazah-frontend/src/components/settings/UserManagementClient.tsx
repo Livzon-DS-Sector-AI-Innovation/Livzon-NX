@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { App, Button, Dropdown, Form, Input, Modal, Select, Space, Table, Tag, Typography } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
@@ -143,7 +144,7 @@ export default function UserManagementClient() {
           await loadUsers()
         } catch (error) {
           message.error(
-            error instanceof Error ? error.message : '飞书用户同步失败'
+            getUserErrorMessage(error instanceof Error ? error.message : '飞书用户同步失败')
           )
           throw error
         } finally {
@@ -205,7 +206,7 @@ export default function UserManagementClient() {
       setModalOpen(false)
       await loadUsers()
     } catch (error) {
-      if (error instanceof Error) message.error(error.message)
+      if (error instanceof Error) message.error(getUserErrorMessage(error.message))
     } finally {
       setSaving(false)
     }
@@ -239,7 +240,7 @@ export default function UserManagementClient() {
       message.success(nextStatus === 'active' ? '用户已启用' : '用户已禁用')
       await loadUsers()
     } catch (error) {
-      if (error instanceof Error) message.error(error.message)
+      if (error instanceof Error) message.error(getUserErrorMessage(error.message))
       throw error
     }
   }
@@ -265,7 +266,7 @@ export default function UserManagementClient() {
       setPasswordUser(null)
       passwordForm.resetFields()
     } catch (error) {
-      if (error instanceof Error) message.error(error.message)
+      if (error instanceof Error) message.error(getUserErrorMessage(error.message))
     }
   }
 
