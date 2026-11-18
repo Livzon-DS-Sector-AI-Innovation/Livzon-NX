@@ -2,12 +2,15 @@
 
 import asyncio
 import contextlib
+import uuid
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+from sqlalchemy import delete, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import database, maintenance
 from app.core.exceptions import AppException
@@ -78,6 +81,13 @@ class _FakeSession:
 
     def add(self, obj: object) -> None:
         self.added.append(obj)
+
+    @contextlib.asynccontextmanager
+    async def begin_nested(self) -> AsyncIterator[None]:
+        yield
+
+    async def flush(self) -> None:
+        return None
 
     async def commit(self) -> None:
         self.commits += 1
@@ -189,9 +199,6 @@ async def test_sync_upserts_revives_and_soft_deletes(monkeypatch) -> None:
         page_key=PAGE_KEY, record_id="rec-2", fields={}, search_text="x",
     )
     existing_revived.is_deleted = True  # 曾被软删、远端仍存在 → 应复活
-    existing_stale = SafetyPageTableMirrorRecord(
-        page_key=PAGE_KEY, record_id="rec-gone", fields={}, search_text="y",
-    )
     rows = [
         {"record_id": "rec-1", "fields": {"记录编号": [{"text": "YH-1"}]}},
         {"record_id": "rec-2", "fields": {"整改情况": "已整改"}},
@@ -203,7 +210,7 @@ async def test_sync_upserts_revives_and_soft_deletes(monkeypatch) -> None:
             _FakeResult(config),
             _FakeResult(
                 None,
-                list_value=[existing_kept, existing_revived, existing_stale],
+                list_value=[existing_kept, existing_revived],
             ),
         ],
     )
@@ -212,14 +219,91 @@ async def test_sync_upserts_revives_and_soft_deletes(monkeypatch) -> None:
     count = await page_table.sync_page_table_mirror(db, PAGE_KEY)
 
     assert count == 2
-    # rec-1 原地更新，rec-2 复活，rec-gone 软删，无新增之外的写
+    # rec-1 原地更新，rec-2 复活，无额外新增。
     assert existing_kept.fields["记录编号"] == "YH-1"
     assert existing_revived.is_deleted is False
-    assert existing_stale.is_deleted is True
     assert db.added == []
     assert db.commits == 1
     assert db.rollbacks == 0
     assert config.last_sync_status == "success"
+
+
+async def test_mirror_batches_keep_current_row_and_soft_delete_only_missing_rows(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    key = f"test-safety-mirror-{uuid.uuid4()}"
+    initial = datetime(2026, 1, 1, tzinfo=UTC)
+    config = _config(
+        page_key=key,
+        sub_tables=[{"table_id": "failed", "tab_name": "失败子表"}],
+    )
+    model = SafetyPageTableMirrorRecord
+    db_session.add(config)
+    db_session.add_all(
+        [
+            model(
+                page_key=key,
+                table_id=TABLE_ID,
+                record_id="keep",
+                fields={"记录编号": "YH-1"},
+                search_text="YH-1",
+                synced_at=initial,
+            ),
+            model(
+                page_key=key,
+                table_id=TABLE_ID,
+                record_id="keep",
+                fields={},
+                is_deleted=True,
+            ),
+            model(page_key=key, table_id=TABLE_ID, record_id="gone", fields={}),
+            model(page_key=key, table_id="other", record_id="other", fields={}),
+            model(page_key=key, table_id="failed", record_id="protected", fields={}),
+        ]
+    )
+    await db_session.commit()
+    client = _FakeClient(
+        rows=[
+            {"record_id": "keep", "fields": {"记录编号": "YH-1"}},
+            {"record_id": "new", "fields": {"记录编号": "YH-2"}},
+        ]
+    )
+    _install(monkeypatch, client)
+    monkeypatch.setattr(
+        client,
+        "search_records_with_result",
+        AsyncMock(
+            side_effect=[
+                (client.rows, None),
+                ([{"record_id": "rolled-back"}, {"record_id": "x" * 65}], None),
+            ]
+        ),
+    )
+    monkeypatch.setattr(page_table, "_MIRROR_WRITE_BATCH_SIZE", 1)
+    monkeypatch.setattr(
+        page_table,
+        "_load_config_or_raise",
+        AsyncMock(
+            return_value=(page_table.get_page_table(PAGE_KEY), config, APP_TOKEN, None),
+        ),
+    )
+    try:
+        assert await page_table.sync_page_table_mirror(db_session, key) == 2
+        result = await db_session.scalars(select(model).where(model.page_key == key))
+        active = {row.record_id: row for row in result if not row.is_deleted}
+        assert set(active) == {"keep", "new", "other", "protected"}
+        assert active["keep"].synced_at == initial
+        assert config.last_sync_status == "partial"
+    finally:
+        await db_session.rollback()
+        await db_session.execute(delete(model).where(model.page_key == key))
+        await db_session.execute(
+            delete(SafetyPageFeishuConfig).where(
+                SafetyPageFeishuConfig.page_key == key,
+            )
+        )
+        await db_session.commit()
 
 
 async def test_sync_writes_status_back_to_config(monkeypatch) -> None:
@@ -240,6 +324,29 @@ async def test_sync_writes_status_back_to_config(monkeypatch) -> None:
     assert config.last_sync_status == "success"
     assert config.last_sync_record_count == 1
     assert config.last_synced_at is not None
+
+
+async def test_sync_leaves_identical_mirror_row_untouched(monkeypatch) -> None:
+    config = _config()
+    initial = datetime(2026, 1, 1, tzinfo=UTC)
+    row = SafetyPageTableMirrorRecord(
+        page_key=PAGE_KEY,
+        table_id=TABLE_ID,
+        record_id="rec-1",
+        fields={"记录编号": "YH-1"},
+        search_text="YH-1",
+        synced_at=initial,
+        is_deleted=False,
+    )
+    client = _FakeClient(rows=[{"record_id": "rec-1", "fields": {"记录编号": "YH-1"}}])
+    db = _FakeSession(
+        None, results=[_FakeResult(config), _FakeResult(list_value=[row])]
+    )
+    _install(monkeypatch, client, mirror_session=db)
+
+    assert await page_table.sync_page_table_mirror(db, PAGE_KEY) == 1
+    assert row.synced_at == initial
+    assert config.last_synced_at is not None and config.last_synced_at > initial
 
 
 async def test_sync_deduplicates_overlapping_pages(monkeypatch) -> None:
@@ -486,6 +593,46 @@ async def test_mirror_sync_loop_defers_until_release_reopens(
         stop.set()
         finish_sync.set()
         await asyncio.wait_for(task, timeout=2)
+
+
+async def test_mirror_sync_loop_rolls_back_timeout_and_processes_next_page(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.modules.safety import scheduled
+
+    stop = asyncio.Event()
+    session = _FakeSession()
+    processed: list[str] = []
+
+    async def execute(_generator, _session, page_key):
+        if page_key == "slow":
+            await asyncio.Event().wait()
+        else:
+            processed.append(page_key)
+            stop.set()
+
+    monkeypatch.setattr(scheduled, "_mirror_sync_stop", stop)
+    monkeypatch.setattr(scheduled, "_MIRROR_SYNC_PAGE_TIMEOUT_SECONDS", 0.01)
+    monkeypatch.setattr(
+        scheduled, "business_activity", lambda _: contextlib.nullcontext()
+    )
+    monkeypatch.setattr(
+        page_table, "async_session_factory", _FakeSessionFactory(session)
+    )
+    monkeypatch.setattr(
+        SafetyPageMirrorSyncGenerator,
+        "find_due",
+        AsyncMock(
+            return_value=["slow", "fast"],
+        ),
+    )
+    monkeypatch.setattr(SafetyPageMirrorSyncGenerator, "execute_one", execute)
+
+    await asyncio.wait_for(scheduled.mirror_sync_loop(), timeout=2)
+
+    assert processed == ["fast"]
+    assert session.rollbacks == 1
+    assert session.commits == 1
 
 
 async def test_mirror_sync_loop_runs_due_pages_and_survives_failures(

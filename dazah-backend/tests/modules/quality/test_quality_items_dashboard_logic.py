@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock
@@ -11,8 +12,8 @@ import pytest
 from app.modules.quality.schemas.inspection_items_dashboard import (
     ItemsStockAlertItem,
 )
+from app.modules.quality.service import items_dashboard as dashboard
 from app.modules.quality.service.items_dashboard import (
-    _aggregate_monthly,
     _build_alert_content,
     _cell_text,
     _is_low_stock,
@@ -48,13 +49,37 @@ def test_is_low_stock_local_threshold() -> None:
     assert _is_low_stock({"当前库存": None, "警戒库存": 5}, "local_threshold") is False
 
 
-def test_aggregate_monthly_fills_12_months() -> None:
+@pytest.mark.asyncio
+async def test_dashboard_aggregates_projected_monthly_rows(monkeypatch) -> None:
     # epoch ms: 2026-01-15 与 2026-03-10（UTC）
     jan = 1_768_435_200_000  # 2026-01-15
     mar = 1_773_100_800_000  # 2026-03-10
     inbound = [{"入库日期": jan, "入库数量": "10"}, {"入库日期": mar, "入库数量": "5"}]
     outbound = [{"领用日期": mar, "领取数量": "3"}]
-    points = _aggregate_monthly(inbound, outbound, 2026)
+
+    async def snapshot(_db, page_key):
+        data = {dashboard.PAGE_INBOUND: inbound, dashboard.PAGE_OUTBOUND: outbound}.get(
+            page_key
+        )
+        columns = [{"key": key} for key in data[0]] if data else []
+        return SimpleNamespace(id=page_key, columns=columns, last_synced_at=None)
+
+    async def stream(_db, snapshot_id, *, sort_field=None, project_fields=None):
+        data = {dashboard.PAGE_INBOUND: inbound, dashboard.PAGE_OUTBOUND: outbound}.get(
+            snapshot_id
+        )
+        for cells in data or []:
+            assert set(project_fields) == set(cells)
+            yield "", None, None, dict(cells)
+
+    monkeypatch.setattr(dashboard.repo, "get_snapshot", snapshot)
+    monkeypatch.setattr(dashboard.repo, "iter_statistics_rows", stream)
+    monkeypatch.setattr(
+        dashboard,
+        "load_items_stock_alert_config",
+        AsyncMock(return_value=ItemsStockAlertConfig()),
+    )
+    points = (await dashboard.get_items_dashboard(None)).monthly
     assert len(points) == 12
     m1 = next(p for p in points if p.month == 1)
     m3 = next(p for p in points if p.month == 3)
@@ -113,25 +138,25 @@ def test_row_month_parses_timestamps_and_dates() -> None:
 async def test_find_low_stock_items_uses_inventory_page(
     monkeypatch: Any,
 ) -> None:
-    async def fake_list(db: Any, page_key: str, **kwargs: Any) -> dict[str, Any]:
-        return {
-            "items": [
-                {"record_id": "r1", "当前库存": 1, "警戒库存": 5},
-                {"record_id": "r2", "当前库存": 9, "警戒库存": 5},
-            ],
-            "configured": True,
-            "last_sync_time": None,
-        }
+    columns = [{"key": "当前库存"}, {"key": "警戒库存"}]
+    snapshot = SimpleNamespace(id="inventory", columns=columns, last_synced_at=None)
+    get_snapshot = AsyncMock(return_value=snapshot)
+    monkeypatch.setattr(dashboard.repo, "get_snapshot", get_snapshot)
 
-    monkeypatch.setattr(
-        "app.modules.quality.service.items_dashboard.list_items_mirror",
-        fake_list,
-    )
+    async def rows(db, snapshot_id):
+        assert snapshot_id == "inventory"
+        now = datetime.now(UTC)
+        yield "r1", now, now, {"当前库存": 1, "警戒库存": 5}
+        yield "r2", now, now, {"当前库存": 9, "警戒库存": 5}
 
+    monkeypatch.setattr(dashboard.repo, "iter_statistics_rows", rows)
     found = await find_low_stock_items(
         None, ItemsStockAlertConfig(warning_source="local_threshold")
     )
+    get_snapshot.assert_awaited_once_with(None, dashboard.PAGE_INVENTORY)
     assert [item["record_id"] for item in found] == ["r1"]
+
+
 def test_build_deep_link_appends_feishu_filter(monkeypatch: Any) -> None:
     from app.modules.quality.service.items_dashboard import _build_deep_link
 

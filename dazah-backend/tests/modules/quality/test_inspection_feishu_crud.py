@@ -409,6 +409,28 @@ async def test_download_attachment_bytes_reports_forbidden(
     assert result == (None, "", "forbidden")
 
 
+async def test_warmup_download_enforces_stream_limit_without_content_length() -> None:
+    class Body(service.httpx.AsyncByteStream):
+        async def __aiter__(self):
+            yield b"a" * (64 * 1024)
+            yield b"b" * (64 * 1024)
+            pytest.fail("读取应在超过预热限制时终止")
+
+    transport = service.httpx.MockTransport(
+        lambda _request: service.httpx.Response(
+            200,
+            stream=Body(),
+            headers={"content-type": "image/jpeg"},
+        )
+    )
+    async with service.httpx.AsyncClient(transport=transport) as http:
+        with pytest.raises(AppException) as exc:
+            await service._get_attachment_response(
+                http, "https://example.test/photo", {}, 64 * 1024
+            )
+    assert exc.value.status_code == 413
+
+
 @pytest.mark.anyio
 async def test_get_attachment_content_rejects_foreign_file_token(
     db_session,

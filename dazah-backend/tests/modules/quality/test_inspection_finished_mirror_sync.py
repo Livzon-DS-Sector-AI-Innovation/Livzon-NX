@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
+from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppException
+from app.modules.quality.repository import inspection_items_mirror as repo
 from app.modules.quality.service import inspection_finished_material as fin_svc
 from app.modules.quality.service import inspection_finished_mirror as mirror
 
@@ -89,9 +92,15 @@ def _install_feishu_mocks(
     monkeypatch: pytest.MonkeyPatch,
     records: list[dict[str, Any]],
     fields: list[dict[str, Any]],
+    *,
+    request: AsyncMock | None = None,
 ) -> None:
     class _ClientObj:
         async def request(self, method, path, params=None, json=None, timeout=None):
+            if request is not None:
+                return await request(
+                    method, path, params=params, json=json, timeout=timeout
+                )
             return {"items": records, "has_more": False, "total": len(records)}
 
     class _Client:
@@ -382,7 +391,9 @@ async def test_fetch_incremental_paginates_and_early_stops(
             self.calls += 1
             if self.calls == 1:
                 return {"items": page1, "has_more": True, "page_token": "p2"}
-            return {"items": page2, "has_more": False}
+            if self.calls == 2:
+                return {"items": page2, "has_more": True, "page_token": "p3"}
+            pytest.fail("整页无变更后应结束批号搜索")
 
     class _PagedClient:
         def __init__(self, *, app_token, app_id, app_secret):
@@ -470,6 +481,100 @@ async def test_pull_finished_by_entity_full_syncs_mirror(
 async def test_sync_unknown_entity_rejected(db_session: AsyncSession) -> None:
     with pytest.raises(AppException):
         await mirror.sync_finished_page(db_session, "qc_finished_not_exist")
+
+
+async def test_full_sync_rejects_truncated_pagination_without_mutating_snapshot(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    initial = [{"record_id": "initial", "fields": {"批号": "PF-1"}}]
+    _install_feishu_mocks(monkeypatch, initial, _fields())
+    await mirror.sync_finished_page(db_session, ENTITY, incremental=False)
+
+    async def repeated_cursor(*_args, **_kwargs):
+        return {
+            "items": [{"record_id": "partial", "fields": {"批号": "PF-2"}}],
+            "has_more": True,
+            "page_token": "p2",
+        }
+
+    request = AsyncMock(side_effect=repeated_cursor)
+
+    _install_feishu_mocks(monkeypatch, [], _fields(), request=request)
+    with pytest.raises(AppException) as exc:
+        await mirror.sync_finished_page(db_session, ENTITY, incremental=False)
+    assert exc.value.status_code == 503
+    assert request.await_count == 2
+    read = await mirror.list_finished_mirror(db_session, ENTITY)
+    assert [row["record_id"] for row in read["items"]] == ["initial"]
+
+
+async def test_incremental_fallback_rolls_back_partial_search_and_keeps_history(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    initial = [{"record_id": "initial", "fields": {"批号": "PF-1"}}]
+    _install_feishu_mocks(monkeypatch, initial, _fields())
+    await mirror.sync_finished_page(db_session, ENTITY, incremental=False)
+
+    request = AsyncMock(
+        side_effect=[
+            {
+                "items": [{"record_id": "partial", "fields": {"批号": "PF-2"}}],
+                "has_more": True,
+                "page_token": "p2",
+            },
+            RuntimeError("InvalidSort"),
+            {
+                "items": [{"record_id": "fallback", "fields": {"批号": "PF-3"}}],
+                "has_more": False,
+            },
+        ]
+    )
+
+    _install_feishu_mocks(monkeypatch, [], _fields(), request=request)
+
+    result = await mirror.sync_finished_page(db_session, ENTITY)
+
+    assert result["synced"] == 1
+    assert [call.args[0] for call in request.await_args_list] == ["POST", "POST", "GET"]
+    read = await mirror.list_finished_mirror(db_session, ENTITY)
+    assert {row["record_id"] for row in read["items"]} == {"initial", "fallback"}
+
+
+@pytest.mark.parametrize(
+    ("group", "entity_code", "incomplete"),
+    [("pf", ENTITY, False), ("mpa", "qc_finished_internal", True)],
+)
+async def test_manual_finished_pull_reports_complete_and_incomplete_pagination(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+    group: str,
+    entity_code: str,
+    incomplete: bool,
+) -> None:
+    request = AsyncMock(
+        return_value={
+            "items": [{"record_id": "rec1", "fields": {"批号": "PF-1"}}],
+            "has_more": incomplete,
+        }
+    )
+    _install_feishu_mocks(monkeypatch, [], _fields(), request=request)
+
+    resp = await client.post(
+        f"/api/v1/quality/inspection-finished/{group}/pull",
+        params={"entity_code": entity_code},
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert data["synced"] == (0 if incomplete else 1)
+    if incomplete:
+        assert data["error"]
+        assert await repo.get_snapshot(db_session, entity_code) is None
+    else:
+        assert data == {"synced": 1, "removed": 0, "total": 1}
 
 
 async def test_list_filters_placeholder_rows(

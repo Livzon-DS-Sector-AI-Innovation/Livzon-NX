@@ -6,6 +6,7 @@ scheduled.py 是每日全量对账正确性的全部保障（防止 00:00 后重
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from datetime import datetime
 from unittest.mock import MagicMock
 from zoneinfo import ZoneInfo
@@ -40,6 +41,10 @@ class _FakeSession:
 
     async def commit(self) -> None:
         self.committed = True
+
+    @asynccontextmanager
+    async def begin_nested(self):
+        yield
 
 
 @pytest.mark.asyncio

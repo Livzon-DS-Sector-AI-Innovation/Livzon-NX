@@ -44,6 +44,18 @@ def test_build_thumbnail_rejects_non_image() -> None:
     assert build_thumbnail(b"hello", "notes.docx", 200, 200) is None
 
 
+def test_warmup_rejects_images_over_the_pixel_budget() -> None:
+    image = Image.new("RGB", (200, 150))
+    buf = io.BytesIO()
+    image.save(buf, format="PNG")
+
+    assert (
+        build_thumbnail(buf.getvalue(), "photo.png", 200, 200, max_pixels=10_000)
+        is None
+    )
+    assert build_thumbnail(buf.getvalue(), "photo.png", 200, 200) is not None
+
+
 def test_build_thumbnail_keeps_small_image_unchanged() -> None:
     img = Image.new("RGB", (64, 64), (10, 20, 30))
     buf = io.BytesIO()

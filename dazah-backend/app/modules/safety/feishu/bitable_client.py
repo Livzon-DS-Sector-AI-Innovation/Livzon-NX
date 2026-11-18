@@ -456,6 +456,7 @@ class SafetyBitableClient:
         page_size: int = 100,
         max_pages: int = 50,
         sort: list[dict[str, Any]] | None = None,
+        require_complete: bool = False,
     ) -> tuple[list[dict[str, Any]], str | None]:
         """搜索记录，返回 ``(记录列表, 飞书错误信息)``。
 
@@ -468,6 +469,8 @@ class SafetyBitableClient:
         tid = table_id or self.table_id
         results: list[dict[str, Any]] = []
         page_token: str | None = None
+        seen_tokens: set[str] = set()
+        seen_records: set[str] = set()
         async with httpx.AsyncClient(timeout=30) as http:
             for _ in range(max_pages):
                 # page_size/page_token 是 query 参数：放进 body 会被服务端忽略，
@@ -495,14 +498,54 @@ class SafetyBitableClient:
                     logger.error("Bitable search_records 失败: %s", message)
                     return results, message
                 page = data.get("data", {})
-                items = page.get("items", [])
+                if not isinstance(page, dict):
+                    return results, "飞书记录分页响应无效"
+                items = page.get("items") if require_complete else page.get("items", [])
+                has_more = page.get("has_more")
+                if require_complete:
+                    if items is None and has_more is False and page.get("total") == 0:
+                        items = []
+                    if (
+                        not isinstance(has_more, bool)
+                        or not isinstance(items, list)
+                        or len(items) > page_size
+                    ):
+                        return results, "飞书记录分页响应无效"
+                    for item in items:
+                        if (
+                            not isinstance(item, dict)
+                            or not isinstance(item.get("record_id"), str)
+                            or not item["record_id"]
+                            or len(item["record_id"]) > 64
+                        ):
+                            return results, "飞书分页中包含无效记录，已跳过对账"
+                        if item.get("fields") is not None and not isinstance(
+                            item["fields"], dict
+                        ):
+                            return results, "飞书分页中包含无效字段，已跳过对账"
+                        seen_records.add(item["record_id"])
                 if isinstance(items, list):
                     results.extend(
                         item for item in items if isinstance(item, dict)
                     )
+                if not has_more:
+                    total = page.get("total")
+                    if (
+                        require_complete
+                        and isinstance(total, int)
+                        and len(seen_records) < total
+                    ):
+                        return results, "飞书记录未拉取完整，已跳过对账"
+                    return results, None
                 page_token = page.get("page_token") or None
-                if not page.get("has_more") or not page_token:
+                if require_complete:
+                    if not isinstance(page_token, str) or page_token in seen_tokens:
+                        return results, "飞书记录分页游标缺失或重复，已跳过对账"
+                    seen_tokens.add(page_token)
+                elif not page_token:
                     break
+        if require_complete:
+            return results, "飞书记录超过全量同步分页上限，已跳过对账"
         return results, None
 
     async def list_fields(self, table_id: str | None = None) -> list[dict[str, Any]]:

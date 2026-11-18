@@ -14,7 +14,8 @@ import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import ColumnElement, func, or_, select
+from sqlalchemy import TIMESTAMP, ColumnElement, String, cast, func, or_, select, tuple_
+from sqlalchemy.dialects.postgresql import array
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppException, NotFoundException
@@ -518,165 +519,138 @@ async def pull_supplier_qualification_records(
 
 
 async def get_supplier_statistics(db: AsyncSession) -> dict[str, Any]:
-    """基于镜像表计算供应商资质 GMP 指标。"""
+    """Aggregate the mirror in PostgreSQL without loading records or HR avatars."""
+    now = datetime.now(UTC)
+    mirror = SupplierQualificationMirror
+    supplier = func.btrim(func.coalesce(func.nullif(mirror.supplier_name, ""), "未知"))
+    material = func.btrim(func.coalesce(func.nullif(mirror.material_type, ""), "未知"))
+    qualification = func.btrim(
+        func.coalesce(func.nullif(mirror.qualification_name, ""), "未知")
+    )
+    deadline_text = func.nullif(func.btrim(mirror.deadline), "")
+    deadline = cast(deadline_text, TIMESTAMP(timezone=True))
+    month = func.substr(deadline_text, 1, 7)
+
+    cutoff_30 = now + timedelta(days=31)
+    cutoff_60 = now + timedelta(days=61)
+    cutoff_90 = now + timedelta(days=91)
+    group = func.grouping(supplier, material, qualification, month)
+    # Resolve ranking ties by the first record of each group in the original list order.
+    first_key = func.max(
+        array(
+            [
+                func.coalesce(mirror.deadline, ""),
+                func.coalesce(cast(mirror.source_updated_at, String), ""),
+            ]
+        )
+    )
+    stmt = (
+        select(
+            group.label("group_kind"),
+            supplier.label("supplier"),
+            material.label("material"),
+            qualification.label("qualification"),
+            month.label("month"),
+            func.count().label("total"),
+            func.count().filter(mirror.is_completed.is_(True)).label("completed"),
+            func.count().filter(deadline < now).label("expired"),
+            func.count().filter(deadline >= now, deadline < cutoff_30).label("due30"),
+            func.count()
+            .filter(deadline >= cutoff_30, deadline < cutoff_60)
+            .label("due60"),
+            func.count()
+            .filter(deadline >= cutoff_60, deadline < cutoff_90)
+            .label("due90"),
+        )
+        .where(mirror.is_deleted.is_(False))
+        .group_by(
+            func.grouping_sets(
+                tuple_(),
+                tuple_(supplier),
+                tuple_(material),
+                tuple_(qualification),
+                tuple_(month),
+            )
+        )
+        .order_by(first_key.desc().nulls_last())
+    )
     try:
-        result = await list_supplier_qualification_records(db, page=1, page_size=99999)
+        groups = (await db.execute(stmt)).mappings().all()
     except AppException:
         return _empty_supplier_stats()
-    items: list[dict[str, Any]] = result.get("items", [])
 
-    total = len(items)
-    completed = sum(1 for item in items if item.get("is_completed"))
-    pending = total - completed
+    stats = _empty_supplier_stats()
+    supplier_risk: list[dict[str, Any]] = []
+    material_compliance: list[dict[str, Any]] = []
+    qualification_compliance: list[dict[str, Any]] = []
+    timeline: list[dict[str, Any]] = []
+    latest_month = (now + timedelta(days=400)).strftime("%Y-%m")
+    for row in groups:
+        total = row["total"]
+        completed = row["completed"]
+        pending = total - completed
+        rate = round(completed / total * 100, 1) if total else 0
+        counts = {"total": total, "completed": completed, "pending": pending}
+        match row["group_kind"]:
+            case 15:  # Overall (all four grouping columns omitted).
+                stats.update(
+                    counts,
+                    completion_rate=rate,
+                    expired_count=row["expired"],
+                    due_30_count=row["due30"],
+                    due_60_count=row["due60"],
+                    due_90_count=row["due90"],
+                    normal_count=total
+                    - row["expired"]
+                    - row["due30"]
+                    - row["due60"]
+                    - row["due90"],
+                )
+            case 7:  # Supplier.
+                supplier_risk.append(
+                    {
+                        "name": row["supplier"],
+                        **counts,
+                        "expired": row["expired"],
+                        "due30": row["due30"],
+                        "risk_score": row["expired"] * 3 + row["due30"] * 2 + pending,
+                    }
+                )
+            case 11:  # Material type.
+                material_compliance.append(
+                    {
+                        "type": row["material"],
+                        **counts,
+                        "expired": row["expired"],
+                        "compliance_rate": rate,
+                    }
+                )
+            case 13:  # Qualification.
+                qualification_compliance.append(
+                    {
+                        "name": row["qualification"],
+                        **counts,
+                        "completion_rate": rate,
+                    }
+                )
+            case 14:  # Expiry month.
+                if row["month"] and row["month"] <= latest_month:
+                    timeline.append({"month": row["month"], "count": total})
 
-    now = datetime.now(UTC)
-
-    supplier_stats: dict[str, dict[str, int]] = {}
-    material_type_stats: dict[str, dict[str, int]] = {}
-    qualification_stats: dict[str, dict[str, int]] = {}
-
-    expired_count = 0
-    due_30_count = 0
-    due_60_count = 0
-    due_90_count = 0
-    normal_count = 0
-
-    for item in items:
-        sn = (item.get("supplier_name") or "未知").strip()
-        mt = (item.get("material_type") or "未知").strip()
-        qn = (item.get("qualification_name") or "未知").strip()
-        is_done = item.get("is_completed")
-
-        if sn not in supplier_stats:
-            supplier_stats[sn] = {
-                "total": 0,
-                "completed": 0,
-                "pending": 0,
-                "expired": 0,
-                "due30": 0,
-                "due60": 0,
-                "due90": 0,
-            }
-        supplier_stats[sn]["total"] += 1
-        supplier_stats[sn]["completed" if is_done else "pending"] += 1
-
-        if mt not in material_type_stats:
-            material_type_stats[mt] = {
-                "total": 0,
-                "completed": 0,
-                "pending": 0,
-                "expired": 0,
-            }
-        material_type_stats[mt]["total"] += 1
-        material_type_stats[mt]["completed" if is_done else "pending"] += 1
-
-        if qn not in qualification_stats:
-            qualification_stats[qn] = {"total": 0, "completed": 0, "pending": 0}
-        qualification_stats[qn]["total"] += 1
-        qualification_stats[qn]["completed" if is_done else "pending"] += 1
-
-        deadline = item.get("deadline")
-        if deadline:
-            if isinstance(deadline, str):
-                deadline = feishu_sync_service._parse_feishu_datetime(deadline)
-            if deadline:
-                days_left = (deadline - now).days
-                if days_left < 0:
-                    expired_count += 1
-                    supplier_stats[sn]["expired"] += 1
-                    material_type_stats[mt]["expired"] += 1
-                elif days_left <= 30:
-                    due_30_count += 1
-                    supplier_stats[sn]["due30"] += 1
-                elif days_left <= 60:
-                    due_60_count += 1
-                    supplier_stats[sn]["due60"] += 1
-                elif days_left <= 90:
-                    due_90_count += 1
-                    supplier_stats[sn]["due90"] += 1
-                else:
-                    normal_count += 1
-            else:
-                normal_count += 1
-        else:
-            normal_count += 1
-
-    supplier_risk = sorted(
-        [
-            {
-                "name": k,
-                "total": v["total"],
-                "completed": v["completed"],
-                "pending": v["pending"],
-                "expired": v["expired"],
-                "due30": v["due30"],
-                "risk_score": v["expired"] * 3 + v["due30"] * 2 + v["pending"],
-            }
-            for k, v in supplier_stats.items()
-        ],
-        key=lambda x: -float(str(x["risk_score"])),
-    )[:10]
-
-    material_type_compliance = [
-        {
-            "type": k,
-            "total": v["total"],
-            "completed": v["completed"],
-            "pending": v["pending"],
-            "expired": v["expired"],
-            "compliance_rate": round(v["completed"] / v["total"] * 100, 1)
-            if v["total"] > 0
-            else 0,
-        }
-        for k, v in sorted(material_type_stats.items(), key=lambda x: -x[1]["total"])
-    ]
-
-    qualification_compliance = [
-        {
-            "name": k,
-            "total": v["total"],
-            "completed": v["completed"],
-            "pending": v["pending"],
-            "completion_rate": round(v["completed"] / v["total"] * 100, 1)
-            if v["total"] > 0
-            else 0,
-        }
-        for k, v in sorted(qualification_stats.items(), key=lambda x: -x[1]["total"])
-    ]
-
-    expiry_timeline: dict[str, int] = {}
-    for item in items:
-        deadline = item.get("deadline")
-        if deadline:
-            if isinstance(deadline, str):
-                deadline = feishu_sync_service._parse_feishu_datetime(deadline)
-            if deadline:
-                month_key = deadline.strftime("%Y-%m")
-                expiry_timeline[month_key] = expiry_timeline.get(month_key, 0) + 1
-
-    timeline_sorted = sorted(expiry_timeline.items())
-    recent_timeline = [
-        {"month": k, "count": v}
-        for k, v in timeline_sorted
-        if k <= (now + timedelta(days=400)).strftime("%Y-%m")
-    ][-24:]
-
-    return {
-        "total": total,
-        "completed": completed,
-        "pending": pending,
-        "completion_rate": round(completed / total * 100, 1) if total > 0 else 0,
-        "expired_count": expired_count,
-        "due_30_count": due_30_count,
-        "due_60_count": due_60_count,
-        "due_90_count": due_90_count,
-        "normal_count": normal_count,
-        "supplier_count": len(supplier_stats),
-        "material_type_compliance": material_type_compliance,
-        "qualification_compliance": qualification_compliance,
-        "supplier_risk_ranking": supplier_risk,
-        "expiry_timeline": recent_timeline,
-    }
+    stats.update(
+        supplier_count=len(supplier_risk),
+        material_type_compliance=sorted(
+            material_compliance, key=lambda item: -item["total"]
+        ),
+        qualification_compliance=sorted(
+            qualification_compliance, key=lambda item: -item["total"]
+        ),
+        supplier_risk_ranking=sorted(
+            supplier_risk, key=lambda item: -item["risk_score"]
+        )[:10],
+        expiry_timeline=sorted(timeline, key=lambda item: item["month"])[-24:],
+    )
+    return stats
 
 
 def _empty_supplier_stats() -> dict[str, Any]:

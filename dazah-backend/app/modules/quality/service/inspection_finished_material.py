@@ -42,9 +42,6 @@ from app.modules.quality.service.quality_feishu_material_groups import (
 from app.modules.quality.service.quality_feishu_pages import (
     _resolve_runtime_entity,
 )
-from app.modules.quality.service.quality_feishu_settings import (
-    ensure_quality_feishu_entity_settings,
-)
 from app.platform.integrations.feishu.bitable import BitableClient
 
 logger = logging.getLogger(__name__)
@@ -928,7 +925,6 @@ async def list_material_subtables(
     module: str,
     group: str,
 ) -> dict[str, Any]:
-    await ensure_quality_feishu_entity_settings(db)
     entity_codes = get_material_entity_codes(module, group)
     if not entity_codes:
         raise KeyError(group)
@@ -955,7 +951,6 @@ async def get_material_fields(
     entity_code: str,
 ) -> list[str]:
     """物料展示列：优先读本地镜像快照列；未同步时再实时拉飞书列元数据。"""
-    await ensure_quality_feishu_entity_settings(db)
     mirror_fields = await get_material_mirror_fields(db, entity_code)
     if mirror_fields:
         return mirror_fields
@@ -1012,7 +1007,6 @@ async def pull_material_records_by_entity(
     entity_code: str,
 ) -> dict[str, int]:
     """同步飞书数据：全量回拉该物料实体到本地镜像（替代纯计数）。"""
-    await ensure_quality_feishu_entity_settings(db)
     return await sync_material_page(db, entity_code, incremental=False)
 
 

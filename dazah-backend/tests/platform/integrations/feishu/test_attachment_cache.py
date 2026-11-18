@@ -191,3 +191,37 @@ async def test_memory_lru_eviction(tmp_path) -> None:
     await cache.get_or_fetch("entity", "rec_2", "t2", fetcher_b)
     assert cache.stats()["memory_entries"] == 1
     assert cache.stats()["memory_bytes"] <= 1 * 1024 * 1024
+
+
+async def test_disk_only_fetch_warms_disk_without_retaining_bytes(
+    cache: AttachmentCache,
+) -> None:
+    assert await cache.prepare_disk() is True
+    assert await cache.get_or_fetch("e", "r", "f", _fetch_ok, disk_only=True) == (
+        b"image-bytes",
+        "image/jpeg",
+        "photo.jpg",
+    )
+    assert cache.stats()["memory_bytes"] == 0
+    assert not cache._locks
+    assert await cache.get("e", "r", "f") == (b"image-bytes", "image/jpeg", "photo.jpg")
+
+
+async def test_unusable_disk_skips_repeated_writes_and_foreground_stays_available(
+    tmp_path,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    cache_path = tmp_path / "blocked"
+    cache_path.write_text("file")
+    cache = AttachmentCache(
+        enabled=True,
+        cache_dir=str(cache_path),
+        max_memory_mb=1,
+        max_disk_mb=2,
+        ttl_seconds=3600,
+    )
+    assert await cache.prepare_disk() is False
+    assert await cache.prepare_disk() is False
+    assert await cache.get_or_fetch("e", "r", "f", _fetch_ok) is not None
+    assert await cache.get("e", "r", "f") is not None
+    assert len(caplog.records) == 1

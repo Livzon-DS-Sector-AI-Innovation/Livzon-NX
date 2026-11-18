@@ -19,6 +19,7 @@ import uuid
 from collections import Counter
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from itertools import batched
 from typing import Any
 
 from sqlalchemy import Numeric, and_, case, func, or_, select
@@ -65,6 +66,7 @@ from app.modules.safety.page_tables import (
     PageTableDefinition,
     get_page_table,
 )
+from app.modules.safety.repository import SafetyRepository
 from app.modules.safety.schemas.page_table import (
     PageFeishuConfigItem,
     PageFeishuConfigListResponse,
@@ -953,6 +955,7 @@ def _mirror_fields_for_response(
 # ── 本地镜像（全量副本 + 定时同步 + 编辑写透） ──
 
 MIRROR_SYNC_MAX_RECORDS = 20000
+_MIRROR_WRITE_BATCH_SIZE = 500
 MIRROR_SYNC_LOCK_TIMEOUT = 1800
 _MIRROR_SYNC_LOCK_TEMPLATE = "safety:page-table:mirror-sync:{page_key}"
 _mirror_sync_task: asyncio.Task[None] | None = None
@@ -972,6 +975,74 @@ def _mirror_search_text(schema: list[FieldSchema], decoded: dict[str, Any]) -> s
     return " ".join(parts)
 
 
+async def _sync_bound_mirror_table(
+    db: AsyncSession,
+    client: SafetyBitableClient,
+    page_key: str,
+    app_token: str,
+    table_id: str,
+    now: datetime,
+) -> int:
+    schema = await _load_field_schema(app_token, table_id)
+    raw_rows, error = await client.search_records_with_result(
+        table_id=table_id,
+        page_size=100,
+        max_pages=MIRROR_SYNC_MAX_RECORDS // 100,
+        require_complete=True,
+    )
+    if error:
+        raise AppException(message=error, status_code=502)
+
+    repo = SafetyRepository(db)
+    dept_field = _dept_field_of(schema)
+    dept_map = _resolve_dept_inheritance(schema, raw_rows)
+    seen: set[str] = set()
+    async with db.begin_nested():
+        for raw_batch in batched(raw_rows, _MIRROR_WRITE_BATCH_SIZE):
+            batch: dict[str, dict[str, Any]] = {}
+            for raw in raw_batch:
+                record_id = str(raw.get("record_id") or "")
+                if record_id and record_id not in seen:
+                    seen.add(record_id)
+                    batch[record_id] = raw
+            if not batch:
+                continue
+
+            existing = await repo.get_page_mirror_batch(page_key, table_id, set(batch))
+            for record_id, raw in batch.items():
+                raw_fields = raw.get("fields")
+                decoded = decode_record_fields(
+                    schema,
+                    raw_fields if isinstance(raw_fields, dict) else {},
+                )
+                _apply_inherited_dept(dept_field, dept_map, record_id, decoded)
+                search_text = _mirror_search_text(schema, decoded)
+                current = existing.get(record_id)
+                if current is None:
+                    db.add(
+                        SafetyPageTableMirrorRecord(
+                            page_key=page_key,
+                            table_id=table_id,
+                            record_id=record_id,
+                            fields=decoded,
+                            search_text=search_text,
+                            synced_at=now,
+                        )
+                    )
+                elif (
+                    current.is_deleted
+                    or current.fields != decoded
+                    or current.search_text != search_text
+                ):
+                    current.fields = decoded
+                    current.search_text = search_text
+                    current.synced_at = now
+                    current.is_deleted = False
+            await db.flush()
+        await repo.soft_delete_missing_page_mirror_rows(page_key, table_id, seen)
+    return len(seen)
+
+
 async def sync_page_table_mirror(db: AsyncSession, page_key: str) -> int:
     """全量同步一个镜像页的全部绑定子表：拉取记录 upsert 并软删消失记录。
 
@@ -989,88 +1060,44 @@ async def sync_page_table_mirror(db: AsyncSession, page_key: str) -> int:
         client = SafetyBitableClient(app_token=app_token, table_id="")
         now = datetime.now(UTC)
         total_kept = 0
+        synced_tables = 0
         errors: list[str] = []
         for bound in tables:
             try:
-                schema = await _load_field_schema(app_token, bound.table_id)
-                raw_rows, error = await client.search_records_with_result(
-                    table_id=bound.table_id,
-                    page_size=100,
-                    max_pages=MIRROR_SYNC_MAX_RECORDS // 100,
-                )
-                if error:
-                    errors.append(f"{bound.tab_name}: {error}")
-                    continue
-                existing_rows = (
-                    (
-                        await db.execute(
-                            select(SafetyPageTableMirrorRecord).where(
-                                SafetyPageTableMirrorRecord.page_key == page_key,
-                                SafetyPageTableMirrorRecord.table_id == bound.table_id,
-                            )
-                        )
-                    )
-                    .scalars()
-                    .all()
-                )
-                existing_by_record = {row.record_id: row for row in existing_rows}
-                dept_field = _dept_field_of(schema)
-                dept_map = _resolve_dept_inheritance(schema, raw_rows)
-                seen: set[str] = set()
-                kept = 0
-                for raw in raw_rows[:MIRROR_SYNC_MAX_RECORDS]:
-                    record_id = str(raw.get("record_id") or "")
-                    if not record_id or record_id in seen:
-                        # 飞书翻页可能跨页返回同一条记录，重复插入会撞唯一索引
-                        continue
-                    seen.add(record_id)
-                    kept += 1
-                    raw_fields = raw.get("fields")
-                    decoded = decode_record_fields(
-                        schema, raw_fields if isinstance(raw_fields, dict) else {}
-                    )
-                    _apply_inherited_dept(dept_field, dept_map, record_id, decoded)
-                    current = existing_by_record.pop(record_id, None)
-                    if current is None:
-                        db.add(
-                            SafetyPageTableMirrorRecord(
-                                page_key=page_key,
-                                table_id=bound.table_id,
-                                record_id=record_id,
-                                fields=decoded,
-                                search_text=_mirror_search_text(schema, decoded),
-                                synced_at=now,
-                            )
-                        )
-                    else:
-                        current.fields = decoded
-                        current.search_text = _mirror_search_text(schema, decoded)
-                        current.synced_at = now
-                        current.is_deleted = False
-                for stale in existing_by_record.values():
-                    stale.is_deleted = True
-                total_kept += kept
-                logger.info(
-                    "页面镜像同步: page=%s 表=%s 记录=%s",
+                kept = await _sync_bound_mirror_table(
+                    db,
+                    client,
                     page_key,
-                    bound.tab_name,
-                    kept,
+                    app_token,
+                    bound.table_id,
+                    now,
                 )
-            except Exception as exc:  # noqa: BLE001 —— 单表失败不中断其它表
-                await db.rollback()
-                errors.append(f"{bound.tab_name}: {exc}")
-        model.last_synced_at = now
-        if errors:
-            model.last_sync_status = "failed" if not total_kept else "partial"
-            model.last_sync_error = "; ".join(errors)[:500]
-        else:
-            model.last_sync_status = "success"
-            model.last_sync_error = None
-        model.last_sync_record_count = total_kept
-        if errors and not total_kept:
-            # 全部子表失败：先回滚本会话，再经独立会话记录失败状态后抛出
+            except AppException as exc:
+                errors.append(f"{bound.tab_name}: {exc.message}")
+                continue
+            except Exception as exc:  # noqa: BLE001 —— 单表保存点失败不影响其他子表
+                logger.warning(
+                    "页面镜像子表同步失败: page=%s error=%s",
+                    page_key,
+                    type(exc).__name__,
+                )
+                errors.append(f"{bound.tab_name}: 同步失败（{type(exc).__name__}）")
+                continue
+            total_kept += kept
+            synced_tables += 1
+            logger.info(
+                "页面镜像同步: page=%s 表=%s 记录=%s", page_key, bound.tab_name, kept
+            )
+
+        if errors and not synced_tables:
+            # 所有子表失败，用独立会话记录错误状态。
             await db.rollback()
+            await _record_mirror_sync_failure(page_key, "; ".join(errors))
             raise AppException(message=f"镜像同步失败：{errors[0]}", status_code=502)
+        model.last_synced_at = now
+        model.last_sync_status = "partial" if errors else "success"
+        model.last_sync_error = "; ".join(errors)[:500] if errors else None
+        model.last_sync_record_count = total_kept
         await db.commit()
         logger.info(
             "页面镜像同步完成: page=%s 子表=%s 记录=%s 错误=%s",

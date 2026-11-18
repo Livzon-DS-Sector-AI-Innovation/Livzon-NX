@@ -9,6 +9,7 @@ SafetyHazardDueReminderGenerator 注册进统一调度引擎；任务重名会�
 from __future__ import annotations
 
 import asyncio
+import inspect
 
 import pytest
 
@@ -90,3 +91,11 @@ def test_mirror_sync_loop_runs_until_stop_then_finishes(monkeypatch) -> None:
 def test_mirror_sync_interval_is_fifteen_minutes() -> None:
     # main.py 以该间隔启动独立循环；改动需同步调整 lifespan 侧注释
     assert MIRROR_SYNC_INTERVAL.total_seconds() == 15 * 60
+
+
+def test_lifespan_starts_only_the_independent_mirror_scheduler() -> None:
+    from app.main import lifespan
+
+    source = inspect.getsource(lifespan)
+    assert source.count("asyncio.create_task(mirror_sync_loop())") == 1
+    assert "register_generator(SafetyPageMirrorSyncGenerator())" not in source
