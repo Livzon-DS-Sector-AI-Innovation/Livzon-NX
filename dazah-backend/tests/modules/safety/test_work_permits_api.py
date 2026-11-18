@@ -41,11 +41,15 @@ class NotifySpy:
     def __init__(self) -> None:
         self.calls: list[dict] = []
 
-    async def __call__(self, open_id: str, title: str, content: str,
-                       elements=None, id_type: str = "open_id") -> bool:
-        self.calls.append(
-            {"open_id": open_id, "title": title, "content": content}
-        )
+    async def __call__(
+        self,
+        open_id: str,
+        title: str,
+        content: str,
+        elements=None,
+        id_type: str = "open_id",
+    ) -> bool:
+        self.calls.append({"open_id": open_id, "title": title, "content": content})
         return True
 
 
@@ -54,9 +58,7 @@ async def notify_spy(
     monkeypatch: pytest.MonkeyPatch,
 ) -> AsyncIterator[NotifySpy]:
     spy = NotifySpy()
-    monkeypatch.setattr(
-        "app.modules.safety.feishu.notification.send_user_card", spy
-    )
+    monkeypatch.setattr("app.modules.safety.feishu.notification.send_user_card", spy)
     yield spy
 
 
@@ -88,9 +90,7 @@ async def users(db_session: AsyncSession) -> dict[str, User]:
 
 
 @pytest.fixture
-async def work_app(
-    db_session: AsyncSession, users: dict[str, User]
-) -> FastAPI:
+async def work_app(db_session: AsyncSession, users: dict[str, User]) -> FastAPI:
     application = FastAPI()
 
     @application.exception_handler(AppException)
@@ -149,9 +149,7 @@ async def _cleanup(db: AsyncSession) -> None:
                 | WorkPermitRelation.related_permit_id.in_(permit_ids)
             )
         )
-        await db.execute(
-            delete(WorkPermit).where(WorkPermit.id.in_(permit_ids))
-        )
+        await db.execute(delete(WorkPermit).where(WorkPermit.id.in_(permit_ids)))
     await db.execute(
         delete(SafetyFeishuAppSettings).where(
             SafetyFeishuAppSettings.app_id.like(f"{_PERMIT_MARK}%")
@@ -191,9 +189,7 @@ def _payload(**overrides) -> dict:
     return base
 
 
-async def _create_permit(
-    client: AsyncClient, **overrides
-) -> dict:
+async def _create_permit(client: AsyncClient, **overrides) -> dict:
     response = await client.post(
         "/api/v1/safety/work-permits", json=_payload(**overrides)
     )
@@ -225,8 +221,7 @@ async def test_create_and_meta_roundtrip(
     assert "hot_work" in meta_data["gas_types"]
     assert meta_data["gas_cycle_minutes"]["confined_space"] == 120
     assert any(
-        item["value"] == "electrician"
-        for item in meta_data["certificate_categories"]
+        item["value"] == "electrician" for item in meta_data["certificate_categories"]
     )
 
     permit = await _create_permit(api_client)
@@ -715,9 +710,7 @@ async def test_submit_cert_strict_block(
         json={"assignments": _blind_assignments(users["approver"].id)},
     )
     assert resubmitted.status_code == 200, resubmitted.text
-    assert any(
-        "未关联证件" in item for item in resubmitted.json()["data"]["warnings"]
-    )
+    assert any("未关联证件" in item for item in resubmitted.json()["data"]["warnings"])
     await _cleanup(db_session)
 
 
@@ -749,4 +742,110 @@ async def test_submit_cert_category_and_holder_mismatch(
     warnings = submitted.json()["data"]["warnings"]
     assert any("类别" in item and "建议" in item for item in warnings)
     assert any(f"持有人为「{_PERMIT_MARK}王五」" in item for item in warnings)
+    await _cleanup(db_session)
+
+
+async def test_detail_signatures_and_missing_brief(
+    api_client: AsyncClient,
+    work_app: FastAPI,
+    db_session: AsyncSession,
+    users: dict[str, User],
+) -> None:
+    """详情带 signatures/missing_brief_names：交底签字推进 + 多作业人外部标记。"""
+    await _cleanup(db_session)
+    approver = users["approver"]
+    permit = await _create_permit(
+        api_client,
+        persons=[
+            {"role": "work_leader", "name": "张三"},
+            {"role": "worker", "name": f"{_PERMIT_MARK}作业人甲"},
+            {
+                "role": "worker",
+                "name": f"{_PERMIT_MARK}作业人乙",
+                "external": True,
+                "certificate_no": "T-TEST-001",
+            },
+        ],
+    )
+    submitted = await api_client.post(
+        f"/api/v1/safety/work-permits/{permit['id']}/submit",
+        json={"assignments": _blind_assignments(approver.id)},
+    )
+    assert submitted.status_code == 200, submitted.text
+
+    _switch_user(work_app, approver)
+    detail = await api_client.get(f"/api/v1/safety/work-permits/{permit['id']}")
+    approve_nodes = [
+        node
+        for node in detail.json()["data"]["nodes"]
+        if node["node_kind"] == "approve"
+    ]
+    for node in approve_nodes:
+        approved = await api_client.post(
+            f"/api/v1/safety/work-permits/{permit['id']}/nodes/{node['id']}/approve",
+            json={"opinion": "同意"},
+        )
+        assert approved.status_code == 200, approved.text
+    _switch_user(work_app, users["creator"])
+
+    data = (await api_client.get(f"/api/v1/safety/work-permits/{permit['id']}")).json()[
+        "data"
+    ]
+    assert data["status"] == "approved"
+    # 两名作业人都未交底签字
+    assert data["missing_brief_names"] == [
+        f"{_PERMIT_MARK}作业人甲",
+        f"{_PERMIT_MARK}作业人乙",
+    ]
+    # 多作业人同角色多条 + 外部标记保留
+    workers = [p for p in data["persons"] if p["role"] == "worker"]
+    assert len(workers) == 2
+    assert workers[1]["external"] is True
+    assert workers[1]["certificate_no"] == "T-TEST-001"
+    # 详情此时无任何签名行（API 建票无发起签字）
+    assert data["signatures"] == []
+
+    from uuid import UUID as _UUID
+
+    from app.modules.safety.service.work_permit_signatures import save_signature_row
+
+    permit_id = _UUID(permit["id"])
+    await save_signature_row(
+        db_session,
+        permit_id=permit_id,
+        round_no=1,
+        sign_key="brief_worker_0",
+        node_id=None,
+        signer_user_id=None,
+        signer_name=f"{_PERMIT_MARK}作业人甲",
+        image_key="signatures/detail-test-0.png",
+    )
+    await db_session.commit()
+    data = (await api_client.get(f"/api/v1/safety/work-permits/{permit['id']}")).json()[
+        "data"
+    ]
+    keys = [item["sign_key"] for item in data["signatures"]]
+    assert keys == ["brief_worker_0"]
+    assert data["signatures"][0]["signer_name"] == f"{_PERMIT_MARK}作业人甲"
+    assert data["missing_brief_names"] == [f"{_PERMIT_MARK}作业人乙"]
+
+    await save_signature_row(
+        db_session,
+        permit_id=permit_id,
+        round_no=1,
+        sign_key="brief_worker_1",
+        node_id=None,
+        signer_user_id=None,
+        signer_name=f"{_PERMIT_MARK}作业人乙",
+        image_key="signatures/detail-test-1.png",
+    )
+    await db_session.commit()
+    data = (await api_client.get(f"/api/v1/safety/work-permits/{permit['id']}")).json()[
+        "data"
+    ]
+    assert data["missing_brief_names"] == []
+    assert [item["sign_key"] for item in data["signatures"]] == [
+        "brief_worker_0",
+        "brief_worker_1",
+    ]
     await _cleanup(db_session)

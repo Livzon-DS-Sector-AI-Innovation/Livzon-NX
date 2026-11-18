@@ -316,7 +316,7 @@ export function WorkCertificatePanel({
     {
       title: '姓名',
       dataIndex: 'person_name',
-      width: 110,
+      width: 100,
       render: (value: string, record) => (
         <a
           onClick={() => setDetail(record)}
@@ -328,12 +328,12 @@ export function WorkCertificatePanel({
         </a>
       ),
     },
-    { title: '证件类别', dataIndex: 'certificate_category_label', width: 150 },
-    { title: '证件号', dataIndex: 'certificate_no', width: 150, render: (v: string | null) => v ?? '-' },
+    { title: '证件类别', dataIndex: 'certificate_category_label', width: 175 },
+    { title: '证件号', dataIndex: 'certificate_no', width: 190, render: (v: string | null) => v ?? '-' },
     {
       title: '有效期至',
       dataIndex: 'expiry_date',
-      width: 120,
+      width: 150,
       render: (value: string | null, record) => (
         <Space size={4}>
           {value ?? '-'}
@@ -355,20 +355,32 @@ export function WorkCertificatePanel({
     {
       title: '附件',
       dataIndex: 'files',
+      width: 110,
       render: (files: CertificateRow['files'], record) =>
-        (files ?? []).length === 0
-          ? '-'
-          : files.map((file) => (
+        (files ?? []).length === 0 ? (
+          '-'
+        ) : (
+          <div style={{ maxWidth: 160 }}>
+            {files.map((file) => (
               <a
                 key={file.id}
                 href={certificateFilePreviewUrl(record.id, file.id)}
                 target="_blank"
                 rel="noreferrer"
-                style={{ marginRight: 8 }}
+                title={file.file_name}
+                style={{
+                  display: 'block',
+                  maxWidth: 160,
+                  overflow: 'hidden',
+                  whiteSpace: 'nowrap',
+                  textOverflow: 'ellipsis',
+                }}
               >
                 {file.file_name}
               </a>
-            )),
+            ))}
+          </div>
+        ),
     },
     {
       title: '操作',

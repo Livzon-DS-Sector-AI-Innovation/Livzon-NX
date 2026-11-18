@@ -45,6 +45,7 @@ from app.modules.safety.schemas.work_permit import (
     WorkPermitListItem,
     WorkPermitListResponse,
     WorkPermitNodeItem,
+    WorkPermitSignatureItem,
     WorkPermitStatsResponse,
     WorkPermitUpdate,
 )
@@ -185,9 +186,7 @@ async def get_permit(db: AsyncSession, permit_id: UUID) -> WorkPermit:
     return permit
 
 
-async def _user_name_map(
-    db: AsyncSession, user_ids: list[UUID]
-) -> dict[UUID, str]:
+async def _user_name_map(db: AsyncSession, user_ids: list[UUID]) -> dict[UUID, str]:
     ids = [uid for uid in set(user_ids) if uid is not None]
     if not ids:
         return {}
@@ -202,9 +201,7 @@ async def _load_settings(db: AsyncSession) -> dict[str, Any]:
     return {row.setting_key: row.setting_value for row in result.scalars().all()}
 
 
-def _setting_value(
-    settings: dict[str, Any], key: str, default: Any
-) -> Any:
+def _setting_value(settings: dict[str, Any], key: str, default: Any) -> Any:
     value = settings.get(key)
     return default if value is None else value
 
@@ -213,9 +210,7 @@ def _setting_value(
 CERT_CHECK_STRICT_KEY = "cert_check_strict"
 
 
-async def certificate_check_issues(
-    db: AsyncSession, permit: WorkPermit
-) -> list[str]:
+async def certificate_check_issues(db: AsyncSession, permit: WorkPermit) -> list[str]:
     """按角色建议类别检查作业人员证件，返回问题文案列表。
 
     口径（PERSON_ROLE_CERT_CATEGORIES，30 天内到期不拦）：
@@ -252,9 +247,7 @@ async def certificate_check_issues(
     issues: list[str] = []
     for person, categories in required:
         name = str(person.get("name") or "未填写姓名")
-        role_label = PERSON_ROLE_LABELS.get(
-            str(person.get("role") or ""), "该角色"
-        )
+        role_label = PERSON_ROLE_LABELS.get(str(person.get("role") or ""), "该角色")
         cert_id = person.get("certificate_id")
         if not cert_id:
             issues.append(f"「{name}」{role_label}未关联证件")
@@ -268,8 +261,7 @@ async def certificate_check_issues(
                 cert.certificate_category, cert.certificate_category
             )
             suggested = "、".join(
-                CERTIFICATE_CATEGORY_LABELS.get(item, item)
-                for item in categories
+                CERTIFICATE_CATEGORY_LABELS.get(item, item) for item in categories
             )
             issues.append(
                 f"「{name}」{role_label}证件类别为「{category_label}」，"
@@ -279,9 +271,7 @@ async def certificate_check_issues(
             state = "已过期" if cert.status == "expired" else "已吊销"
             issues.append(f"「{name}」{role_label}证件{state}")
         elif cert.person_name and cert.person_name != name:
-            issues.append(
-                f"「{name}」{role_label}证件持有人为「{cert.person_name}」"
-            )
+            issues.append(f"「{name}」{role_label}证件持有人为「{cert.person_name}」")
     return issues
 
 
@@ -423,6 +413,7 @@ async def build_detail(
                 "certificate_id": p.get("certificate_id"),
                 "certificate_no": p.get("certificate_no"),
                 "certificate_category": p.get("certificate_category"),
+                "external": bool(p.get("external")),
                 "certificate_valid": p.get("certificate_valid"),
                 "certificate_status": p.get("certificate_status"),
             }
@@ -479,6 +470,48 @@ async def build_detail(
     ]
     detail.next_gas_due_at = next_due
     detail.gas_overdue = overdue
+
+    # 手写签名行（本轮）：发起行 → 交底作业人行 → 节点行
+    from app.modules.safety.service.work_permit_signatures import (
+        get_permit_signatures,
+    )
+    from app.modules.safety.service.work_permit_templates import (
+        INITIATOR_SIGN_KEYS,
+    )
+
+    sig_map = await get_permit_signatures(db, permit.id, permit.approval_round or 1)
+    if sig_map:
+        ordered_keys: list[str] = [sk for sk in INITIATOR_SIGN_KEYS if sk in sig_map]
+        brief_keys = sorted(
+            (k for k in sig_map if k.startswith("brief_worker_")),
+            key=lambda k: (
+                int(k.rsplit("_", 1)[-1]) if k.rsplit("_", 1)[-1].isdigit() else 0
+            ),
+        )
+        ordered_keys.extend(brief_keys)
+        current_round = permit.approval_round or 1
+        for node in nodes:
+            if (
+                node.round == current_round
+                and node.node_key in sig_map
+                and node.node_key not in ordered_keys
+            ):
+                ordered_keys.append(node.node_key)
+        detail.signatures = [
+            WorkPermitSignatureItem(
+                sign_key=sign_key,
+                node_id=sig_map[sign_key].node_id,
+                signer_name=sig_map[sign_key].signer_name,
+                signed_at=sig_map[sign_key].signed_at,
+                image_key=sig_map[sign_key].image_key,
+            )
+            for sign_key in ordered_keys
+        ]
+
+    # 交底缺签名单（仅 approved 状态有意义）
+    if permit.status == PERMIT_STATUS_APPROVED:
+        missing = await missing_brief_workers(db, permit)
+        detail.missing_brief_names = [str(p.get("name") or "—") for _, p in missing]
     return detail
 
 
@@ -509,9 +542,7 @@ async def create_permit(
         work_unit=data.work_unit,
         planned_start_time=data.planned_start_time,
         planned_end_time=data.planned_end_time,
-        persons=[
-            p.model_dump(exclude_none=True, mode="json") for p in data.persons
-        ],
+        persons=[p.model_dump(exclude_none=True, mode="json") for p in data.persons],
         risk_identifications=data.risk_identifications,
         safety_measures=[m.model_dump(exclude_none=True) for m in data.safety_measures],
         type_data=data.type_data,
@@ -538,9 +569,7 @@ async def update_permit(
 ) -> WorkPermit:
     permit = await get_permit(db, permit_id)
     if permit.status not in _EDITABLE_STATUSES:
-        raise AppException(
-            status_code=409, message="仅草稿或已驳回的作业票可以编辑"
-        )
+        raise AppException(status_code=409, message="仅草稿或已驳回的作业票可以编辑")
     if permit.created_by != current_user.id and current_user.role != "admin":
         raise AppException(status_code=403, message="只有创建人或管理员可以编辑")
 
@@ -572,9 +601,7 @@ async def update_permit(
         strict=True,
     )
     if persons_raw is not None:
-        patch["persons"] = [
-            p.model_dump(exclude_none=True) for p in persons or []
-        ]
+        patch["persons"] = [p.model_dump(exclude_none=True) for p in persons or []]
     if measures_raw is not None:
         patch["safety_measures"] = [
             m.model_dump(exclude_none=True) for m in measures or []
@@ -595,9 +622,7 @@ async def update_permit(
     return permit
 
 
-async def delete_permit(
-    db: AsyncSession, permit_id: UUID, current_user: User
-) -> None:
+async def delete_permit(db: AsyncSession, permit_id: UUID, current_user: User) -> None:
     permit = await get_permit(db, permit_id)
     if permit.status != PERMIT_STATUS_DRAFT:
         raise AppException(status_code=409, message="仅草稿作业票可以删除")
@@ -627,9 +652,7 @@ async def _approver_config_map(
             WorkPermitApproverConfig.is_deleted.is_(False),
         )
     )
-    return {
-        row.node_key: row.approver_user_id for row in result.scalars().all()
-    }
+    return {row.node_key: row.approver_user_id for row in result.scalars().all()}
 
 
 # ── 提交 / 审批 / 驳回 / 验票 / 验收 ──
@@ -645,10 +668,7 @@ def _resolve_actor_guard(
         return
     if node.assigned_approver_id == current_user.id:
         return
-    if (
-        node.assigned_approver_id is None
-        and permit.created_by == current_user.id
-    ):
+    if node.assigned_approver_id is None and permit.created_by == current_user.id:
         return
     raise AppException(
         status_code=403, message=f"节点「{node.node_name}」未指派给你处理"
@@ -678,9 +698,7 @@ async def _validity_hours(
     settings: dict[str, Any], permit_type: str, permit_level: str
 ) -> float | None:
     configured = _setting_value(settings, "validity_hours", {}) or {}
-    by_type = configured.get(permit_type) or VALIDITY_HOURS_DEFAULTS.get(
-        permit_type
-    )
+    by_type = configured.get(permit_type) or VALIDITY_HOURS_DEFAULTS.get(permit_type)
     if by_type and permit_level in by_type:
         return float(by_type[permit_level])
     return None
@@ -699,9 +717,7 @@ async def submit_permit(
     """
     await _acquire_submit_lock(permit_id)
     try:
-        return await _submit_permit_locked(
-            db, permit_id, assignments, current_user
-        )
+        return await _submit_permit_locked(db, permit_id, assignments, current_user)
     finally:
         await cache_delete(f"safety:work_permit:submit_lock:{permit_id}")
 
@@ -723,26 +739,16 @@ async def _submit_permit_locked(
         permit.permit_type,
         permit.permit_level,
         permit.type_data,
-        [
-            PermitPersonInput.model_validate(p)
-            for p in (permit.persons or [])
-        ],
-        [
-            PermitMeasureInput.model_validate(m)
-            for m in (permit.safety_measures or [])
-        ],
+        [PermitPersonInput.model_validate(p) for p in (permit.persons or [])],
+        [PermitMeasureInput.model_validate(m) for m in (permit.safety_measures or [])],
         permit.risk_identifications,
         strict=True,
     )
     if not permit.planned_start_time or not permit.planned_end_time:
-        raise AppException(
-            status_code=422, message="请填写作业实施时间（开始/结束）"
-        )
+        raise AppException(status_code=422, message="请填写作业实施时间（开始/结束）")
     if permit.planned_end_time <= permit.planned_start_time:
         raise AppException(status_code=422, message="实施结束时间必须晚于开始时间")
-    validity = await _validity_hours(
-        settings, permit.permit_type, permit.permit_level
-    )
+    validity = await _validity_hours(settings, permit.permit_type, permit.permit_level)
     if validity is not None:
         span = (
             permit.planned_end_time - permit.planned_start_time
@@ -788,9 +794,7 @@ async def _submit_permit_locked(
             node_key=node_tpl["key"],
             node_name=node_tpl["name"],
             node_kind=node_tpl["kind"],
-            status=(
-                NODE_STATUS_PENDING if seq == 1 else NODE_STATUS_WAITING
-            ),
+            status=(NODE_STATUS_PENDING if seq == 1 else NODE_STATUS_WAITING),
             assigned_approver_id=approver_id,
             created_by=current_user.id,
             updated_by=current_user.id,
@@ -814,9 +818,7 @@ async def _submit_permit_locked(
     return permit, cert_issues
 
 
-async def _current_node(
-    db: AsyncSession, permit: WorkPermit
-) -> WorkPermitNode:
+async def _current_node(db: AsyncSession, permit: WorkPermit) -> WorkPermitNode:
     result = await db.execute(
         select(WorkPermitNode)
         .where(
@@ -1016,9 +1018,7 @@ async def verify_permit(
     return permit
 
 
-async def _current_verify_node(
-    db: AsyncSession, permit: WorkPermit
-) -> WorkPermitNode:
+async def _current_verify_node(db: AsyncSession, permit: WorkPermit) -> WorkPermitNode:
     result = await db.execute(
         select(WorkPermitNode)
         .where(
@@ -1045,8 +1045,7 @@ async def accept_permit(
 ) -> WorkPermit:
     permit = await _lock_permit(db, permit_id)
     if permit.status != PERMIT_STATUS_ACTIVE and not (
-        permit.status == PERMIT_STATUS_APPROVED
-        and _has_no_verify(permit)
+        permit.status == PERMIT_STATUS_APPROVED and _has_no_verify(permit)
     ):
         raise AppException(
             status_code=409,
@@ -1176,9 +1175,7 @@ async def add_gas_analysis(
         PERMIT_STATUS_ACTIVE,
     )
     if permit.status not in gas_allowed:
-        raise AppException(
-            status_code=409, message="当前状态不允许录入气体分析"
-        )
+        raise AppException(status_code=409, message="当前状态不允许录入气体分析")
     if data.phase == "on_duty" and permit.status != PERMIT_STATUS_ACTIVE:
         raise AppException(
             status_code=409, message="作业期间复检需在验票开工（作业中）后录入"
@@ -1300,9 +1297,7 @@ async def list_permits(
     date_from: datetime | None = None,
     date_to: datetime | None = None,
 ) -> WorkPermitListResponse:
-    conditions: list[ColumnElement[bool]] = [
-        WorkPermit.is_deleted.is_(False)
-    ]
+    conditions: list[ColumnElement[bool]] = [WorkPermit.is_deleted.is_(False)]
     if permit_type:
         conditions.append(WorkPermit.permit_type == permit_type)
     if permit_level:
@@ -1321,9 +1316,7 @@ async def list_permits(
             | WorkPermit.work_location.ilike(like)
             | WorkPermit.apply_department.ilike(like)
         )
-    total = await db.scalar(
-        select(func.count(WorkPermit.id)).where(*conditions)
-    )
+    total = await db.scalar(select(func.count(WorkPermit.id)).where(*conditions))
     result = await db.execute(
         select(WorkPermit)
         .where(*conditions)
@@ -1331,9 +1324,7 @@ async def list_permits(
         .offset((page - 1) * page_size)
         .limit(page_size)
     )
-    items = [
-        WorkPermitListItem.model_validate(item) for item in result.scalars().all()
-    ]
+    items = [WorkPermitListItem.model_validate(item) for item in result.scalars().all()]
     return WorkPermitListResponse(
         items=items, total=total or 0, page=page, page_size=page_size
     )
@@ -1373,9 +1364,7 @@ async def get_stats(
 # ── 附件辅助 ──
 
 
-async def get_permit_with_access(
-    db: AsyncSession, permit_id: UUID
-) -> WorkPermit:
+async def get_permit_with_access(db: AsyncSession, permit_id: UUID) -> WorkPermit:
     return await get_permit(db, permit_id)
 
 

@@ -122,6 +122,10 @@ const META = {
     blind_plate: [
       { key: 'work_leader_approve', name: '作业负责人审批', kind: 'approve', levels: null },
     ],
+    hot_work: [
+      { key: 'hot_special_only', name: '特级动火会签', kind: 'approve', levels: ['special'] },
+      { key: 'hot_workshop', name: '动火车间审批', kind: 'approve', levels: null },
+    ],
   },
 }
 
@@ -360,5 +364,68 @@ describe('作业票列表面板：默认审批人配置抽屉', () => {
       node_key: 'work_leader_approve',
       approver_user_id: 'ou_1',
     })
+  })
+
+  async function pickDrawerOption(selectIndex: number, optionText: string) {
+    const selects = document.body.querySelectorAll<HTMLElement>(
+      '.ant-drawer .ant-select',
+    )
+    expect(selects.length, `抽屉下拉 ${selectIndex} 应存在`).toBeGreaterThan(
+      selectIndex,
+    )
+    const target = selects[selectIndex]!
+    const input = target.querySelector<HTMLElement>('input.ant-select-input')
+    await act(async () => {
+      ;(input ?? target).dispatchEvent(
+        new MouseEvent('mousedown', { bubbles: true }),
+      )
+    })
+    await flush(60)
+    const option = Array.from(
+      document.body.querySelectorAll<HTMLElement>('.ant-select-item-option'),
+    ).find((o) => o.textContent?.includes(optionText))
+    expect(option, `选项 ${optionText} 应出现`).toBeTruthy()
+    await act(async () => {
+      option!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+      option!.click()
+    })
+    await flush(60)
+  }
+
+  it('配置抽屉按级别过滤实际激活的审批链节点', async () => {
+    mocks.getApproverConfigs.mockResolvedValue({
+      code: 200,
+      data: { items: [] },
+    })
+    mocks.getWorkPermitSettings.mockResolvedValue({
+      code: 200,
+      data: { cert_check_strict: false },
+    })
+    await act(async () => {
+      localRoot = createRoot(localContainer!)
+      localRoot.render(
+        <WorkPermitListPanel
+          initialList={null}
+          initialStats={STATS}
+          initialError={null}
+        />,
+      )
+    })
+    await flush()
+    await act(async () => {
+      buttons('默认审批人配置')[0].click()
+    })
+    await flush()
+    // 单级别票种：不渲染级别下拉，全级别节点即实际审批链
+    expect(document.body.textContent).toContain('作业负责人审批')
+    expect(document.body.textContent).toContain('按票种+级别展示实际激活的审批链')
+    // 切到多级别票种：默认取第一档（特级）→ 特级节点 + 全级别节点
+    await pickDrawerOption(0, '动火作业')
+    expect(document.body.textContent).toContain('特级动火会签')
+    expect(document.body.textContent).toContain('动火车间审批')
+    // 切级别到二级 → 特级专属节点消失
+    await pickDrawerOption(1, '二级')
+    expect(document.body.textContent).toContain('动火车间审批')
+    expect(document.body.textContent).not.toContain('特级动火会签')
   })
 })
