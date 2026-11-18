@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -74,7 +75,7 @@ export function EnergyEntryClient() {
       setValues({}); setReason(''); setConfirmOpen(false)
       await client.invalidateQueries({ queryKey: ['energy-ledger'] })
       message.success(draft ? '草稿已保存' : '原始数据已保存，关联台账已更新')
-    } catch (cause) { setError(cause instanceof Error ? cause.message : '保存未完成，输入已保留') }
+    } catch (cause) { setError(getUserErrorMessage(cause instanceof Error ? cause.message : '保存未完成，输入已保留', '保存未完成，输入已保留')) }
     finally { setBusy(false) }
   }
   const valueInput = (row: Item) => (

@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useEffect, useState } from 'react'
 import {
   Table,
@@ -251,7 +252,7 @@ export default function FermentationPage() {
         message.error(response.message || '操作失败')
       }
     } catch (error) {
-      message.error('操作失败: ' + (error instanceof Error ? error.message : String(error)))
+      message.error(getUserErrorMessage('操作失败: ' + (error instanceof Error ? error.message : String(error))))
     }
   }
 

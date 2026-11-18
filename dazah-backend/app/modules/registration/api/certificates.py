@@ -34,6 +34,10 @@ from app.modules.registration.schemas.certificate import (
     CertificateWorkbookOverview,
 )
 from app.modules.registration.service.certificate import CertificateWorkbookService
+from app.modules.registration.workbook_error_contract import (
+    RegistrationWorkbookErrorCode,
+    workbook_import_errors,
+)
 from app.shared.schemas import ApiResponseEnvelope
 
 logger = logging.getLogger(__name__)
@@ -73,6 +77,7 @@ async def get_certificate_workbook(
     "/workbook/import",
     summary="导入整本药政证书台账",
     response_model=ApiResponseEnvelope[CertificateWorkbookImportResult],
+    responses=workbook_import_errors(RegistrationWorkbookErrorCode.CERTIFICATE_NAME_REQUIRED),
 )
 async def import_certificate_workbook(
     current_user: CurrentUser,

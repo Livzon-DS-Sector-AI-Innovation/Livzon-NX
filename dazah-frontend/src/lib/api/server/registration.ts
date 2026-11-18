@@ -1,3 +1,4 @@
+import { requireActionResponse, type BusinessErrorMessages } from '@/lib/server-action-result'
 import {
   AuthorizationFdaRecord,
   AuthorizationLedgerOverview,
@@ -149,13 +150,20 @@ export async function serverApiDelete<T>(path: string): Promise<T | null> {
   return handleServerApiResponse<T>(response)
 }
 
-export async function serverApiPostFormData<T>(path: string, formData: FormData): Promise<T | null> {
+export async function serverApiPostFormData<T>(
+  path: string,
+  formData: FormData,
+  businessMessages?: BusinessErrorMessages,
+): Promise<T | null> {
+  const headers = new Headers(await getAuthHeadersForServer())
+  headers.delete('Content-Type')
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: 'POST',
-    headers: await getAuthHeadersForServer(),
+    headers,
     body: formData,
   })
 
+  if (businessMessages) await requireActionResponse(response, businessMessages)
   return handleServerApiResponse<T>(response)
 }
 

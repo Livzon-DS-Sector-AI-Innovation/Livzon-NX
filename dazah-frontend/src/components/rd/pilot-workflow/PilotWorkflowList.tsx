@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Table, Button, Tag, Space, Input, Select, App, Popconfirm } from 'antd'
@@ -73,7 +74,7 @@ export function PilotWorkflowList({ initialData }: Props) {
       message.success('已删除')
       await loadData(page, keyword)
     } catch (err) {
-      message.error(err instanceof Error ? err.message : '删除失败')
+      message.error(getUserErrorMessage(err instanceof Error ? err.message : '删除失败'))
     } finally {
       setDeletingId(null)
     }

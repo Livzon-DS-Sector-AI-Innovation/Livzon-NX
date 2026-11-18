@@ -227,3 +227,32 @@ describe('WorkOrderDetailDrawer 领料', () => {
     expect(api.fetchWorkOrderMaterialsClient.mock.calls.length).toBeGreaterThanOrEqual(2)
   })
 })
+
+describe('工单操作失败反馈', () => {
+  const technicalError = 'TypeError: internal work order failure'
+
+  async function click(label: string) {
+    const button = Array.from(document.querySelectorAll('button'))
+      .find(element => element.textContent?.replace(/\s/g, '') === label)
+    expect(button?.disabled).toBe(false)
+    await act(async () => button?.click())
+  }
+
+  it.each([
+    ['待处理', '开始执行', 'startWorkOrder'],
+    ['待处理', '抢单', 'claimWorkOrder'],
+    ['已完成', '关闭工单', 'closeWorkOrder'],
+  ] as const)('%s工单的%s失败时保留状态和操作入口', async (status, label, action) => {
+    actions[action].mockRejectedValueOnce(new Error(technicalError))
+    renderDrawer()
+    openWith({ ...baseWorkOrder, status })
+    await click(label)
+
+    expect(actions[action]).toHaveBeenCalledWith('wo-1')
+    expect(useEquipmentStore.getState().viewingWorkOrder?.status).toBe(status)
+    expect(document.body.textContent).toContain('操作未完成，请稍后重试')
+    expect(document.body.textContent).not.toContain(technicalError)
+    expect(api.fetchWorkOrderByIdClient).not.toHaveBeenCalled()
+  })
+
+})

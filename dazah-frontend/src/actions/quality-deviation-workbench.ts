@@ -1,6 +1,9 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { serverActionResult, type BusinessErrorMessages } from '@/lib/server-action-result'
+import { uncertainWriteMessage } from '@/lib/user-error'
+import type { components } from '@/types/generated/schema'
 import type {
   CreateDeviationWorkbenchPayload,
   CreateHistoricalDeviationPayload,
@@ -17,6 +20,25 @@ function revalidateDeviationWorkbenchPaths() {
   revalidatePath('/quality/deviations')
   revalidatePath('/quality/deviations/history')
   revalidatePath('/quality/deviations/workbench')
+}
+
+function uploadDeviationFile<T>(
+  operation: string,
+  label: string,
+  path: string,
+  formData: FormData,
+  businessMessages: BusinessErrorMessages = {},
+) {
+  return serverActionResult(`quality.deviation.${operation}`, async () => {
+    const result = await actionFetch<T>(
+      `${API_BASE_URL}/api/v1/quality${path}`,
+      { method: 'POST', body: formData },
+      businessMessages,
+    )
+    if (result == null) throw new Error('Missing upload result')
+    revalidateDeviationWorkbenchPaths()
+    return result
+  }, uncertainWriteMessage(label))
 }
 
 // ============ 历史偏差 ============
@@ -54,13 +76,10 @@ export async function deleteHistoricalDeviation(recordId: string): Promise<void>
 export async function uploadHistoricalDeviationAttachment(
   recordId: string,
   formData: FormData
-): Promise<{ id: string; file_name: string; url: string; converted: boolean } | null> {
-  const result = await actionFetch<{ id: string; file_name: string; url: string; converted: boolean }>(
-    `${API_BASE_URL}/api/v1/quality/historical-deviations/${recordId}/attachments`,
-    { method: 'POST', body: formData }
+) {
+  return uploadDeviationFile<{ id: string; file_name: string; url: string; converted: boolean }>(
+    'history.uploadAttachment', '历史偏差附件上传', `/historical-deviations/${encodeURIComponent(recordId)}/attachments`, formData,
   )
-  revalidateDeviationWorkbenchPaths()
-  return result
 }
 
 export async function deleteHistoricalDeviationAttachment(
@@ -101,13 +120,10 @@ export async function updateDeviationWorkbenchSettings(
 
 export async function uploadDeviationWorkbenchAttachment(
   formData: FormData
-): Promise<DeviationWorkbenchAttachmentDescriptor | null> {
-  const result = await actionFetch<DeviationWorkbenchAttachmentDescriptor>(
-    `${API_BASE_URL}/api/v1/quality/deviation-workbench/attachments`,
-    { method: 'POST', body: formData }
+) {
+  return uploadDeviationFile<DeviationWorkbenchAttachmentDescriptor>(
+    'workbench.uploadAttachment', '偏差工作台附件上传', '/deviation-workbench/attachments', formData,
   )
-  revalidateDeviationWorkbenchPaths()
-  return result
 }
 
 export async function analyzeDeviationWorkbench(
@@ -142,11 +158,11 @@ export async function deleteDeviationWorkbenchAttachment(
 /** 批量导入历史偏差附件：转 MD + 建记录 + 解析编号 + AI 提取 */
 export async function batchImportHistoricalDeviations(
   formData: FormData
-): Promise<HistoricalDeviationBatchImportResult | null> {
-  const result = await actionFetch<HistoricalDeviationBatchImportResult>(
-    `${API_BASE_URL}/api/v1/quality/historical-deviations/batch-import`,
-    { method: 'POST', body: formData }
+) {
+  const batchMessages = {
+    QUALITY_HISTORICAL_DEVIATION_BATCH_LIMIT: '本次附件数量过多，请分批导入',
+  } satisfies Record<components['schemas']['HistoricalDeviationBatchErrorDetail']['error_code'], string>
+  return uploadDeviationFile<HistoricalDeviationBatchImportResult>(
+    'history.batchImport', '历史偏差批量导入', '/historical-deviations/batch-import', formData, { 400: batchMessages },
   )
-  revalidateDeviationWorkbenchPaths()
-  return result
 }

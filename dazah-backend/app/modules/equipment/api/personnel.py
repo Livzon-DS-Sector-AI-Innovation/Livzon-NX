@@ -10,13 +10,16 @@ from app.core.database import get_db
 from app.core.response import success_response
 from app.modules.equipment import service
 from app.modules.equipment.schemas.personnel import (
+    EquipmentRoleConflictResponse,
     PersonnelAddRequest,
+    PersonnelAddResult,
     PersonnelCategoryAssign,
     PersonnelRoleAssign,
     PersonnelUpdate,
     RoleCreate,
     RoleUpdate,
 )
+from app.shared.schemas import ApiResponseEnvelope
 
 router = APIRouter()
 
@@ -24,7 +27,16 @@ router = APIRouter()
 # ═══════════════ 角色 API ═══════════════
 
 
-@router.post("/roles", summary="创建角色")
+@router.post(
+    "/roles",
+    summary="创建角色",
+    responses={
+        409: {
+            "model": EquipmentRoleConflictResponse,
+            "description": "角色编码已存在（EQUIPMENT_ROLE_CODE_EXISTS）",
+        }
+    },
+)
 async def create_role(
     data: RoleCreate,
     db: AsyncSession = Depends(get_db),
@@ -85,7 +97,11 @@ async def delete_role(
 # ═══════════════ 人员 API ═══════════════
 
 
-@router.post("", summary="从身份系统添加人员")
+@router.post(
+    "",
+    summary="从身份系统添加人员",
+    response_model=ApiResponseEnvelope[PersonnelAddResult],
+)
 async def add_personnel(
     data: PersonnelAddRequest,
     db: AsyncSession = Depends(get_db),

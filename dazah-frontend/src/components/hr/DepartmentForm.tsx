@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useEffect } from 'react'
 import { App, Modal, Form, Input, Select, InputNumber } from 'antd'
 import { Department, DepartmentCreateInput, DepartmentUpdateInput } from '@/types/hr'
@@ -66,7 +67,7 @@ export default function DepartmentForm({ open, department, parentId, onClose, on
       onSuccess()
       onClose()
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '操作失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '操作失败'))
     }
   }
 

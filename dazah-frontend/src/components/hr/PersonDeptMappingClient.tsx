@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   App, Button, Input, Modal, Popconfirm, Select, Space, Switch, Table, Typography,
@@ -141,7 +142,7 @@ export default function PersonDeptMappingClient({
       setRemark('')
       await onChanged()
     } catch (e) {
-      message.error(e instanceof Error ? e.message : '保存失败，已输入内容保留在表单中')
+      message.error(getUserErrorMessage(e instanceof Error ? e.message : '保存失败，已输入内容保留在表单中'))
     } finally {
       setSaving(false)
     }
@@ -154,7 +155,7 @@ export default function PersonDeptMappingClient({
       message.success(enabled ? '已启用' : '已停用')
       await onChanged()
     } catch (e) {
-      message.error(e instanceof Error ? e.message : '操作失败')
+      message.error(getUserErrorMessage(e instanceof Error ? e.message : '操作失败'))
     }
   }
 
@@ -175,7 +176,7 @@ export default function PersonDeptMappingClient({
       setEditing(null)
       await onChanged()
     } catch (e) {
-      message.error(e instanceof Error ? e.message : '保存失败')
+      message.error(getUserErrorMessage(e instanceof Error ? e.message : '保存失败'))
     } finally {
       setSaving(false)
     }
@@ -188,7 +189,7 @@ export default function PersonDeptMappingClient({
       message.success(`已删除「${row.name}」的人员归属配置`)
       await onChanged()
     } catch (e) {
-      message.error(e instanceof Error ? e.message : '删除失败')
+      message.error(getUserErrorMessage(e instanceof Error ? e.message : '删除失败'))
     }
   }
 

@@ -1,5 +1,7 @@
 'use client'
 
+import { getActionErrorMessage, unwrapServerActionResult } from '@/lib/server-action-result'
+import { getUserErrorMessage } from '@/lib/user-error'
 import Link from 'next/link'
 import { useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { App, Button, Card, Col, Row, Space, Table, Typography } from 'antd'
@@ -416,13 +418,13 @@ export default function DeclarationProgressDashboardPage({
     formData.append('file', file)
     setImportingWorkbook(true)
     try {
-      const result = await importDeclarationProgressWorkbook(formData)
+      const result = unwrapServerActionResult(await importDeclarationProgressWorkbook(formData))
       message.success(
         `导入完成，共导入 ${result?.imported_records ?? 0} 条主记录`
       )
       router.refresh()
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '导入失败')
+      message.error(getActionErrorMessage(error, '申报进度台账导入'))
     } finally {
       setImportingWorkbook(false)
       if (fileInputRef.current) {
@@ -437,7 +439,7 @@ export default function DeclarationProgressDashboardPage({
       await fetchDeclarationProgressWorkbookExport()
       message.success('申报进度工作簿已开始下载')
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '导出失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '导出失败'))
     } finally {
       setExportingWorkbook(false)
     }

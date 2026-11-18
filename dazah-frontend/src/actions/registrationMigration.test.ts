@@ -141,8 +141,7 @@ describe('registration migration server-action contracts', () => {
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/certificate-management/workbook/import'))).toBe(true)
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/knowledge/articles/article-1/attachments'))).toBe(true)
     expect(fetchMock.mock.calls.every(([, init]) => {
-      const headers = init?.headers as Record<string, string> | undefined
-      return headers?.Authorization === 'Bearer registration-action-token'
+      return new Headers(init?.headers).get('Authorization') === 'Bearer registration-action-token'
     })).toBe(true)
   })
 

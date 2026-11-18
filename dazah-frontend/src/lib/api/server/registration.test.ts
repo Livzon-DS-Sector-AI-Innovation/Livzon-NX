@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/lib/auth', () => ({ getAuthHeaders: mocks.getAuthHeaders }))
 
-import { ServerApiError, serverApiGet, serverApiPost } from './registration'
+import { ServerApiError, serverApiGet, serverApiPost, serverApiPostFormData } from './registration'
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -60,6 +60,25 @@ describe('registration server api client', () => {
     await expect(serverApiGet('/certificates/ledger?page=1')).resolves.toEqual(
       envelope,
     )
+  })
+
+  it('lets fetch set the multipart boundary and maps the registered business error', async () => {
+    const request = vi.fn().mockResolvedValue(jsonResponse({
+      message: 'internal workbook error',
+      detail: { error_code: 'INVALID_WORKBOOK' },
+    }, 422))
+    vi.stubGlobal('fetch', request)
+    const form = new FormData()
+    form.set('file', new Blob(['fixture']), 'workbook.xlsx')
+
+    await expect(serverApiPostFormData('/certificates/import', form, {
+      422: { INVALID_WORKBOOK: '请核对工作簿模板' },
+    })).rejects.toThrow('请核对工作簿模板')
+    const [, init] = request.mock.calls[0] as [string, RequestInit]
+    const headers = new Headers(init.headers)
+    expect(headers.has('content-type')).toBe(false)
+    expect(headers.get('authorization')).toBe('Bearer server-token')
+    expect(init.body).toBe(form)
   })
 
   it('throws ServerApiError on get failures and plain Error on post failures', async () => {

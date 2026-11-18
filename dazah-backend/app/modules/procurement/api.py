@@ -20,10 +20,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.database import async_session_factory, get_db
+from app.core.exceptions import AppException
 from app.core.redis import acquire_lock, release_lock, renew_lock
 from app.core.response import paginated_response, success_response
 from app.modules.procurement.contract_generator import (
     get_contract_template_metadata,
+)
+from app.modules.procurement.error_contract import (
+    ProcurementErrorCode,
+    ProcurementOperationError,
+    procurement_error_response,
 )
 from app.modules.procurement.material_source import (
     MaterialSourceConflictError,
@@ -603,6 +609,11 @@ async def list_supplier_records(
         "上传 xlsx、xlsm、csv 或 tsv 表格文件，按文件表头读取字段并替换当前供应商清单。"
     ),
     response_model=SupplierImportResponse,
+    responses={
+        413: {"description": "表格文件超过大小限制"},
+        415: {"description": "表格文件格式不受支持"},
+        422: procurement_error_response(ProcurementErrorCode.INVALID_TABLE),
+    },
 )
 async def import_supplier_records(
     file: UploadFile = File(..., description="供应商清单表格文件"),
@@ -611,20 +622,22 @@ async def import_supplier_records(
     filename = file.filename or ""
     allowed_extensions = (".xlsx", ".xlsm", ".csv", ".tsv")
     if not filename.lower().endswith(allowed_extensions):
-        raise HTTPException(
-            status_code=400,
-            detail="请上传 xlsx、xlsm、csv 或 tsv 文件",
+        raise AppException(
+            status_code=415,
+            message="请上传 xlsx、xlsm、csv 或 tsv 文件",
         )
 
     file_bytes = await _read_upload_file_with_limit(file, file_label="表格文件")
+    if not file_bytes:
+        raise AppException(status_code=400, message="上传文件为空")
     try:
         result = await import_supplier_table_file(
             db,
             file_bytes,
             file_name=filename,
         )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ProcurementOperationError as exc:
+        raise exc.as_http_error() from exc
 
     return success_response(
         data=result.model_dump(mode="json"),
@@ -830,6 +843,11 @@ async def create_purchase_request_record(
         "返回成功导入的申请与失败的行/工作表明细。"
     ),
     response_model=PurchaseRequestImportResponse,
+    responses={
+        413: {"description": "表格文件超过大小限制"},
+        415: {"description": "表格文件格式不受支持"},
+        422: procurement_error_response(ProcurementErrorCode.INVALID_TABLE),
+    },
 )
 async def import_purchase_request_records(
     file: UploadFile = File(..., description="采购申请表格文件"),
@@ -837,20 +855,22 @@ async def import_purchase_request_records(
 ) -> Any:
     filename = file.filename or ""
     if not filename.lower().endswith((".xlsx", ".xls", ".csv")):
-        raise HTTPException(
-            status_code=400,
-            detail="请上传 xlsx、xls 或 csv 文件",
+        raise AppException(
+            status_code=415,
+            message="请上传 xlsx、xls 或 csv 文件",
         )
 
     file_bytes = await _read_upload_file_with_limit(file, file_label="表格文件")
+    if not file_bytes:
+        raise AppException(status_code=400, message="上传文件为空")
     try:
         result = await import_purchase_request_table_file(
             db,
             file_bytes,
             file_name=filename,
         )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ProcurementOperationError as exc:
+        raise exc.as_http_error() from exc
 
     return success_response(
         data=result.model_dump(mode="json"),
@@ -923,6 +943,13 @@ async def delete_purchase_request_record(
     summary="提交采购申请",
     description="将采购申请提交到该采购类型配置的首个审批节点。",
     response_model=PurchaseRequestApiResponse,
+    responses={
+        404: {"description": "采购申请不存在"},
+        409: {"description": "采购申请状态不允许提交"},
+        422: procurement_error_response(
+            ProcurementErrorCode.ITEMS_MISSING, ProcurementErrorCode.AMOUNT_MISMATCH
+        ),
+    },
 )
 async def submit_purchase_request_record(
     request_id: UUID,
@@ -930,8 +957,8 @@ async def submit_purchase_request_record(
 ) -> Any:
     try:
         request = await submit_purchase_request(db, request_id)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ProcurementOperationError as exc:
+        raise exc.as_http_error() from exc
     return success_response(
         data=request.model_dump(mode="json"),
         message="采购申请已提交",
@@ -942,6 +969,10 @@ async def submit_purchase_request_record(
     "/purchase-requests/{request_id}/approve",
     summary="通过采购申请审批",
     response_model=PurchaseRequestApiResponse,
+    responses={
+        404: {"description": "采购申请不存在"},
+        409: {"description": "当前申请不在该审批步骤"},
+    },
 )
 async def approve_purchase_request_record(
     request_id: UUID,
@@ -950,8 +981,8 @@ async def approve_purchase_request_record(
 ) -> Any:
     try:
         request = await approve_purchase_request(db, request_id, payload)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ProcurementOperationError as exc:
+        raise exc.as_http_error() from exc
     return success_response(data=request.model_dump(mode="json"), message="审批已通过")
 
 
@@ -959,6 +990,10 @@ async def approve_purchase_request_record(
     "/purchase-requests/{request_id}/reject",
     summary="驳回采购申请审批",
     response_model=PurchaseRequestApiResponse,
+    responses={
+        404: {"description": "采购申请不存在"},
+        409: {"description": "当前申请不在该审批步骤"},
+    },
 )
 async def reject_purchase_request_record(
     request_id: UUID,
@@ -967,8 +1002,8 @@ async def reject_purchase_request_record(
 ) -> Any:
     try:
         request = await reject_purchase_request(db, request_id, payload)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ProcurementOperationError as exc:
+        raise exc.as_http_error() from exc
     return success_response(data=request.model_dump(mode="json"), message="审批已驳回")
 
 

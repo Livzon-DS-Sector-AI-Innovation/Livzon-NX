@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import Link from 'next/link'
 import { usePagePermissions } from '@/hooks/usePagePermissions'
 import { useCallback, useEffect, useMemo, useState, useTransition } from 'react'
@@ -346,7 +347,7 @@ export default function CertificateSheetPage({
         form.resetFields()
         router.refresh()
       } catch (error) {
-        message.error(error instanceof Error ? error.message : '操作失败')
+        message.error(getUserErrorMessage(error instanceof Error ? error.message : '操作失败'))
       }
     })
   }
@@ -364,7 +365,7 @@ export default function CertificateSheetPage({
         message.success('证书记录已删除')
         router.refresh()
       } catch (error) {
-        message.error(error instanceof Error ? error.message : '删除失败')
+        message.error(getUserErrorMessage(error instanceof Error ? error.message : '删除失败'))
       }
     })
   }

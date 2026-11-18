@@ -106,7 +106,7 @@ export default function OffboardingClient({
       message.success('删除成功')
       loadData()
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '删除失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '删除失败'))
     }
   }
 
@@ -130,7 +130,7 @@ export default function OffboardingClient({
       message.success('离职证明已生成并下载')
       loadData()
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '生成失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '生成失败'))
     }
   }
 
@@ -142,7 +142,7 @@ export default function OffboardingClient({
       message.success(res.message || '同步完成')
       loadData()
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '同步飞书失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '同步飞书失败'))
     } finally {
       setSyncing(false)
     }
@@ -182,7 +182,7 @@ export default function OffboardingClient({
       setEditingCell(null)
       loadData()
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '更新失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '更新失败'))
       setEditingCell(null)
     }
   }

@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useEffect, useMemo, useState } from 'react'
 import { App, Button, DatePicker, Form, Input, Modal, Select, Switch, Typography, Upload } from 'antd'
 import { PaperClipOutlined, UploadOutlined } from '@ant-design/icons'
@@ -177,9 +178,9 @@ export function FinishedProductAnomalyFormModal({
       }))
     } catch (error: unknown) {
       message.error(
-        error instanceof Error && error.message
+        getUserErrorMessage(error instanceof Error && error.message
           ? error.message
-          : '附件上传失败',
+          : '附件上传失败'),
       )
     } finally {
       setUploadingField(null)

@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useState, useCallback, useEffect } from 'react'
 import { Table, Input, Select, DatePicker, Button, Space, Tag, Card, Statistic, Row, Col, Modal, App, Form, InputNumber, Checkbox, Upload, Descriptions } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
@@ -70,7 +71,7 @@ export default function LabelVerificationClient({
       setVerifications(res.data)
       setTotal(res.meta?.total || 0)
     } catch (err) {
-      message.error(err.message || '加载数据失败')
+      message.error(getUserErrorMessage(err.message || '加载数据失败'))
     } finally {
       setLoading(false)
     }
@@ -114,7 +115,7 @@ export default function LabelVerificationClient({
       })
       message.success('视频上传成功')
     } catch (err) {
-      message.error(err.message || '上传失败')
+      message.error(getUserErrorMessage(err.message || '上传失败'))
     } finally {
       setVideoUploading(false)
     }
@@ -179,7 +180,7 @@ export default function LabelVerificationClient({
       if ((typeof err === 'object' && err !== null && 'errorFields' in err)) {
         message.warning('请先填写表单基本信息并上传视频')
       } else {
-        message.error((err instanceof Error ? err.message : '') || '自动对比失败')
+        message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '自动对比失败'))
       }
     } finally {
       setAutoComparing(false)
@@ -224,7 +225,7 @@ export default function LabelVerificationClient({
       loadData()
       loadStatistics()
     } catch (err) {
-      message.error(err.message || '创建失败')
+      message.error(getUserErrorMessage(err.message || '创建失败'))
     }
   }
 

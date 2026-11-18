@@ -1,5 +1,7 @@
 'use client'
 
+import { getActionErrorMessage, unwrapServerActionResult } from '@/lib/server-action-result'
+
 import { useMemo, useState } from 'react'
 import dayjs from 'dayjs'
 import type { Dayjs } from 'dayjs'
@@ -341,15 +343,11 @@ export function UrgentPurchaseRequestFormClient({
   const handleSubmitFlow = async (record: PurchaseRequestResponse) => {
     setSubmittingId(record.id)
     try {
-      const response = await submitPurchaseRequest(record.id)
-      if (response.code !== 200) {
-        message.error(response.message || '采购申请提交失败')
-        return
-      }
+      unwrapServerActionResult(await submitPurchaseRequest(record.id))
       message.success('已提交至五金库审批')
       await loadRecords(page)
-    } catch {
-      message.error('采购申请提交失败，请稍后重试')
+    } catch (error) {
+      message.error(getActionErrorMessage(error, '采购申请提交'))
     } finally {
       setSubmittingId(null)
     }

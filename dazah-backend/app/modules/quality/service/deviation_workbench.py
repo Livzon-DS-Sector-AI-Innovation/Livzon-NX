@@ -216,6 +216,8 @@ async def upload_workbench_attachment(
 ) -> DeviationWorkbenchAttachmentIn:
     if not file.filename:
         raise AppException(message="附件文件名不能为空")
+    if Path(file.filename).suffix.lower() not in ALLOWED_EXT:
+        raise AppException(status_code=415, message="附件格式不受支持")
     file_name, content = await read_upload_secure(
         file,
         max_bytes=ATTACHMENT_MAX_SIZE,

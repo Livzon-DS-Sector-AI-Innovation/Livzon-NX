@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import PlatformNotice from '@/components/shared/PlatformNotice'
 
 import { useState } from 'react'
@@ -155,7 +156,7 @@ export default function ContractTableClient({ initialData, initialTotal }: Contr
         message.error(json.message || '标记失败')
       }
     } catch (e) {
-      message.error((e instanceof Error ? e.message : '') || '标记失败')
+      message.error(getUserErrorMessage((e instanceof Error ? e.message : '') || '标记失败'))
     }
   }
 

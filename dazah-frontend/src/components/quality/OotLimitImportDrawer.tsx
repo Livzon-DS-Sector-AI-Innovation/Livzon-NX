@@ -1,5 +1,6 @@
 "use client"
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import PlatformNotice from '@/components/shared/PlatformNotice'
 
 import { useRef, useState } from "react"
@@ -81,7 +82,7 @@ export function OotLimitImportDrawer({ isOpen, onClose, onSuccess }: OotLimitImp
       setPreviewFiles(data.files)
       setPreviewed(true)
     } catch (err) {
-      setErrorMsg((err instanceof Error ? err.message : "") || "预览失败")
+      setErrorMsg(getUserErrorMessage((err instanceof Error ? err.message : "") || "预览失败", "预览失败"))
     } finally {
       setPreviewing(false)
     }
@@ -104,7 +105,7 @@ export function OotLimitImportDrawer({ isOpen, onClose, onSuccess }: OotLimitImp
         onSuccess()
       }, 2500)
     } catch (err) {
-      setErrorMsg((err instanceof Error ? err.message : "") || "导入失败")
+      setErrorMsg(getUserErrorMessage((err instanceof Error ? err.message : "") || "导入失败", "导入失败"))
     } finally {
       setImporting(false)
     }

@@ -121,7 +121,7 @@ export default function EmployeeProfileClient({
     } catch (e: unknown) {
       if (hide) hide()
       if (!silent) {
-        message.error(e instanceof Error ? (e instanceof Error ? e.message : '') : '同步失败')
+        message.error(getUserErrorMessage(e instanceof Error ? (e instanceof Error ? e.message : '') : '同步失败'))
       }
     } finally {
       setSyncing(false)

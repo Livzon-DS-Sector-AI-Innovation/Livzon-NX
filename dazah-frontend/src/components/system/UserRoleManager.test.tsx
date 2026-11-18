@@ -423,8 +423,8 @@ it('uses the returned grant version when roles change again after a scope failur
   })
 })
 
-it('previews added roles and submits a versioned full replacement with a reason', async () => {
-  await renderManager()
+it.each(['light', 'dark'] as const)('confirms added roles without an access rules banner in %s mode', async (appearance) => {
+  await renderManager(appearance)
   await searchUsers('QA部')
   mocks.fetchUsers.mockClear()
   await act(async () => button('分配角色').click())
@@ -437,7 +437,8 @@ it('previews added roles and submits a versioned full replacement with a reason'
     reason.dispatchEvent(new Event('input', { bubbles: true }))
   })
   await act(async () => button('保存').click())
-  const confirmation = mocks.confirm.mock.lastCall![0] as { onOk: () => Promise<void> }
+  const confirmation = mocks.confirm.mock.lastCall![0] as { content: React.ReactNode; onOk: () => Promise<void> }
+  expect(mocks.assign).not.toHaveBeenCalled()
   await act(async () => confirmation.onOk())
   expect(mocks.assign).toHaveBeenCalledWith('user-1', ['role-a', 'role-b'], {
     expectedGrantVersion: 7,
@@ -446,6 +447,12 @@ it('previews added roles and submits a versioned full replacement with a reason'
   expect(mocks.fetchUsers).toHaveBeenCalledExactlyOnceWith({ keyword: 'QA部', offset: 0, limit: 20 })
   expect(mocks.saveScope).not.toHaveBeenCalled()
   expect(mocks.deleteScope).not.toHaveBeenCalled()
+
+  await act(async () => root.render(createElement(ConfigProvider, { theme: getAntdTheme(appearance) }, confirmation.content)))
+  expect(host.textContent).toContain('新增角色：体系QA')
+  expect(host.textContent).toContain('调整原因：增加体系文件维护职责')
+  expect(host.textContent).not.toContain('多个角色的页面权限合并生效')
+  expect(host.textContent).not.toContain('了解访问规则')
 })
 
 it.each(['系统管理员', '普通管理员'])('requires confirmation before replacing six selected roles with %s', async (administrator) => {

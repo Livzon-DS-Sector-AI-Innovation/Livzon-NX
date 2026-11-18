@@ -36,7 +36,7 @@ from app.modules.quality.api.deps import (
 from app.modules.quality.api.deps import (
     resolve_quality_list_scope as _resolve_quality_list_scope,
 )
-from app.modules.quality.api.uploads import read_upload_with_limit
+from app.modules.quality.api.uploads import read_word_import
 from app.modules.quality.schemas import (
     BatchUpdateStatusRequest,
     BatchUpdateStatusResponse,
@@ -62,6 +62,7 @@ from app.modules.quality.schemas.deviations import (
     DeviationCreateResult,
     DeviationReporterOption,
 )
+from app.modules.quality.schemas.import_error import QUALITY_IMPORT_ERROR_RESPONSES
 from app.modules.quality.service import quality_deviation as deviation_service
 from app.modules.quality.service import quality_import_export as ie_service
 from app.modules.quality.service.deviation_ledger_export import (
@@ -824,6 +825,7 @@ async def delete_deviation_investigation_push_record(
     "/deviations/import/preview",
     summary="偏差导入预览",
     response_model=ApiResponseEnvelope[dict[str, Any]],
+    responses=QUALITY_IMPORT_ERROR_RESPONSES,
 )
 async def preview_deviation_import(
     file: UploadFile = File(...),
@@ -831,9 +833,7 @@ async def preview_deviation_import(
     current_user: CurrentUser = None,
 ) -> JSONResponse:
     _require_user(current_user)
-    if not file.filename or not file.filename.endswith((".docx", ".doc")):
-        raise AppException(message="请上传 Word 文件 (.docx)")
-    content = await read_upload_with_limit(file, IMPORT_FILE_MAX_SIZE, "导入文件")
+    content = await read_word_import(file, IMPORT_FILE_MAX_SIZE)
     result = await ie_service.preview_deviation_import(db, content)
     return success_response(data=result)
 
@@ -842,6 +842,7 @@ async def preview_deviation_import(
     "/deviations/import/confirm",
     summary="确认偏差导入",
     response_model=ApiResponseEnvelope[dict[str, Any]],
+    responses=QUALITY_IMPORT_ERROR_RESPONSES,
 )
 async def confirm_deviation_import(
     file: UploadFile = File(...),
@@ -851,9 +852,7 @@ async def confirm_deviation_import(
     current_user: CurrentUser = None,
 ) -> JSONResponse:
     _require_user(current_user)
-    if not file.filename or not file.filename.endswith((".docx", ".doc")):
-        raise AppException(message="请上传 Word 文件 (.docx)")
-    content = await read_upload_with_limit(file, IMPORT_FILE_MAX_SIZE, "导入文件")
+    content = await read_word_import(file, IMPORT_FILE_MAX_SIZE)
     result = await ie_service.confirm_deviation_import(
         db, content, skip_duplicates, update_existing
     )

@@ -304,12 +304,14 @@ async def test_approve_purchase_request_api_accepts_new_approval_role(
 
 
 @pytest.mark.anyio
-async def test_approve_purchase_request_api_returns_400_for_invalid_workflow_step(
+async def test_approve_purchase_request_api_returns_409_for_invalid_workflow_step(
     authenticated_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     async def approve(_db: Any, _request_id: Any, _payload: Any) -> Any:
-        raise ValueError("该采购类型不包含此审批步骤")
+        raise procurement_api.ProcurementOperationError(
+            409, "该采购类型不包含此审批步骤"
+        )
 
     monkeypatch.setattr(procurement_api, "approve_purchase_request", approve)
     response = await authenticated_client.post(
@@ -328,7 +330,7 @@ async def test_approve_purchase_request_api_returns_400_for_invalid_workflow_ste
         },
     )
 
-    assert response.status_code == 400
+    assert response.status_code == 409
     assert response.json()["message"] == "该采购类型不包含此审批步骤"
 
 
@@ -396,7 +398,7 @@ async def test_import_purchase_requests_api_rejects_unsupported_extension(
         files={"file": ("采购申请.docx", b"docx-bytes", "application/octet-stream")},
     )
 
-    assert response.status_code == 400
+    assert response.status_code == 415
     assert "请上传 xlsx、xls 或 csv 文件" in response.json()["message"]
 
 
@@ -471,8 +473,10 @@ async def test_submit_purchase_request_api_maps_total_amount_error_to_400(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     async def submit(_db: Any, _request_id: Any) -> Any:
-        raise ValueError(
-            "第1条明细总额（0.00）与数量×单价（50.00）不一致，请修改后重新提交"
+        raise procurement_api.ProcurementOperationError(
+            422,
+            "第1条明细总额（0.00）与数量×单价（50.00）不一致，请修改后重新提交",
+            procurement_api.ProcurementErrorCode.AMOUNT_MISMATCH,
         )
 
     monkeypatch.setattr(procurement_api, "submit_purchase_request", submit)
@@ -481,5 +485,5 @@ async def test_submit_purchase_request_api_maps_total_amount_error_to_400(
         headers={"X-Dazah-Page-Key": "purchasing:request:request-fire"},
     )
 
-    assert response.status_code == 400
+    assert response.status_code == 422
     assert "总额（0.00）与数量×单价（50.00）不一致" in response.json()["message"]

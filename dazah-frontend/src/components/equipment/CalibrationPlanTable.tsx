@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useCallback } from 'react'
 import { App, Table, Button, Space, Select } from 'antd'
 import { PlusOutlined, EditOutlined, DeleteOutlined, FileTextOutlined } from '@ant-design/icons'
@@ -31,7 +32,7 @@ export function CalibrationPlanTable({ onRefresh, onRecordRefresh }: Props) {
       okText: '确认', cancelText: '取消', okButtonProps: { danger: true },
       onOk: async () => {
         try { await deleteCalibrationPlan(r.id); message.success('删除成功'); onRefresh?.() }
-        catch (error) { message.error(error?.message || '删除失败') }
+        catch (error) { message.error(getUserErrorMessage(error?.message || '删除失败')) }
       },
     })
   }, [modal, message, onRefresh])

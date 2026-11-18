@@ -139,4 +139,31 @@ describe('SopContentEditor lifecycle', () => {
     act(() => ui.modal.confirm.mock.calls[0][0].onOk())
     expect(onBack).toHaveBeenCalledOnce()
   })
+
+  it('keeps an SOP draft after failed writes and reports a failed export separately', async () => {
+    await mount()
+    const documentNumber = container.querySelector<HTMLInputElement>('input[placeholder="编号"]')!
+    await act(async () => changeInput(documentNumber, 'SOP-DRAFT'))
+    const button = (text: string) => [...container.querySelectorAll('button')]
+      .find(node => node.textContent === text)
+    const fail = new Error('TypeError: SOP adapter failed')
+    actions.updateSopContent.mockRejectedValueOnce(fail).mockRejectedValueOnce(fail)
+    for (const label of ['仅保存', '保存并导出 PDF']) {
+      const save = button(label)
+      expect(save?.disabled).toBe(false)
+      await act(async () => save?.click())
+      expect(ui.message.error).toHaveBeenLastCalledWith('操作未完成，请稍后重试')
+      expect(documentNumber.value).toBe('SOP-DRAFT')
+      expect(onSaved).not.toHaveBeenCalled()
+      expect(actions.exportSopPdf).not.toHaveBeenCalled()
+    }
+    expect(ui.message.error).toHaveBeenCalledTimes(2)
+
+    actions.exportSopPdf.mockRejectedValueOnce(fail)
+    await act(async () => button('保存并导出 PDF')?.click())
+    expect(onSaved).toHaveBeenCalledOnce()
+    expect(actions.exportSopPdf).toHaveBeenCalledWith('regulation-1')
+    expect(ui.message.error).toHaveBeenCalledTimes(3)
+    expect(ui.message.error).toHaveBeenLastCalledWith('操作未完成，请稍后重试')
+  })
 })

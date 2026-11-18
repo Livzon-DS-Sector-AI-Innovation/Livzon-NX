@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useState } from 'react'
 import { Upload, Button, Card, Space, App, Typography } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
@@ -60,7 +61,7 @@ export function AIFileParser({
       onParseComplete(result)
       return false // 阻止自动上传
     } catch (err) {
-      message.error(err.message || '文件解析失败')
+      message.error(getUserErrorMessage(err.message || '文件解析失败'))
       return false
     } finally {
       setParsing(false)
@@ -81,7 +82,7 @@ export function AIFileParser({
       setTextContent('')
       setShowTextInput(false)
     } catch (err) {
-      message.error(err.message || '内容解析失败')
+      message.error(getUserErrorMessage(err.message || '内容解析失败'))
     } finally {
       setParsing(false)
     }

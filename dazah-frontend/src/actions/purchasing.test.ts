@@ -92,7 +92,7 @@ describe('procurement material source actions', () => {
 
     const formData = new FormData()
     formData.append('file', new File(['bytes'], '申请.xlsx'))
-    await expect(importPurchaseRequestTable(formData)).resolves.toMatchObject({ code: 200 })
+    await expect(importPurchaseRequestTable(formData)).resolves.toMatchObject({ ok: true, data: { code: 200 } })
 
     expect(fetchMock).toHaveBeenCalledWith(
       'http://backend.test/api/v1/procurement/purchase-requests/import',
@@ -112,7 +112,7 @@ describe('procurement material source actions', () => {
     )
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(importPurchaseRequestTable(new FormData())).resolves.toMatchObject({ code: 200 })
+    await expect(importPurchaseRequestTable(new FormData())).resolves.toMatchObject({ ok: true, data: { code: 200 } })
 
     const headers = fetchMock.mock.calls[0][1].headers as HeadersInit
     expect(headers).not.toHaveProperty('Authorization')

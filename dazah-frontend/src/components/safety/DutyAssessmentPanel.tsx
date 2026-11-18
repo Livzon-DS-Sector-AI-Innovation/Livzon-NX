@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useMemo, useState } from 'react'
 import {
   App,
@@ -156,7 +157,7 @@ export default function DutyAssessmentPanel({
       const statsRes = await getSafetyDutyAssessmentStats(nextYear)
       if (statsRes.code === 200) setStats(statsRes.data)
     } catch (err) {
-      setError(err instanceof Error ? err.message : '加载考核记录失败')
+      setError(getUserErrorMessage(err instanceof Error ? err.message : '加载考核记录失败', '加载考核记录失败'))
     } finally {
       setLoading(false)
     }
@@ -234,7 +235,7 @@ export default function DutyAssessmentPanel({
         message.error(res.message || '获取考核模板失败')
       }
     } catch (err) {
-      message.error(err instanceof Error ? err.message : '获取考核模板失败')
+      message.error(getUserErrorMessage(err instanceof Error ? err.message : '获取考核模板失败'))
     } finally {
       setTemplateLoading(false)
     }
@@ -273,7 +274,7 @@ export default function DutyAssessmentPanel({
         message.error(res.message || '保存失败')
       }
     } catch (err) {
-      message.error(err instanceof Error ? err.message : '保存失败')
+      message.error(getUserErrorMessage(err instanceof Error ? err.message : '保存失败'))
     }
   }
 

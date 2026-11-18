@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useState, useEffect, useRef } from 'react'
 import { Card, Button, Space, Tag, Collapse, App, Progress, Spin, Tabs, Descriptions, Divider, Upload } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
@@ -193,7 +194,7 @@ export function ModuleResearch({ routeId, literatureSource = '', literatureFile,
       } catch (error) {
         if (controller.signal.aborted) return
         console.error('文献解析失败:', error)
-        setParseError(error instanceof Error ? error.message : '解析失败')
+        setParseError(getUserErrorMessage(error instanceof Error ? error.message : '解析失败', '解析失败'))
         setIsParsing(false)
         message.error('文献解析失败，请检查 AI 配置或稍后重试')
       }

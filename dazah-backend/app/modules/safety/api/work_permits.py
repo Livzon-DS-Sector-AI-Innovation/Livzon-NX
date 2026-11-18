@@ -74,6 +74,10 @@ from app.modules.safety.service.work_permit_templates import (
     person_role_options_for,
     type_fields_for,
 )
+from app.modules.safety.work_permit_error_contract import (
+    WORK_PERMIT_REVIEW_ERRORS,
+    WORK_PERMIT_SUBMIT_ERRORS,
+)
 from app.platform.identity.models import User
 from app.platform.storage.preview import resolve_preview_content
 from app.shared.schemas import ApiResponseEnvelope
@@ -289,6 +293,7 @@ async def delete_work_permit(
 @work_permits_router.post(
     "/work-permits/{permit_id}/submit",
     response_model=ApiResponseEnvelope[ActionResponse],
+    responses=WORK_PERMIT_SUBMIT_ERRORS,
     summary="提交审批（生成逐级审批节点链）",
 )
 async def submit_work_permit(
@@ -315,6 +320,7 @@ async def submit_work_permit(
 @work_permits_router.post(
     "/work-permits/{permit_id}/nodes/{node_id}/approve",
     response_model=ApiResponseEnvelope[ActionResponse],
+    responses=WORK_PERMIT_REVIEW_ERRORS,
     summary="审批同意（当前节点签批并推进）",
 )
 async def approve_work_permit_node(
@@ -338,6 +344,7 @@ async def approve_work_permit_node(
 @work_permits_router.post(
     "/work-permits/{permit_id}/nodes/{node_id}/reject",
     response_model=ApiResponseEnvelope[ActionResponse],
+    responses=WORK_PERMIT_REVIEW_ERRORS,
     summary="审批驳回（整票驳回，修改后重新提交）",
 )
 async def reject_work_permit_node(

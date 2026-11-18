@@ -63,6 +63,26 @@ describe('Livzon conversation audit detail', () => {
     }
   })
 
+  it('uses safe errors for failed audit requests and recovers on refresh', async () => {
+    api.fetchAgentAuditSessions.mockRejectedValueOnce(new Error('TypeError: audit list adapter failed'))
+    await act(async () => root.render(createElement(App, null, createElement(AgentAuditLogClient))))
+    await vi.waitFor(() => expect(document.body.textContent).toContain('操作未完成，请稍后重试'))
+    const refresh = [...host.querySelectorAll('button')].find(button => button.textContent?.replace(/\s/g, '') === '刷新')
+    expect(refresh).toBeDefined()
+    await act(async () => refresh?.click())
+    expect(host.textContent).toContain('测试对话')
+
+    api.fetchAgentAuditSession.mockRejectedValueOnce(new Error('TypeError: audit detail adapter failed'))
+    const view = [...host.querySelectorAll('button')].find(button => button.textContent?.replace(/\s/g, '') === '查看')
+    expect(view).toBeDefined()
+    const errors = document.querySelectorAll('.ant-message-error').length
+    await act(async () => view?.click())
+    expect(api.fetchAgentAuditSession).toHaveBeenCalledWith('session-1')
+    expect(document.querySelectorAll('.ant-message-error')).toHaveLength(errors + 1)
+    expect(document.body.textContent).not.toContain('audit detail adapter failed')
+    expect(host.textContent).toContain('测试对话')
+  })
+
   it.each(['conversation', 'confirmations'] as const)('renders audit timelines without deprecated items.children warnings: %s', async (tab) => {
     const session = (await api.fetchAgentAuditSessions()).items[0]
     api.fetchAgentAuditSession.mockResolvedValue({

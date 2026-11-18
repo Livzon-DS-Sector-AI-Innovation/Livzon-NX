@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useCallback, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { App, Button, Card, Collapse, Form, Input, Space, Table, Tag } from 'antd'
@@ -245,7 +246,7 @@ export function WarehouseFeishuConfigPage({ initialConfigs }: WarehouseFeishuCon
         appToken = bundle.app_token
         tables = bundle.tables
       } catch (error) {
-        message.error(error instanceof Error ? error.message : '读取子表列表失败')
+        message.error(getUserErrorMessage(error instanceof Error ? error.message : '读取子表列表失败'))
         return
       } finally {
         setBatchLoading(false)

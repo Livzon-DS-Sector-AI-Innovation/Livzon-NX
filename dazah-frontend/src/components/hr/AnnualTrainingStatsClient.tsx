@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useCallback, useEffect, useState, type Key } from 'react'
 import { App, Button, Drawer, Modal, Popconfirm, Spin, Table, Descriptions, Form, Input, Select, DatePicker, Tag, Space, Tooltip, Switch } from 'antd'
 import { EditOutlined, DeleteOutlined, EyeOutlined, FolderOpenOutlined, DownloadOutlined, FileExcelOutlined, PlusOutlined } from '@ant-design/icons'
@@ -117,7 +118,7 @@ export default function AnnualTrainingStatsClient({ department, dateFrom, dateTo
       setDocs(docsData)
       setSessionDept(sessionData.department || null)
     } catch (e) {
-      message.error((e instanceof Error ? e.message : '') || '加载培训资料失败')
+      message.error(getUserErrorMessage((e instanceof Error ? e.message : '') || '加载培训资料失败'))
     } finally {
       setDocsLoading(false)
     }
@@ -133,7 +134,7 @@ export default function AnnualTrainingStatsClient({ department, dateFrom, dateTo
         downloadBytes(r.bytes, r.filename)
       }
     } catch (e) {
-      message.error((e instanceof Error ? e.message : '') || '导出失败')
+      message.error(getUserErrorMessage((e instanceof Error ? e.message : '') || '导出失败'))
     }
   }
 
@@ -151,7 +152,7 @@ export default function AnnualTrainingStatsClient({ department, dateFrom, dateTo
       setTotal(res.meta?.total ?? (res.data?.length || 0))
       setPage(p)
     } catch (e) {
-      message.error('加载数据失败: ' + ((e instanceof Error ? e.message : '') || '未知错误'))
+      message.error(getUserErrorMessage('加载数据失败: ' + ((e instanceof Error ? e.message : '') || '未知错误')))
     } finally {
       setLoading(false)
     }
@@ -186,7 +187,7 @@ export default function AnnualTrainingStatsClient({ department, dateFrom, dateTo
           setSelectedRowKeys([])
           loadData(page)
         } catch (e) {
-          message.error((e instanceof Error ? e.message : '') || '批量删除失败')
+          message.error(getUserErrorMessage((e instanceof Error ? e.message : '') || '批量删除失败'))
         }
       },
     })
@@ -254,7 +255,7 @@ export default function AnnualTrainingStatsClient({ department, dateFrom, dateTo
       setEditingRecord(null)
       loadData(page)
     } catch (e) {
-      message.error((e instanceof Error ? e.message : '') || '保存失败')
+      message.error(getUserErrorMessage((e instanceof Error ? e.message : '') || '保存失败'))
     } finally {
       setSaving(false)
     }
@@ -266,7 +267,7 @@ export default function AnnualTrainingStatsClient({ department, dateFrom, dateTo
       message.success('删除成功')
       loadData(page)
     } catch (e) {
-      message.error((e instanceof Error ? e.message : '') || '删除失败')
+      message.error(getUserErrorMessage((e instanceof Error ? e.message : '') || '删除失败'))
     }
   }
 
@@ -288,7 +289,7 @@ export default function AnnualTrainingStatsClient({ department, dateFrom, dateTo
       setCreateModalOpen(false)
       loadData(page)
     } catch (e) {
-      message.error((e instanceof Error ? e.message : '') || '创建失败')
+      message.error(getUserErrorMessage((e instanceof Error ? e.message : '') || '创建失败'))
     } finally {
       setCreating(false)
     }
@@ -301,7 +302,7 @@ export default function AnnualTrainingStatsClient({ department, dateFrom, dateTo
       message.success(status === 'done' ? '已确认完成二级培训' : '已确认无需二级培训')
       loadData(page)
     } catch (e) {
-      message.error((e instanceof Error ? e.message : '') || '操作失败')
+      message.error(getUserErrorMessage((e instanceof Error ? e.message : '') || '操作失败'))
     }
   }
 
@@ -312,7 +313,7 @@ export default function AnnualTrainingStatsClient({ department, dateFrom, dateTo
       message.success(checked ? '已设为呈现' : '已设为不呈现（不进入员工培训清单）')
       loadData(page)
     } catch (e) {
-      message.error((e instanceof Error ? e.message : '') || '切换失败')
+      message.error(getUserErrorMessage((e instanceof Error ? e.message : '') || '切换失败'))
     }
   }
 
@@ -323,7 +324,7 @@ export default function AnnualTrainingStatsClient({ department, dateFrom, dateTo
       message.success(`已创建二级培训会话（带入 ${res.copied_doc_types.length} 类试卷）`)
       router.push(`/hr/training/sign-in?session=${res.id}&doc=ai_written_exam&parent_record=${res.parent_record_id}`)
     } catch (e) {
-      message.error((e instanceof Error ? e.message : '') || '创建二级培训失败')
+      message.error(getUserErrorMessage((e instanceof Error ? e.message : '') || '创建二级培训失败'))
     }
   }
 

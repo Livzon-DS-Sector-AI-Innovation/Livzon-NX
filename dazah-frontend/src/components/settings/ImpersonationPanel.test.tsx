@@ -10,12 +10,20 @@ import ImpersonationPanel from './ImpersonationPanel'
 
 vi.mock('@/lib/api/client/impersonation', () => ({
   listImpersonationTargets: vi.fn().mockResolvedValue({
-    total: 2,
+    total: 3,
     items: [
       {
         id: 'with-roles', name: '角色验收用户', username: 'reviewer',
         department: '采购部', employee_no: null,
         roles: [{ id: 'reader', name: '采购查询员' }, { id: 'reviewer', name: '供应商审核员' }],
+      },
+      {
+        id: 'with-extra-roles', name: '多角色用户', username: 'multi-role',
+        department: '质量部', employee_no: null,
+        roles: [
+          { id: 'product-qa', name: '产品QA' }, { id: 'system-qa', name: '体系QA' },
+          { id: 'change-qa', name: '变更QA' }, { id: 'material-qa', name: '物料QA' },
+        ],
       },
       {
         id: 'without-roles', name: '未授权用户', username: 'unassigned',
@@ -27,7 +35,7 @@ vi.mock('@/lib/api/client/impersonation', () => ({
 }))
 
 describe('模拟登录角色列', () => {
-  it.each([theme.defaultAlgorithm, theme.darkAlgorithm])('呈现全部角色及未分配状态', async algorithm => {
+  it.each([theme.defaultAlgorithm, theme.darkAlgorithm])('默认最多显示两个角色，悬停查看更多角色', async algorithm => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
     vi.useFakeTimers()
     const host = document.createElement('div')
@@ -44,6 +52,25 @@ describe('模拟登录角色列', () => {
       expect(host.querySelector('[data-row-key="without-roles"]')?.textContent).toContain('未分配角色')
       expect(host.querySelector('[aria-label="按角色筛选"]')).not.toBeNull()
       expect(host.textContent).toContain('全部角色')
+
+      const more = [...host.querySelectorAll<HTMLButtonElement>('tbody button')]
+        .filter(button => button.textContent?.startsWith('更多'))
+      expect(more.map(button => button.textContent)).toEqual(['更多（2+）'])
+      const [trigger] = more
+      const row = trigger.closest('tr')
+      expect(row?.textContent).toContain('产品QA')
+      expect(row?.textContent).toContain('体系QA')
+      expect(row?.textContent).not.toContain('变更QA')
+      expect(row?.textContent).not.toContain('物料QA')
+      await act(async () => {
+        trigger.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
+        await vi.advanceTimersByTimeAsync(300)
+      })
+      const tooltip = document.querySelector('[role="tooltip"]')
+      expect(tooltip?.textContent).toContain('变更QA')
+      expect(tooltip?.textContent).toContain('物料QA')
+      expect(tooltip?.textContent).not.toContain('产品QA')
+      expect(tooltip?.textContent).not.toContain('体系QA')
     } finally {
       await act(async () => root.unmount())
       host.remove()

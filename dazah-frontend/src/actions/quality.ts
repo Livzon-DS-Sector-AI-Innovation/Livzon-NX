@@ -2,7 +2,8 @@
 
 import { getServerApiBaseUrl, getBackendFallbackUrls } from '@/lib/server-api'
 import { getAuthHeaders } from '@/lib/auth'
-import { ActionRequestError } from '@/lib/server-action-result'
+import { ActionRequestError, requireActionResponse, type BusinessErrorMessages } from '@/lib/server-action-result'
+import { qualityImportErrorMessages } from './quality-shared'
 import { revalidatePath } from 'next/cache'
 import {
   CreateDeviationRequest,
@@ -104,7 +105,7 @@ function getBackendPath(url: string): string {
   }
 }
 
-async function fetchQualityBackend(url: string, options?: RequestInit): Promise<Response> {
+async function fetchQualityBackend(url: string, options?: RequestInit, retryBackend = true): Promise<Response> {
   const authHeaders = await getAuthHeaders()
   if (options?.body instanceof FormData) {
     delete authHeaders['Content-Type']
@@ -113,7 +114,7 @@ async function fetchQualityBackend(url: string, options?: RequestInit): Promise<
   const candidates = Array.from(
     new Set([
       url.startsWith('http') ? url : `${API_BASE_URL}${path}`,
-      ...getBackendFallbackUrls().map((baseUrl) => `${baseUrl}${path}`),
+      ...(retryBackend ? getBackendFallbackUrls().map((baseUrl) => `${baseUrl}${path}`) : []),
     ])
   )
 
@@ -346,12 +347,17 @@ function buildQuery(params?: Record<string, QueryValue>) {
   return query ? `?${query}` : ''
 }
 
-async function actionFetchForm<T>(url: string, formData: FormData): Promise<T | null> {
+async function actionFetchForm<T>(
+  url: string,
+  formData: FormData,
+  errorHandling?: { businessMessages: BusinessErrorMessages; retryBackend?: boolean },
+): Promise<T | null> {
   const response = await fetchQualityBackend(url, {
     method: 'POST',
     body: formData,
-  })
+  }, errorHandling?.retryBackend)
   if (!response.ok) {
+    if (errorHandling) await requireActionResponse(response, errorHandling.businessMessages)
     const errorBody = await response.text().catch(() => '')
     throw new ActionRequestError(response.status, response.status >= 500 ? '服务暂时不可用，请稍后重试' : getActionErrorMessage(errorBody, response))
   }
@@ -929,6 +935,7 @@ export async function previewChangeImport(formData: FormData) {
     await actionFetchForm<QualityImportPreviewResult>(
       `${API_BASE_URL}/api/v1/quality/changes/import/preview`,
       formData,
+      { businessMessages: qualityImportErrorMessages },
     ),
     '未收到变更导入预览结果',
   )
@@ -944,6 +951,7 @@ export async function confirmChangeImport(
       update_existing: options.updateExisting,
     })}`,
     formData,
+    { businessMessages: qualityImportErrorMessages, retryBackend: false },
   )
   revalidatePath('/quality/change')
   return requireActionResult(result, '未收到变更导入结果')
@@ -954,6 +962,7 @@ export async function previewCapaImport(formData: FormData) {
     await actionFetchForm<QualityImportPreviewResult>(
       `${API_BASE_URL}/api/v1/quality/capas/import/preview`,
       formData,
+      { businessMessages: qualityImportErrorMessages },
     ),
     '未收到CAPA导入预览结果',
   )
@@ -969,6 +978,7 @@ export async function confirmCapaImport(
       update_existing: options.updateExisting,
     })}`,
     formData,
+    { businessMessages: qualityImportErrorMessages, retryBackend: false },
   )
   revalidatePath('/quality/capas')
   return requireActionResult(result, '未收到CAPA导入结果')
@@ -979,6 +989,7 @@ export async function previewDeviationImport(formData: FormData) {
     await actionFetchForm<QualityImportPreviewResult>(
       `${API_BASE_URL}/api/v1/quality/deviations/import/preview`,
       formData,
+      { businessMessages: qualityImportErrorMessages },
     ),
     '未收到偏差导入预览结果',
   )
@@ -994,6 +1005,7 @@ export async function confirmDeviationImport(
       update_existing: options.updateExisting,
     })}`,
     formData,
+    { businessMessages: qualityImportErrorMessages, retryBackend: false },
   )
   revalidatePath('/quality/deviations')
   return requireActionResult(result, '未收到偏差导入结果')

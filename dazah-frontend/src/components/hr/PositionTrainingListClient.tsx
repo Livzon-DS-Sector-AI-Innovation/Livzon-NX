@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useEffect, useState } from 'react'
 import { Table, Button, Space, Modal, Form, Input, Select, App, Popconfirm, Upload } from 'antd'
 import { PlusOutlined, UploadOutlined, DownloadOutlined, DeleteOutlined } from '@ant-design/icons'
@@ -13,6 +14,7 @@ import {
 } from '@/actions/hr'
 import type { PositionTrainingList, PositionTrainingListItem } from '@/types/hr'
 import { usePagePermissions } from '@/hooks/usePagePermissions'
+import { getActionErrorMessage, unwrapServerActionResult } from '@/lib/server-action-result'
 
 interface ItemDisplay {
   key: string
@@ -249,8 +251,8 @@ export default function PositionTrainingListClient() {
     if (!canImport) return false
     setImportLoading(true)
     try {
-      const result = await importPositionTrainingLists(file)
-      const data = (result.data || {}) as { department?: string; imported?: number; skipped?: number }
+      const result = unwrapServerActionResult(await importPositionTrainingLists(file))
+      const data = result.data || {}
       const importedDept = data.department
       const detail = `导入${data.imported || 0}条，跳过${data.skipped || 0}条重复`
       message.success(`${result.message || '导入成功'}（${detail}）`)
@@ -262,7 +264,7 @@ export default function PositionTrainingListClient() {
         loadData()
       }
     } catch (e) {
-      message.error((e instanceof Error ? e.message : '') || '导入失败')
+      message.error(getActionErrorMessage(e, '岗位培训清单导入'))
     } finally {
       setImportLoading(false)
     }
@@ -398,7 +400,7 @@ export default function PositionTrainingListClient() {
                 message.success(result.message || '已清除')
                 loadData()
               } catch (e) {
-                message.error((e instanceof Error ? e.message : '') || '清除失败')
+                message.error(getUserErrorMessage((e instanceof Error ? e.message : '') || '清除失败'))
               } finally { setClearLoading(false) }
             }}
             okText="确认清除"

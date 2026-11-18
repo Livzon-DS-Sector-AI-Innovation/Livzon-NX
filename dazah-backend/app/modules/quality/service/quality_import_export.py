@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import AppException
 from app.modules.quality import repository as repo
 from app.modules.quality.models import CAPA, ChangeControl, Deviation
+from app.modules.quality.schemas.import_error import INVALID_IMPORT_DOCUMENT
 from app.modules.quality.service import deviation_cause_analysis
 from app.platform.identity.data_scope import DepartmentScope
 
@@ -32,6 +33,7 @@ def _read_import_document(content: bytes) -> WordDocument:
         raise AppException(
             status_code=422,
             message="无法解析 Word 文档，请使用有效的 .docx 模板重新上传",
+            detail={"error_code": INVALID_IMPORT_DOCUMENT},
         ) from exc
 
 

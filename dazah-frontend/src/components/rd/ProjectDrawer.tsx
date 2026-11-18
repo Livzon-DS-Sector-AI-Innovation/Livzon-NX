@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useState, useEffect } from 'react'
 import { App, Drawer, Form, Input, Select, DatePicker, Button, } from 'antd'
 import dayjs from 'dayjs'
@@ -75,7 +76,7 @@ export function ProjectDrawer({ onRefresh }: ProjectDrawerProps) {
       closeDrawer()
       onRefresh?.()
     } catch (error) {
-      if (error?.message) message.error(error.message)
+      if (error?.message) message.error(getUserErrorMessage(error.message))
     } finally {
       setSubmitting(false)
     }

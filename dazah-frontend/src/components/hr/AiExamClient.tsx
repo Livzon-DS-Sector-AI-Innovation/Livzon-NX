@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useState } from 'react'
 import { App,
   Button,
@@ -77,7 +78,7 @@ export default function AiExamClient() {
       }
       message.success('试卷题目生成成功')
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '出题失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '出题失败'))
     } finally {
       setGenerating(false)
     }
@@ -119,7 +120,7 @@ export default function AiExamClient() {
       window.URL.revokeObjectURL(url)
       message.success('试卷导出成功')
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '导出失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '导出失败'))
     } finally {
       setExporting(false)
     }

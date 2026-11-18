@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useState, useEffect } from 'react'
 import { App, Form, Input, Select, DatePicker, Button, Collapse, AutoComplete, Result, Spin } from 'antd'
 import dayjs from 'dayjs'
@@ -71,7 +72,7 @@ export default function EmployeeFillForm() {
       setSubmitted(true)
     } catch (err) {
       if ((typeof err === 'object' && err !== null && 'errorFields' in err)) return // 表单校验失败，不提示
-      message.error((err instanceof Error ? err.message : '') || '提交失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '提交失败'))
     } finally {
       setLoading(false)
     }

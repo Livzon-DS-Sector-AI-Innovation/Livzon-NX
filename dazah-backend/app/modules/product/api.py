@@ -14,7 +14,7 @@ from app.modules.product.schemas import (
 from app.modules.product.service import ProductService
 from app.shared.module_api import create_module_router
 from app.shared.module_registry import MODULES_BY_CODE
-from app.shared.schemas import PageParams
+from app.shared.schemas import ApiResponseEnvelope, PageParams
 
 router = create_module_router(MODULES_BY_CODE["product"])
 
@@ -52,7 +52,12 @@ async def list_products(
     )
 
 
-@router.post("/products", summary="创建产品")
+@router.post(
+    "/products",
+    summary="创建产品",
+    status_code=201,
+    response_model=ApiResponseEnvelope[ProductResponse],
+)
 async def create_product(
     payload: ProductCreate,
     service: ProductService = Depends(get_product_service),
@@ -76,7 +81,12 @@ async def get_product(
     )
 
 
-@router.put("/products/{product_id}", summary="更新产品")
+@router.put(
+    "/products/{product_id}",
+    summary="更新产品",
+    response_model=ApiResponseEnvelope[ProductResponse],
+    responses={404: {"description": "产品不存在或已被删除"}},
+)
 async def update_product(
     product_id: UUID,
     payload: ProductUpdate,
@@ -89,7 +99,12 @@ async def update_product(
     )
 
 
-@router.delete("/products/{product_id}", summary="删除产品")
+@router.delete(
+    "/products/{product_id}",
+    summary="删除产品",
+    response_model=ApiResponseEnvelope[None],
+    responses={404: {"description": "产品不存在或已被删除"}},
+)
 async def delete_product(
     product_id: UUID,
     service: ProductService = Depends(get_product_service),

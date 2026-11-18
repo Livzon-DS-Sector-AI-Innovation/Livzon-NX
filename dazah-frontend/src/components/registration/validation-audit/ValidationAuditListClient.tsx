@@ -1,5 +1,7 @@
 'use client'
 
+import { getActionErrorMessage, unwrapServerActionResult } from '@/lib/server-action-result'
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useState, useCallback } from 'react'
 import { Table, Button, Space, Tag, App } from 'antd'
 import {
@@ -30,13 +32,13 @@ export default function ValidationAuditListClient({ initialTasks, initialTotal }
   const loadData = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetchTasksServer({ page, page_size: pageSize })
+      const res = unwrapServerActionResult(await fetchTasksServer({ page, page_size: pageSize }))
       if (res?.data) {
         setTasks(res.data.items)
         setTotal(res.data.total)
       }
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '加载任务列表失败')
+      message.error(getUserErrorMessage(error, '无法加载审核任务，请刷新后重试'))
     } finally {
       setLoading(false)
     }
@@ -50,9 +52,9 @@ export default function ValidationAuditListClient({ initialTasks, initialTotal }
       okButtonProps: { danger: true },
       cancelText: '取消',
       onOk: async () => {
-        const result = await deleteValidationAuditTask(taskId)
-        if (result.success) {
-          message.success(result.message)
+        try {
+          unwrapServerActionResult(await deleteValidationAuditTask(taskId))
+          message.success('删除成功')
           // 当前页仅剩一条且不是第一页时回退一页，否则原地刷新
           if (tasks.length === 1 && page > 1) {
             setListQuery({ page: page - 1 })
@@ -60,8 +62,8 @@ export default function ValidationAuditListClient({ initialTasks, initialTotal }
             await loadData()
             router.refresh()
           }
-        } else {
-          message.error(result.message)
+        } catch (error) {
+          message.error(getActionErrorMessage(error, '审核任务删除'))
         }
       },
     })

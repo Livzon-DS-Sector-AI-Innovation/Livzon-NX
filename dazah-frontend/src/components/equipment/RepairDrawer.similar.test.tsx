@@ -62,7 +62,7 @@ describe('RepairDrawer 相似案例推荐（方案B）', () => {
     })
   })
 
-  function openDrawer() {
+  function openDrawer(onRefresh = vi.fn()) {
     useEquipmentStore.setState({
       repairDrawerOpen: true,
       repairEquipmentId: 'eq-1',
@@ -81,12 +81,37 @@ describe('RepairDrawer 相似案例推荐（方案B）', () => {
               },
             ]}
             symptoms={[]}
-            onRefresh={vi.fn()}
+            onRefresh={onRefresh}
           />
         </AntApp>,
       )
     })
   }
+
+  it('reports that the work order was created when image upload fails', async () => {
+    api.createWorkOrder.mockResolvedValue({ id: 'wo-1' })
+    api.uploadWorkOrderImages.mockResolvedValue({
+      ok: false,
+      message: '文件过大，请缩小文件后重试',
+    })
+    const refresh = vi.fn()
+    openDrawer(refresh)
+    const input = document.querySelector<HTMLInputElement>('input[type="file"]')
+    expect(input).not.toBeNull()
+    await act(async () => {
+      Object.defineProperty(input, 'files', { value: [new File(['test'], 'fault.jpg', { type: 'image/jpeg' })] })
+      input?.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    const submit = [...document.querySelectorAll('button')]
+      .find(button => button.textContent?.includes('提交工单'))
+    expect(submit).toBeDefined()
+    await act(async () => submit?.click())
+    expect(api.createWorkOrder).toHaveBeenCalledTimes(1)
+    expect(api.uploadWorkOrderImages).toHaveBeenCalledWith('wo-1', expect.any(FormData))
+    await vi.waitFor(() => expect(document.body.textContent).toContain('报修工单已提交。图片上传提示：文件过大，请缩小文件后重试'))
+    expect(refresh).toHaveBeenCalledTimes(1)
+    expect(useEquipmentStore.getState().repairDrawerOpen).toBe(false)
+  })
 
   it('打开抽屉即按设备名检索并渲染推荐面板', async () => {
     openDrawer()

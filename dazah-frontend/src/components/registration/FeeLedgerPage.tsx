@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useMemo, useState, useTransition , useEffect , useRef} from 'react'
 import { App, Button, Card, DatePicker, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Switch, Table, Tag, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
@@ -82,9 +83,9 @@ export default function FeeLedgerPage({ entries, defaultYearFrom = 2023 }: FeeLe
     setModalOpen(true)
   }
 
-  function handleDelete() { if (!selected) { message.warning('请先选择一条记录'); return }; startTransition(async () => { try { await deleteFeeEntry(selected.id); message.success('已删除'); setSelectedId(null); router.refresh() } catch (e) { message.error(e instanceof Error ? e.message : '删除失败') } }) }
+  function handleDelete() { if (!selected) { message.warning('请先选择一条记录'); return }; startTransition(async () => { try { await deleteFeeEntry(selected.id); message.success('已删除'); setSelectedId(null); router.refresh() } catch (e) { message.error(getUserErrorMessage(e instanceof Error ? e.message : '删除失败')) } }) }
 
-  async function handleSubmit(values: FeeEntryCreate) { startTransition(async () => { try { if (mode === 'edit' && editingEntry) { await updateFeeEntry(editingEntry.id, values as FeeEntryUpdate); message.success('已更新') } else { await createFeeEntry(values); message.success('已新增') }; setModalOpen(false); form.resetFields(); router.refresh() } catch (e) { message.error(e instanceof Error ? e.message : '保存失败') } }) }
+  async function handleSubmit(values: FeeEntryCreate) { startTransition(async () => { try { if (mode === 'edit' && editingEntry) { await updateFeeEntry(editingEntry.id, values as FeeEntryUpdate); message.success('已更新') } else { await createFeeEntry(values); message.success('已新增') }; setModalOpen(false); form.resetFields(); router.refresh() } catch (e) { message.error(getUserErrorMessage(e instanceof Error ? e.message : '保存失败')) } }) }
 
   return (
     <Space orientation="vertical" size={16} style={{ width: '100%' }}>

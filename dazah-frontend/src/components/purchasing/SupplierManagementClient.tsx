@@ -11,6 +11,7 @@ import {
   UploadOutlined,
 } from '@ant-design/icons'
 import { importSupplierTable } from '@/actions/purchasing'
+import { getActionErrorMessage, unwrapServerActionResult } from '@/lib/server-action-result'
 import { fetchSuppliers } from '@/lib/api/purchasing'
 import type { SupplierListResponse, SupplierResponse } from '@/types/purchasing'
 import { useAuthStore } from '@/stores/auth'
@@ -138,7 +139,8 @@ export function SupplierManagementClient({
         const formData = new FormData()
         formData.append('file', file)
         return importSupplierTable(formData)
-          .then(async (response) => {
+          .then(async (result) => {
+            const response = unwrapServerActionResult(result)
             if (response.code >= 200 && response.code < 300) {
               const importedCount = response.data?.imported_count ?? 0
               const importedColumns = response.data?.columns ?? []
@@ -153,8 +155,8 @@ export function SupplierManagementClient({
               message.error(response.message || '供应商清单导入失败')
             }
           })
-          .catch(() => {
-            message.error('供应商清单导入失败')
+          .catch((error: unknown) => {
+            message.error(getActionErrorMessage(error, '供应商清单导入'))
           })
           .finally(() => {
             setUploading(false)

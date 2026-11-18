@@ -170,8 +170,9 @@ describe('UserManagementClient permission entry', () => {
     await act(async () => root.unmount())
   })
 
-  it('does not expose or submit role changes from the profile editor', async () => {
-    mocks.updateUser.mockResolvedValue({})
+  it.each([false, true])('preserves profile editing and never submits role changes (failed=%s)', async failed => {
+    if (failed) mocks.updateUser.mockRejectedValueOnce(new Error('TypeError: internal user write'))
+    else mocks.updateUser.mockResolvedValue({})
     const root = createRoot(host)
     await act(async () => {
       root.render(createElement(AntdApp, null, createElement(UserManagementClient)))
@@ -190,6 +191,10 @@ describe('UserManagementClient permission entry', () => {
 
     expect(mocks.updateUser).toHaveBeenCalledTimes(1)
     expect(mocks.updateUser.mock.calls[0][1]).not.toHaveProperty('role')
+    if (failed) {
+      expect(document.body.textContent).toContain('操作未完成，请稍后重试')
+      expect(document.querySelector<HTMLElement>('.ant-modal')?.textContent).toContain('编辑用户')
+    }
 
     await act(async () => root.unmount())
   })
@@ -240,8 +245,27 @@ describe('UserManagementClient permission entry', () => {
     await act(async () => root.unmount())
   })
 
-  it('requires confirmation before disabling a user from the compact actions menu', async () => {
-    mocks.updateUser.mockResolvedValue({})
+  it.each([false, true])('requires confirmation before disabling a user (failed=%s)', async failed => {
+    const internal = new Error('TypeError: internal status write')
+    let confirmAction: (() => unknown) | undefined
+    if (failed) {
+      mocks.updateUser.mockRejectedValueOnce(internal)
+      const originalUseApp = AntdApp.useApp
+      vi.spyOn(AntdApp, 'useApp').mockImplementation(() => {
+        const context = originalUseApp()
+        return {
+          ...context,
+          modal: {
+            ...context.modal,
+            confirm: config => {
+              confirmAction = () => config.onOk?.(() => {})
+              return context.modal.confirm(config)
+            },
+          },
+        }
+      })
+    }
+    else mocks.updateUser.mockResolvedValue({})
     const root = createRoot(host)
     await act(async () => {
       root.render(createElement(AntdApp, null, createElement(UserManagementClient)))
@@ -259,8 +283,17 @@ describe('UserManagementClient permission entry', () => {
 
     const confirm = document.body.querySelector<HTMLButtonElement>('.ant-modal-confirm-btns .ant-btn-primary')
     expect(confirm).not.toBeNull()
-    await act(async () => confirm?.click())
+    if (failed) {
+      expect(confirmAction).toBeDefined()
+      await act(async () => { await expect(confirmAction?.()).rejects.toBe(internal) })
+    } else {
+      await act(async () => confirm?.click())
+    }
     expect(mocks.updateUser).toHaveBeenCalledWith('user-1', { status: 'disabled' })
+    if (failed) {
+      expect(document.body.textContent).toContain('操作未完成，请稍后重试')
+      expect(host.textContent).toContain('测试用户')
+    }
 
     await act(async () => root.unmount())
   })

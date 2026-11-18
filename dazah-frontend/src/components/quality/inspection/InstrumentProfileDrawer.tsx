@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useMemo } from 'react'
 import { Descriptions, Drawer, Space, Spin, Table, Tabs, Typography } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
@@ -166,7 +167,7 @@ export function InstrumentProfileDrawer({
           <Spin />
         </div>
       )}
-      {error && <Alert type="error" showIcon title={error.message} />}
+      {error && <Alert type="error" showIcon title={getUserErrorMessage(error.message)} />}
       {data && (
         <Space orientation="vertical" size={16} style={{ width: '100%' }}>
           <Descriptions

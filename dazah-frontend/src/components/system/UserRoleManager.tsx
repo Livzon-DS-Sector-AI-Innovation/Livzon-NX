@@ -1,5 +1,6 @@
 "use client"
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { PAGE_DATA_SCOPE_VISIBLE } from "@/lib/page-permission-editor"
 import { App, Button, Checkbox, ConfigProvider, Drawer, Input, Popover, Table, Tag, Tooltip, Typography } from "antd"
@@ -199,8 +200,8 @@ export function UserRoleManager({ initialRoles, initialDepartments }: UserRoleMa
       setDrawerOpen(false)
       if (!rolesSaved) refreshUsers()
     } catch (e) {
-      message.error(rolesSaved ? "角色已保存，请刷新确认部门数据范围是否已保存"
-        : e instanceof Error ? e.message : "分配失败")
+      message.error(getUserErrorMessage(rolesSaved ? "角色已保存，请刷新确认部门数据范围是否已保存"
+        : e instanceof Error ? e.message : "分配失败"))
     } finally {
       setSaving(false)
     }
@@ -244,10 +245,10 @@ export function UserRoleManager({ initialRoles, initialDepartments }: UserRoleMa
     })
   }
 
-  const permissionSummary = <div className="space-y-3 pt-2">
-    <Alert showIcon type={selectedSystemAdmin ? "warning" : "info"}
+  const renderPermissionSummary = (showAccessRules: boolean) => <div className="space-y-3 pt-2">
+    {(showAccessRules || selectedSystemAdmin) && <Alert showIcon type={selectedSystemAdmin ? "warning" : "info"}
       title={selectedSystemAdmin ? "系统管理员将拥有全部权限" : "多个角色的页面权限合并生效，模块入口随有效页面访问权限自动开通或关闭。"}
-      description="角色提供页面权限基线：基础权限与高风险操作取并集，数据范围按页面合并；已有用户页面覆盖仍优先于角色基线。模块内至少一个页面具有有效访问权限时，模块入口自动开通；撤销最后一个可访问页面后，入口自动关闭。系统管理员默认拥有全部模块访问权限。" />
+      description="角色提供页面权限基线：基础权限与高风险操作取并集，数据范围按页面合并；已有用户页面覆盖仍优先于角色基线。模块内至少一个页面具有有效访问权限时，模块入口自动开通；撤销最后一个可访问页面后，入口自动关闭。系统管理员默认拥有全部模块访问权限。" />}
     <div><Typography.Text strong>已选角色：</Typography.Text>{selectedRoleIds.length
       ? initialRoles.filter((role) => selectedRoleSet.has(role.id)).map((role) => <Tag key={role.id} color={roleTagColor(role.code, role.is_system)}>{role.name}</Tag>)
       : <Typography.Text type="secondary">未分配角色</Typography.Text>}</div>
@@ -272,7 +273,7 @@ export function UserRoleManager({ initialRoles, initialDepartments }: UserRoleMa
     centered: true,
     icon: null,
     okText: "返回编辑",
-    content: permissionSummary,
+    content: renderPermissionSummary(true),
   })
 
   const previewSave = () => {
@@ -296,7 +297,7 @@ export function UserRoleManager({ initialRoles, initialDepartments }: UserRoleMa
       okText: "确认保存",
       cancelText: "继续检查",
       content: <div className="space-y-3 pt-2">
-        {permissionSummary}
+        {renderPermissionSummary(false)}
         <div><Typography.Text strong>调整原因：</Typography.Text>{reason.trim()}</div>
       </div>,
       onOk: handleSave,

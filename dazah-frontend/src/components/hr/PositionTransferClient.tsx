@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useState, useCallback, useEffect } from 'react'
 import { App, Button, Table, Space, Popconfirm, Input, Tag, Tooltip, Select } from 'antd'
 import {
@@ -22,6 +23,7 @@ import {
 import PositionTransferForm from './PositionTransferForm'
 import PositionTransferDetailDrawer from './PositionTransferDetailDrawer'
 import { usePagePermissions } from '@/hooks/usePagePermissions'
+import { getActionErrorMessage, unwrapServerActionResult } from '@/lib/server-action-result'
 
 interface PositionTransferClientProps {
   initialRecords: PositionTransferRecord[]
@@ -72,7 +74,7 @@ export default function PositionTransferClient({
       setRecords(res.data)
       setTotal(res.meta?.total || 0)
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '加载数据失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '加载数据失败'))
     } finally {
       setLoading(false)
     }
@@ -113,7 +115,7 @@ export default function PositionTransferClient({
       message.success('删除成功')
       loadData()
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '删除失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '删除失败'))
     }
   }
 
@@ -130,7 +132,7 @@ export default function PositionTransferClient({
       a.click()
       URL.revokeObjectURL(url)
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '导出失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '导出失败'))
     }
   }
 
@@ -138,7 +140,7 @@ export default function PositionTransferClient({
     if (!canSync) return
     setSyncing(true)
     try {
-      const res = await syncPositionTransferFromFeishuAction()
+      const res = unwrapServerActionResult(await syncPositionTransferFromFeishuAction())
       const data = res.data || {}
       const total = data.total ?? 0
       const created = data.created ?? 0
@@ -153,7 +155,7 @@ export default function PositionTransferClient({
       }
       loadData()
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '同步飞书失败')
+      message.error(getActionErrorMessage(err, '飞书岗位调动同步'))
     } finally {
       setSyncing(false)
     }
@@ -170,11 +172,11 @@ export default function PositionTransferClient({
     setSubmitting(record.id)
     try {
       const supervisor = isSupervisorLevel(record.original_position)
-      await submitPositionTransferApproval(record.id, supervisor)
+      unwrapServerActionResult(await submitPositionTransferApproval(record.id, supervisor))
       message.success(`审批已提交（${supervisor ? '主管级' : '非主管级'}流程）`)
       loadData()
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '提交审批失败')
+      message.error(getActionErrorMessage(err, '岗位调动审批提交'))
     } finally {
       setSubmitting(null)
     }

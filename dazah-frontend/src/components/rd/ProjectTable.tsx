@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useCallback } from 'react'
 import { App, Table, Tag, Space, Button, Input, Select, Modal } from 'antd'
 import { EditOutlined, DeleteOutlined, SearchOutlined } from '@ant-design/icons'
@@ -69,7 +70,7 @@ export function ProjectTable({ loading = false, onRefresh }: ProjectTableProps) 
           message.success('删除成功')
           onRefresh?.()
         } catch (error) {
-          message.error(error?.message || '删除失败')
+          message.error(getUserErrorMessage(error?.message || '删除失败'))
         }
       }
     })

@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useEffect, useMemo, useState } from 'react'
 import { App, Descriptions, Form, Modal } from 'antd'
 
@@ -113,7 +114,7 @@ export function InspectionFeishuRecordModal({
       onSuccess()
       onClose()
     } catch (err) {
-      if (err instanceof Error) message.error(err.message)
+      if (err instanceof Error) message.error(getUserErrorMessage(err.message))
     } finally {
       setSubmitting(false)
     }
@@ -141,7 +142,7 @@ export function InspectionFeishuRecordModal({
       const blobUrl = URL.createObjectURL(blob)
       window.open(blobUrl, '_blank')
     } catch (err) {
-      message.error(err instanceof Error ? err.message : '附件下载失败')
+      message.error(getUserErrorMessage(err instanceof Error ? err.message : '附件下载失败'))
     }
   }
 

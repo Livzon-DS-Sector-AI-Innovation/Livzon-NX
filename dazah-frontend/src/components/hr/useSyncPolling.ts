@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useCallback, useRef, useEffect } from 'react'
+import { getActionErrorMessage } from '@/lib/server-action-result'
+import { readBusinessErrorCode, uncertainWriteMessage, UserFacingError } from '@/lib/user-error'
 
 interface SyncPollingOptions {
   /** Action that kicks off the sync (POST). Returns a response that may contain data.state for immediate completion. */
@@ -31,6 +33,14 @@ function toSyncResponse(value: unknown): { data?: SyncStatusData } {
   return typeof data === 'object' && data !== null
     ? { data: data as SyncStatusData }
     : {}
+}
+
+function syncFailureMessage(status: string, data: SyncStatusData | undefined): string {
+  if (status === 'interrupted') return uncertainWriteMessage('同步')
+  if (readBusinessErrorCode(data) === 'HR_FEISHU_CONTACT_NOT_CONFIGURED') {
+    return '人事飞书应用未配置，请联系管理员检查人事飞书设置'
+  }
+  return '同步失败，请查看同步任务状态'
 }
 
 /**
@@ -75,7 +85,7 @@ export function useSyncPolling(options: SyncPollingOptions) {
       if (cancelledRef.current) return
       attemptsRef.current += 1
       if (maxPolls > 0 && attemptsRef.current > maxPolls) {
-        handleError('同步超时，请稍后刷新页面重试')
+        handleError('暂未确认同步结果，请稍后刷新页面查看同步状态')
         return
       }
       try {
@@ -89,14 +99,18 @@ export function useSyncPolling(options: SyncPollingOptions) {
           onSuccess?.(msg, statusRes.data?.result)
           return
         }
-        if (status === 'failed' || status === 'error') {
-          if (cancelledRef.current) return
-          handleError(statusRes.data?.progress || statusRes.data?.message || '同步失败')
+        if (status === 'failed' || status === 'error' || status === 'interrupted') {
+          handleError(syncFailureMessage(status, statusRes.data))
           return
         }
         // Still running, continue polling
         timerRef.current = setTimeout(poll, interval)
-      } catch {
+      } catch (error) {
+        if (cancelledRef.current) return
+        if (error instanceof UserFacingError) {
+          handleError(error.message)
+          return
+        }
         // Query failed (network error, etc.) — retry with longer interval
         timerRef.current = setTimeout(poll, interval >= 3000 ? interval : 3000)
       }
@@ -114,8 +128,8 @@ export function useSyncPolling(options: SyncPollingOptions) {
           onSuccess?.(msg, res.data?.result)
           return
         }
-        if (status === 'failed' || status === 'error') {
-          handleError(res.data?.progress || res.data?.message || '同步失败')
+        if (status === 'failed' || status === 'error' || status === 'interrupted') {
+          handleError(syncFailureMessage(status, res.data))
           return
         }
         // Status is 'running' or undefined — start polling
@@ -123,7 +137,7 @@ export function useSyncPolling(options: SyncPollingOptions) {
       })
       .catch((err: unknown) => {
         if (cancelledRef.current) return
-        handleError(err instanceof Error ? err.message : '同步失败')
+        handleError(getActionErrorMessage(err, '同步'))
       })
   }, [clearTimer])
 

@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useState, useEffect } from 'react'
 import { App, Card, Button, Statistic, Row, Col, Tag, Spin } from 'antd'
 import { SyncOutlined, CloudSyncOutlined, ExclamationCircleOutlined } from '@ant-design/icons'
@@ -27,7 +28,7 @@ export default function FeishuSyncPanel({ onSynced }: { onSynced?: () => void })
       const res = await fetchSyncStatus()
       setStatus(res.data)
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '获取同步状态失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '获取同步状态失败'))
     } finally {
       setLoading(false)
     }
@@ -45,7 +46,7 @@ export default function FeishuSyncPanel({ onSynced }: { onSynced?: () => void })
       await loadStatus()
       onSynced?.()
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '同步失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '同步失败'))
     } finally {
       setSyncing(false)
     }

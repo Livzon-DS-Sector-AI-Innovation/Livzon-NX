@@ -5,7 +5,7 @@ import {
   QualityAiAnalysisLog,
 } from '@/types/quality'
 import type { CreateChangeRequest, UpdateChangeRequest } from '@/types/quality'
-import { API_BASE_URL, actionFetch } from './quality-shared'
+import { API_BASE_URL, actionFetch, qualityImportErrorMessages } from './quality-shared'
 
 function revalidateChangePaths() {
   revalidatePath('/quality')
@@ -137,7 +137,8 @@ export async function previewChangeImport(formData: FormData, changeType: string
     {
       method: 'POST',
       body: formData,
-    }
+    },
+    qualityImportErrorMessages,
   )
   revalidatePath('/quality/change')
   return result
@@ -149,7 +150,8 @@ export async function confirmChangeImport(formData: FormData, skipDuplicates: bo
     {
       method: 'POST',
       body: formData,
-    }
+    },
+    qualityImportErrorMessages,
   )
   revalidatePath('/quality')
   revalidatePath('/quality/change')

@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useState } from 'react'
 import { App, Modal, Button, Input, Upload, Form, Select } from 'antd'
 import { UploadOutlined } from '@ant-design/icons'
@@ -56,7 +57,7 @@ export default function CreateCandidateModal({
       setParsed(true)
       message.success('简历解析完成，请确认以下信息')
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '解析失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '解析失败'))
     } finally {
       setParsing(false)
     }
@@ -90,7 +91,7 @@ export default function CreateCandidateModal({
       onSuccess()
       handleReset()
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '创建失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '创建失败'))
     } finally {
       setCreating(false)
     }

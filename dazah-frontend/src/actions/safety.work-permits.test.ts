@@ -117,6 +117,42 @@ describe('8 大作业票 actions', () => {
     expect(JSON.parse(String(rejectInit?.body))).toEqual({ opinion: '材料不全' })
   })
 
+  it.each([
+    [401, '登录已失效，请重新登录'],
+    [403, '没有执行此操作的权限，请联系管理员'],
+    [409, '数据已发生变化，请刷新后重试'],
+  ])('提交、签批和驳回按 HTTP %i 给出统一提示', async (status, message) => {
+    const fetchMock = vi.fn(() => jsonResponse({ message: 'Minified React error #441' }, status))
+    vi.stubGlobal('fetch', fetchMock)
+    for (const result of [
+      await safety.submitWorkPermit('p1', []),
+      await safety.approveWorkPermitNode('p1', 'n1'),
+      await safety.rejectWorkPermitNode('p1', 'n1', '材料不全'),
+    ]) {
+      expect(result).toEqual({ ok: false, message })
+    }
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+    expect(mocks.revalidatePath).not.toHaveBeenCalled()
+  })
+
+  it('提交审批按业务码提示缺少审批人', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => jsonResponse({
+      message: '内部错误文本',
+      detail: { error_code: 'SAFETY_WORK_PERMIT_APPROVER_REQUIRED' },
+    }, 422)))
+    expect(await safety.submitWorkPermit('p1', [])).toEqual({
+      ok: false,
+      message: '有审批节点缺少审批人，请补齐指派或联系管理员配置默认审批人',
+    })
+  })
+
+  it('提交成功后保留证件提示并刷新列表', async () => {
+    const data = { warnings: ['证件即将过期'] }
+    vi.stubGlobal('fetch', vi.fn(() => jsonResponse({ code: 200, data })))
+    expect(await safety.submitWorkPermit('p1', [])).toEqual({ ok: true, data })
+    expect(mocks.revalidatePath).toHaveBeenCalledWith('/safety/work-permits')
+  })
+
   it('验票与完工验收', async () => {
     const [verifyUrl] = await capture(() => safety.verifyWorkPermit('p1'))
     expect(verifyUrl).toContain('/api/v1/safety/work-permits/p1/verify')

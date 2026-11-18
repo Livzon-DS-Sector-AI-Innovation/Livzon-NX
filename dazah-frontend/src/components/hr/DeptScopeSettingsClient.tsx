@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import {
   App, Card, Button, Space, Table, Tag, Typography, Select, Input, Popconfirm, Result,
@@ -173,7 +174,7 @@ export default function DeptScopeSettingsClient() {
       setLocalScopes((prev) => ({ ...prev, [row.user_id]: saved.visible_depts || [] }))
       message.success(`已保存「${row.user_name}」的可见部门配置`)
     } catch (e) {
-      message.error(e instanceof Error ? e.message : '保存失败')
+      message.error(getUserErrorMessage(e instanceof Error ? e.message : '保存失败'))
     } finally {
       setSavingIds((prev) => {
         const next = new Set(prev)
@@ -197,7 +198,7 @@ export default function DeptScopeSettingsClient() {
       setLocalScopes((prev) => ({ ...prev, [row.user_id]: [] }))
       message.success(`已清除「${row.user_name}」的可见部门（回退为白名单：看不到任何部门）`)
     } catch (e) {
-      message.error(e instanceof Error ? e.message : '清除失败')
+      message.error(getUserErrorMessage(e instanceof Error ? e.message : '清除失败'))
     } finally {
       setSavingIds((prev) => {
         const next = new Set(prev)
@@ -221,7 +222,7 @@ export default function DeptScopeSettingsClient() {
       })
       message.success(`已彻底移除「${row.user_name}」的配置`)
     } catch (e) {
-      message.error(e instanceof Error ? e.message : '移除失败')
+      message.error(getUserErrorMessage(e instanceof Error ? e.message : '移除失败'))
     } finally {
       setSavingIds((prev) => {
         const next = new Set(prev)

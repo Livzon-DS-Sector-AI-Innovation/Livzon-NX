@@ -3,6 +3,7 @@
 // 数据源：102 发酵车间排产 Excel 的放罐计划（后端解析），即提炼车间接罐计划
 // 接罐执行确认：待接罐 → 确认接罐 / 填报延期 →（无资质）待班组长审批
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { App, Button, Card, Col, Descriptions, Form, Input, Modal, Row, Select, Space, Spin, Statistic, Table, Tag, Typography, Upload } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
@@ -81,7 +82,7 @@ export default function Scheduling2013Page() {
         if (json.code === 200) setData(json.data)
         else setError(json.message || '加载失败')
       })
-      .catch((e) => setError(e.message || '网络错误'))
+      .catch((e) => setError(getUserErrorMessage(e.message || '网络错误', '网络错误')))
       .finally(() => setLoading(false))
   }, [])
 
@@ -102,7 +103,7 @@ export default function Scheduling2013Page() {
         message.error(json.message || '上传失败')
       }
     } catch (e) {
-      message.error('上传失败：' + (e?.message || '网络错误'))
+      message.error(getUserErrorMessage('上传失败：' + (e?.message || '网络错误')))
     }
     return false // 阻止 antd 默认上传
   }

@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { alignFeishuColumns, feishuColumnLayouts } from './feishuColumnLayout'
 
 import { TableEmptyState } from './TableEmptyState'
@@ -146,7 +147,7 @@ export function CapaTable({ capas, total, loading = false }: CapaTableProps) {
           message.success('删除成功')
           queryClient.invalidateQueries({ queryKey: ['quality-capa'] })
         } catch (error: unknown) {
-          message.error(error instanceof Error ? error.message : '删除失败')
+          message.error(getUserErrorMessage(error instanceof Error ? error.message : '删除失败'))
         }
       },
     })
@@ -178,7 +179,7 @@ export function CapaTable({ capas, total, loading = false }: CapaTableProps) {
       URL.revokeObjectURL(url)
       message.success('导出成功')
     } catch (err: unknown) {
-      message.error(err instanceof Error ? err.message : '导出失败')
+      message.error(getUserErrorMessage(err instanceof Error ? err.message : '导出失败'))
     }
   }, [
     statusFilter,
@@ -218,7 +219,7 @@ export function CapaTable({ capas, total, loading = false }: CapaTableProps) {
           setSelectedRowKeys([])
           queryClient.invalidateQueries({ queryKey: ['quality-capa'] })
         } catch (error: unknown) {
-          message.error(error instanceof Error ? error.message : '批量删除失败')
+          message.error(getUserErrorMessage(error instanceof Error ? error.message : '批量删除失败'))
         }
       },
     })

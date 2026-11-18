@@ -10,6 +10,7 @@ from io import BytesIO, StringIO
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
+from zipfile import BadZipFile
 
 import xlrd  # type: ignore[import-untyped]
 from openpyxl import Workbook, load_workbook
@@ -21,6 +22,7 @@ from openpyxl.styles import (
     Side,
 )
 from openpyxl.utils import get_column_letter
+from openpyxl.utils.exceptions import InvalidFileException
 from openpyxl.worksheet._read_only import ReadOnlyWorksheet
 from openpyxl.worksheet.page import PageMargins
 from openpyxl.worksheet.properties import (
@@ -34,6 +36,10 @@ from app.core.config import get_settings
 from app.core.storage import get_object, upload_object
 from app.core.storage import is_enabled as minio_enabled
 from app.modules.procurement.contract_generator import generate_contract
+from app.modules.procurement.error_contract import (
+    ProcurementErrorCode,
+    ProcurementOperationError,
+)
 from app.modules.procurement.models import (
     ContractRecord,
     InvoiceRecognitionRecord,
@@ -484,7 +490,19 @@ async def import_supplier_table_file(
     if not file_bytes:
         raise ValueError("上传文件为空")
 
-    columns, rows, sheet_name = _parse_supplier_table_file(file_bytes, file_name)
+    try:
+        columns, rows, sheet_name = _parse_supplier_table_file(file_bytes, file_name)
+    except (
+        BadZipFile,
+        csv.Error,
+        InvalidFileException,
+        KeyError,
+        SyntaxError,
+        ValueError,
+    ) as exc:
+        raise ProcurementOperationError(
+            422, "无法读取供应商清单", ProcurementErrorCode.INVALID_TABLE
+        ) from exc
     suppliers = [
         _build_supplier_from_row(
             raw_data=row_data,
@@ -524,7 +542,20 @@ async def import_purchase_request_table_file(
         supported = "、".join(sorted(SUPPORTED_PURCHASE_REQUEST_IMPORT_EXTENSIONS))
         raise ValueError(f"暂不支持该文件类型，请上传 {supported} 文件")
 
-    sheets = _parse_purchase_request_import_sheets(file_bytes, suffix)
+    try:
+        sheets = _parse_purchase_request_import_sheets(file_bytes, suffix)
+    except (
+        BadZipFile,
+        csv.Error,
+        InvalidFileException,
+        KeyError,
+        SyntaxError,
+        ValueError,
+        xlrd.XLRDError,
+    ) as exc:
+        raise ProcurementOperationError(
+            422, "无法读取采购申请表格", ProcurementErrorCode.INVALID_TABLE
+        ) from exc
     result = PurchaseRequestImportResult(file_name=file_name, total_sheets=len(sheets))
     for sheet_name, rows, parse_error, title_department in sheets:
         if parse_error is not None:
@@ -1255,22 +1286,26 @@ async def submit_purchase_request(
     repository = PurchaseRequestRepository(db)
     request = await repository.get(request_id)
     if not request:
-        raise ValueError("采购申请不存在")
+        raise ProcurementOperationError(404, "采购申请不存在")
     if request.status not in {
         PurchaseRequestStatus.draft.value,
         PurchaseRequestStatus.rejected.value,
     }:
-        raise ValueError("只有草稿或已驳回的采购申请可以提交")
+        raise ProcurementOperationError(409, "只有草稿或已驳回的采购申请可以提交")
     items = await repository.list_items(request_id)
     if not items:
-        raise ValueError("采购申请至少需要一条明细")
+        raise ProcurementOperationError(
+            422, "采购申请至少需要一条明细", ProcurementErrorCode.ITEMS_MISSING
+        )
     for item in items:
         calculated_total = _calculate_line_amount(item.quantity, item.unit_price)
         if calculated_total != item.total_amount:
-            raise ValueError(
+            raise ProcurementOperationError(
+                422,
                 f"第{item.sequence}条明细总额（{_format_decimal(item.total_amount)}）"
                 f"与数量×单价（{_format_decimal(calculated_total)}）不一致，"
-                "请修改后重新提交"
+                "请修改后重新提交",
+                ProcurementErrorCode.AMOUNT_MISMATCH,
             )
 
     now = datetime.now(UTC)
@@ -1288,7 +1323,7 @@ async def approve_purchase_request(
     data: PurchaseApprovalRequest,
 ) -> PurchaseRequestResponse:
     if data.result != PurchaseApprovalResult.approved:
-        raise ValueError("审批通过接口的结果必须为 approved")
+        raise ProcurementOperationError(422, "审批通过接口的结果必须为 approved")
     return await _review_purchase_request(db, request_id, data)
 
 
@@ -1298,7 +1333,7 @@ async def reject_purchase_request(
     data: PurchaseApprovalRequest,
 ) -> PurchaseRequestResponse:
     if data.result != PurchaseApprovalResult.rejected:
-        raise ValueError("审批驳回接口的结果必须为 rejected")
+        raise ProcurementOperationError(422, "审批驳回接口的结果必须为 rejected")
     return await _review_purchase_request(db, request_id, data)
 
 
@@ -1315,17 +1350,17 @@ async def _review_purchase_request(
     repository = PurchaseRequestRepository(db)
     request = await repository.get_for_update(request_id)
     if not request:
-        raise ValueError("采购申请不存在")
+        raise ProcurementOperationError(404, "采购申请不存在")
 
     workflow = get_purchase_approval_workflow(request.category)
     try:
         workflow_index = workflow.index(data.approval_role)
     except ValueError as exc:
-        raise ValueError("该采购类型不包含此审批步骤") from exc
+        raise ProcurementOperationError(409, "该采购类型不包含此审批步骤") from exc
 
     expected_status = APPROVAL_ROLE_TO_PENDING_STATUS[data.approval_role].value
     if request.status != expected_status:
-        raise ValueError("当前采购申请不在该审批步骤")
+        raise ProcurementOperationError(409, "当前采购申请不在该审批步骤")
 
     approvals = await repository.list_approvals(request_id)
     now = datetime.now(UTC)

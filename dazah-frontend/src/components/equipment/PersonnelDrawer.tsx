@@ -5,6 +5,7 @@ import { App, Button, Drawer, Select, Typography, Avatar, Space } from 'antd'
 import { UserOutlined, SearchOutlined } from '@ant-design/icons'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { addPersonnel } from '@/actions/equipment-personnel'
+import { getActionErrorMessage, unwrapServerActionResult } from '@/lib/server-action-result'
 import type { EquipmentRole } from '@/types/equipment-personnel'
 
 const { Text } = Typography
@@ -68,14 +69,24 @@ export function PersonnelDrawer({ open, onClose, roles: _roles, workshopCode }: 
     }
     setSubmitting(true)
     try {
-      await addPersonnel({ user_ids: selectedIds, workshop_code: workshopCode })
-      message.success('人员添加成功')
+      const result = unwrapServerActionResult(await addPersonnel({ user_ids: selectedIds, workshop_code: workshopCode }))
+      const skipped = result.skipped?.length ?? 0
+      const failed = result.errors ?? []
       queryClient.invalidateQueries({ queryKey: ['equipment-personnel'] })
+      if (failed.length > 0 || skipped > 0) {
+        message.warning(`已添加 ${result.added.length} 人，跳过 ${skipped} 人，失败 ${failed.length} 人${failed.length ? '。请刷新并重新选择失效人员' : ''}`)
+        if (failed.length > 0) {
+          setSelectedIds(selectedIds.filter(id => failed.some(item => item.user_id === id)))
+          return
+        }
+      } else {
+        message.success('人员添加成功')
+      }
       setSelectedIds([])
       setKeyword('')
       onClose()
-    } catch {
-      message.error('添加失败')
+    } catch (error) {
+      message.error(getActionErrorMessage(error, '设备人员添加'))
     } finally {
       setSubmitting(false)
     }

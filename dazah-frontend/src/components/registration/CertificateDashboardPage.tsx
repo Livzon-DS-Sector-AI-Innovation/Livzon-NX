@@ -1,5 +1,7 @@
 'use client'
 
+import { getActionErrorMessage, unwrapServerActionResult } from '@/lib/server-action-result'
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useRef, useState, type ChangeEvent } from 'react'
 import { App, Button, Card, Col, Row, Space, Table, Tag, Typography } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
@@ -116,7 +118,7 @@ export default function CertificateDashboardPage({
     formData.append('file', file)
     setImportingWorkbook(true)
     try {
-      const result = await importCertificateWorkbook(formData)
+      const result = unwrapServerActionResult(await importCertificateWorkbook(formData))
       message.success(
         result
           ? `导入成功，共覆盖 ${result.replaced_record_count} 条旧记录，写入 ${result.imported_record_count} 条新记录`
@@ -124,7 +126,7 @@ export default function CertificateDashboardPage({
       )
       router.refresh()
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '药政证书台账导入失败')
+      message.error(getActionErrorMessage(error, '药政证书台账导入'))
     } finally {
       setImportingWorkbook(false)
     }
@@ -136,7 +138,7 @@ export default function CertificateDashboardPage({
       await fetchCertificateWorkbookExport()
       message.success('药政证书台账导出成功')
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '药政证书台账导出失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '药政证书台账导出失败'))
     } finally {
       setExportingWorkbook(false)
     }

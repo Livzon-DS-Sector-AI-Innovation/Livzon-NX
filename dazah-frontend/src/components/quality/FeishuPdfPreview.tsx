@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { Button, Space, Spin } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
 import { useEffect, useRef, useState } from 'react'
@@ -34,7 +35,7 @@ function PdfPage({ pdf, pageNumber, fileName }: {
         })
         await task.promise
       } catch (cause) {
-        if (!cancelled) setError(cause instanceof Error ? cause.message : '文档页面加载失败')
+        if (!cancelled) setError(getUserErrorMessage(cause instanceof Error ? cause.message : '文档页面加载失败', '文档页面加载失败'))
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -90,7 +91,7 @@ export function FeishuPdfPreview({ src, fileName }: { src: string; fileName: str
         if (!controller.signal.aborted) setPdf(document)
       } catch (cause) {
         if (!controller.signal.aborted) {
-          setError(cause instanceof Error ? cause.message : '文档加载失败')
+          setError(getUserErrorMessage(cause instanceof Error ? cause.message : '文档加载失败', '文档加载失败'))
         }
       }
     }

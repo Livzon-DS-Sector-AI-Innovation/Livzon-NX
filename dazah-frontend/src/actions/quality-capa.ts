@@ -7,7 +7,7 @@ import {
   UpdateCapaPlanTrackRequest,
   QualityAiAnalysisLog,
 } from '@/types/quality'
-import { API_BASE_URL, actionFetch } from './quality-shared'
+import { API_BASE_URL, actionFetch, qualityImportErrorMessages } from './quality-shared'
 
 export async function createCapa(data: CreateCapaRequest) {
   const result = await actionFetch(`${API_BASE_URL}/api/v1/quality/capas`, {
@@ -254,7 +254,8 @@ export async function previewCapaImport(formData: FormData) {
     {
       method: 'POST',
       body: formData,
-    }
+    },
+    qualityImportErrorMessages,
   )
   revalidatePath('/quality/capas')
   return result
@@ -266,7 +267,8 @@ export async function confirmCapaImport(formData: FormData, skipDuplicates: bool
     {
       method: 'POST',
       body: formData,
-    }
+    },
+    qualityImportErrorMessages,
   )
   revalidatePath('/quality')
   revalidatePath('/quality/capas')

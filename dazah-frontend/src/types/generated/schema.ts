@@ -33872,6 +33872,24 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** ApiResponseEnvelope[PersonnelAddResult] */
+        ApiResponseEnvelope_PersonnelAddResult_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["PersonnelAddResult"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** ApiResponseEnvelope[ProductQualityOut] */
         ApiResponseEnvelope_ProductQualityOut_: {
             /**
@@ -33880,6 +33898,24 @@ export interface components {
              */
             code: number;
             data: components["schemas"]["ProductQualityOut"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[ProductResponse] */
+        ApiResponseEnvelope_ProductResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["ProductResponse"];
             /**
              * Message
              * @default success
@@ -35811,6 +35847,25 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** ApiResponseEnvelope[list[Union[ValidationAuditUploadSuccess, ValidationAuditUploadFailure]]] */
+        ApiResponseEnvelope_list_Union_ValidationAuditUploadSuccess__ValidationAuditUploadFailure___: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            /** Data */
+            data: (components["schemas"]["ValidationAuditUploadSuccess"] | components["schemas"]["ValidationAuditUploadFailure"])[];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** ApiResponseEnvelope[list[ValidationExecutionListItem]] */
         ApiResponseEnvelope_list_ValidationExecutionListItem__: {
             /**
@@ -35877,6 +35932,25 @@ export interface components {
             code: number;
             /** Data */
             data: components["schemas"]["ValidationReviewListItem"][];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[list[WorkOrderImageResponse]] */
+        ApiResponseEnvelope_list_WorkOrderImageResponse__: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            /** Data */
+            data: components["schemas"]["WorkOrderImageResponse"][];
             /**
              * Message
              * @default success
@@ -37982,8 +38056,7 @@ export interface components {
         };
         /** Body_upload_files_api_v1_registration_validation_audit_tasks__task_id__files_post */
         Body_upload_files_api_v1_registration_validation_audit_tasks__task_id__files_post: {
-            /** File Type */
-            file_type: string;
+            file_type: components["schemas"]["FileType"];
             /** Files */
             files: string[];
         };
@@ -47940,6 +48013,23 @@ export interface components {
              */
             today_table_id: string;
         };
+        /** EquipmentRoleConflictDetail */
+        EquipmentRoleConflictDetail: {
+            /**
+             * Error Code
+             * @constant
+             */
+            error_code: "EQUIPMENT_ROLE_CODE_EXISTS";
+        };
+        /** EquipmentRoleConflictResponse */
+        EquipmentRoleConflictResponse: {
+            /** Code */
+            code: number;
+            /** Detail */
+            detail?: components["schemas"]["EquipmentRoleConflictDetail"] | string | null;
+            /** Message */
+            message: string;
+        };
         /**
          * EquipmentUpdate
          * @description 更新设备请求
@@ -49978,6 +50068,11 @@ export interface components {
             tank_yield?: number | null;
         };
         /**
+         * FileType
+         * @enum {string}
+         */
+        FileType: "protocol" | "report" | "attachment";
+        /**
          * FillBlankQuestion
          * @description 填空题
          */
@@ -51304,6 +51399,23 @@ export interface components {
              */
             url: string;
         };
+        /** HistoricalDeviationBatchErrorDetail */
+        HistoricalDeviationBatchErrorDetail: {
+            /**
+             * Error Code
+             * @constant
+             */
+            error_code: "QUALITY_HISTORICAL_DEVIATION_BATCH_LIMIT";
+        };
+        /** HistoricalDeviationBatchErrorResponse */
+        HistoricalDeviationBatchErrorResponse: {
+            /** Code */
+            code: number;
+            /** Detail */
+            detail?: components["schemas"]["HistoricalDeviationBatchErrorDetail"] | string | null;
+            /** Message */
+            message: string;
+        };
         /** HistoricalDeviationBatchImportResult */
         HistoricalDeviationBatchImportResult: {
             /** Failed */
@@ -51427,12 +51539,61 @@ export interface components {
             /** Year */
             year: number;
         };
+        /**
+         * HrBusinessErrorCode
+         * @enum {string}
+         */
+        HrBusinessErrorCode: "HR_ANNUAL_PLAN_DUPLICATE" | "HR_ANNUAL_PLAN_DEPARTMENT_MISSING" | "HR_ANNUAL_PLAN_ITEMS_MISSING" | "HR_ANNUAL_PLAN_ATTACHMENT_COUNT_EXCEEDED" | "HR_POSITION_TRAINING_TEMPLATE_INVALID" | "HR_POSITION_TRAINING_DATA_MISSING" | "HR_POSITION_TRANSFER_NOT_DRAFT" | "HR_POSITION_TRANSFER_NOT_SUBMITTED" | "HR_POSITION_TRANSFER_APPROVAL_COMPLETED" | "HR_POSITION_TRANSFER_FEISHU_NOT_CONFIGURED" | "HR_FEISHU_CONTACT_NOT_CONFIGURED";
+        /** HrBusinessErrorDetail */
+        HrBusinessErrorDetail: {
+            error_code: components["schemas"]["HrBusinessErrorCode"];
+        };
+        /** HrBusinessErrorResponse */
+        HrBusinessErrorResponse: {
+            /** Code */
+            code: number;
+            /** Detail */
+            detail?: components["schemas"]["HrBusinessErrorDetail"] | string | null;
+            /** Message */
+            message: string;
+        };
         /** HrFeishuFieldMappingItem */
         HrFeishuFieldMappingItem: {
             /** Feishu Field */
             feishu_field?: string | null;
             /** System Field */
             system_field: string;
+        };
+        /** HrSyncJobStatus */
+        HrSyncJobStatus: {
+            detail?: components["schemas"]["HrBusinessErrorDetail"] | null;
+            /** Progress */
+            progress: string;
+            /** Result */
+            result?: unknown;
+            /** State */
+            state: string;
+        };
+        /**
+         * HrSyncJobStatusEnvelope
+         * @description Status of an accepted sync, including any known failure of the job itself.
+         */
+        HrSyncJobStatusEnvelope: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["HrSyncJobStatus"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** ImpersonationExit */
         ImpersonationExit: {
@@ -58194,6 +58355,20 @@ export interface components {
             workshop_code: string;
         };
         /**
+         * PersonnelAddResult
+         * @description 添加人员结果
+         */
+        PersonnelAddResult: {
+            /** Added */
+            added: string[];
+            /** Errors */
+            errors?: {
+                [key: string]: unknown;
+            }[];
+            /** Skipped */
+            skipped?: string[];
+        };
+        /**
          * PersonnelCategoryAssign
          * @description 人员+角色绑定设备分类请求
          */
@@ -59491,6 +59666,24 @@ export interface components {
              */
             step_no?: number | null;
         };
+        /**
+         * ProcurementErrorCode
+         * @enum {string}
+         */
+        ProcurementErrorCode: "PROCUREMENT_IMPORT_TABLE_INVALID" | "PROCUREMENT_SUBMIT_ITEMS_MISSING" | "PROCUREMENT_SUBMIT_AMOUNT_MISMATCH";
+        /** ProcurementErrorDetail */
+        ProcurementErrorDetail: {
+            error_code: components["schemas"]["ProcurementErrorCode"];
+        };
+        /** ProcurementErrorResponse */
+        ProcurementErrorResponse: {
+            /** Code */
+            code: number;
+            /** Detail */
+            detail?: components["schemas"]["ProcurementErrorDetail"] | string | null;
+            /** Message */
+            message: string;
+        };
         /** ProductCreate */
         ProductCreate: {
             /**
@@ -60136,6 +60329,62 @@ export interface components {
              * @description 目标市场
              */
             target_market?: string | null;
+        };
+        /** ProductResponse */
+        ProductResponse: {
+            /**
+             * Capacity Range
+             * @description 生产批量
+             */
+            capacity_range?: string | null;
+            /** Created At */
+            created_at?: string | null;
+            /** Feishu Record Id */
+            feishu_record_id?: string | null;
+            /** Feishu Synced At */
+            feishu_synced_at?: string | null;
+            /**
+             * Formulation Code
+             * @description 制剂代码
+             */
+            formulation_code?: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Indication
+             * @description 适应症
+             */
+            indication?: string | null;
+            /**
+             * Major Category
+             * @description 产品代码
+             */
+            major_category?: string | null;
+            /**
+             * Name
+             * @description 产品名称
+             */
+            name: string;
+            /**
+             * Product Type
+             * @description 产品剂型
+             */
+            product_type?: string | null;
+            /**
+             * Spec
+             * @description 生产规格
+             */
+            spec?: string | null;
+            /**
+             * Unit
+             * @description 单位
+             */
+            unit?: string | null;
+            /** Updated At */
+            updated_at?: string | null;
         };
         /** ProductUpdate */
         ProductUpdate: {
@@ -61782,6 +62031,23 @@ export interface components {
             /** Table Name */
             table_name: string;
         };
+        /** QualityImportErrorDetail */
+        QualityImportErrorDetail: {
+            /**
+             * Error Code
+             * @constant
+             */
+            error_code: "QUALITY_IMPORT_INVALID_DOCUMENT";
+        };
+        /** QualityImportErrorResponse */
+        QualityImportErrorResponse: {
+            /** Code */
+            code: number;
+            /** Detail */
+            detail: components["schemas"]["QualityImportErrorDetail"] | string;
+            /** Message */
+            message: string;
+        };
         /** QualityNotificationRecipientItem */
         QualityNotificationRecipientItem: {
             /**
@@ -62028,6 +62294,24 @@ export interface components {
             workshop: string;
             /** Year */
             year: number;
+        };
+        /**
+         * RegistrationWorkbookErrorCode
+         * @enum {string}
+         */
+        RegistrationWorkbookErrorCode: "REGISTRATION_WORKBOOK_UNREADABLE" | "REGISTRATION_WORKBOOK_TEMPLATE_MISMATCH" | "REGISTRATION_WORKBOOK_CERTIFICATE_NAME_REQUIRED";
+        /** RegistrationWorkbookErrorDetail */
+        RegistrationWorkbookErrorDetail: {
+            error_code: components["schemas"]["RegistrationWorkbookErrorCode"];
+        };
+        /** RegistrationWorkbookErrorResponse */
+        RegistrationWorkbookErrorResponse: {
+            /** Code */
+            code: number;
+            /** Detail */
+            detail?: components["schemas"]["RegistrationWorkbookErrorDetail"] | string | null;
+            /** Message */
+            message: string;
         };
         /**
          * RegulationRevisionCreate
@@ -70370,6 +70654,24 @@ export interface components {
             username?: string | null;
         };
         /**
+         * ValidationAuditErrorCode
+         * @enum {string}
+         */
+        ValidationAuditErrorCode: "VALIDATION_AUDIT_FILE_LIMIT" | "VALIDATION_AUDIT_NO_FILES" | "VALIDATION_AUDIT_FILE_UNREADABLE" | "VALIDATION_AUDIT_NO_PARSED_FILES" | "VALIDATION_AUDIT_CROSS_FILES_REQUIRED";
+        /** ValidationAuditErrorDetail */
+        ValidationAuditErrorDetail: {
+            error_code: components["schemas"]["ValidationAuditErrorCode"];
+        };
+        /** ValidationAuditErrorResponse */
+        ValidationAuditErrorResponse: {
+            /** Code */
+            code: number;
+            /** Detail */
+            detail?: components["schemas"]["ValidationAuditErrorDetail"] | string | null;
+            /** Message */
+            message: string;
+        };
+        /**
          * ValidationAuditTaskCreate
          * @description 创建审核任务
          */
@@ -70424,6 +70726,37 @@ export interface components {
              * @description 任务名称
              */
             task_name?: string | null;
+        };
+        /** ValidationAuditUploadFailure */
+        ValidationAuditUploadFailure: {
+            /** Error */
+            error: string;
+            /** Filename */
+            filename: string;
+            /**
+             * Status
+             * @constant
+             */
+            status: "failed";
+            /** Status Code */
+            status_code: number;
+        };
+        /** ValidationAuditUploadSuccess */
+        ValidationAuditUploadSuccess: {
+            /**
+             * File Id
+             * Format: uuid
+             */
+            file_id: string;
+            /** File Size */
+            file_size: number;
+            /** Filename */
+            filename: string;
+            /**
+             * Status
+             * @constant
+             */
+            status: "success";
         };
         /** ValidationDetail */
         ValidationDetail: {
@@ -72253,6 +72586,48 @@ export interface components {
             /** External Vendor */
             external_vendor?: string | null;
         };
+        /** WorkOrderImageLimitDetail */
+        WorkOrderImageLimitDetail: {
+            /**
+             * Error Code
+             * @constant
+             */
+            error_code: "EQUIPMENT_WORK_ORDER_IMAGE_LIMIT";
+        };
+        /**
+         * WorkOrderImageResponse
+         * @description 工单图片响应
+         */
+        WorkOrderImageResponse: {
+            /** File Name */
+            file_name: string;
+            /** File Size */
+            file_size: number | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Uploaded At
+             * Format: date-time
+             */
+            uploaded_at: string;
+            /**
+             * Work Order Id
+             * Format: uuid
+             */
+            work_order_id: string;
+        };
+        /** WorkOrderImageUploadError */
+        WorkOrderImageUploadError: {
+            /** Code */
+            code: number;
+            /** Detail */
+            detail?: components["schemas"]["WorkOrderImageLimitDetail"] | string | null;
+            /** Message */
+            message: string;
+        };
         /**
          * WorkOrderTransfer
          * @description 转派工单请求（方案E）
@@ -72648,6 +73023,15 @@ export interface components {
              */
             related_permit_id: string;
         };
+        /** WorkPermitReviewErrorResponse */
+        WorkPermitReviewErrorResponse: {
+            /** Code */
+            code: number;
+            /** Detail */
+            detail?: string | null;
+            /** Message */
+            message: string;
+        };
         /**
          * WorkPermitSettingsResponse
          * @description 作业票运行参数（work_permit_settings 键值子集）。
@@ -72716,6 +73100,24 @@ export interface components {
              * @default 0
              */
             total: number;
+        };
+        /**
+         * WorkPermitSubmitErrorCode
+         * @enum {string}
+         */
+        WorkPermitSubmitErrorCode: "SAFETY_WORK_PERMIT_TIME_INVALID" | "SAFETY_WORK_PERMIT_CERTIFICATE_INVALID" | "SAFETY_WORK_PERMIT_APPROVER_REQUIRED";
+        /** WorkPermitSubmitErrorDetail */
+        WorkPermitSubmitErrorDetail: {
+            error_code: components["schemas"]["WorkPermitSubmitErrorCode"];
+        };
+        /** WorkPermitSubmitErrorResponse */
+        WorkPermitSubmitErrorResponse: {
+            /** Code */
+            code: number;
+            /** Detail */
+            detail?: components["schemas"]["WorkPermitSubmitErrorDetail"] | string | null;
+            /** Message */
+            message: string;
         };
         /** WorkPermitSubmitInput */
         WorkPermitSubmitInput: {
@@ -81867,8 +82269,38 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_list_WorkOrderImageResponse__"];
                 };
+            };
+            /** @description 文件校验失败，或工单图片总数超限（EQUIPMENT_WORK_ORDER_IMAGE_LIMIT） */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkOrderImageUploadError"];
+                };
+            };
+            /** @description 工单不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 图片超过大小限制 */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 图片格式不受支持 */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -82226,7 +82658,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_PersonnelAddResult_"];
                 };
             };
             /** @description Validation Error */
@@ -82369,6 +82801,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description 角色编码已存在（EQUIPMENT_ROLE_CODE_EXISTS） */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EquipmentRoleConflictResponse"];
                 };
             };
             /** @description Validation Error */
@@ -84304,6 +84745,15 @@ export interface operations {
                     "application/json": unknown;
                 };
             };
+            /** @description 可能的业务错误码：HR_ANNUAL_PLAN_DUPLICATE。通用错误可不带业务错误码。 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HrBusinessErrorResponse"];
+                };
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -84344,6 +84794,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description 可能的业务错误码：HR_ANNUAL_PLAN_DEPARTMENT_MISSING, HR_ANNUAL_PLAN_ITEMS_MISSING。通用错误可不带业务错误码。 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HrBusinessErrorResponse"];
                 };
             };
             /** @description Validation Error */
@@ -84550,6 +85009,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description 可能的业务错误码：HR_ANNUAL_PLAN_ATTACHMENT_COUNT_EXCEEDED。通用错误可不带业务错误码。 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HrBusinessErrorResponse"];
                 };
             };
             /** @description Validation Error */
@@ -85583,7 +86051,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["HrSyncJobStatusEnvelope"];
                 };
             };
             /** @description Validation Error */
@@ -88273,7 +88741,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["HrSyncJobStatusEnvelope"];
                 };
             };
             /** @description Validation Error */
@@ -90511,6 +90979,22 @@ export interface operations {
                     "application/json": unknown;
                 };
             };
+            /** @description 可能的业务错误码：HR_POSITION_TRAINING_TEMPLATE_INVALID, HR_POSITION_TRAINING_DATA_MISSING。通用错误可不带业务错误码。 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HrBusinessErrorResponse"];
+                };
+            };
+            /** @description 旧版 Word 文件格式不受支持 */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -90937,6 +91421,15 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
+            /** @description 可能的业务错误码：HR_POSITION_TRANSFER_FEISHU_NOT_CONFIGURED。通用错误可不带业务错误码。 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HrBusinessErrorResponse"];
+                };
+            };
         };
     };
     get_position_transfer_api_v1_hr_position_transfers__record_id__get: {
@@ -91068,6 +91561,15 @@ export interface operations {
                     "application/json": unknown;
                 };
             };
+            /** @description 可能的业务错误码：HR_POSITION_TRANSFER_NOT_SUBMITTED, HR_POSITION_TRANSFER_APPROVAL_COMPLETED。通用错误可不带业务错误码。 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HrBusinessErrorResponse"];
+                };
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -91076,6 +91578,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+            /** @description 审批正在处理 */
+            423: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -91138,6 +91647,15 @@ export interface operations {
                     "application/json": unknown;
                 };
             };
+            /** @description 可能的业务错误码：HR_POSITION_TRANSFER_NOT_SUBMITTED, HR_POSITION_TRANSFER_APPROVAL_COMPLETED。通用错误可不带业务错误码。 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HrBusinessErrorResponse"];
+                };
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -91175,6 +91693,15 @@ export interface operations {
                     "application/json": unknown;
                 };
             };
+            /** @description 可能的业务错误码：HR_POSITION_TRANSFER_NOT_DRAFT。通用错误可不带业务错误码。 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HrBusinessErrorResponse"];
+                };
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -91183,6 +91710,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+            /** @description 审批正在提交 */
+            423: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -97599,13 +98133,27 @@ export interface operations {
                     "application/json": components["schemas"]["PurchaseRequestImportResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description 表格文件超过大小限制 */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 表格文件格式不受支持 */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 请求校验失败。业务错误码：PROCUREMENT_IMPORT_TABLE_INVALID */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ProcurementErrorResponse"];
                 };
             };
         };
@@ -97739,6 +98287,20 @@ export interface operations {
                     "application/json": components["schemas"]["PurchaseRequestApiResponse"];
                 };
             };
+            /** @description 采购申请不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 当前申请不在该审批步骤 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -97776,6 +98338,20 @@ export interface operations {
                     "application/json": components["schemas"]["PurchaseRequestApiResponse"];
                 };
             };
+            /** @description 采购申请不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 当前申请不在该审批步骤 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -97809,13 +98385,27 @@ export interface operations {
                     "application/json": components["schemas"]["PurchaseRequestApiResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description 采购申请不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 采购申请状态不允许提交 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 请求校验失败。业务错误码：PROCUREMENT_SUBMIT_ITEMS_MISSING, PROCUREMENT_SUBMIT_AMOUNT_MISMATCH */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ProcurementErrorResponse"];
                 };
             };
         };
@@ -97888,13 +98478,27 @@ export interface operations {
                     "application/json": components["schemas"]["SupplierImportResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description 表格文件超过大小限制 */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 表格文件格式不受支持 */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 请求校验失败。业务错误码：PROCUREMENT_IMPORT_TABLE_INVALID */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ProcurementErrorResponse"];
                 };
             };
         };
@@ -97990,12 +98594,12 @@ export interface operations {
         };
         responses: {
             /** @description Successful Response */
-            200: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_ProductResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -98127,8 +98731,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_ProductResponse_"];
                 };
+            };
+            /** @description 产品不存在或已被删除 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -98160,8 +98771,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_NoneType_"];
                 };
+            };
+            /** @description 产品不存在或已被删除 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -111442,13 +112060,27 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponseEnvelope_dict_str__Any__"];
                 };
             };
-            /** @description Validation Error */
+            /** @description 导入文件超过大小限制 */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 需要 .docx 格式的 Word 文档 */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 请求校验失败，或 Word 文档无法解析（QUALITY_IMPORT_INVALID_DOCUMENT） */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["QualityImportErrorResponse"];
                 };
             };
         };
@@ -111477,13 +112109,27 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponseEnvelope_dict_str__Any__"];
                 };
             };
-            /** @description Validation Error */
+            /** @description 导入文件超过大小限制 */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 需要 .docx 格式的 Word 文档 */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 请求校验失败，或 Word 文档无法解析（QUALITY_IMPORT_INVALID_DOCUMENT） */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["QualityImportErrorResponse"];
                 };
             };
         };
@@ -112572,13 +113218,27 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponseEnvelope_dict_str__Any__"];
                 };
             };
-            /** @description Validation Error */
+            /** @description 导入文件超过大小限制 */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 需要 .docx 格式的 Word 文档 */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 请求校验失败，或 Word 文档无法解析（QUALITY_IMPORT_INVALID_DOCUMENT） */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["QualityImportErrorResponse"];
                 };
             };
         };
@@ -112610,13 +113270,27 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponseEnvelope_dict_str__Any__"];
                 };
             };
-            /** @description Validation Error */
+            /** @description 导入文件超过大小限制 */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 需要 .docx 格式的 Word 文档 */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 请求校验失败，或 Word 文档无法解析（QUALITY_IMPORT_INVALID_DOCUMENT） */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["QualityImportErrorResponse"];
                 };
             };
         };
@@ -113836,6 +114510,20 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponseEnvelope_DeviationWorkbenchAttachmentIn_"];
                 };
             };
+            /** @description 附件超过大小限制 */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 附件格式不受支持 */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -114383,13 +115071,27 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponseEnvelope_dict_str__Any__"];
                 };
             };
-            /** @description Validation Error */
+            /** @description 导入文件超过大小限制 */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 需要 .docx 格式的 Word 文档 */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 请求校验失败，或 Word 文档无法解析（QUALITY_IMPORT_INVALID_DOCUMENT） */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["QualityImportErrorResponse"];
                 };
             };
         };
@@ -114418,13 +115120,27 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponseEnvelope_dict_str__Any__"];
                 };
             };
-            /** @description Validation Error */
+            /** @description 导入文件超过大小限制 */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 需要 .docx 格式的 Word 文档 */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 请求校验失败，或 Word 文档无法解析（QUALITY_IMPORT_INVALID_DOCUMENT） */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["QualityImportErrorResponse"];
                 };
             };
         };
@@ -117538,6 +118254,15 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponseEnvelope_HistoricalDeviationBatchImportResult_"];
                 };
             };
+            /** @description 批量附件超限（QUALITY_HISTORICAL_DEVIATION_BATCH_LIMIT） */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistoricalDeviationBatchErrorResponse"];
+                };
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -117710,6 +118435,27 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ApiResponseEnvelope_HistoricalDeviationAttachmentOut_"];
                 };
+            };
+            /** @description 历史偏差记录不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 附件超过大小限制 */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 附件格式不受支持 */
+            415: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -128078,13 +128824,41 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponseEnvelope_CertificateWorkbookImportResult_"];
                 };
             };
-            /** @description Validation Error */
+            /** @description 上传文件为空或不符合文件校验要求 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 登录已失效 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 没有批量导入权限 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 文件超过上传大小限制 */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 请求校验失败。业务错误码：REGISTRATION_WORKBOOK_UNREADABLE, REGISTRATION_WORKBOOK_TEMPLATE_MISMATCH, REGISTRATION_WORKBOOK_CERTIFICATE_NAME_REQUIRED */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["RegistrationWorkbookErrorResponse"];
                 };
             };
         };
@@ -128414,13 +129188,41 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponseEnvelope_DeclarationProgressWorkbookImportResult_"];
                 };
             };
-            /** @description Validation Error */
+            /** @description 上传文件为空或不符合文件校验要求 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 登录已失效 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 没有批量导入权限 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 文件超过上传大小限制 */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 请求校验失败。业务错误码：REGISTRATION_WORKBOOK_UNREADABLE, REGISTRATION_WORKBOOK_TEMPLATE_MISMATCH */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["RegistrationWorkbookErrorResponse"];
                 };
             };
         };
@@ -130310,13 +131112,41 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponseEnvelope_ProjectLedgerWorkbookImportResult_"];
                 };
             };
-            /** @description Validation Error */
+            /** @description 上传文件为空或不符合文件校验要求 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 登录已失效 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 没有批量导入权限 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 文件超过上传大小限制 */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 请求校验失败。业务错误码：REGISTRATION_WORKBOOK_UNREADABLE, REGISTRATION_WORKBOOK_TEMPLATE_MISMATCH */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["RegistrationWorkbookErrorResponse"];
                 };
             };
         };
@@ -131108,6 +131938,15 @@ export interface operations {
                     };
                 };
             };
+            /** @description 可能的业务错误码：VALIDATION_AUDIT_NO_FILES, VALIDATION_AUDIT_NO_PARSED_FILES, VALIDATION_AUDIT_CROSS_FILES_REQUIRED */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationAuditErrorResponse"];
+                };
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -131116,6 +131955,27 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+            /** @description 审核服务限流 */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 审核服务返回异常 */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 审核服务暂时不可用 */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -131212,9 +132072,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["ApiResponseEnvelope_list_Union_ValidationAuditUploadSuccess__ValidationAuditUploadFailure___"];
+                };
+            };
+            /** @description 可能的业务错误码：VALIDATION_AUDIT_FILE_LIMIT */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationAuditErrorResponse"];
                 };
             };
             /** @description Validation Error */
@@ -131289,13 +132156,22 @@ export interface operations {
                     };
                 };
             };
-            /** @description Validation Error */
+            /** @description 可能的业务错误码：VALIDATION_AUDIT_NO_FILES */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ValidationAuditErrorResponse"];
+                };
+            };
+            /** @description 可能的业务错误码：VALIDATION_AUDIT_FILE_UNREADABLE */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ValidationAuditErrorResponse"];
                 };
             };
         };
@@ -132442,6 +133318,20 @@ export interface operations {
                     "application/json": unknown;
                 };
             };
+            /** @description 工作流不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 没有待确认的步骤，请刷新工作流 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -132545,6 +133435,20 @@ export interface operations {
                 content: {
                     "application/json": unknown;
                 };
+            };
+            /** @description 工作流不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 中试文档超过大小限制 */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -146883,13 +147787,41 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponseEnvelope_ActionResponse_"];
                 };
             };
-            /** @description Validation Error */
+            /** @description 登录已失效 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 没有操作权限 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 作业票不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 作业票或审批节点的当前状态不允许该操作 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 请求校验失败 */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["WorkPermitReviewErrorResponse"];
                 };
             };
         };
@@ -146961,13 +147893,41 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponseEnvelope_ActionResponse_"];
                 };
             };
-            /** @description Validation Error */
+            /** @description 登录已失效 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 没有操作权限 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 作业票不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 作业票或审批节点的当前状态不允许该操作 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 请求校验失败 */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["WorkPermitReviewErrorResponse"];
                 };
             };
         };
@@ -147069,14 +148029,49 @@ export interface operations {
                     "application/json": components["schemas"]["ApiResponseEnvelope_ActionResponse_"];
                 };
             };
-            /** @description Validation Error */
+            /** @description 登录已失效 */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 没有操作权限 */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 作业票不存在 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 作业票或审批节点的当前状态不允许该操作 */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 请求校验失败。业务错误码：SAFETY_WORK_PERMIT_TIME_INVALID, SAFETY_WORK_PERMIT_CERTIFICATE_INVALID, SAFETY_WORK_PERMIT_APPROVER_REQUIRED */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["WorkPermitSubmitErrorResponse"];
                 };
+            };
+            /** @description 作业票正在提交 */
+            423: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

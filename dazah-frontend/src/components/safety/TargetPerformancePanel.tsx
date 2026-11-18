@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useEffect, useState } from 'react'
 import {
   App,
@@ -161,7 +162,7 @@ export default function TargetPerformancePanel({
       const statsRes = await getSafetyTargetStats(nextYear)
       if (statsRes.code === 200) setStats(statsRes.data)
     } catch (err) {
-      setError(err instanceof Error ? err.message : '加载安全目标失败')
+      setError(getUserErrorMessage(err instanceof Error ? err.message : '加载安全目标失败', '加载安全目标失败'))
     } finally {
       setLoading(false)
     }
@@ -217,7 +218,7 @@ export default function TargetPerformancePanel({
         message.error(res.message || '保存失败')
       }
     } catch (err) {
-      message.error(err instanceof Error ? err.message : '保存失败')
+      message.error(getUserErrorMessage(err instanceof Error ? err.message : '保存失败'))
     }
   }
 
@@ -238,7 +239,7 @@ export default function TargetPerformancePanel({
         message.error(res.message || '保存失败')
       }
     } catch (err) {
-      message.error(err instanceof Error ? err.message : '保存失败')
+      message.error(getUserErrorMessage(err instanceof Error ? err.message : '保存失败'))
     }
   }
 
