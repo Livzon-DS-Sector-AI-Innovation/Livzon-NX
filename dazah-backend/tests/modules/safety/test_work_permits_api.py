@@ -29,6 +29,7 @@ from app.modules.safety.models import (
     WorkPermitNode,
     WorkPermitRelation,
     WorkPermitSetting,
+    WorkPermitSignature,
 )
 from app.platform.identity.models import User
 
@@ -135,6 +136,11 @@ async def _cleanup(db: AsyncSession) -> None:
         )
     )
     if permit_ids:
+        await db.execute(
+            delete(WorkPermitSignature).where(
+                WorkPermitSignature.permit_id.in_(permit_ids)
+            )
+        )
         await db.execute(
             delete(WorkPermitNode).where(WorkPermitNode.permit_id.in_(permit_ids))
         )
