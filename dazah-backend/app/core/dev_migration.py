@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shlex
 import sys
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -36,9 +37,8 @@ _UVICORN_ARGS = [
     "0.0.0.0",
     "--port",
     "8000",
-    "--reload",
-    "--reload-dir",
-    "/app/app",
+    "--workers",
+    "1",
 ]
 
 
@@ -180,7 +180,24 @@ def main(argv: list[str] | None = None, *, stdin: TextIO | None = None) -> int:
         else:
             plan = check_current()
             if args.action == "serve":
-                os.execv(sys.executable, [sys.executable, *_UVICORN_ARGS])
+                # The watcher must not own the HTTP socket. During a reload,
+                # clients should see a closed port until Uvicorn finishes startup.
+                os.execv(
+                    sys.executable,
+                    [
+                        sys.executable,
+                        "-m",
+                        "watchfiles",
+                        "--target-type",
+                        "command",
+                        "--filter",
+                        "python",
+                        "--sigint-timeout",
+                        "30",
+                        shlex.join([sys.executable, *_UVICORN_ARGS]),
+                        "/app/app",
+                    ],
+                )
             else:
                 print(f"Database revision verified: {plan.target_revision}.")
     except MigrationGuardError as exc:
