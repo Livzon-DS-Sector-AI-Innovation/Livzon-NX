@@ -617,6 +617,27 @@ describe('HazchemPanel', () => {
     expect(mocks.message.error).toHaveBeenCalledWith('附件保存失败')
   })
 
+  it('文件请求异常时隐藏技术信息并保留附件管理窗口', async () => {
+    const failure = new Error('TypeError: internal attachment adapter')
+    mocks.uploadChemicalMsdsFile.mockRejectedValueOnce(failure)
+    mocks.fetchChemicalMsdsBytes.mockRejectedValue(failure)
+    await renderPanel()
+    const modal = await openMsdsManager()
+    const upload = modal.querySelector<HTMLButtonElement>('[data-upload-trigger]')
+    expect(upload).not.toBeNull()
+    await act(async () => upload?.click())
+    expect(mocks.message.error).toHaveBeenCalledWith('操作未完成，请稍后重试')
+
+    const preview = Array.from(modal.querySelectorAll('button')).find(button => button.textContent === '预览')
+    expect(preview).toBeDefined()
+    await act(async () => preview?.click())
+    expect(mocks.fetchChemicalMsdsBytes).toHaveBeenCalledWith('c-1', 'f-1', true)
+    expect(mocks.message.error).toHaveBeenCalledTimes(2)
+    expect(mocks.message.error).toHaveBeenLastCalledWith('操作未完成，请稍后重试')
+    expect(container.contains(modal)).toBe(true)
+    expect(container.querySelector('[data-preview-modal]')).toBeNull()
+  })
+
   it('MSDS 下载失败提示错误', async () => {
     mocks.fetchChemicalMsdsBytes.mockRejectedValue(new Error('网络中断'))
     await renderPanel()

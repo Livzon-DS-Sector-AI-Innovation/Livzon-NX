@@ -147,6 +147,15 @@ vi.mock('@/actions/quality-deviation', () => mocks.moduleFactory('actions/qualit
 vi.mock('@/actions/quality-deviation-workbench', () => mocks.moduleFactory('actions/quality-deviation-workbench'))
 vi.mock('@/actions/quality-inspection', () => mocks.moduleFactory('actions/quality-inspection'))
 vi.mock('@/actions/validation-audit', () => mocks.moduleFactory('actions/validation-audit'))
+vi.mock('@/lib/feishu-data-source', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/lib/feishu-data-source')>(),
+  feishuDataSourceApi: {
+    getConfig: mocks.get('feishu-data-source', 'getConfig'),
+    listRoots: mocks.get('feishu-data-source', 'listRoots'),
+    listResources: mocks.get('feishu-data-source', 'listResources'),
+    getBindings: mocks.get('feishu-data-source', 'getBindings'),
+  },
+}))
 vi.mock('@/lib/api/validation-audit', () => mocks.moduleFactory('lib/api/validation-audit'))
 vi.mock('@/lib/api/dossier-writer-client', () => mocks.moduleFactory('lib/api/dossier-writer-client'))
 vi.mock('@/lib/api/client/hr', () => mocks.moduleFactory('lib/api/client/hr'))
@@ -442,6 +451,12 @@ import OffboardingClient from './components/hr/OffboardingClient'
 import AnnualPlanDetailClient from './components/hr/AnnualPlanDetailClient'
 import AnnualPlanListClient from './components/hr/AnnualPlanListClient'
 import AnnualTrainingStatsClient from './components/hr/AnnualTrainingStatsClient'
+import AnnualPlanDeptClient from './components/hr/AnnualPlanDeptClient'
+import DepartureClient from './components/hr/DepartureClient'
+import OnboardingClient from './components/hr/OnboardingClient'
+import OnboardingPrejobClient from './components/hr/OnboardingPrejobClient'
+import PreJobPlanClient from './components/hr/PreJobPlanClient'
+import TrainingLedgerClient from './components/hr/TrainingLedgerClient'
 import TrainingEvaluationListClient from './components/hr/TrainingEvaluationListClient'
 import TrainingNotificationClient from './components/hr/TrainingNotificationClient'
 import OralExamSheetClient from './components/hr/OralExamSheetClient'
@@ -509,6 +524,9 @@ import CertificateManagementDashboard from './components/registration/Certificat
 import CertificateDashboardPage from './components/registration/CertificateDashboardPage'
 import FeeDashboardPage from './components/registration/FeeDashboardPage'
 import FeeLedgerPage from './components/registration/FeeLedgerPage'
+import { ModuleFeishuDataSourcePage, type FeishuWriteActions } from './components/feishu-data/ModuleFeishuDataSourcePage'
+import ReferenceStandardClient from './components/registration/ReferenceStandardClient'
+import SupplementaryReplyClient from './components/registration/SupplementaryReplyClient'
 import KnowledgeArticleDetail from './components/registration/KnowledgeArticleDetail'
 import InspectionContactsPage from './components/registration/InspectionContactsPage'
 import WarehouseFeishuConfigPage from './components/warehouse/WarehouseFeishuConfigPage'
@@ -717,6 +735,127 @@ describe('migrated component coverage', () => {
     vi.restoreAllMocks()
   })
 
+  it.each([
+    ['年度培训计划', 'lib/api/client/hr', 'fetchAnnualTrainingPlans', createElement(AnnualPlanDeptClient, { department: '质量部' })],
+    ['离职信息', 'lib/api/hr', 'fetchDepartureRecords', createElement(DepartureClient, { initialRecords: [], initialTotal: 0 })],
+    ['入职信息', 'lib/api/hr', 'fetchOnboardingRecords', createElement(OnboardingClient, { initialRecords: [], initialTotal: 0 })],
+    ['入职培训', 'lib/api/hr', 'fetchEmployees', createElement(OnboardingPrejobClient)],
+    ['岗前培训计划', 'lib/api/hr', 'fetchEmployees', createElement(PreJobPlanClient)],
+    ['个人培训台账', 'lib/api/hr', 'fetchEmployeeByNumber', createElement(TrainingLedgerClient, { employeeNumber: 'EMP-001' })],
+    ['新员工培训计划', 'lib/api/client/hr', 'fetchNewEmployeeTrainingPlan', createElement(NewEmployeeTrainingDetailClient, { planId: 'plan-1' })],
+    ['转岗记录', 'lib/api/client/hr', 'fetchPositionTransfers', createElement(PositionTransferClient, { initialRecords: [], initialTotal: 0 })],
+    ['ESG 培训记录', 'lib/api/hr', 'fetchEsgRecordsByDept', createElement(EsgTrainingReportClient, {
+      department: '质量部', dateFrom: '2026-01-01', dateTo: '2026-12-31', periodLabel: '全年', printRequest: 0,
+    })],
+  ] as const)('%s加载失败时显示安全提示', async (_, moduleName, read, page) => {
+    let rendered: ReturnType<typeof renderClient> | undefined
+    try {
+      await expectSafeRequestFailure(getMock(moduleName, read), () => {
+        rendered = renderClient(page)
+      })
+      expect(rendered?.container.textContent).not.toContain('internal adapter failure')
+    } finally {
+      if (rendered) closeRendered(rendered)
+    }
+  })
+
+  it('offers reload when the module Feishu configuration could not be read', async () => {
+    let rendered: ReturnType<typeof renderClient> | undefined
+    try {
+      await expectSafeRequestFailure(getMock('feishu-data-source', 'getConfig'), () => {
+        rendered = renderClient(createElement(ModuleFeishuDataSourcePage, { moduleCode: 'energy' }))
+      })
+      expect(rendered?.container.textContent).toContain('应用凭据')
+      expect(getMock('feishu-data-source', 'listResources')).not.toHaveBeenCalled()
+    } finally {
+      if (rendered) closeRendered(rendered)
+    }
+  })
+
+  it('retains the selected textbook and training plan after rejected operations', async () => {
+    const plan = {
+      id: 'training-1', employee_name: '新员工', employee_number: 'E-01', department: '质量部',
+      items: [{ id: 'material-1', textbook_name: '实验室流程', level: '部门级' }],
+      completed_count: 0, total_count: 1, progress: 0,
+    }
+    const hr = (name: string) => getMock('actions/hr', name)
+    const read = (name: string) => getMock('lib/api/client/hr', name)
+    read('fetchNewEmployeeTrainingPlan').mockResolvedValue(plan)
+    const rendered = renderClient(createElement(NewEmployeeTrainingDetailClient, { planId: plan.id }))
+    try {
+      await settle()
+      const click = (label: string) => findBtn(rendered, label)?.click()
+      await expectSafeRequestFailure(read('exportPositionTrainingConfirmation'), () => click('导出岗位培训确认表'))
+      await expectSafeRequestFailure(hr('deleteNewEmployeeTrainingPlan'), () => click('删除计划'))
+      expect(mocks.router.push).not.toHaveBeenCalled()
+
+      rendered.container.querySelector<HTMLInputElement>('tbody input[type="checkbox"]')?.click()
+      await settle()
+      await expectSafeRequestFailure(read('fetchAvailableTrainees'), () => click('添加参训人员'))
+      await expectSafeRequestFailure(hr('startNewEmployeeTraining'), () => click('开始培训（1 份）'))
+      expect(hr('startNewEmployeeTraining')).toHaveBeenCalledWith(plan.id, {
+        item_ids: ['material-1'], additional_trainees: [],
+      })
+
+      click('新增教材')
+      await settle()
+      await expectSafeRequestFailure(hr('addNewEmployeeTrainingItem'), () => click('确定'))
+      expect(rendered.container.querySelector('[role="dialog"]')).not.toBeNull()
+      expect(rendered.container.textContent).toContain('实验室流程')
+    } finally {
+      closeRendered(rendered)
+    }
+  })
+
+  it('preserves module Feishu resources and bindings when configuration operations fail', async () => {
+    const config = {
+      id: 'fixture-cfg', config_name: '演示仓储配置', app_id: 'fixture-app',
+      is_active: true, app_secret_configured: true,
+    }
+    const resource = {
+      id: 'fixture-table', title: '库存记录', table_id: 'table-1', source_path: [], field_count: 2, record_count: 1,
+    }
+    const api = (operation: string) => getMock('feishu-data-source', operation)
+    api('getConfig').mockResolvedValue(config)
+    api('listRoots').mockResolvedValue([{ id: 'fixture-root', name: '仓储入口', source_type: 'wiki' }])
+    api('listResources').mockResolvedValue([resource])
+    api('getBindings').mockResolvedValue([])
+    const writeActions = {
+      saveConfig: vi.fn(), testConfig: vi.fn(), createRoot: vi.fn(), deleteRoot: vi.fn(),
+      discoverRoot: vi.fn(), syncResource: vi.fn(), syncResources: vi.fn(), saveBindings: vi.fn(),
+    } satisfies FeishuWriteActions
+    const rendered = renderClient(createElement(ModuleFeishuDataSourcePage, { moduleCode: 'warehouse', writeActions }))
+    try {
+      await settle()
+      await settle()
+      expect(rendered.container.textContent).toContain(resource.title)
+      const click = (label: string) => Array.from(rendered.container.querySelectorAll('button'))
+        .find(button => button.textContent?.trim() === label)?.click()
+      await expectSafeRequestFailure(writeActions.saveConfig, () => click('保存凭据'))
+      await expectSafeRequestFailure(writeActions.testConfig, () => click('测试连接'))
+      await expectSafeRequestFailure(writeActions.discoverRoot, () => click('发现'))
+      expect(writeActions.discoverRoot).toHaveBeenCalledWith('fixture-root')
+      await expectSafeRequestFailure(writeActions.syncResource, () => click('同步'))
+      expect(writeActions.syncResource).toHaveBeenCalledWith(resource.id)
+      const row = Array.from(rendered.container.querySelectorAll('tbody tr')).find(el => el.textContent?.includes(resource.title))
+      expect(row).toBeDefined()
+      if (row instanceof HTMLElement) row.click()
+      await settle()
+      await expectSafeRequestFailure(writeActions.syncResources, () => findBtn(rendered, '批量同步')?.click())
+      expect(writeActions.syncResources).toHaveBeenCalledWith([resource.id])
+      await expectSafeRequestFailure(writeActions.saveBindings, () => click('发布映射'))
+      expect(rendered.container.textContent).toContain(resource.title)
+      expect(rendered.container.textContent).toContain('仓储入口')
+
+      click('添加入口')
+      await settle()
+      await expectSafeRequestFailure(writeActions.createRoot, () => click('确定'))
+      expect(rendered.container.querySelector('[role="dialog"]')).not.toBeNull()
+    } finally {
+      closeRendered(rendered)
+    }
+  })
+
   it('covers shared sync polling completion, failure, retry and timeout guards', async () => {
     const Harness = ({
       syncAction,
@@ -905,6 +1044,10 @@ describe('migrated component coverage', () => {
     await settle()
 
     await setInput('input[placeholder="例如：bascnxxxxxxxx"]', 'bascn-candidate-new')
+    await expectSafeRequestFailure(
+      getMock('lib/api/hr', 'fetchHrFeishuEntityTables'),
+      () => buttons('读取表')[0]?.click(),
+    )
     buttons('读取表')[0]?.click()
     await settle()
     const tableSelect = rendered.container.querySelector('select[aria-label="可读取后直接选择"]') as HTMLSelectElement | null
@@ -944,6 +1087,10 @@ describe('migrated component coverage', () => {
     queryElement<HTMLButtonElement>(rendered.container, 'aside button:last-of-type')?.click()
     await settle()
 
+    await expectSafeRequestFailure(
+      getMock('actions/hr', 'uploadOfferTemplateAction'),
+      () => buttons('上传 PDF 模板')[0]?.click(),
+    )
     buttons('上传 PDF 模板')[0]?.click()
     await settle()
     const emailTestButtons = buttons('测试连接')
@@ -1514,10 +1661,12 @@ describe('migrated component coverage', () => {
     appSwitch?.click()
     await settle()
     const button = (text: string) => Array.from(rendered.container.querySelectorAll('button')).find((item) => item.textContent?.includes(text))
+    await expectSafeRequestFailure(getMock('actions/quality', 'updateQualityFeishuAppSettings'), () => button('保存配置')?.click())
     button('保存配置')?.click()
     await settle()
     button('测试连接')?.click()
     await settle()
+    await expectSafeRequestFailure(getMock('actions/quality', 'pullQualityRecordsFromFeishu'), () => button('手动回拉已启用数据')?.click())
     button('手动回拉已启用数据')?.click()
     await settle()
 
@@ -2382,6 +2531,10 @@ describe('migrated component coverage', () => {
       .find(row => row.querySelector('td')?.textContent?.includes('仓储部'))
     const deleteMapping = mappingRow?.querySelector('.anticon-delete')?.closest('button')
     expect(deleteMapping).toBeDefined()
+    await expectSafeRequestFailure(
+      getMock('actions/hr', 'deleteTrainingDeptMappingAction'),
+      () => deleteMapping?.click(),
+    )
     deleteMapping?.click()
     await settle()
     expect(getMock('actions/hr', 'createTrainingDeptMappingAction')).toHaveBeenCalled()
@@ -3175,6 +3328,10 @@ describe('migrated component coverage', () => {
       input.dispatchEvent(new Event('change', { bubbles: true }))
     }
     const textButton = (text: string) => Array.from(rendered.container.querySelectorAll('button')).find((item) => item.textContent?.includes(text))
+    await expectSafeRequestFailure(
+      getMock('actions/hr', 'syncOffboardingFromFeishuAction'),
+      () => textButton('同步飞书')?.click(),
+    )
     textButton('同步飞书')?.click()
     await settle()
     textButton('新增离职记录')?.click()
@@ -3265,7 +3422,10 @@ describe('migrated component coverage', () => {
       id: 'ledger-1', product_name: '产品A', market_name: '美国', source_sequence: '1',
       authorization_file_name: '授权文件.pdf', quality_standard: 'USP', company_name: '机构A',
       country: '美国', customer_code: 'C-1', purpose: '注册申报', status: '待确认',
-      updates: [{ id: 'update-1', sort_order: 1, authorization_date: '2026-08-01', handler: '张三', remarks: '首次授权' }],
+      updates: [
+        { id: 'update-1', sort_order: 1, authorization_date: '2026-08-01', handler: '张三', remarks: '首次授权' },
+        { id: 'update-2', sort_order: 2, authorization_date: '2026-08-02', handler: '李四', remarks: '再次授权' },
+      ],
     }
     const fdaRecord = {
       id: 'fda-1', sequence: 1, product_name: '产品A', company_name: 'FDA机构', address: '美国地址',
@@ -3324,8 +3484,14 @@ describe('migrated component coverage', () => {
       updateStatus()
       await settle()
     }
+    await expectSafeRequestFailure(getMock('actions/registration', 'deleteAuthorizationLedgerUpdate'), () => clickText('删除更新'))
+    expect(rendered.container.textContent).toContain('再次授权')
     await clickText('删除更新')
+    await expectSafeRequestFailure(getMock('actions/registration', 'deleteAuthorizationLedgerMain'), () => clickText('删除主记录'))
+    expect(rendered.container.textContent).toContain('授权文件.pdf')
     await clickText('删除主记录')
+    await expectSafeRequestFailure(getMock('actions/registration', 'deleteAuthorizationFdaEntry'), () => clickText('删除选中'))
+    expect(rendered.container.textContent).toContain('FDA机构')
     await clickText('删除选中')
     expect(getMock('actions/registration', 'updateAuthorizationLedgerMain')).toHaveBeenCalled()
     expect(getMock('lib/api/client/registration', 'fetchAuthorizationLedgerExport')).toHaveBeenCalled()
@@ -3463,6 +3629,12 @@ describe('migrated component coverage', () => {
       scopeSelect.dispatchEvent(new Event('change', { bubbles: true }))
       await settle()
     }
+    const clickScopeAction = (text: string) => Array.from(rendered.container.querySelectorAll('button'))
+      .find(button => button.textContent === text)?.click()
+    await expectSafeRequestFailure(getMock('actions/hr', 'saveDeptScopeAction'), () => clickScopeAction('保存'))
+    await expectSafeRequestFailure(getMock('actions/hr', 'saveDeptScopeAction'), () => clickScopeAction('清除'))
+    await expectSafeRequestFailure(getMock('actions/hr', 'clearDeptScopeAction'), () => clickScopeAction('移除'))
+    expect(rendered.container.textContent).toContain('张三')
     for (const button of Array.from(rendered.container.querySelectorAll('button'))) {
       if (button.textContent === '保存' || button.textContent === '清除' || button.textContent === '移除') {
         button.click()
@@ -3576,12 +3748,17 @@ describe('migrated component coverage', () => {
     const printButton = Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent === '打印')
     printButton?.click()
     const clearButton = Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent?.includes('全部清除'))
+    await expectSafeRequestFailure(getMock('actions/hr', 'clearTrainingLedgersByDept'), () => clearButton?.click())
     clearButton?.click()
     await settle()
     const esgTab = Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent === 'ESG培训报表')
     esgTab?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     await settle()
     const syncButton = Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent?.includes('从台账同步'))
+    await expectSafeRequestFailure(
+      getMock('actions/hr', 'syncEsgFromLedger'),
+      () => { syncButton?.dispatchEvent(new MouseEvent('click', { bubbles: true })) },
+    )
     syncButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     await settle()
     expect(getMock('actions/hr', 'syncEsgFromLedger')).toHaveBeenCalled()
@@ -3607,14 +3784,22 @@ describe('migrated component coverage', () => {
     const report = renderClient(createElement(EsgTrainingReportClient, { department: '质量部', dateFrom: '2026-01-01', dateTo: '2026-12-31', periodLabel: '全年', printRequest: 1 }))
     await settle()
     const reportButton = (text: string) => Array.from(report.container.querySelectorAll('button')).find((button) => button.textContent?.includes(text))
+    report.container.querySelector<HTMLTableRowElement>('tbody tr')?.click()
+    await settle()
+    await expectSafeRequestFailure(getMock('actions/hr', 'batchDeleteEsgTrainingRecords'), () => reportButton('批量删除')?.click())
     reportButton('编辑')?.click()
     await settle()
+    await expectSafeRequestFailure(getMock('actions/hr', 'updateEsgTrainingRecord'), () => {
+      Array.from(report.container.querySelectorAll('button')).find((button) => button.textContent === '确定')?.click()
+    })
     Array.from(report.container.querySelectorAll('button')).find((button) => button.textContent === '确定')?.click()
     await settle()
     // 精确匹配行内「删除」按钮：工具栏「批量删除」按钮包含"删除"子串，不能误点
-    Array.from(report.container.querySelectorAll('button'))
-      .find((button) => button.textContent?.trim() === '删除')
-      ?.click()
+    const remove = () => Array.from(report.container.querySelectorAll('button'))
+      .find((button) => button.textContent?.trim() === '删除')?.click()
+    await expectSafeRequestFailure(getMock('actions/hr', 'deleteEsgTrainingRecord'), remove)
+    expect(report.container.textContent).toContain('GMP培训')
+    remove()
     await settle()
     expect(getMock('actions/hr', 'updateEsgTrainingRecord')).toHaveBeenCalled()
     expect(getMock('actions/hr', 'deleteEsgTrainingRecord')).toHaveBeenCalled()
@@ -3783,6 +3968,14 @@ describe('migrated component coverage', () => {
     await settle()
     expect(rendered.container.textContent).toContain('项目')
     expect(rendered.container.textContent).toContain('申报')
+    await expectSafeRequestFailure(
+      getMock('lib/api/client/registration', 'fetchProjectLedgerWorkbookExport'),
+      () => findBtn(rendered, '导出申报台账')?.click(),
+    )
+    await expectSafeRequestFailure(
+      getMock('lib/api/client/registration', 'fetchDeclarationProgressWorkbookExport'),
+      () => findBtn(rendered, '导出 Excel')?.click(),
+    )
     for (const input of Array.from(rendered.container.querySelectorAll('input[type="file"]'))) {
       Object.defineProperty(input, 'files', { configurable: true, value: [new File(['invalid'], '导入.xlsx')] })
       input.dispatchEvent(new Event('change', { bubbles: true }))
@@ -3796,6 +3989,85 @@ describe('migrated component coverage', () => {
     expect(getMock('lib/api/client/registration', 'fetchProjectLedgerWorkbookExport')).toHaveBeenCalled()
     expect(getMock('lib/api/client/registration', 'fetchDeclarationProgressWorkbookExport')).toHaveBeenCalled()
     closeRendered(rendered)
+  })
+
+  it('keeps knowledge articles and categories available when edits or deletions fail', async () => {
+    const entry = { id: 'knowledge-1', title: '验证规程', category_id: 'cat-1', category_name: '法规', is_published: true }
+    const category = { id: 'cat-1', name: '法规', description: '', article_count: 1, sort_order: 1 }
+    const call = (name: string) => getMock('actions/registration', name)
+    const rendered = renderClient(createElement(KnowledgeBasePage, {
+      articles: [entry] as never,
+      categories: [category] as never,
+      overview: { total_articles: 1, published_articles: 1, draft_articles: 0, category_count: 1, categories: [] } as never,
+    }))
+    try {
+      await settle()
+      const click = (label: string) => findBtn(rendered, label)?.click()
+      const rows = Array.from(rendered.container.querySelectorAll<HTMLTableRowElement>('tbody tr'))
+      rows.find(row => row.textContent?.includes('法规'))?.click()
+      rows.find(row => row.textContent?.includes(entry.title))?.click()
+      await settle()
+      await expectSafeRequestFailure(call('deleteKnowledgeCategory'), () => click('删除分类'))
+      await expectSafeRequestFailure(call('deleteKnowledgeArticle'), () => click('删除文章'))
+      expect(rendered.container.textContent).toContain(entry.title)
+      expect(rendered.container.textContent).toContain(category.name)
+
+      click('编辑分类')
+      await settle()
+      await expectSafeRequestFailure(call('updateKnowledgeCategory'), () => click('确定'))
+      expect(rendered.container.querySelector('[role="dialog"]')?.textContent).toContain('编辑分类')
+      click('取消')
+      await settle()
+
+      click('新增文章')
+      await settle()
+      await expectSafeRequestFailure(call('extractArticleFromFile'), () => click('上传文件自动提取内容'))
+      await expectSafeRequestFailure(call('createKnowledgeArticle'), () => click('确定'))
+      expect(rendered.container.querySelector('[role="dialog"]')?.textContent).toContain('新增文章')
+      expect(mocks.router.refresh).not.toHaveBeenCalled()
+    } finally {
+      closeRendered(rendered)
+    }
+  })
+
+  it.each([
+    {
+      module: '对照物质',
+      read: 'fetchReferenceStandards',
+      remove: 'deleteReferenceStandardAction',
+      page: createElement(ReferenceStandardClient, {
+        initialRecords: [{ id: 'ref-1', drug_name: '示例产品', reference_substance_name: '示例对照物质' } as never],
+        initialTotal: 1,
+      }),
+      id: 'ref-1',
+    },
+    {
+      module: '发补回复',
+      read: 'fetchSupplementaryReplies',
+      remove: 'deleteSupplementaryReplyAction',
+      page: createElement(SupplementaryReplyClient, {
+        initialReplies: [{ id: 'reply-1', drug_name: '示例产品' } as never],
+        initialTotal: 1,
+      }),
+      id: 'reply-1',
+    },
+  ])('$module 的加载和删除失败保留原记录', async ({ read, remove, page, id }) => {
+    const request = getMock('lib/api/registration', read)
+    const mutation = getMock('actions/registration', remove)
+    request.mockRejectedValueOnce(new Error('TypeError: internal registration read error'))
+    const rendered = renderClient(page)
+    try {
+      await settle()
+      expect(request).toHaveBeenCalledOnce()
+      expect(mocks.message.error).toHaveBeenCalledWith('操作未完成，请稍后重试')
+      expect(rendered.container.textContent).toContain('示例产品')
+      await expectSafeRequestFailure(mutation, () => findBtn(rendered, '删除')?.click())
+      expect(mutation).toHaveBeenCalledWith(id)
+      expect(rendered.container.textContent).toContain('示例产品')
+      expect(request).toHaveBeenCalledOnce()
+    } finally {
+      closeRendered(rendered)
+    }
   })
 
   it('renders quality records and warehouse dashboard data', async () => {
