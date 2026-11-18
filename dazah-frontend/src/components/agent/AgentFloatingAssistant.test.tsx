@@ -231,6 +231,39 @@ describe("agent session history", () => {
     expect(host.textContent).toContain("已恢复历史对话")
   })
 
+  it("preserves the active conversation if restoring history fails", async () => {
+    const technical = "TypeError: internal session adapter"
+    useAgentStore.getState().loadConversation({
+      sessionId: "current-session", messages: [{ role: "user", content: "当前问题" }], confirmations: [],
+    })
+    mocks.fetchAgentSession.mockRejectedValueOnce(new Error(technical))
+    await openHistory()
+    const restore = [...document.body.querySelectorAll("button")].find(button => button.textContent === "继续对话")
+    expect(restore).toBeDefined()
+    await act(async () => restore?.click())
+
+    expect(mocks.fetchAgentSession).toHaveBeenCalledWith(session.id)
+    expect(useAgentStore.getState().sessionId).toBe("current-session")
+    expect(host.textContent).toContain("当前问题")
+    expect(host.textContent).toContain("恢复历史会话失败")
+    expect(document.body.textContent).not.toContain(technical)
+  })
+
+  it("keeps the user's question and displays safe feedback if streaming cannot start", async () => {
+    const technical = "TypeError: internal streaming adapter"
+    useAuthStore.getState().setUser({ id: "fixture-user", name: "用户", role: "admin" })
+    mocks.streamAgentMessage.mockRejectedValueOnce(new Error(technical))
+    await act(async () => root.render(createElement(App, null, createElement(AgentFloatingAssistant))))
+    const suggestion = [...host.querySelectorAll("button")].find(button => button.textContent?.includes("供应商"))
+    expect(suggestion).toBeDefined()
+    await act(async () => suggestion?.click())
+
+    expect(mocks.streamAgentMessage).toHaveBeenCalledOnce()
+    expect(useAgentStore.getState().messages.some(message => message.role === "user" && message.content.includes("供应商"))).toBe(true)
+    expect(host.textContent).toContain("中枢助手请求失败")
+    expect(host.textContent).not.toContain(technical)
+  })
+
   it("shows the empty state when there are no sessions", async () => {
     mocks.fetchAgentSessions.mockResolvedValue({ items: [], page: 1, page_size: 20, total: 0 })
     await openHistory()

@@ -451,6 +451,17 @@ describe('HazchemPanel', () => {
     expect(mocks.fetchChemicalMsdsBytes).toHaveBeenCalledWith('c-1', 'f-1', false)
   })
 
+  it('shows a safe list error and keeps existing chemical records when refresh fails', async () => {
+    mocks.getHazardousChemicals.mockRejectedValueOnce(new Error('TypeError: catalog adapter failed'))
+    await renderPanel()
+    const search = container.querySelector<HTMLButtonElement>('button[data-search]')
+    expect(search).not.toBeNull()
+    await act(async () => search?.click())
+    expect(mocks.getHazardousChemicals).toHaveBeenCalled()
+    expect(container.textContent).toContain('加载危化品档案失败')
+    expect(container.textContent).toContain('乙醇')
+  })
+
   it('previews MSDS through object URLs', async () => {
     mocks.fetchChemicalMsdsBytes.mockResolvedValue({
       base64: Buffer.from('pdf').toString('base64'),
@@ -502,6 +513,10 @@ describe('HazchemPanel', () => {
     expect(aiModal).not.toBeNull()
     const ok = aiModal!.querySelector<HTMLButtonElement>('[data-modal-ok]')
     expect(ok).not.toBeNull()
+    mocks.updateHazardousChemical.mockRejectedValueOnce(new Error('TypeError: archive update adapter failed'))
+    await act(async () => ok!.click())
+    expect(mocks.message.error).toHaveBeenLastCalledWith('操作未完成，请稍后重试')
+    expect(container.contains(aiModal)).toBe(true)
     await act(async () => {
       ok!.click()
       await new Promise((resolve) => setTimeout(resolve, 30))
@@ -574,6 +589,10 @@ describe('HazchemPanel', () => {
     const modal = container.querySelector('[data-modal-open="true"]')
     expect(modal).not.toBeNull()
     const ok = modal!.querySelector<HTMLButtonElement>('[data-modal-ok]')
+    mocks.createHazardousChemical.mockRejectedValueOnce(new Error('TypeError: archive write adapter failed'))
+    await act(async () => ok!.click())
+    expect(mocks.message.error).toHaveBeenLastCalledWith('操作未完成，请稍后重试')
+    expect(container.contains(modal)).toBe(true)
     await act(async () => {
       ok!.click()
       await new Promise((resolve) => setTimeout(resolve, 30))

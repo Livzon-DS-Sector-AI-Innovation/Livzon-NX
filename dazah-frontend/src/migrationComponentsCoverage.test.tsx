@@ -81,7 +81,7 @@ const mocks = vi.hoisted(() => {
     permissionAllowed: true,
     // echarts-for-react mock 捕获各图表 onEvents，供测试触发图表点击
     chartEventHandlers: [] as unknown[],
-    message: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn(), loading: vi.fn() },
+    message: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn(), loading: vi.fn(), destroy: vi.fn() },
     modal: { confirm: vi.fn(({ onOk }: { onOk?: () => unknown }) => void onOk?.()) },
     router: { push: vi.fn(), replace: vi.fn(), refresh: vi.fn(), prefetch: vi.fn() },
   }
@@ -145,6 +145,8 @@ vi.mock('@/actions/quality-capa', () => mocks.moduleFactory('actions/quality-cap
 vi.mock('@/actions/quality-change', () => mocks.moduleFactory('actions/quality-change'))
 vi.mock('@/actions/quality-deviation', () => mocks.moduleFactory('actions/quality-deviation'))
 vi.mock('@/actions/quality-deviation-workbench', () => mocks.moduleFactory('actions/quality-deviation-workbench'))
+vi.mock('@/actions/rd', () => mocks.moduleFactory('actions/rd'))
+vi.mock('@/lib/api/pilot-workflow', () => mocks.moduleFactory('lib/api/pilot-workflow'))
 vi.mock('@/actions/quality-inspection', () => mocks.moduleFactory('actions/quality-inspection'))
 vi.mock('@/actions/validation-audit', () => mocks.moduleFactory('actions/validation-audit'))
 vi.mock('@/lib/feishu-data-source', async (importOriginal) => ({
@@ -262,10 +264,16 @@ vi.mock('antd', async (importOriginal) => {
   ;(Input as typeof Input & { TextArea: typeof TextArea; Password: typeof Password; Search: typeof Search }).TextArea = TextArea
   ;(Input as typeof Input & { TextArea: typeof TextArea; Password: typeof Password; Search: typeof Search }).Password = Password
   ;(Input as typeof Input & { TextArea: typeof TextArea; Password: typeof Password; Search: typeof Search }).Search = Search
-  const AutoComplete = ({ value, defaultValue, onChange, onSearch, placeholder, ...props }: { value?: unknown; defaultValue?: unknown; onChange?: (value: string) => void; onSearch?: (value: string) => void; placeholder?: string } & Record<string, unknown>) =>
-    createElement('input', { ...props, value: value ?? defaultValue ?? '', placeholder, onChange: (event: Event) => { const next = (event.target as HTMLInputElement).value; onChange?.(next); onSearch?.(next) } })
+  const AutoComplete = ({ value, defaultValue, onChange, onSearch, placeholder, ...props }: { value?: unknown; defaultValue?: unknown; onChange?: (value: string) => void; onSearch?: (value: string) => void; placeholder?: string } & Record<string, unknown>) => {
+    const handleChange = (event: Event) => { const next = (event.target as HTMLInputElement).value; onChange?.(next); onSearch?.(next) }
+    return createElement('input', { ...props, value: value ?? defaultValue ?? '', placeholder, onChange: handleChange, onInput: handleChange })
+  }
   const Select = ({ value, defaultValue, options = [], onChange, mode, placeholder, children, ...props }: { value?: unknown; defaultValue?: unknown; options?: Array<{ label: ReactNode; value: string | number }>; onChange?: (value: unknown) => void; mode?: string; placeholder?: string; children?: ReactNode } & Record<string, unknown>) =>
     createElement('select', { ...props, value: mode === 'multiple' || mode === 'tags' ? (Array.isArray(value) ? value : value ? [value] : []) : Array.isArray(value) ? value[0] ?? '' : value ?? defaultValue ?? '', multiple: mode === 'multiple' || mode === 'tags', 'aria-label': placeholder, onChange: (event: Event) => onChange?.(mode === 'multiple' || mode === 'tags' ? [(event.target as HTMLSelectElement).value] : (event.target as HTMLSelectElement).value) }, [createElement('option', { key: 'empty', value: '' }, placeholder ?? ''), ...options.map((option) => createElement('option', { key: String(option.value), value: option.value }, option.label)), children])
+  Object.assign(Select, {
+    Option: ({ value, label, children }: { value: string; label?: ReactNode; children?: ReactNode }) =>
+      createElement('option', { value }, label ?? children),
+  })
   const DatePicker = ({ value, onChange, placeholder }: { value?: unknown; onChange?: (value: unknown) => void; placeholder?: string }) =>
     createElement('input', { type: 'date', value: value && typeof value === 'object' && 'format' in value ? (value as { format: (format: string) => string }).format('YYYY-MM-DD') : '', placeholder, onChange: () => onChange?.(null) })
   const RangePicker = () => createElement('input', { type: 'date' })
@@ -457,6 +465,7 @@ import OnboardingClient from './components/hr/OnboardingClient'
 import OnboardingPrejobClient from './components/hr/OnboardingPrejobClient'
 import PreJobPlanClient from './components/hr/PreJobPlanClient'
 import TrainingLedgerClient from './components/hr/TrainingLedgerClient'
+import RecruitmentClient from './components/hr/RecruitmentClient'
 import TrainingEvaluationListClient from './components/hr/TrainingEvaluationListClient'
 import TrainingNotificationClient from './components/hr/TrainingNotificationClient'
 import OralExamSheetClient from './components/hr/OralExamSheetClient'
@@ -524,6 +533,11 @@ import CertificateManagementDashboard from './components/registration/Certificat
 import CertificateDashboardPage from './components/registration/CertificateDashboardPage'
 import FeeDashboardPage from './components/registration/FeeDashboardPage'
 import FeeLedgerPage from './components/registration/FeeLedgerPage'
+import DossierDetailPage from './app/(dashboard)/registration/dossier-writer/[id]/page'
+import { useDossierWriterStore } from './stores/dossier-writer'
+import { AiFillPanel } from './components/registration/AiFillPanel'
+import { PilotWorkflowDetail } from './components/rd/pilot-workflow/PilotWorkflowDetail'
+import type { PilotWorkflow } from './types/pilot-workflow'
 import { ModuleFeishuDataSourcePage, type FeishuWriteActions } from './components/feishu-data/ModuleFeishuDataSourcePage'
 import ReferenceStandardClient from './components/registration/ReferenceStandardClient'
 import SupplementaryReplyClient from './components/registration/SupplementaryReplyClient'
@@ -856,6 +870,104 @@ describe('migrated component coverage', () => {
     }
   })
 
+  it('preserves a candidate and a job draft across failed recruitment operations', async () => {
+    const candidate = {
+      id: 'candidate-1', name: '候选人甲', job_position: '分析员', interview_status: '通过',
+      fit_level: '高', education: '本科', work_years: 3, match_rate: 90,
+    }
+    const api = (name: string) => getMock('actions/hr', name)
+    getMock('lib/api/client/hr', 'fetchCandidates').mockResolvedValue({
+      data: [candidate], meta: { total: 1, page: 1, page_size: 20 },
+    })
+    const rendered = renderClient(createElement(RecruitmentClient, { initialJobs: [] }))
+    try {
+      await settle()
+      expect(rendered.container.textContent).toContain(candidate.name)
+      const click = (label: string) => findBtn(rendered, label)?.click()
+      const rowAction = (label: string) => Array.from(rendered.container.querySelectorAll('tbody a'))
+        .find(link => link.textContent?.trim() === label)?.parentElement?.click()
+      await expectSafeRequestFailure(api('fetchCandidatesFromFeishu'), () => click('从飞书同步'))
+      await expectSafeRequestFailure(api('batchAnalyzeCandidatesAction'), () => click('AI 筛选'))
+      await expectSafeRequestFailure(api('deleteCandidateAction'), () => rowAction('删除'))
+      await expectSafeRequestFailure(api('createOnboardingFromInterviewAction'), () => rowAction('转入职'))
+      expect(api('deleteCandidateAction')).toHaveBeenCalledWith(candidate.id)
+      expect(api('createOnboardingFromInterviewAction')).toHaveBeenCalledWith(candidate.id)
+
+      const status = rendered.container.querySelector<HTMLSelectElement>('tbody select')
+      expect(status?.value).toBe('通过')
+      await expectSafeRequestFailure(api('updateCandidateAction'), () => {
+        if (status) {
+          status.value = '未通过'
+          status.dispatchEvent(new Event('change', { bubbles: true }))
+        }
+      })
+      expect(status?.value).toBe('通过')
+
+      click('发布招聘信息')
+      await settle()
+      const title = rendered.container.querySelector<HTMLInputElement>('input[placeholder="如：高级前端工程师"]')
+      expect(title).not.toBeNull()
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(title, '示例职位')
+        title?.dispatchEvent(new Event('input', { bubbles: true }))
+      })
+      await expectSafeRequestFailure(api('createJobPosting'), () => click('确定'))
+      expect(title?.value).toBe('示例职位')
+      expect(rendered.container.textContent).toContain(candidate.name)
+    } finally {
+      closeRendered(rendered)
+    }
+  })
+
+  it('keeps the pilot workflow unchanged after upload, approval and deletion are denied', async () => {
+    const date = '2026-08-01'
+    const workflow: PilotWorkflow = {
+      id: 'workflow-1', project_id: null, product_name: '示例项目', scale_up_ratio: 1,
+      equipment_type: '示例设备', equipment_volume: 1, input_document_path: null, input_context: null,
+      status: 'pending', final_report: null, created_by: null, updated_by: null, created_at: date, updated_at: date,
+      steps: [],
+    }
+    const denied = '没有执行此操作的权限，请联系管理员'
+    const rd = (name: string) => getMock('actions/rd', name)
+    const read = getMock('lib/api/pilot-workflow', 'fetchPilotWorkflow')
+    rd('uploadPilotWorkflowDocument').mockResolvedValue({ ok: false, message: denied })
+    const draft = renderClient(createElement(PilotWorkflowDetail, { workflowId: workflow.id, initialWorkflow: workflow }))
+    try {
+      findBtn(draft, '上传工艺文档')?.click()
+      await settle()
+      expect(rd('uploadPilotWorkflowDocument')).toHaveBeenCalledWith(workflow.id, expect.any(File))
+      expect(mocks.message.error).toHaveBeenLastCalledWith(denied)
+      await expectSafeRequestFailure(rd('deletePilotWorkflow'), () => findBtn(draft, '删除')?.click())
+      expect(mocks.router.push).not.toHaveBeenCalled()
+      expect(draft.container.textContent).toContain('待启动')
+      expect(read).not.toHaveBeenCalled()
+    } finally {
+      closeRendered(draft)
+    }
+
+    const waiting: PilotWorkflow = {
+      ...workflow,
+      status: 'waiting_approval',
+      steps: [{
+        id: 'step-1', workflow_id: workflow.id, step_order: 1, step_code: 'review', step_name: '审核',
+        input_data: null, output_data: null, status: 'waiting_approval', error_message: null, started_at: date,
+        completed_at: null, created_at: date, updated_at: date,
+      }],
+    }
+    rd('approvePilotWorkflowStep').mockResolvedValue({ ok: false, message: denied })
+    const review = renderClient(createElement(PilotWorkflowDetail, { workflowId: workflow.id, initialWorkflow: waiting }))
+    try {
+      findBtn(review, '确认并继续')?.click()
+      await settle()
+      expect(rd('approvePilotWorkflowStep')).toHaveBeenCalledWith(workflow.id)
+      expect(mocks.message.error).toHaveBeenLastCalledWith(denied)
+      expect(review.container.textContent).toContain('等待确认')
+      expect(read).not.toHaveBeenCalled()
+    } finally {
+      closeRendered(review)
+    }
+  })
+
   it('covers shared sync polling completion, failure, retry and timeout guards', async () => {
     const Harness = ({
       syncAction,
@@ -1056,9 +1168,12 @@ describe('migrated component coverage', () => {
       tableSelect.dispatchEvent(new Event('change', { bubbles: true }))
       await settle()
     }
-    buttons('保存')[0]?.click()
+    const entityButton = (text: string) => buttons(text).find((button) => button.textContent?.trim() === text)
+    await expectSafeRequestFailure(getMock('actions/hr', 'updateHrFeishuEntitySetting'), () => entityButton('保存')?.click())
+    entityButton('保存')?.click()
     await settle()
-    buttons('测试')[0]?.click()
+    await expectSafeRequestFailure(getMock('actions/hr', 'testHrFeishuEntitySetting'), () => entityButton('测试')?.click())
+    entityButton('测试')?.click()
     await settle()
     buttons('URL填充')[0]?.click()
     await settle()
@@ -1084,7 +1199,7 @@ describe('migrated component coverage', () => {
       mappingSelect.dispatchEvent(new Event('change', { bubbles: true }))
       await settle()
     }
-    queryElement<HTMLButtonElement>(rendered.container, 'aside button:last-of-type')?.click()
+    findBtn(rendered, '保存字段对齐')?.click()
     await settle()
 
     await expectSafeRequestFailure(
@@ -1096,6 +1211,7 @@ describe('migrated component coverage', () => {
     const emailTestButtons = buttons('测试连接')
     emailTestButtons[emailTestButtons.length - 1]?.click()
     await settle()
+    await expectSafeRequestFailure(getMock('actions/hr', 'updateEmailConfig'), () => buttons('保存邮箱配置')[0]?.click())
     buttons('保存邮箱配置')[0]?.click()
     await settle()
     getMock('actions/hr', 'testEmailConfig').mockRejectedValueOnce(new Error('邮箱连接失败'))
@@ -1105,6 +1221,42 @@ describe('migrated component coverage', () => {
     buttons('保存配置')[0]?.click()
     await settle()
     closeRendered(rendered)
+  })
+
+  it('keeps new employee training rows when loading or assigning a training plan fails', async () => {
+    const read = getMock('lib/api/client/hr', 'fetchNewEmployeeTrainingPlans')
+    const write = (name: string) => getMock('actions/hr', name)
+    const employee = {
+      employee_id: 'employee-new', employee_name: '新员工甲', position: '分析员',
+      department: '质量部', progress: 0, completed_count: 0, total_count: 0,
+    }
+    read.mockResolvedValue({ data: [employee], total: 1 })
+    getMock('lib/api/client/hr', 'fetchTrainingDepartments').mockResolvedValue(['质量部'])
+    getMock('lib/api/client/hr', 'fetchDepartmentPositions').mockResolvedValue(['质量岗位'])
+    const rendered = renderClient(createElement(NewEmployeeTrainingListClient))
+    try {
+      await settle()
+      const click = (label: string) => findBtn(rendered, label)?.click()
+      read.mockRejectedValueOnce(new Error('TypeError: employee training list adapter failed'))
+      click('拉取新员工')
+      await settle()
+      expect(mocks.message.error).toHaveBeenLastCalledWith('操作未完成，请稍后重试')
+      expect(rendered.container.textContent).toContain(employee.employee_name)
+      await expectSafeRequestFailure(write('generateNewEmployeeTrainingPlan'), () => click('生成计划'))
+      expect(write('generateNewEmployeeTrainingPlan')).toHaveBeenCalledWith({ employee_id: employee.employee_id })
+      const position = queryElement<HTMLSelectElement>(rendered.container, 'select[aria-label="请选择培训岗位"]')
+      expect(position?.querySelector('option[value="质量岗位"]')).not.toBeNull()
+      if (position) {
+        position.value = '质量岗位'
+        position.dispatchEvent(new Event('change', { bubbles: true }))
+      }
+      await settle()
+      await expectSafeRequestFailure(write('createPositionTrainingMappingAction'), () => click('保存'))
+      expect(write('generateNewEmployeeTrainingPlan')).toHaveBeenCalledOnce()
+      expect(rendered.container.textContent).toContain(employee.employee_name)
+    } finally {
+      closeRendered(rendered)
+    }
   })
 
   it('renders HR training and personnel pages through loaded and empty states', async () => {
@@ -1513,17 +1665,23 @@ describe('migrated component coverage', () => {
     await settle()
     await selectByOption('config-1')
     const newHireButton = Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent?.includes('拉取新员工'))
+    await expectSafeRequestFailure(getMock('lib/api/client/hr', 'fetchNewHires'), () => newHireButton?.click())
     newHireButton?.click()
     await settle()
     const exportButton = Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent?.includes('一键导出'))
     exportButton?.click()
     await settle()
-    Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent === '保存')?.click()
+    const saveTraining = () => Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent === '保存')?.click()
+    await expectSafeRequestFailure(getMock('actions/hr', 'upsertTrainingSession'), saveTraining)
+    saveTraining()
     await settle()
-    Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent?.includes('添加到培训台账'))?.click()
-    await settle()
-    // 台账入账改为受控确认弹窗：点击弹窗内"确定"触发 doAddToLedger
-    Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent === '确 定' || button.textContent === '确定')?.click()
+    const addToLedger = async () => {
+      findBtn(rendered, '添加到培训台账')?.click()
+      await settle()
+      findBtn(rendered, '确定')?.click()
+    }
+    await expectSafeRequestFailure(getMock('actions/hr', 'createTrainingLedger'), addToLedger)
+    await addToLedger()
     await settle()
     expect(getMock('actions/hr', 'upsertTrainingSession')).toHaveBeenCalled()
     expect(getMock('actions/hr', 'upsertTrainingDocument')).toHaveBeenCalled()
@@ -1937,8 +2095,12 @@ describe('migrated component coverage', () => {
     await settle()
     Array.from(certificate.container.querySelectorAll('button')).find((button) => button.textContent?.includes('编辑选中'))?.click()
     await settle()
+    await expectSafeRequestFailure(getMock('actions/registration', 'updateCertificateEntry'), () => findBtn(certificate, '确定')?.click())
+    expect(certificate.container.querySelector('[role="dialog"]')).not.toBeNull()
     Array.from(certificate.container.querySelectorAll('button')).find((button) => button.textContent === '确定')?.click()
     await settle()
+    await expectSafeRequestFailure(getMock('actions/registration', 'deleteCertificateEntry'), () => findBtn(certificate, '删除选中')?.click())
+    expect(certificate.container.textContent).toContain('GMP证书')
     Array.from(certificate.container.querySelectorAll('button')).find((button) => button.textContent?.includes('删除选中'))?.click()
     await settle()
     Array.from(certificate.container.querySelectorAll('button')).find((button) => button.textContent?.includes('新增'))?.click()
@@ -2336,12 +2498,16 @@ describe('migrated component coverage', () => {
     // 编辑弹窗 → 保存 → updateOnboardingAction（antd Modal mock 将 okText 渲染为「确定」）
     Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent?.includes('编辑'))?.click()
     await settle()
+    await expectSafeRequestFailure(getMock('actions/hr', 'updateOnboardingAction'), () => findButton('确定')?.click())
+    expect(rendered.container.querySelector('[role="dialog"]')).not.toBeNull()
     findButton('确定')?.click()
     await settle()
     expect(getMock('actions/hr', 'updateOnboardingAction')).toHaveBeenCalled()
     // 删除（Popconfirm 确认）→ deleteOnboarding
     await settle()
     const deleteBtn = Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent?.includes('删除'))
+    await expectSafeRequestFailure(getMock('actions/hr', 'deleteOnboardingAction'), () => deleteBtn?.click())
+    expect(rendered.container.textContent).toContain('候选人A')
     if (deleteBtn) {
       deleteBtn.click()
       await settle()
@@ -2450,6 +2616,38 @@ describe('migrated component coverage', () => {
     closeRendered(rendered)
   })
 
+  it('blocks an oversized annual training plan and a pending import after permission is revoked', async () => {
+    const action = getMock('actions/hr', 'importAnnualTrainingPlan')
+    getMock('lib/api/client/hr', 'fetchAnnualTrainingPlans').mockResolvedValue({ data: [] })
+    const page = createElement(AnnualPlanListClient)
+    const rendered = renderClient(page)
+    const click = async (text: string) => {
+      await act(async () => findBtn(rendered, text)?.click())
+    }
+    try {
+      await settle()
+      await click('导入文档')
+      await click('选择文档')
+      const size = vi.spyOn(File.prototype, 'size', 'get').mockReturnValue(50 * 1024 * 1024)
+      try {
+        await click('确定')
+        expect(mocks.message.error).toHaveBeenLastCalledWith('文件过大，请缩小文件后重试')
+        expect(action).not.toHaveBeenCalled()
+      } finally {
+        size.mockRestore()
+      }
+      mocks.permissionAllowed = false
+      await act(async () => rendered.root.render(createElement(QueryClientProvider, { client: rendered.client },
+        createElement(RenderBoundary, null, createElement(AnnualPlanListClient)))))
+      await click('确定')
+      expect(mocks.message.error).toHaveBeenLastCalledWith(expect.stringContaining('导入权限'))
+      expect(action).not.toHaveBeenCalled()
+      expect(rendered.container.querySelector('[role="dialog"]')).not.toBeNull()
+    } finally {
+      closeRendered(rendered)
+    }
+  })
+
   it('drives position training list department, CRUD, import, export and clear flows', async () => {
     const list = {
       id: 'position-list-1', department: '质量部', position: '分析员',
@@ -2505,10 +2703,10 @@ describe('migrated component coverage', () => {
     const findButton = (text: string) => Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent?.includes(text))
     findButton('新增映射')?.click()
     await settle()
-    const source = rendered.container.querySelector('input[placeholder*="飞书源部门名"]') as HTMLInputElement | null
+    const source = rendered.container.querySelector<HTMLInputElement>('[role="dialog"] input[placeholder*="103一车间"]')
     if (source) {
       source.value = '新部门'
-      source.dispatchEvent(new Event('change', { bubbles: true }))
+      source.dispatchEvent(new Event('input', { bubbles: true }))
     }
     for (const select of Array.from(rendered.container.querySelectorAll('select'))) {
       const option = Array.from(select.options).find((item) => item.value)
@@ -2517,13 +2715,20 @@ describe('migrated component coverage', () => {
         select.dispatchEvent(new Event('change', { bubbles: true }))
       }
     }
+    await expectSafeRequestFailure(getMock('actions/hr', 'createTrainingDeptMappingAction'), () => findButton('确定')?.click())
+    expect(rendered.container.querySelector('[role="dialog"]')).not.toBeNull()
     findButton('确定')?.click()
     await settle()
     for (const select of Array.from(rendered.container.querySelectorAll('select'))) {
       const option = Array.from(select.options).find((item) => item.value === 'drop')
       if (option) {
-        select.value = option.value
-        select.dispatchEvent(new Event('change', { bubbles: true }))
+        const apply = () => {
+          select.value = option.value
+          select.dispatchEvent(new Event('change', { bubbles: true }))
+        }
+        await expectSafeRequestFailure(getMock('actions/hr', 'updateTrainingDeptMappingAction'), apply)
+        apply()
+        break
       }
     }
     await settle()
@@ -2912,7 +3117,12 @@ describe('migrated component coverage', () => {
       inputs[0].dispatchEvent(new Event('change', { bubbles: true }))
     }
     await settle()
-    for (const button of Array.from(rendered.container.querySelectorAll('button')).filter((item) => item.textContent?.includes('保存'))) button.click()
+    const save = [...rendered.container.querySelectorAll('button')].filter(item => item.textContent?.includes('保存'))
+    await expectSafeRequestFailure(getMock('actions/hr', 'updateDeptApprovalConfigAction'), () => save[0]?.click())
+    for (const button of save) button.click()
+    await settle()
+    const deleteConfig = rendered.container.querySelector('tbody .anticon-delete')?.closest('button')
+    await expectSafeRequestFailure(getMock('actions/hr', 'deleteDeptApprovalConfigAction'), () => deleteConfig?.click())
     for (const button of Array.from(rendered.container.querySelectorAll('button')).filter((item) => !item.textContent?.trim())) button.click()
     await settle()
     expect(getMock('actions/hr', 'updateDeptApprovalConfigAction')).toHaveBeenCalled()
@@ -3240,6 +3450,8 @@ describe('migrated component coverage', () => {
       textArea.dispatchEvent(new Event('input', { bubbles: true }))
       textArea.dispatchEvent(new Event('change', { bubbles: true }))
     }
+    await expectSafeRequestFailure(getMock('actions/hr', 'updateCandidateAction'), () => button('保存修改')?.click())
+    expect(button('取消')).toBeDefined()
     button('保存修改')?.click()
     await settle()
     expect(getMock('actions/hr', 'updateCandidateAction')).toHaveBeenCalledWith('candidate-1', expect.objectContaining({ name: expect.any(String) }))
@@ -3268,6 +3480,7 @@ describe('migrated component coverage', () => {
     const interviewRendered = renderClient(createElement(CandidateDetailClient, { candidate: interviewCandidate as never }))
     await settle()
     button = (text: string) => Array.from(interviewRendered.container.querySelectorAll('button')).find((item) => item.textContent?.includes(text))
+    await expectSafeRequestFailure(getMock('actions/hr', 'sendCandidateNoticeAction'), () => button('发送面试通知')?.click())
     button('发送面试通知')?.click()
     await settle()
     expect(getMock('actions/hr', 'sendCandidateNoticeAction')).toHaveBeenCalledWith('candidate-1', 'interview_notice')
@@ -3354,8 +3567,11 @@ describe('migrated component coverage', () => {
     await settle()
     const typeSelect = rendered.container.querySelector('select') as HTMLSelectElement | null
     if (typeSelect) {
-      typeSelect.value = '正常离职'
-      typeSelect.dispatchEvent(new Event('change', { bubbles: true }))
+      await expectSafeRequestFailure(getMock('actions/hr', 'updateOffboardingRecord'), () => {
+        typeSelect.value = '正常离职'
+        typeSelect.dispatchEvent(new Event('change', { bubbles: true }))
+      })
+      expect(table?.textContent).toContain('辞职')
     }
     await settle()
     const statusCell = Array.from(table?.querySelectorAll('span') ?? []).find((item) => item.textContent === '待交接')
@@ -3368,6 +3584,9 @@ describe('migrated component coverage', () => {
     }
     await settle()
 
+    const deleteRecord = table?.querySelector('.anticon-delete')?.closest('button')
+    await expectSafeRequestFailure(getMock('actions/hr', 'deleteOffboardingRecord'), () => deleteRecord?.click())
+    expect(table?.textContent).toContain('李四')
     for (let index = 0; index < 4; index += 1) {
       const actionButton = rendered.container.querySelector('table')?.querySelectorAll('button')[index] as HTMLButtonElement | undefined
       actionButton?.click()
@@ -3415,6 +3634,47 @@ describe('migrated component coverage', () => {
     }
     await settle()
     closeRendered(rendered)
+  })
+
+  it.each([
+    {
+      page: 'project ledger', component: ProjectLedgerSheetPage, history: 'fetchProjectLedgerRecordHistory',
+      remove: 'deleteProjectLedgerEntry', update: 'updateProjectLedgerEntry', edit: '编辑主记录', submit: '保存',
+    },
+    {
+      page: 'declaration progress', component: DeclarationProgressPage, history: 'fetchDeclarationProgressRecordHistory',
+      remove: 'deleteDeclarationProgressEntry', update: 'updateDeclarationProgressEntry', edit: '编辑选中', submit: '确定',
+    },
+  ])('retains the selected $page record after failed history, delete and edit requests', async ({
+    component, history, remove, update, edit, submit,
+  }) => {
+    const record = {
+      record_id: 'record-1', sequence: 1, latest_values: { project_name: '质量项目' },
+      latest_style_marks: {}, history_count: 2,
+    }
+    const rendered = renderClient(createElement(component, {
+      detail: {
+        sheet_key: 'project-fixture', sheet_name: '项目记录', records: [record],
+        columns: [{ key: 'project_name', label: '项目名称' }],
+      } as never,
+    }))
+    try {
+      await settle()
+      const row = queryElement<HTMLTableRowElement>(rendered.container, 'tbody tr')
+      expect(row?.textContent).toContain('质量项目')
+      row?.click()
+      await settle()
+      await expectSafeRequestFailure(getMock('lib/api/client/registration', history), () => findBtn(rendered, '查看历史')?.click())
+      await expectSafeRequestFailure(getMock('actions/registration', remove), () => findBtn(rendered, '删除选中')?.click())
+      expect(row?.isConnected).toBe(true)
+      findBtn(rendered, edit)?.click()
+      await settle()
+      await expectSafeRequestFailure(getMock('actions/registration', update), () => findBtn(rendered, submit)?.click())
+      expect(findBtn(rendered, submit)).toBeDefined()
+      expect(rendered.container.textContent).toContain('质量项目')
+    } finally {
+      closeRendered(rendered)
+    }
   })
 
   it('drives authorization ledger create, update, status, delete and export flows', async () => {
@@ -3518,7 +3778,7 @@ describe('migrated component coverage', () => {
     const addInput = Array.from(rendered.container.querySelectorAll('input')).find((input) => input.placeholder?.includes('可添加离职人员'))
     if (addInput) {
       addInput.value = '赵六'
-      addInput.dispatchEvent(new Event('change', { bubbles: true }))
+      addInput.dispatchEvent(new Event('input', { bubbles: true }))
       await settle()
       Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent === '添加')?.click()
       await settle()
@@ -3720,15 +3980,21 @@ describe('migrated component coverage', () => {
     getMock('actions/hr', 'importEsgRecordsByDept').mockResolvedValue({ message: '导入完成' })
     const rendered = renderClient(createElement(TrainingLedgerPageClient))
     await settle()
+    const customDepartment = [...rendered.container.querySelectorAll('button')]
+      .find(button => button.textContent === '质量部')
+    await expectSafeRequestFailure(getMock('actions/hr', 'deleteCustomTrainingDepartment'),
+      () => customDepartment?.querySelector<HTMLElement>('span')?.click())
+    expect(customDepartment?.isConnected).toBe(true)
     const addDept = Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent?.includes('添加部门'))
     addDept?.click()
     await settle()
     const addInput = Array.from(rendered.container.querySelectorAll('input')).find((input) => input.placeholder?.includes('请输入或选择部门名称'))
     if (addInput) {
-      addInput.value = '研发部'
-      addInput.dispatchEvent(new Event('change', { bubbles: true }))
+      addInput.value = '包装部'
+      addInput.dispatchEvent(new Event('input', { bubbles: true }))
       await settle()
-      Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent?.includes('确认添加'))?.click()
+      await expectSafeRequestFailure(getMock('actions/hr', 'addCustomTrainingDepartment'), () => findBtn(rendered, '确定')?.click())
+      findBtn(rendered, '确定')?.click()
       await settle()
     }
     const dept = Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent === '生产部')
@@ -3744,7 +4010,15 @@ describe('migrated component coverage', () => {
     await settle()
     await Promise.resolve()
     const exportButton = Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent === '导出')
-    exportButton?.click()
+    const previousFetch = globalThis.fetch
+    const request = vi.fn(previousFetch)
+    vi.stubGlobal('fetch', request)
+    try {
+      await expectSafeRequestFailure(request, () => exportButton?.click())
+      expect(request).toHaveBeenCalledWith(expect.stringContaining('/training-ledgers/export-by-dept?'), { cache: 'no-store' })
+    } finally {
+      vi.stubGlobal('fetch', previousFetch)
+    }
     const printButton = Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent === '打印')
     printButton?.click()
     const clearButton = Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent?.includes('全部清除'))
@@ -3752,14 +4026,15 @@ describe('migrated component coverage', () => {
     clearButton?.click()
     await settle()
     const esgTab = Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent === 'ESG培训报表')
-    esgTab?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    await settle()
+    expect(esgTab).toBeDefined()
+    await act(async () => esgTab?.click())
     const syncButton = Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent?.includes('从台账同步'))
+    expect(syncButton).toBeDefined()
     await expectSafeRequestFailure(
       getMock('actions/hr', 'syncEsgFromLedger'),
-      () => { syncButton?.dispatchEvent(new MouseEvent('click', { bubbles: true })) },
+      () => act(async () => syncButton?.click()),
     )
-    syncButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await act(async () => syncButton?.click())
     await settle()
     expect(getMock('actions/hr', 'syncEsgFromLedger')).toHaveBeenCalled()
     closeRendered(rendered)
@@ -3809,6 +4084,8 @@ describe('migrated component coverage', () => {
     const importer = renderClient(createElement(TrainingLedgerImportModal, { open: true, department: '质量部', onClose: vi.fn(), onSuccess: success }))
     await settle()
     const uploadText = importer.container.querySelector('.ant-upload-text')
+    await expectSafeRequestFailure(getMock('actions/hr', 'previewTrainingImport'), () => uploadText?.parentElement?.click())
+    expect(success).not.toHaveBeenCalled()
     uploadText?.parentElement?.click()
     await settle()
     const mappingSelect = Array.from(importer.container.querySelectorAll('select')).find((select) => select.querySelector('option[value="employee_name"]'))
@@ -3820,7 +4097,10 @@ describe('migrated component coverage', () => {
     sheetCheckbox?.click()
     sheetCheckbox?.click()
     await settle()
-    Array.from(importer.container.querySelectorAll('button')).find((button) => button.textContent?.includes('确认导入'))?.click()
+    await expectSafeRequestFailure(getMock('actions/hr', 'confirmTrainingImport'), () => findBtn(importer, '确认导入')?.click())
+    expect(success).not.toHaveBeenCalled()
+    expect(findBtn(importer, '确认导入')).toBeDefined()
+    findBtn(importer, '确认导入')?.click()
     await settle()
     expect(getMock('actions/hr', 'previewTrainingImport')).toHaveBeenCalled()
     expect(getMock('actions/hr', 'confirmTrainingImport')).toHaveBeenCalled()
@@ -3862,7 +4142,13 @@ describe('migrated component coverage', () => {
       initialNotificationSettings: { ...notificationSettings, is_enabled: false, recipient_open_id: null, pending_count: 0 },
     }))
     await settle()
-    Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent?.includes('刷新数据'))?.click()
+    const invalidate = vi.spyOn(rendered.client, 'invalidateQueries')
+      .mockRejectedValueOnce(new Error('TypeError: regulatory refresh adapter failed'))
+    findBtn(rendered, '刷新数据')?.click()
+    await settle()
+    expect(mocks.message.error).toHaveBeenLastCalledWith('操作未完成，请稍后重试')
+    invalidate.mockRestore()
+    findBtn(rendered, '刷新数据')?.click()
     await settle()
     const source = Array.from(rendered.container.querySelectorAll('select')).find((select) => select.querySelector('option[value="NMPA"]'))
     if (source) {
@@ -3879,7 +4165,11 @@ describe('migrated component coverage', () => {
     await settle()
     Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent?.includes('查看详情'))?.click()
     await settle()
-    Array.from(rendered.container.querySelectorAll('button')).find((button) => button.textContent?.includes('查看/分析当前选中'))?.click()
+    await expectSafeRequestFailure(
+      getMock('lib/api/client/regulatoryTracker', 'analyzeRegulatoryDocumentClient'),
+      () => findBtn(rendered, '查看/分析当前选中')?.click(),
+    )
+    findBtn(rendered, '查看/分析当前选中')?.click()
     await settle()
     const keyword = Array.from(rendered.container.querySelectorAll('input')).find((input) => input.placeholder?.includes('关键词搜索'))
     if (keyword) {
@@ -4027,6 +4317,134 @@ describe('migrated component coverage', () => {
       expect(mocks.router.refresh).not.toHaveBeenCalled()
     } finally {
       closeRendered(rendered)
+    }
+  })
+
+  it('keeps the selected chapter and material when dossier updates or exports fail', async () => {
+    const dossier = { id: 'record-1', product_name: '示例品种', status: 'active' }
+    const chapter = { id: 'chapter-1', chapter_code: '3.2.P', chapter_title: '分析方法', has_content: false, children: [] }
+    const asset = { id: 'asset-1', original_filename: '方法数据.docx', uploaded_at: '2026-08-01', category_id: null }
+    const oldStore = useDossierWriterStore.getState()
+    useDossierWriterStore.setState({
+      currentDossier: dossier as never, chapterTree: [chapter] as never, loadDossier: vi.fn(), loadChapterTree: vi.fn(),
+    })
+    const api = (operation: string) => getMock('lib/api/dossier-writer-client', operation)
+    api('fetchChapterAssets').mockResolvedValue([asset])
+    api('fetchAssetCategories').mockResolvedValue([{ id: 'category-1', category_name: '方法资料' }])
+    const rendered = renderClient(createElement(DossierDetailPage))
+    try {
+      await settle()
+      const click = (label: string) => findBtn(rendered, label)?.click()
+      await expectSafeRequestFailure(api('matchAssetsToChapters'), () => click('智能匹配素材'))
+      await expectSafeRequestFailure(api('exportDossier'), () => click('导出全部'))
+      expect(api('exportDossier')).toHaveBeenLastCalledWith(dossier.id)
+      click('上传模板')
+      await settle()
+      const file = rendered.container.querySelector<HTMLInputElement>('#detail-template-upload')
+      expect(file).not.toBeNull()
+      await expectSafeRequestFailure(api('uploadTemplates'), () => {
+        Object.defineProperty(file, 'files', { value: [new File(['sample'], '模板.docx')] })
+        file?.dispatchEvent(new Event('change', { bubbles: true }))
+      })
+      expect(rendered.container.querySelector('[role="dialog"]')).not.toBeNull()
+      click('取消')
+      await settle()
+
+      click(chapter.chapter_title)
+      await settle()
+      expect(rendered.container.textContent).toContain(asset.original_filename)
+      await expectSafeRequestFailure(api('exportDossier'), () => click('导出当前章节'))
+      expect(api('exportDossier')).toHaveBeenLastCalledWith(dossier.id, [chapter.id])
+      await expectSafeRequestFailure(api('fillChapterFields'), () => click('提取并填充'))
+      expect(api('fillChapterFields')).toHaveBeenLastCalledWith(chapter.id)
+      expect(mocks.message.destroy).toHaveBeenCalledWith('filling')
+      const category = rendered.container.querySelector<HTMLSelectElement>('select[aria-label="选择分类"]')
+      expect(category).not.toBeNull()
+      await expectSafeRequestFailure(api('updateAssetCategory'), () => {
+        if (category) {
+          category.value = 'category-1'
+          category.dispatchEvent(new Event('change', { bubbles: true }))
+        }
+      })
+      expect(api('updateAssetCategory')).toHaveBeenCalledWith(asset.id, 'category-1')
+      expect(rendered.container.textContent).toContain(asset.original_filename)
+    } finally {
+      closeRendered(rendered)
+      useDossierWriterStore.setState(oldStore)
+    }
+  })
+
+  it('retains extracted fields and page selection when dossier fill requests fail', async () => {
+    const api = (operation: string) => getMock('lib/api/dossier-writer-client', operation)
+    const asset = { id: 'asset-1', original_filename: '方法附件.pdf', uploaded_at: '2026-08-01', category_id: 'cat-1' }
+    const field = {
+      field_name: '图表附录', field_type: 'image_appendix', value: null, confidence: 0.9,
+      source: '', field_mapping_id: 'field-1', source_category: '图表附件',
+    }
+    api('fetchAssetCategories').mockResolvedValue([{ id: 'cat-1', category_name: '图表附件', category_type: 'image_appendix' }])
+    api('aiPreviewExtraction').mockResolvedValue({ success: true, fields: [field] })
+    api('splitPreview').mockResolvedValue({ pages: [{ page_number: 1, content_summary: '示例表格' }] })
+    const onAssetsChange = vi.fn()
+    const onFillComplete = vi.fn()
+    const view = renderClient(createElement(AiFillPanel, {
+      chapterId: 'chapter-1', chapterCode: '3.2.P', assets: [asset], onAssetsChange, onFillComplete,
+    }))
+    try {
+      await settle()
+      const click = (label: string) => findBtn(view, label)?.click()
+      await expectSafeRequestFailure(api('aiPreviewExtraction'), () => click('AI 智能提取'))
+      click('AI 智能提取')
+      await settle()
+      expect(view.container.textContent).toContain(field.field_name)
+      await expectSafeRequestFailure(api('aiConfirmAndFill'), () => click('确认并填充'))
+      expect(api('aiConfirmAndFill')).toHaveBeenCalledWith('chapter-1', { fields: [field] })
+      expect(onFillComplete).not.toHaveBeenCalled()
+      await expectSafeRequestFailure(api('splitPreview'), () => click('选择页'))
+      click('选择页')
+      await settle()
+      expect(view.container.textContent).toContain('示例表格')
+      const slot = view.container.querySelector<HTMLSelectElement>('select[aria-label="插入到..."]')
+      expect(slot).not.toBeNull()
+      await expectSafeRequestFailure(api('splitConfirmAndInsert'), () => {
+        if (slot) {
+          slot.value = field.field_name
+          slot.dispatchEvent(new Event('change', { bubbles: true }))
+        }
+      })
+      expect(view.container.textContent).toContain('示例表格')
+      expect(onAssetsChange).not.toHaveBeenCalled()
+    } finally {
+      closeRendered(view)
+    }
+  })
+
+  it('keeps certificate imports recoverable when the write result cannot be confirmed', async () => {
+    const upload = getMock('actions/registration', 'importCertificateWorkbook')
+    const download = getMock('lib/api/client/registration', 'fetchCertificateWorkbookExport')
+    upload.mockRejectedValueOnce(new Error('TypeError: internal certificate import'))
+      .mockResolvedValueOnce({ ok: true, data: { replaced_record_count: 0, imported_record_count: 1 } })
+    const view = renderClient(createElement(CertificateDashboardPage, {
+      overview: { total_records: 0, sheet_count: 0, issuer_count: 0, product_count: 0, expired_count: 0, due_90_count: 0, total_pages: 0, sheet_summaries: [], records: [] } as never,
+      reminderSettings: { is_enabled: false, reminder_days: 90, recipient_open_id: null, recipient_name: null, recipient_department: null, pending_count: 0 } as never,
+    }))
+    try {
+      const picker = view.container.querySelector<HTMLInputElement>('input[type=file]')
+      expect(picker).not.toBeNull()
+      const select = async () => {
+        Object.defineProperty(picker, 'files', { configurable: true, value: [new File(['sample'], '证书台账.xlsx')] })
+        await act(async () => picker?.dispatchEvent(new Event('change', { bubbles: true })))
+        await settle()
+      }
+      await select()
+      expect(mocks.message.error).toHaveBeenLastCalledWith('暂未确认药政证书台账导入结果，请先查看业务记录后再决定是否重试')
+      expect(mocks.router.refresh).not.toHaveBeenCalled()
+      await select()
+      expect(upload).toHaveBeenCalledTimes(2)
+      expect(mocks.router.refresh).toHaveBeenCalledOnce()
+      await expectSafeRequestFailure(download, () => findBtn(view, '导出药政证书台账')?.click())
+      expect(view.container.textContent).toContain('证书管理仪表盘')
+    } finally {
+      closeRendered(view)
     }
   })
 
@@ -4478,6 +4896,7 @@ describe('quality deviation history / workbench / inspection modal coverage', ()
     findButton('刷新')?.click()
     await settle()
     // 详情抽屉：报告正文 / 参考来源 / 附件与预览
+    await expectSafeRequestFailure(getMock('lib/api/client/quality', 'fetchDeviationWorkbenchReport'), () => findButton('查看')?.click())
     findButton('查看')?.click()
     await settle()
     expect(rendered.container.textContent).toContain('调查报告 - WB-2026-0001')
@@ -4500,6 +4919,7 @@ describe('quality deviation history / workbench / inspection modal coverage', ()
     findButton('设置')?.click()
     await settle()
     expect(rendered.container.textContent).toContain('偏差工作台设置')
+    await expectSafeRequestFailure(getMock('actions/quality-deviation-workbench', 'updateDeviationWorkbenchSettings'), () => findButton('保存')?.click())
     findButton('保存')?.click()
     await settle()
     expect(getMock('actions/quality-deviation-workbench', 'updateDeviationWorkbenchSettings')).toHaveBeenCalled()
@@ -4514,6 +4934,8 @@ describe('quality deviation history / workbench / inspection modal coverage', ()
     findButton('选择文件')?.click()
     await settle()
     expect(mocks.message.success).toHaveBeenCalledWith(expect.stringContaining('上传成功'))
+    await expectSafeRequestFailure(getMock('actions/quality-deviation-workbench', 'analyzeDeviationWorkbench'), () => findButton('生成调查报告')?.click())
+    expect(rendered.container.textContent).toContain('template.pdf')
     findButton('生成调查报告')?.click()
     await settle()
     expect(getMock('actions/quality-deviation-workbench', 'analyzeDeviationWorkbench')).toHaveBeenCalled()
@@ -4553,6 +4975,8 @@ describe('quality deviation history / workbench / inspection modal coverage', ()
     findButton('查看')?.click()
     await settle()
     expect(rendered.container.textContent).toContain('模型超时')
+    await expectSafeRequestFailure(getMock('actions/quality-deviation-workbench', 'deleteDeviationWorkbenchReport'), () => findButton('删除')?.click())
+    expect(rendered.container.textContent).toContain('失败样本')
     findButton('删除')?.click()
     await settle()
     expect(getMock('actions/quality-deviation-workbench', 'deleteDeviationWorkbenchReport')).toHaveBeenCalledWith('f1')
@@ -4970,6 +5394,10 @@ describe('sidebar navigation / onboarding attachment flow / validation audit she
       await settle()
     }
     // 带 token PDF → 预览弹窗
+    await expectSafeRequestFailure(
+      getMock('lib/api/client/hr', 'fetchOnboardingAttachmentContent'),
+      () => clickText('离职证明.pdf'),
+    )
     await clickText('离职证明.pdf')
     expect(rendered.container.textContent).toContain('预览 - 离职证明.pdf')
     // 关闭预览

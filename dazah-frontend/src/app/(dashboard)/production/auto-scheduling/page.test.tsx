@@ -676,6 +676,21 @@ describe('AutoSchedulingPage', () => {
     expect(Boolean(container.querySelector('table .ant-btn-dangerous'))).toBe(remove)
   })
 
+  it('shows safe feedback and keeps the draft available when its download fails', async () => {
+    const technicalError = 'TypeError: internal draft download failure'
+    setViewUser(['access', 'query', 'operate'], ['sensitive_export'])
+    mockHistory()
+    actions.downloadScheduleDraftRecordFile.mockRejectedValueOnce(new Error(technicalError))
+    await render()
+    const download = [...container.querySelectorAll<HTMLButtonElement>('table button')].find(button => button.textContent?.trim() === '下载')
+    expect(download).toBeDefined()
+    await act(async () => download?.click())
+    expect(actions.downloadScheduleDraftRecordFile).toHaveBeenCalledWith(HISTORY_RECORD.id)
+    await vi.waitFor(() => expect(document.body.textContent).toContain('操作未完成，请稍后重试'))
+    expect(document.body.textContent).not.toContain(technicalError)
+    expect(download?.isConnected).toBe(true)
+  })
+
   it('removes historical actions when sensitive grants are revoked', async () => {
     setViewUser(['access', 'query', 'operate'], ['delete', 'sensitive_export'])
     mockHistory()

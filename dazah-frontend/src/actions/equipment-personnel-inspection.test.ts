@@ -47,6 +47,18 @@ it.each([
   expect(revalidatePath).not.toHaveBeenCalled()
 })
 
+it('rejects an empty image selection without sending a work order update', async () => {
+  const fetcher = vi.fn()
+  vi.stubGlobal('fetch', fetcher)
+  const form = new FormData()
+  form.append('files', new File([], 'empty.jpg'))
+
+  await expect(uploadWorkOrderImages('fixture-order', form)).resolves.toEqual({
+    ok: false, message: '请选择非空图片后重新上传',
+  })
+  expect(fetcher).not.toHaveBeenCalled()
+})
+
 it.each([
   ['更新角色', () => updateRole('role/1', { name: '维修员' }), '/roles/role%2F1', 'PUT', { name: '维修员' }],
   ['删除角色', () => deleteRole('role/1'), '/roles/role%2F1', 'DELETE', undefined],

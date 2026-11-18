@@ -304,6 +304,12 @@ describe('SafetyFacilityPanel', () => {
     expect(mocks.getSafetyFacilities).toHaveBeenCalledWith(
       expect.objectContaining({ category: 'gas_detector' })
     )
+    const all = container.querySelector<HTMLButtonElement>('[data-segmented="all"]')
+    expect(all).not.toBeNull()
+    mocks.getSafetyFacilities.mockRejectedValueOnce(new Error('TypeError: facility filter adapter failed'))
+    await act(async () => all?.click())
+    expect(container.textContent).toContain('加载安全设施失败')
+    expect(container.textContent).not.toContain('facility filter adapter failed')
   })
 
   it('disables edit actions without operate permission', async () => {
@@ -330,6 +336,10 @@ describe('SafetyFacilityPanel', () => {
     expect(modal).not.toBeNull()
     const ok = modal!.querySelector<HTMLButtonElement>('button[data-modal-ok]')
     expect(ok).not.toBeNull()
+    mocks.createSafetyFacility.mockRejectedValueOnce(new Error('TypeError: facility write adapter failed'))
+    await act(async () => ok?.click())
+    expect(mocks.message.error).toHaveBeenLastCalledWith('操作未完成，请稍后重试')
+    expect(modal?.isConnected).toBe(true)
     await act(async () => {
       ok!.click()
       await new Promise((resolve) => setTimeout(resolve, 30))

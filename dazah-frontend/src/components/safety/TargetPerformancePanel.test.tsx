@@ -521,6 +521,11 @@ describe('TargetPerformancePanel', () => {
     expect(mocks.getSafetyTargets).toHaveBeenCalledWith(
       expect.objectContaining({ year: expect.any(Number), status: 'achieved' })
     )
+    mocks.getSafetyTargets.mockRejectedValueOnce(new Error('TypeError: target list adapter failed'))
+    const active = container.querySelector<HTMLButtonElement>('[data-segmented="not_achieved"]')
+    expect(active).not.toBeNull()
+    await act(async () => active?.click())
+    expect(container.textContent).toContain('加载安全目标失败')
   })
 
   it('creates a target through the modal submit', async () => {
@@ -537,6 +542,10 @@ describe('TargetPerformancePanel', () => {
     expect(modal).not.toBeNull()
     const ok = modal!.querySelector<HTMLButtonElement>('button[data-modal-ok]')
     expect(ok).not.toBeNull()
+    mocks.createSafetyTarget.mockRejectedValueOnce(new Error('TypeError: target write adapter failed'))
+    await act(async () => ok!.click())
+    expect(mocks.message.error).toHaveBeenLastCalledWith('操作未完成，请稍后重试')
+    expect(container.contains(modal)).toBe(true)
     await act(async () => {
       ok!.click()
       await new Promise((resolve) => setTimeout(resolve, 30))
@@ -554,6 +563,10 @@ describe('TargetPerformancePanel', () => {
     const modal = container.querySelector('[data-modal-open="true"]')
     expect(modal).not.toBeNull()
     const ok = modal!.querySelector<HTMLButtonElement>('button[data-modal-ok]')
+    mocks.updateSafetyTarget.mockRejectedValueOnce(new Error('TypeError: target update adapter failed'))
+    await act(async () => ok!.click())
+    expect(mocks.message.error).toHaveBeenLastCalledWith('操作未完成，请稍后重试')
+    expect(container.contains(modal)).toBe(true)
     await act(async () => {
       ok!.click()
       await new Promise((r) => setTimeout(r, 30))

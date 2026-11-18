@@ -207,6 +207,24 @@ describe('migrated HR server action coverage', () => {
     expect(init.body.get('file').name).toBe('annual.docx')
   })
 
+  it('treats a malformed successful import response as an uncertain write', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(Response.json({ message: { private: '内部字段' } })))
+
+    const result = await actions.importAnnualTrainingPlan(new File(['content'], 'annual.docx'), 2026)
+    expect(result).toMatchObject({ ok: false, reference: expect.any(String) })
+    expect(JSON.stringify(result)).not.toContain('内部字段')
+    expect(log).toHaveBeenCalledOnce()
+  })
+
+  it('rejects empty plan attachments before sending a write', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(actions.uploadPlanAttachments('plan-1', [new File([], 'empty.docx')]))
+      .resolves.toEqual({ ok: false, message: '请选择非空附件后重新上传' })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('maps structured training conflicts', async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({
         code: 200,
