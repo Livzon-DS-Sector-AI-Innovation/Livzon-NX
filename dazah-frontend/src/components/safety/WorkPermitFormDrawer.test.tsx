@@ -182,7 +182,7 @@ beforeEach(() => {
     code: 200,
     data: { items: [] },
   })
-  mocks.submitWorkPermit.mockResolvedValue({ code: 200, data: {} })
+  mocks.submitWorkPermit.mockResolvedValue({ ok: true, data: {} })
   vi.stubGlobal(
     'fetch',
     vi.fn(() =>

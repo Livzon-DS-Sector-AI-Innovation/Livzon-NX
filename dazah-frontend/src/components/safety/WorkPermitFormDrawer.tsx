@@ -337,7 +337,7 @@ export function WorkPermitFormDrawer({
         }))
         const submitRes = await submitWorkPermit(permitId, assignmentsPayload)
         setSaving(false)
-        if (submitRes.code !== 200) {
+        if (!submitRes.ok) {
           // 草稿已保存，仅提交失败（如证件强校验拦截）：留在弹窗让用户修正
           message.error(submitRes.message ?? '提交审批失败（草稿已保存）')
           return
