@@ -111,6 +111,7 @@ export function WorkPermitListPanel({
   const [meta, setMeta] = useState<MetaShape | null>(null)
   const [configOpen, setConfigOpen] = useState(false)
   const [configType, setConfigType] = useState<string>('blind_plate')
+  const [configLevel, setConfigLevel] = useState<string>('none')
   const [userOptions, setUserOptions] = useState<
     { value: string; label: string }[]
   >([])
@@ -435,12 +436,31 @@ export function WorkPermitListPanel({
             }))}
             onChange={(value) => {
               setConfigType(value)
+              setConfigLevel(meta?.level_options?.[value]?.[0]?.value ?? 'none')
               setConfigMap({})
               void openConfig()
             }}
           />
+          {(meta?.level_options?.[configType]?.length ?? 0) > 1 && (
+            <Select
+              style={{ width: 160 }}
+              value={configLevel}
+              options={(meta?.level_options?.[configType] ?? []).map((item) => ({
+                value: item.value,
+                label: item.label,
+              }))}
+              onChange={(value) => setConfigLevel(value)}
+            />
+          )}
+          <Typography.Text type="secondary">
+            按票种+级别展示实际激活的审批链节点（与提交审批时一致）。
+          </Typography.Text>
           {(meta?.nodes?.[configType] ?? [])
-            .filter((node) => node.kind === 'approve')
+            .filter(
+              (node) =>
+                node.kind === 'approve' &&
+                (node.levels === null || node.levels.includes(configLevel))
+            )
             .map((node) => (
               <Form layout="vertical" key={node.key}>
                 <Form.Item label={node.name}>

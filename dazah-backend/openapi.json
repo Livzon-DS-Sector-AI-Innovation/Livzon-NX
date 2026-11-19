@@ -10948,6 +10948,44 @@
         "title": "ApiResponseEnvelope[dict[str, Any]]",
         "type": "object"
       },
+      "ApiResponseEnvelope_dict_str__str__": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Data",
+            "type": "object"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[dict[str, str]]",
+        "type": "object"
+      },
       "ApiResponseEnvelope_list_AdministrationFeishuResource__": {
         "properties": {
           "code": {
@@ -105469,6 +105507,14 @@
             "title": "Id",
             "type": "string"
           },
+          "missing_brief_names": {
+            "description": "尚未完成交底学习签字的作业人姓名（仅 approved 状态非空）",
+            "items": {
+              "type": "string"
+            },
+            "title": "Missing Brief Names",
+            "type": "array"
+          },
           "next_gas_due_at": {
             "anyOf": [
               {
@@ -105584,6 +105630,14 @@
               "$ref": "#/components/schemas/PermitMeasureItem"
             },
             "title": "Safety Measures",
+            "type": "array"
+          },
+          "signatures": {
+            "description": "本轮手写签名行（发起行 + 交底作业人行 + 节点行）",
+            "items": {
+              "$ref": "#/components/schemas/WorkPermitSignatureItem"
+            },
+            "title": "Signatures",
             "type": "array"
           },
           "status": {
@@ -106128,6 +106182,71 @@
           "cert_check_strict"
         ],
         "title": "WorkPermitSettingsUpdate",
+        "type": "object"
+      },
+      "WorkPermitSignatureItem": {
+        "description": "手写签名行（发起行 node_id 为空；节点行/交底作业人行带对应标识）。",
+        "properties": {
+          "image_key": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Key"
+          },
+          "node_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "所属节点（发起行为空）",
+            "title": "Node Id"
+          },
+          "sign_key": {
+            "description": "签字行标识",
+            "maxLength": 64,
+            "title": "Sign Key",
+            "type": "string"
+          },
+          "signed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Signed At"
+          },
+          "signer_name": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Signer Name"
+          }
+        },
+        "required": [
+          "sign_key"
+        ],
+        "title": "WorkPermitSignatureItem",
         "type": "object"
       },
       "WorkPermitStatsResponse": {
@@ -109788,6 +109907,68 @@
         ]
       }
     },
+    "/api/v1/administration/feishu-read/person-avatars": {
+      "get": {
+        "operationId": "get_person_avatars_api_v1_administration_feishu_read_person_avatars_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "emails",
+            "required": false,
+            "schema": {
+              "default": [],
+              "items": {
+                "type": "string"
+              },
+              "title": "Emails",
+              "type": "array"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_dict_str__str__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "按企业邮箱批量解析镜像人员头像",
+        "tags": [
+          "行政管理"
+        ]
+      }
+    },
     "/api/v1/administration/feishu-read/resources": {
       "get": {
         "operationId": "list_read_resources_api_v1_administration_feishu_read_resources_get",
@@ -110331,6 +110512,34 @@
                 }
               ],
               "title": "Keyword"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort_field",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 255,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sort Field"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort_direction",
+            "required": false,
+            "schema": {
+              "default": "desc",
+              "pattern": "^(asc|desc)$",
+              "title": "Sort Direction",
+              "type": "string"
             }
           },
           {

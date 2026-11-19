@@ -1,22 +1,24 @@
 'use client'
 
-import { SettingOutlined } from '@ant-design/icons'
-import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query'
-import { Button, Card, Checkbox, Drawer, Dropdown, Empty, Input, Select, Space, Table, Tabs, Tag, Typography } from 'antd'
+import { UserOutlined, SettingOutlined } from '@ant-design/icons'
+import { Avatar, Button, Card, Checkbox, Drawer, Dropdown, Empty, Image, Input, Select, Space, Table, Tabs, Typography } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
 import type { ColumnsType as AntColumnsType } from 'antd/es/table'
+import { useQuery, QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import type { UseQueryResult } from '@tanstack/react-query'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect, useMemo, useState } from 'react'
 
 import {
   fetchMappedPageData,
   fetchMappedPageDataset,
+  fetchPersonAvatars,
   mappedAttachmentUrl,
 } from '@/lib/api/mapped-feishu'
 import type {
+  WarehouseDataset,
   WarehouseDatasetRecord,
   WarehouseFeishuField,
-  WarehouseFeishuPageBinding,
   WarehouseFeishuPageData,
 } from '@/types/warehouse'
 
@@ -27,6 +29,23 @@ interface MappedDatasetPageProps {
   description?: string
   enableAdvancedQuery?: boolean
   initialPageData?: WarehouseFeishuPageData
+  /** 开启镜像人员头像解析（按企业邮箱，需模块提供 person-avatars 端点）。 */
+  enablePersonAvatars?: boolean
+  /** 按字段名在表格中隐藏（详情抽屉仍完整展示）。 */
+  hiddenFieldNames?: string[]
+}
+
+interface PersonItem {
+  id?: string
+  name?: string
+  email?: string
+}
+
+interface AttachmentItem {
+  name?: string
+  type?: string
+  file_token?: string
+  attachment_token?: string
 }
 
 type DetailValue = {
@@ -36,8 +55,32 @@ type DetailValue = {
   recordId: string
 } | null
 
-function attachmentItems(value: unknown): Array<{ token: string; name: string }> {
-  const found: Array<{ token: string; name: string }> = []
+const IMAGE_EXTENSION_PATTERN = /\.(jpe?g|png|gif|webp|bmp)$/i
+
+/** 飞书字段类型 ID：5=日期，1001/1002=创建/修改时间。 */
+const DATE_FIELD_TYPES = new Set([5, 1001, 1002])
+
+function fieldTypeId(field: WarehouseFeishuField): number {
+  return Number(field.type ?? field.field_type ?? NaN)
+}
+
+function isEmptyFieldValue(value: unknown): boolean {
+  return (
+    value === undefined ||
+    value === null ||
+    value === '' ||
+    (Array.isArray(value) && value.length === 0)
+  )
+}
+
+function isImageAttachment(item: AttachmentItem): boolean {
+  const name = item.name || ''
+  const type = item.type || ''
+  return type.startsWith('image/') || IMAGE_EXTENSION_PATTERN.test(name)
+}
+
+function attachmentItems(value: unknown): Array<{ token: string; name: string; type: string }> {
+  const found: Array<{ token: string; name: string; type: string }> = []
   const visit = (item: unknown) => {
     if (Array.isArray(item)) {
       item.forEach(visit)
@@ -47,7 +90,11 @@ function attachmentItems(value: unknown): Array<{ token: string; name: string }>
     const object = item as Record<string, unknown>
     const token = object.file_token || object.attachment_token
     if (typeof token === 'string') {
-      found.push({ token, name: String(object.name || object.file_name || '下载附件') })
+      found.push({
+        token,
+        name: String(object.name || object.file_name || '下载附件'),
+        type: typeof object.type === 'string' ? object.type : '',
+      })
     }
     Object.values(object).forEach(visit)
   }
@@ -55,18 +102,64 @@ function attachmentItems(value: unknown): Array<{ token: string; name: string }>
   return found
 }
 
+/** 飞书人员字段：[{id: "ou_…", name, email}]（附件项没有 email/id）。 */
+function isPersonItems(value: unknown): value is PersonItem[] {
+  return (
+    Array.isArray(value) &&
+    value.length > 0 &&
+    value.every(
+      (item) =>
+        item !== null && typeof item === 'object' && !Array.isArray(item) &&
+        typeof (item as PersonItem).name === 'string' &&
+        (typeof (item as PersonItem).email === 'string' ||
+          String((item as PersonItem).id || '').startsWith('ou_')),
+    )
+  )
+}
+
+function personNames(value: unknown): string[] {
+  if (!isPersonItems(value)) return []
+  return value.map((item) => (item.name || '').trim()).filter(Boolean)
+}
+
+function collectPersonEmails(records: WarehouseDatasetRecord[]): string[] {
+  const emails = new Set<string>()
+  for (const record of records) {
+    for (const value of Object.values(record.fields || {})) {
+      if (isPersonItems(value)) {
+        for (const item of value) {
+          if (item.email) emails.add(item.email)
+        }
+      }
+    }
+  }
+  return [...emails]
+}
+
+/** 固定东八区：飞书日期是本地零点时间戳，SSR（UTC 容器）与浏览器输出必须一致。
+ * 零点时间戳只显示日期部分。 */
+function formatDateTime(value: number): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value)
+  const full = date.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false })
+  return full.endsWith(' 00:00:00') ? full.slice(0, -' 00:00:00'.length) : full
+}
+
 function formatValue(value: unknown): string {
   if (value === null || value === undefined || value === '') return '-'
   if (typeof value === 'boolean') return value ? '是' : '否'
-  if (typeof value === 'number') return String(value)
+  // 飞书日期字段是毫秒时间戳（数值或数字串），按东八区展示
+  if (typeof value === 'number' && value >= 1e12 && value < 1e14) return formatDateTime(value)
   if (typeof value === 'string') {
-    if (/^\d{13}$/.test(value)) {
-      const date = new Date(Number(value))
-      if (!Number.isNaN(date.getTime())) return date.toLocaleString('zh-CN')
+    if (/^\d{13}$/.test(value) && Number(value) >= 1e12 && Number(value) < 1e14) {
+      return formatDateTime(Number(value))
     }
     return value
   }
-  if (Array.isArray(value)) return value.map(formatValue).join('、') || '-'
+  if (Array.isArray(value)) {
+    if (isPersonItems(value)) return personNames(value).join('、') || '-'
+    return value.map(formatValue).join('、') || '-'
+  }
   if (typeof value === 'object') {
     const object = value as Record<string, unknown>
     for (const key of ['text', 'name', 'title', 'display_name', 'value', 'url']) {
@@ -77,9 +170,135 @@ function formatValue(value: unknown): string {
   return String(value)
 }
 
-function sourcePath(binding: WarehouseFeishuPageBinding) {
-  const path = binding.table.source_path || []
-  return path.map((item) => item.title).filter(Boolean).join(' / ')
+/** 表格单元格内的图片缩略图条：点击弹大图预览（阻断行点击冒泡）。 */
+function AttachmentThumbStrip({
+  images,
+  moduleCode,
+  pageKey,
+  bindingId,
+  recordId,
+  fieldId,
+}: {
+  images: Array<{ token: string; name: string }>
+  moduleCode: string
+  pageKey: string
+  bindingId: string
+  recordId: string
+  fieldId: string
+}) {
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1" onClick={(event) => event.stopPropagation()}>
+      <Image.PreviewGroup>
+        {images.slice(0, 3).map((item) => (
+          <Image
+            key={item.token}
+            src={mappedAttachmentUrl(moduleCode, pageKey, bindingId, recordId, fieldId, item.token)}
+            alt={item.name}
+            width={36}
+            height={36}
+            style={{ objectFit: 'cover', borderRadius: 4 }}
+          />
+        ))}
+      </Image.PreviewGroup>
+      {images.length > 3 ? (
+        <span className="text-[12px]" style={{ color: 'var(--color-slate)' }}>
+          +{images.length - 3}
+        </span>
+      ) : null}
+    </span>
+  )
+}
+
+function PersonName({
+  value,
+  avatarByEmail,
+  size = 22,
+}: {
+  value: unknown
+  avatarByEmail: Record<string, string>
+  size?: number
+}) {
+  if (!isPersonItems(value)) return <span>{formatValue(value)}</span>
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1">
+      {value.map((item, index) => {
+        const name = (item.name || '').trim() || '未知成员'
+        const avatar = item.email ? avatarByEmail[item.email] : undefined
+        return (
+          <span key={`${item.id || item.email || index}-${index}`} className="inline-flex items-center gap-1">
+            <Avatar src={avatar} size={size} icon={<UserOutlined />}>
+              {name.slice(0, 1)}
+            </Avatar>
+            <span>{name}</span>
+          </span>
+        )
+      })}
+    </span>
+  )
+}
+
+function RecordFieldValue({
+  value,
+  recordId,
+  fieldId,
+  moduleCode,
+  pageKey,
+  bindingId,
+  avatarByEmail,
+}: {
+  value: unknown
+  recordId: string
+  fieldId: string
+  moduleCode: string
+  pageKey: string
+  bindingId: string
+  avatarByEmail: Record<string, string>
+}) {
+  const attachments = attachmentItems(value)
+  if (attachments.length) {
+    return (
+      <div className="flex flex-col gap-2">
+        {attachments.some(isImageAttachment) ? (
+          <Image.PreviewGroup>
+            <div className="flex flex-wrap gap-2">
+              {attachments.filter(isImageAttachment).map((item) => (
+                <Image
+                  key={item.token}
+                  src={mappedAttachmentUrl(moduleCode, pageKey, bindingId, recordId, fieldId, item.token)}
+                  alt={item.name}
+                  width={96}
+                  height={96}
+                  style={{ objectFit: 'cover', borderRadius: 8 }}
+                />
+              ))}
+            </div>
+          </Image.PreviewGroup>
+        ) : null}
+        <div className="flex flex-col gap-1">
+          {attachments.map((item) => (
+            <a
+              key={item.token}
+              href={mappedAttachmentUrl(moduleCode, pageKey, bindingId, recordId, fieldId, item.token)}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {item.name}
+            </a>
+          ))}
+        </div>
+      </div>
+    )
+  }
+  if (isPersonItems(value)) return <PersonName value={value} avatarByEmail={avatarByEmail} size={28} />
+  const text = formatValue(value)
+  if (text === '查看详情') {
+    return (
+      <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-[8px] bg-[var(--color-surface)] p-3 text-[12px]">
+        {JSON.stringify(value, null, 2)}
+      </pre>
+    )
+  }
+  return <span>{text}</span>
 }
 
 function MappedDatasetPageContent({
@@ -89,6 +308,8 @@ function MappedDatasetPageContent({
   description,
   enableAdvancedQuery = true,
   initialPageData,
+  enablePersonAvatars = false,
+  hiddenFieldNames,
 }: MappedDatasetPageProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -117,7 +338,11 @@ function MappedDatasetPageContent({
   const activeBinding =
     bindings.find((item) => item.id === requestedBinding) || defaultBinding
 
-  const datasetQuery = useQuery({
+  const activeBindingId = activeBinding?.id
+
+  // 显式类型注解：queryKey 依赖下方派生的 autoSortField（来自本 query 的字段快照），
+  // 会形成推断循环，注解后即为两段式（先取字段再按日期倒序重取）。
+  const datasetQuery: UseQueryResult<WarehouseDataset, Error> = useQuery({
     queryKey: [
       'mapped-page-dataset',
       moduleCode,
@@ -139,12 +364,62 @@ function MappedDatasetPageContent({
         page,
         page_size: pageSize,
         filters: filterFieldId && filterValue ? [{ field_id: filterFieldId, operator: filterOperator, value: filterValue }] : undefined,
-        sort_field: sortFieldId,
-        sort_direction: sortDirection,
+        sort_field: sortFieldId || undefined,
+        sort_direction: sortFieldId ? sortDirection : 'desc',
       }),
   })
 
   const fields = useMemo(() => datasetQuery.data?.fields || [], [datasetQuery.data?.fields])
+  const dateField = useMemo(
+    () => fields.find((field) => DATE_FIELD_TYPES.has(fieldTypeId(field))),
+    [fields],
+  )
+  // 未手动选排序时按日期字段倒序（最新在最上面）。字段快照来自主查询，
+  // 排序结果由第二个查询补取：结果就绪则优先展示，未就绪回退主查询数据。
+  const needsDateSort = Boolean(!sortFieldId && activeBindingId && dateField)
+  const sortedQuery: UseQueryResult<WarehouseDataset, Error> = useQuery({
+    queryKey: [
+      'mapped-page-dataset-sorted',
+      moduleCode,
+      pageKey,
+      activeBinding?.id,
+      keyword,
+      page,
+      pageSize,
+      filterFieldId,
+      filterOperator,
+      filterValue,
+      dateField?.field_id,
+    ],
+    enabled: needsDateSort,
+    queryFn: () =>
+      fetchMappedPageDataset(moduleCode, pageKey, activeBinding!.id, {
+        keyword: keyword || undefined,
+        page,
+        page_size: pageSize,
+        filters: filterFieldId && filterValue ? [{ field_id: filterFieldId, operator: filterOperator, value: filterValue }] : undefined,
+        sort_field: dateField!.field_id,
+        sort_direction: 'desc',
+      }),
+  })
+  const activeQuery = needsDateSort ? sortedQuery : datasetQuery
+  const data = (needsDateSort ? sortedQuery.data : undefined) ?? datasetQuery.data
+
+  const records = useMemo(() => data?.records || [], [data?.records])
+  const personEmails = useMemo(
+    () => (enablePersonAvatars ? collectPersonEmails(records) : []),
+    [records, enablePersonAvatars],
+  )
+  const personEmailsKey = personEmails.join(',')
+  const avatarQuery = useQuery({
+    queryKey: ['mapped-person-avatars', moduleCode, personEmailsKey],
+    enabled: enablePersonAvatars && personEmails.length > 0,
+    queryFn: () => fetchPersonAvatars(moduleCode, personEmails),
+    staleTime: 60 * 60 * 1000,
+    retry: false,
+  })
+  const avatarByEmail = useMemo(() => avatarQuery.data || {}, [avatarQuery.data])
+
   const visibleFieldIds = useMemo(() => {
     if (!activeBinding) return []
     const configured = activeBinding.visible_field_ids || []
@@ -161,38 +436,85 @@ function MappedDatasetPageContent({
     router.replace(`?${next.toString()}`)
   }, [activeBinding, requestedBinding, router, searchParams])
 
+  const displayFields = useMemo(() => {
+    const ordered = dateField
+      ? [dateField, ...fields.filter((field) => field.field_id !== dateField.field_id)]
+      : [...fields]
+    // 隐藏序号列（用户不需要）与调用方指定隐藏的字段；整列为空的字段同样隐藏
+    // （公式/自动编号等飞书不回值的列）。指定隐藏的字段在详情抽屉仍完整展示。
+    return ordered.filter((field) => {
+      if (field.field_name === '序号') return false
+      if (hiddenFieldNames?.includes(field.field_name)) return false
+      if (field.field_id === dateField?.field_id) return true
+      return records.some((record) => !isEmptyFieldValue(record.fields[field.field_name]))
+    })
+  }, [fields, records, dateField, hiddenFieldNames])
+
   const columns = useMemo<AntColumnsType<WarehouseDatasetRecord>>(
-    () =>
-      fields
-        .filter((field) => visibleFieldIds.includes(field.field_id))
-        .map((field: WarehouseFeishuField) => ({
-          title: field.field_name,
-          key: field.field_id,
-          width: 180,
-          ellipsis: true,
-          render: (_: unknown, record: WarehouseDatasetRecord) => {
-            const value = record.fields[field.field_name]
-            const complex = Array.isArray(value) || (value !== null && typeof value === 'object')
-            if (complex) {
-              return (
-                <Button
-                  type="link"
-                  size="small"
-                  onClick={() => setDetail({
-                    title: field.field_name,
-                    value,
-                    fieldId: field.field_id,
-                    recordId: record.record_id,
-                  })}
-                >
-                  {formatValue(value)}
-                </Button>
-              )
+    () => {
+      const dateColumnId = dateField?.field_id
+      const fieldColumns: AntColumnsType<WarehouseDatasetRecord> =
+        displayFields
+          .filter((field) => visibleFieldIds.includes(field.field_id))
+          .map((field: WarehouseFeishuField) => {
+            const valueLengths = records.map((record) =>
+              formatValue(record.fields[field.field_name]).length,
+            )
+            const maxLen = valueLengths.length ? Math.max(...valueLengths) : 0
+            const typeId = fieldTypeId(field)
+            // 按内容类型定宽：窄内容列收紧；长文本列加宽并自动换行不截断
+            let width: number
+            let ellipsis = true
+            if (field.field_id === dateColumnId) width = 100
+            else if (typeId === 17) width = 160
+            else if (typeId === 7) width = 80
+            else if (typeId === 11) width = 120
+            else if (maxLen > 24) {
+              width = 280
+              ellipsis = false
+            } else width = 110
+            return {
+              title: field.field_name,
+              key: field.field_id,
+              width,
+              fixed: field.field_id === dateColumnId ? ('left' as const) : undefined,
+              ellipsis,
+              render: (_: unknown, record: WarehouseDatasetRecord) => {
+                const value = record.fields[field.field_name]
+                if (isPersonItems(value)) {
+                  return <PersonName value={value} avatarByEmail={avatarByEmail} />
+                }
+                const images = attachmentItems(value).filter(isImageAttachment)
+                if (images.length && activeBindingId) {
+                  return (
+                    <AttachmentThumbStrip
+                      images={images}
+                      moduleCode={moduleCode}
+                      pageKey={pageKey}
+                      bindingId={activeBindingId}
+                      recordId={record.record_id}
+                      fieldId={field.field_id}
+                    />
+                  )
+                }
+                return <span>{formatValue(value)}</span>
+              },
             }
-            return <span>{formatValue(value)}</span>
-          },
-        })),
-    [fields, visibleFieldIds],
+          })
+      const dateColumn = fieldColumns.filter((column) => column.key === dateColumnId)
+      const restColumns = fieldColumns.filter((column) => column.key !== dateColumnId)
+      return [...dateColumn, ...restColumns]
+    },
+    [
+      displayFields,
+      visibleFieldIds,
+      records,
+      avatarByEmail,
+      dateField,
+      activeBindingId,
+      moduleCode,
+      pageKey,
+    ],
   )
 
   const activeIsOverflow = bindings.findIndex((item) => item.id === activeBinding?.id) >= 6
@@ -219,9 +541,9 @@ function MappedDatasetPageContent({
       <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
         <div>
           <Typography.Title level={3} className="!mb-1">{title}</Typography.Title>
-          <Typography.Text type="secondary">
-            {description || '展示已映射飞书数据表的最后一次完整本地镜像'}
-          </Typography.Text>
+          {description ? (
+            <Typography.Text type="secondary">{description}</Typography.Text>
+          ) : null}
         </div>
         {bindings.length ? <Space wrap>
           <Input.Search
@@ -301,7 +623,7 @@ function MappedDatasetPageContent({
           >
             <Button icon={<SettingOutlined />}>列设置</Button>
           </Dropdown>
-          <Button onClick={() => datasetQuery.refetch()} loading={datasetQuery.isFetching}>
+          <Button onClick={() => activeQuery.refetch()} loading={activeQuery.isFetching}>
             刷新本地数据
           </Button>
         </Space> : null}
@@ -336,40 +658,37 @@ function MappedDatasetPageContent({
             ) : null}
           </div>
 
-          {activeBinding ? (
-            <div className="mb-4 flex flex-wrap items-center gap-2 text-[13px]">
-              <Tag color={activeBinding.table.sync_status === 'success' ? 'green' : 'orange'}>
-                {activeBinding.table.sync_status || '未同步'}
-              </Tag>
-              <Typography.Text type="secondary">
-                {sourcePath(activeBinding) || activeBinding.table.app_token}
-              </Typography.Text>
-              <Typography.Text type="secondary">
-                数据截至：{activeBinding.table.last_synced_at
-                  ? new Date(activeBinding.table.last_synced_at).toLocaleString('zh-CN')
-                  : '尚未同步'}
-              </Typography.Text>
-            </div>
-          ) : null}
-
           {activeBinding?.table.sync_error ? (
             <Alert className="mb-4" type="warning" showIcon title={activeBinding.table.sync_error} />
           ) : null}
-          {datasetQuery.isError ? (
-            <Alert type="error" showIcon title={(datasetQuery.error as Error).message} />
+          {activeQuery.isError ? (
+            <Alert type="error" showIcon title={(activeQuery.error as Error).message} />
           ) : (
             <Table<WarehouseDatasetRecord>
               virtual
               sticky
+              size="small"
               rowKey="record_id"
-              loading={datasetQuery.isLoading}
+              loading={activeQuery.isLoading}
               columns={columns}
-              dataSource={datasetQuery.data?.records || []}
-              scroll={{ x: Math.max(columns.length * 180, 900), y: 620 }}
+              dataSource={records}
+              scroll={{
+                x: columns.reduce((sum, column) => sum + (Number(column.width) || 110), 48),
+                y: 620,
+              }}
+              onRow={(record) => ({
+                onClick: () => setDetail({
+                  title: '记录详情',
+                  value: record.fields,
+                  fieldId: '',
+                  recordId: record.record_id,
+                }),
+                style: { cursor: 'pointer' },
+              })}
               pagination={{
                 current: page,
                 pageSize,
-                total: datasetQuery.data?.pagination.total || 0,
+                total: data?.pagination.total || 0,
                 pageSizeOptions: [20, 50, 100],
                 showSizeChanger: true,
                 showTotal: (total) => `共 ${total} 条`,
@@ -390,22 +709,29 @@ function MappedDatasetPageContent({
         onClose={() => setDetail(null)}
       >
         {detail && activeBinding ? (
-          <Space orientation="vertical" className="mb-4">
-            {attachmentItems(detail.value).map((item) => (
-              <a
-                key={item.token}
-                href={mappedAttachmentUrl(moduleCode, pageKey, activeBinding.id, detail.recordId, detail.fieldId, item.token)}
-                target="_blank"
-                rel="noreferrer"
-              >
-                {item.name}
-              </a>
-            ))}
-          </Space>
+          <div className="flex flex-col gap-4">
+            {fields.map((field: WarehouseFeishuField) => {
+              const value = (detail.value as Record<string, unknown>)?.[field.field_name]
+              if (value === undefined || value === null || value === '' ) return null
+              return (
+                <div key={field.field_id}>
+                  <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 4, fontSize: 12 }}>
+                    {field.field_name}
+                  </Typography.Text>
+                  <RecordFieldValue
+                    value={value}
+                    recordId={detail.recordId}
+                    fieldId={field.field_id}
+                    moduleCode={moduleCode}
+                    pageKey={pageKey}
+                    bindingId={activeBinding.id}
+                    avatarByEmail={avatarByEmail}
+                  />
+                </div>
+              )
+            })}
+          </div>
         ) : null}
-        <pre className="max-h-[75vh] overflow-auto whitespace-pre-wrap rounded-[8px] bg-[var(--color-surface)] p-4 text-[12px]">
-          {JSON.stringify(detail?.value, null, 2)}
-        </pre>
       </Drawer>
     </main>
   )

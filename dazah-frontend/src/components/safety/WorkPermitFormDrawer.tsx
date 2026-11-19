@@ -25,12 +25,16 @@ import {
   Spin,
   Typography,
 } from 'antd'
+import dayjs from 'dayjs'
 
+import { usePagePermissions } from '@/hooks/usePagePermissions'
 import {
   createWorkPermit,
+  getApproverConfigs,
   getCertificateCategories,
   getWorkCertificates,
   getWorkPermitMeta,
+  submitWorkPermit,
   updateWorkCertificate,
   updateWorkPermit,
   type WorkPermitCreateInput,
@@ -57,6 +61,10 @@ type MetaShape = {
       options?: string[]
     }[]
   >
+  nodes: Record<
+    string,
+    { key: string; name: string; kind: string; levels: string[] | null }[]
+  >
   risk_identification_options: string[]
   gas_types: string[]
 }
@@ -67,6 +75,7 @@ type PersonInput = {
   certificate_id?: string | null
   certificate_no?: string | null
   certificate_category?: string | null
+  external?: boolean
 }
 
 type CertificateOption = {
@@ -118,6 +127,27 @@ export function WorkPermitFormDrawer({
   const [categories, setCategories] = useState<{ value: string; label: string }[]>([])
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(false)
+  // 审批人指派（与聊天流第⑥步/详情页提交 Modal 同口径）：
+  // assignments 为覆盖值，留空回退默认审批人配置（后端 submit 同规则）
+  const [approverDefaults, setApproverDefaults] = useState<Record<string, string>>({})
+  const [assignments, setAssignments] = useState<Record<string, string | null>>({})
+  const [userOptions, setUserOptions] = useState<{ value: string; label: string }[]>([])
+  const permissions = usePagePermissions(WORK_PERMITS_PAGE_KEY)
+
+  const searchUsers = useCallback(async (keyword: string) => {
+    const params = new URLSearchParams({ limit: '50' })
+    if (keyword.trim()) params.set('keyword', keyword)
+    const response = await fetch(`/api/v1/identity/personnel?${params}`)
+    if (response.ok) {
+      const json = await response.json()
+      setUserOptions(
+        ((json.data?.items ?? []) as Record<string, unknown>[]).map((u) => ({
+          value: String(u.id),
+          label: `${String(u.name)} - ${String(u.department || '未知部门')}`,
+        })),
+      )
+    }
+  }, [])
 
   useEffect(() => {
     if (!open) return
@@ -126,7 +156,9 @@ export function WorkPermitFormDrawer({
       getWorkPermitMeta(WORK_PERMITS_PAGE_KEY),
       getWorkCertificates({ pageKey: WORK_PERMITS_PAGE_KEY, pageSize: 200 }),
       getCertificateCategories(WORK_PERMITS_PAGE_KEY),
-    ]).then(([metaRes, certRes, catRes]) => {
+      getApproverConfigs(WORK_PERMITS_PAGE_KEY),
+      searchUsers(''),
+    ]).then(([metaRes, certRes, catRes, configRes]) => {
       if (metaRes.code === 200 && metaRes.data) setMeta(metaRes.data as never)
       if (certRes.code === 200 && certRes.data) {
         setCertificates(certRes.data.items as never)
@@ -134,11 +166,19 @@ export function WorkPermitFormDrawer({
       if (catRes.code === 200 && catRes.data) {
         setCategories(catRes.data.categories as never)
       }
+      if (configRes.code === 200 && configRes.data) {
+        const map: Record<string, string> = {}
+        for (const item of configRes.data.items) {
+          if (!item.approver_user_id) continue
+          map[`${item.permit_type}:${item.node_key}`] = item.approver_user_id
+        }
+        setApproverDefaults(map)
+      }
       setLoading(false)
     })
     }, 0)
     return () => clearTimeout(timer)
-  }, [open])
+  }, [open, searchUsers])
 
   // 打开/切换编辑对象时的初始化：渲染期调整派生状态（避免 effect 内同步 setState）
   const [syncKey, setSyncKey] = useState('')
@@ -167,6 +207,12 @@ export function WorkPermitFormDrawer({
         work_description: editing.work_description,
         work_location: editing.work_location,
         work_unit: editing.work_unit,
+        planned_start_time: editing.planned_start_time
+          ? dayjs(editing.planned_start_time)
+          : undefined,
+        planned_end_time: editing.planned_end_time
+          ? dayjs(editing.planned_end_time)
+          : undefined,
         related_legacy_no_text: editing.related_legacy_no_text,
         remark: editing.remark,
       })
@@ -179,6 +225,7 @@ export function WorkPermitFormDrawer({
       setMeasureState({})
       form.resetFields()
     }
+    setAssignments({})
   }
 
   const typeFields = useMemo(
@@ -192,6 +239,24 @@ export function WorkPermitFormDrawer({
   const measures = useMemo(
     () => (permitType ? (meta?.measures?.[permitType] ?? []) : []),
     [meta, permitType]
+  )
+  // 当前级别真实激活的审批节点（与聊天流第⑥步/提交 Modal 同口径）
+  const activeApproveNodes = useMemo(
+    () =>
+      (permitType ? (meta?.nodes?.[permitType] ?? []) : []).filter(
+        (node) =>
+          node.kind === 'approve' &&
+          (node.levels === null || node.levels.includes(permitLevel))
+      ),
+    [meta, permitType, permitLevel]
+  )
+  const missingApproverNodes = useMemo(
+    () =>
+      activeApproveNodes.filter(
+        (node) =>
+          !assignments[node.key] && !approverDefaults[`${permitType}:${node.key}`]
+      ),
+    [activeApproveNodes, assignments, approverDefaults, permitType]
   )
 
   const handleCertificatePick = useCallback(
@@ -214,63 +279,96 @@ export function WorkPermitFormDrawer({
     [certificates]
   )
 
-  const handleSubmit = useCallback(async () => {
-    if (!permitType) {
-      message.warning('请选择票种')
-      return
-    }
-    const values = await form.validateFields()
-    const safetyMeasures = Object.entries(measureState).map(
-      ([key, value]) => ({
-        key,
-        status: value.status,
-        fills: value.fills,
-      })
-    )
-    const payload: WorkPermitCreateInput = {
-      permit_type: permitType,
-      permit_level: permitLevel,
-      apply_department: values.apply_department ?? null,
-      work_description: values.work_description ?? null,
-      work_location: values.work_location ?? null,
-      work_unit: values.work_unit ?? null,
-      planned_start_time:
-        values.planned_start_time?.toISOString?.() ?? null,
-      planned_end_time: values.planned_end_time?.toISOString?.() ?? null,
-      persons: persons as unknown as Record<string, unknown>[],
-      risk_identifications: risks,
-      safety_measures: safetyMeasures as unknown as Record<string, unknown>[],
-      type_data: typeData,
-      related_legacy_no_text: values.related_legacy_no_text ?? null,
-      remark: values.remark ?? null,
-    }
-    setSaving(true)
-    const response = editing
-      ? await updateWorkPermit(editing.id, payload)
-      : await createWorkPermit(payload)
-    setSaving(false)
-    if (response.code !== 200) {
-      message.error(response.message ?? '保存失败')
-      return
-    }
-    message.success(editing ? '作业票已更新' : '作业票草稿已创建')
-    onCreated?.(payload as unknown as Record<string, unknown>)
-    onClose()
-    form.resetFields()
-    // updateWorkCertificate 引入仅为避免未来编辑证件快照时遗漏导入提示
-    void updateWorkCertificate
-  }, [
-    permitType,
-    permitLevel,
-    form,
-    measureState,
-    persons,
-    risks,
-    typeData,
-    editing,
-    onCreated,
-    onClose,
-  ])
+  const handleSubmit = useCallback(
+    async (submitAfterSave: boolean) => {
+      if (!permitType) {
+        message.warning('请选择票种')
+        return
+      }
+      if (submitAfterSave && missingApproverNodes.length > 0) {
+        message.warning(
+          `以下审批节点未指派且无默认配置：${missingApproverNodes
+            .map((node) => node.name)
+            .join('、')}`
+        )
+        return
+      }
+      const values = await form.validateFields()
+      const safetyMeasures = Object.entries(measureState).map(
+        ([key, value]) => ({
+          key,
+          status: value.status,
+          fills: value.fills,
+        })
+      )
+      const payload: WorkPermitCreateInput = {
+        permit_type: permitType,
+        permit_level: permitLevel,
+        apply_department: values.apply_department ?? null,
+        work_description: values.work_description ?? null,
+        work_location: values.work_location ?? null,
+        work_unit: values.work_unit ?? null,
+        planned_start_time:
+          values.planned_start_time?.toISOString?.() ?? null,
+        planned_end_time: values.planned_end_time?.toISOString?.() ?? null,
+        persons: persons as unknown as Record<string, unknown>[],
+        risk_identifications: risks,
+        safety_measures: safetyMeasures as unknown as Record<string, unknown>[],
+        type_data: typeData,
+        related_legacy_no_text: values.related_legacy_no_text ?? null,
+        remark: values.remark ?? null,
+      }
+      setSaving(true)
+      const response = editing
+        ? await updateWorkPermit(editing.id, payload)
+        : await createWorkPermit(payload)
+      if (response.code !== 200) {
+        setSaving(false)
+        message.error(response.message ?? '保存失败')
+        return
+      }
+      const permitId = String(
+        (response.data as unknown as { id?: string })?.id ?? editing?.id ?? ''
+      )
+      if (submitAfterSave && permitId) {
+        const assignmentsPayload = activeApproveNodes.map((node) => ({
+          node_key: node.key,
+          approver_user_id: assignments[node.key] ?? null,
+        }))
+        const submitRes = await submitWorkPermit(permitId, assignmentsPayload)
+        setSaving(false)
+        if (!submitRes.ok) {
+          // 草稿已保存，仅提交失败（如证件强校验拦截）：留在弹窗让用户修正
+          message.error(submitRes.message ?? '提交审批失败（草稿已保存）')
+          return
+        }
+        message.success('作业票已保存并提交审批')
+      } else {
+        setSaving(false)
+        message.success(editing ? '作业票已更新' : '作业票草稿已创建')
+      }
+      onCreated?.(payload as unknown as Record<string, unknown>)
+      onClose()
+      form.resetFields()
+      // updateWorkCertificate 引入仅为避免未来编辑证件快照时遗漏导入提示
+      void updateWorkCertificate
+    },
+    [
+      permitType,
+      permitLevel,
+      form,
+      measureState,
+      persons,
+      risks,
+      typeData,
+      editing,
+      onCreated,
+      onClose,
+      activeApproveNodes,
+      assignments,
+      missingApproverNodes,
+    ]
+  )
 
   return (
     <Drawer
@@ -282,9 +380,18 @@ export function WorkPermitFormDrawer({
       footer={
         <Space style={{ display: 'flex', justifyContent: 'flex-end' }}>
           <Button onClick={onClose}>取消</Button>
-          <Button type="primary" loading={saving} onClick={() => void handleSubmit()}>
+          <Button loading={saving} onClick={() => void handleSubmit(false)}>
             保存草稿
           </Button>
+          {permissions.canOperate && (
+            <Button
+              type="primary"
+              loading={saving}
+              onClick={() => void handleSubmit(true)}
+            >
+              保存并提交审批
+            </Button>
+          )}
         </Space>
       }
     >
@@ -438,61 +545,129 @@ export function WorkPermitFormDrawer({
           {roleOptions.length > 0 && (
             <>
               <Typography.Title level={5}>作业人员与证件</Typography.Title>
-              {persons.map((person, index) => (
-                <Space key={`${person.role}-${index}`} wrap>
-                  <Select
-                    style={{ width: 130 }}
-                    value={person.role}
-                    disabled
-                    options={roleOptions.map((role) => ({
-                      value: role.role,
-                      label: role.label,
-                    }))}
-                  />
-                  <Input
-                    style={{ width: 120 }}
-                    placeholder="姓名"
-                    value={person.name}
-                    onChange={(event) =>
-                      setPersons((current) =>
-                        current.map((item, position) =>
-                          position === index
-                            ? { ...item, name: event.target.value }
-                            : item
-                        )
-                      )
-                    }
-                  />
-                  <Select
-                    style={{ width: 220 }}
-                    allowClear
-                    placeholder={
-                      roleOptions[index]?.cert ? '关联证件（必选建议）' : '关联证件（选填）'
-                    }
-                    value={person.certificate_id ?? undefined}
-                    options={certificates.map((cert) => ({
-                      value: cert.id,
-                      label: `${cert.person_name} ${
-                        categories.find((c) => c.value === cert.certificate_category)
-                          ?.label ?? ''
-                      } ${cert.certificate_no ?? ''} ${
-                        cert.status === 'valid' ? '' : `(${cert.status})`
-                      }`,
-                    }))}
-                    onChange={(value) => handleCertificatePick(index, value)}
-                  />
-                </Space>
-              ))}
+              <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
+                作业人/吊装作业人等岗位可添加多条（多选）；名单没有的外部人员勾选「外部人员」手工录入。
+              </Typography.Text>
+              {persons.map((person, index) => {
+                const roleOption = roleOptions.find((role) => role.role === person.role)
+                return (
+                  <div key={`${person.role}-${index}`} style={{ marginBottom: 8 }}>
+                    <Space wrap>
+                      <Select
+                        style={{ width: 150 }}
+                        value={person.role || undefined}
+                        placeholder="选择岗位"
+                        options={roleOptions.map((role) => ({
+                          value: role.role,
+                          label: role.label + (role.cert ? '（需持证）' : ''),
+                        }))}
+                        onChange={(value) =>
+                          setPersons((current) =>
+                            current.map((item, position) =>
+                              position === index
+                                ? { ...item, role: value }
+                                : item
+                            )
+                          )
+                        }
+                      />
+                      <Input
+                        style={{ width: 110 }}
+                        placeholder="姓名"
+                        value={person.name}
+                        onChange={(event) =>
+                          setPersons((current) =>
+                            current.map((item, position) =>
+                              position === index
+                                ? { ...item, name: event.target.value }
+                                : item
+                            )
+                          )
+                        }
+                      />
+                      <Checkbox
+                        checked={Boolean(person.external)}
+                        onChange={(event) =>
+                          setPersons((current) =>
+                            current.map((item, position) =>
+                              position === index
+                                ? {
+                                    ...item,
+                                    external: event.target.checked || undefined,
+                                    certificate_id: event.target.checked
+                                      ? null
+                                      : item.certificate_id,
+                                    certificate_category: event.target.checked
+                                      ? null
+                                      : item.certificate_category,
+                                  }
+                                : item
+                            )
+                          )
+                        }
+                      >
+                        外部人员
+                      </Checkbox>
+                      {person.external ? (
+                        <Input
+                          style={{ width: 200 }}
+                          placeholder="证件号（外部人员手输）"
+                          value={person.certificate_no ?? ''}
+                          onChange={(event) =>
+                            setPersons((current) =>
+                              current.map((item, position) =>
+                                position === index
+                                  ? { ...item, certificate_no: event.target.value }
+                                  : item
+                              )
+                            )
+                          }
+                        />
+                      ) : (
+                        <Select
+                          style={{ width: 220 }}
+                          allowClear
+                          placeholder={
+                            roleOption?.cert ? '关联证件（必选建议）' : '关联证件（选填）'
+                          }
+                          value={person.certificate_id ?? undefined}
+                          options={certificates.map((cert) => ({
+                            value: cert.id,
+                            label: `${cert.person_name} ${
+                              categories.find((c) => c.value === cert.certificate_category)
+                                ?.label ?? ''
+                            } ${cert.certificate_no ?? ''} ${
+                              cert.status === 'valid' ? '' : `(${cert.status})`
+                            }`,
+                          }))}
+                          onChange={(value) => handleCertificatePick(index, value)}
+                        />
+                      )}
+                      <Button
+                        size="small"
+                        type="text"
+                        danger
+                        onClick={() =>
+                          setPersons((current) =>
+                            current.filter((_, position) => position !== index)
+                          )
+                        }
+                      >
+                        删除
+                      </Button>
+                    </Space>
+                  </div>
+                )
+              })}
               <div>
                 <Button
                   size="small"
                   onClick={() =>
                     setPersons((current) => [
                       ...current,
-                      { role: roleOptions[current.length]?.role ?? current[0]?.role ?? '', name: '' },
+                      { role: roleOptions[current.length]?.role ?? roleOptions[0]?.role ?? '', name: '' },
                     ])
                   }
-                  disabled={persons.length >= roleOptions.length}
                 >
                   添加人员
                 </Button>
@@ -584,6 +759,57 @@ export function WorkPermitFormDrawer({
                   )
                 })}
               </Space>
+            </>
+          )}
+
+          {activeApproveNodes.length > 0 && permissions.canOperate && (
+            <>
+              <Typography.Title level={5}>审批人指派</Typography.Title>
+              {missingApproverNodes.length > 0 && (
+                <Typography.Text
+                  type="warning"
+                  style={{ display: 'block', marginBottom: 8 }}
+                >
+                  以下节点未指派且无默认配置，提交前需指派：
+                  {missingApproverNodes.map((node) => node.name).join('、')}
+                </Typography.Text>
+              )}
+              {activeApproveNodes.map((node) => {
+                const defaultValue = approverDefaults[`${permitType}:${node.key}`]
+                const defaultValueLabel =
+                  userOptions.find((option) => option.value === defaultValue)?.label ??
+                  defaultValue
+                return (
+                  <Space key={node.key} wrap style={{ marginBottom: 8 }}>
+                    <Typography.Text style={{ width: 180, display: 'inline-block' }}>
+                      {node.name}
+                    </Typography.Text>
+                    <Select
+                      style={{ width: 240 }}
+                      showSearch
+                      allowClear
+                      filterOption={false}
+                      placeholder={
+                        defaultValueLabel
+                          ? `默认：${defaultValueLabel}（可改）`
+                          : '搜索并指派审批人'
+                      }
+                      value={assignments[node.key] ?? undefined}
+                      options={userOptions}
+                      onSearch={(keyword) => void searchUsers(keyword)}
+                      onFocus={() => {
+                        if (userOptions.length === 0) void searchUsers('')
+                      }}
+                      onChange={(value) =>
+                        setAssignments((current) => ({
+                          ...current,
+                          [node.key]: (value as string) ?? null,
+                        }))
+                      }
+                    />
+                  </Space>
+                )
+              })}
             </>
           )}
 

@@ -151,9 +151,7 @@ async def test_other_bitable_error_not_retried(
     created, sleep_mock, client = _setup_retry_env(monkeypatch, queue)
 
     with pytest.raises(RuntimeError, match="Not Found"):
-        await client.request(
-            "POST", "/bitable/v1/apps/base-x/tables/t/records/search"
-        )
+        await client.request("POST", "/bitable/v1/apps/base-x/tables/t/records/search")
 
     assert sum(c.calls for c in created) == 1
     assert _backoff_delays(sleep_mock, 1.0) == []
@@ -216,3 +214,120 @@ async def test_retry_after_header_handling(
     ]
     assert len(retry_delays) == 1
     assert retry_delays[0] < min_delay + 0.31  # 基础值 + 随机抖动上限
+
+
+class _FakeMediaResponse:
+    def __init__(
+        self,
+        *,
+        status_code: int = 200,
+        json_body: dict[str, Any] | None = None,
+        content: bytes = b"",
+        content_type: str = "application/octet-stream",
+    ):
+        self.status_code = status_code
+        self._json_body = json_body
+        self.content = content
+        self.headers = {"content-type": content_type}
+
+    def raise_for_status(self) -> None:
+        if self.status_code >= 400:
+            request = httpx.Request("GET", "http://test")
+            response = httpx.Response(self.status_code, request=request)
+            raise httpx.HTTPStatusError(
+                f"HTTP {self.status_code}", request=request, response=response
+            )
+
+    def json(self) -> dict[str, Any]:
+        return self._json_body or {}
+
+
+class _FakeSharedHttp:
+    def __init__(self, gets: list[Any]):
+        self._gets = gets
+        self.urls: list[str] = []
+
+    async def get(self, url: str, **_kwargs: Any) -> Any:
+        self.urls.append(url)
+        item = self._gets.pop(0)
+        if isinstance(item, Exception):
+            raise item
+        return item
+
+
+async def test_download_media_via_tmp_url_returns_file_bytes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """tmp_url 换签名直链成功：两次 GET，返回字节与内容类型。"""
+    signed = (
+        "https://internal-api-drive-stream.feishu.cn/space/api/box/stream/download/x"
+    )
+    shared = _FakeSharedHttp(
+        [
+            _FakeMediaResponse(
+                json_body={
+                    "code": 0,
+                    "data": {
+                        "tmp_download_urls": [
+                            {"file_token": "tok1", "tmp_download_url": signed}
+                        ]
+                    },
+                }
+            ),
+            _FakeMediaResponse(content=b"jpeg-bytes", content_type="image/jpeg"),
+        ]
+    )
+    monkeypatch.setattr(feishu_client_module, "_shared_http", lambda: shared)
+    monkeypatch.setattr(
+        "app.modules.warehouse.feishu_client.redis_client", SimpleNamespace()
+    )
+    client = WarehouseFeishuClient(
+        app_id="app", app_secret="secret", app_token="base-x"
+    )
+    client.get_tenant_access_token = AsyncMock(return_value="token")
+
+    result = await client.download_media_via_tmp_url(
+        "https://open.feishu.cn/open-apis/drive/v1/medias/batch_get_tmp_download_url"
+        "?file_tokens=tok1&extra=%7B%7D"
+    )
+
+    assert result == (b"jpeg-bytes", "image/jpeg", None)
+    assert len(shared.urls) == 2
+    assert shared.urls[0].startswith("/drive/v1/medias/batch_get_tmp_download_url")
+    assert shared.urls[1] == signed
+
+
+async def test_download_media_via_tmp_url_missing_signed_link(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    shared = _FakeSharedHttp([_FakeMediaResponse(json_body={"code": 0, "data": {}})])
+    monkeypatch.setattr(feishu_client_module, "_shared_http", lambda: shared)
+    monkeypatch.setattr(
+        "app.modules.warehouse.feishu_client.redis_client", SimpleNamespace()
+    )
+    client = WarehouseFeishuClient(
+        app_id="app", app_secret="secret", app_token="base-x"
+    )
+    client.get_tenant_access_token = AsyncMock(return_value="token")
+
+    try:
+        await client.download_media_via_tmp_url(
+            "https://open.feishu.cn/open-apis/drive/v1/medias/batch_get_tmp_download_url"
+            "?file_tokens=tok1"
+        )
+    except ValueError as exc:
+        assert "临时直链" in str(exc)
+    else:
+        raise AssertionError("expected ValueError when Feishu returns no signed link")
+
+
+async def test_download_media_via_tmp_url_rejects_non_feishu_url() -> None:
+    client = WarehouseFeishuClient(
+        app_id="app", app_secret="secret", app_token="base-x"
+    )
+    try:
+        await client.download_media_via_tmp_url("https://evil.example.com/download")
+    except ValueError as exc:
+        assert "飞书开放平台" in str(exc)
+    else:
+        raise AssertionError("expected ValueError for non-Feishu tmp_url")

@@ -11,6 +11,8 @@ const mocks = vi.hoisted(() => ({
   createWorkPermit: vi.fn(),
   updateWorkPermit: vi.fn(),
   updateWorkCertificate: vi.fn(),
+  getApproverConfigs: vi.fn(),
+  submitWorkPermit: vi.fn(),
   message: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() },
 }))
 
@@ -21,6 +23,17 @@ vi.mock('@/actions/safety', () => ({
   createWorkPermit: mocks.createWorkPermit,
   updateWorkPermit: mocks.updateWorkPermit,
   updateWorkCertificate: mocks.updateWorkCertificate,
+  getApproverConfigs: mocks.getApproverConfigs,
+  submitWorkPermit: mocks.submitWorkPermit,
+  WORK_PERMITS_PAGE_KEY: 'safety:ops-safety:work-permits',
+}))
+
+vi.mock('@/hooks/usePagePermissions', () => ({
+  usePagePermissions: () => ({
+    canAccess: true,
+    canQuery: true,
+    canOperate: true,
+  }),
 }))
 
 // 组件使用 antd 静态 message；只替换副作用边界，其余保持真实渲染。
@@ -69,6 +82,16 @@ const META = {
     ],
   },
   type_fields: {},
+  nodes: {
+    hot_work: [
+      {
+        key: 'safety_officer',
+        name: '安全员意见',
+        kind: 'approve',
+        levels: null,
+      },
+    ],
+  },
   risk_identification_options: ['动火产生火花', '有限空间作业'],
   gas_types: ['hot_work'],
   gas_cycle_minutes: { hot_work: 60 },
@@ -155,6 +178,24 @@ beforeEach(() => {
   })
   mocks.createWorkPermit.mockResolvedValue({ code: 200, data: { id: 'new1' } })
   mocks.updateWorkPermit.mockResolvedValue({ code: 200, data: { id: 'p1' } })
+  mocks.getApproverConfigs.mockResolvedValue({
+    code: 200,
+    data: { items: [] },
+  })
+  mocks.submitWorkPermit.mockResolvedValue({ ok: true, data: {} })
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            data: { items: [{ id: 'u9', name: '王审批', department: '安全科' }] },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      ),
+    ),
+  )
 })
 
 afterEach(() => {
@@ -162,6 +203,7 @@ afterEach(() => {
   root = undefined
   document.body.replaceChildren()
   vi.clearAllMocks()
+  vi.unstubAllGlobals()
 })
 
 let root: Root | undefined
@@ -290,5 +332,108 @@ describe('作业票表单抽屉', () => {
     await renderDrawer({ open: true, onClose })
     await clickButton('取消')
     expect(onClose).toHaveBeenCalled()
+  })
+})
+
+
+describe('作业票表单抽屉：多选人员与审批人指派', () => {
+  it('渲染审批人指派区并回显默认配置占位', async () => {
+    mocks.getApproverConfigs.mockResolvedValue({
+      code: 200,
+      data: {
+        items: [
+          {
+            permit_type: 'hot_work',
+            node_key: 'safety_officer',
+            approver_user_id: 'u9',
+          },
+        ],
+      },
+    })
+    await renderDrawer({ open: true, onClose: () => {}, onCreated: () => {}, editing: EDITING })
+    expect(document.body.textContent).toContain('审批人指派')
+    expect(document.body.textContent).toContain('安全员意见')
+    expect(document.body.textContent).toContain('默认：')
+  })
+
+  it('无指派且无默认配置时提交被拦截', async () => {
+    const onClose = vi.fn()
+    await renderDrawer({ open: true, onClose, editing: EDITING })
+    const dates = dateInputs()
+    await setInputValue(dates[0], '2026-11-10 08:00:00')
+    await setInputValue(dates[1], '2026-11-10 18:00:00')
+    await clickButton('保存并提交审批')
+    expect(mocks.message.warning).toHaveBeenCalledWith(
+      expect.stringContaining('安全员意见'),
+    )
+    expect(mocks.updateWorkPermit).not.toHaveBeenCalled()
+    expect(mocks.submitWorkPermit).not.toHaveBeenCalled()
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('有默认配置时保存并提交审批一步完成', async () => {
+    mocks.getApproverConfigs.mockResolvedValue({
+      code: 200,
+      data: {
+        items: [
+          {
+            permit_type: 'hot_work',
+            node_key: 'safety_officer',
+            approver_user_id: 'u9',
+          },
+        ],
+      },
+    })
+    const onClose = vi.fn()
+    await renderDrawer({ open: true, onClose, editing: EDITING })
+    const dates = dateInputs()
+    await setInputValue(dates[0], '2026-11-10 08:00:00')
+    await setInputValue(dates[1], '2026-11-10 18:00:00')
+    await clickButton('保存并提交审批')
+    expect(mocks.updateWorkPermit).toHaveBeenCalledWith(
+      'p1',
+      expect.objectContaining({ permit_type: 'hot_work' }),
+    )
+    // 未手动指派 → approver_user_id=null，后端回退默认配置
+    expect(mocks.submitWorkPermit).toHaveBeenCalledWith('p1', [
+      { node_key: 'safety_officer', approver_user_id: null },
+    ])
+    expect(mocks.message.success).toHaveBeenCalledWith('作业票已保存并提交审批')
+    expect(onClose).toHaveBeenCalled()
+  })
+
+  it('外部人员行渲染并随提交体携带 external 标记（同角色多行）', async () => {
+    const editing: Record<string, unknown> = {
+      ...EDITING,
+      persons: [
+        { role: 'applicant', name: '张三' },
+        { role: 'applicant', name: '马外部', external: true, certificate_no: 'T-1' },
+      ],
+    }
+    const onClose = vi.fn()
+    await renderDrawer({ open: true, onClose, editing: editing as never })
+    const extInput = document.body.querySelector<HTMLInputElement>(
+      'input[placeholder="证件号（外部人员手输）"]',
+    )
+    expect(extInput).toBeTruthy()
+    expect(extInput!.value).toBe('T-1')
+    const dates = dateInputs()
+    await setInputValue(dates[0], '2026-11-10 08:00:00')
+    await setInputValue(dates[1], '2026-11-10 18:00:00')
+    await clickButton('保存草稿')
+    expect(mocks.updateWorkPermit).toHaveBeenCalledWith(
+      'p1',
+      expect.objectContaining({
+        persons: expect.arrayContaining([
+          expect.objectContaining({ role: 'applicant', name: '张三' }),
+          expect.objectContaining({
+            role: 'applicant',
+            name: '马外部',
+            external: true,
+            certificate_no: 'T-1',
+          }),
+        ]),
+      }),
+    )
   })
 })

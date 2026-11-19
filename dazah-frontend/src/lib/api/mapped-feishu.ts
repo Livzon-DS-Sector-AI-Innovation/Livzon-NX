@@ -65,3 +65,18 @@ export function mappedAttachmentUrl(
     `/page-data/${encodeURIComponent(pageKey)}/${bindingId}/record/${encodeURIComponent(recordId)}/attachments/${encodeURIComponent(fieldId)}/${encodeURIComponent(fileToken)}`,
   )
 }
+
+/** 批量解析镜像人员头像（按企业邮箱），返回 {email: avatar_url}。 */
+export async function fetchPersonAvatars(
+  moduleCode: string,
+  emails: string[],
+): Promise<Record<string, string>> {
+  if (!emails.length) return {}
+  const search = new URLSearchParams()
+  for (const email of emails) search.append('emails', email)
+  return mappedFetch<Record<string, string>>(
+    moduleCode,
+    `/feishu-read/person-avatars?${search.toString()}`,
+  )
+}
+

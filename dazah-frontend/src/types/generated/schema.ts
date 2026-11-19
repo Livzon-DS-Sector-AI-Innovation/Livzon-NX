@@ -73,6 +73,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/administration/feishu-read/person-avatars": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 按企业邮箱批量解析镜像人员头像 */
+        get: operations["get_person_avatars_api_v1_administration_feishu_read_person_avatars_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/administration/feishu-read/resources": {
         parameters: {
             query?: never;
@@ -34962,6 +34979,27 @@ export interface components {
             /** Data */
             data: {
                 [key: string]: unknown;
+            };
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[dict[str, str]] */
+        ApiResponseEnvelope_dict_str__str__: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            /** Data */
+            data: {
+                [key: string]: string;
             };
             /**
              * Message
@@ -72811,6 +72849,11 @@ export interface components {
              */
             id: string;
             /**
+             * Missing Brief Names
+             * @description 尚未完成交底学习签字的作业人姓名（仅 approved 状态非空）
+             */
+            missing_brief_names?: string[];
+            /**
              * Next Gas Due At
              * @description 下次气体复检到期时间（无周期复检要求为 None）
              */
@@ -72841,6 +72884,11 @@ export interface components {
             risk_identifications?: string[];
             /** Safety Measures */
             safety_measures?: components["schemas"]["PermitMeasureItem"][];
+            /**
+             * Signatures
+             * @description 本轮手写签名行（发起行 + 交底作业人行 + 节点行）
+             */
+            signatures?: components["schemas"]["WorkPermitSignatureItem"][];
             /** Status */
             status: string;
             /** Type Data */
@@ -73048,6 +73096,28 @@ export interface components {
         WorkPermitSettingsUpdate: {
             /** Cert Check Strict */
             cert_check_strict: boolean;
+        };
+        /**
+         * WorkPermitSignatureItem
+         * @description 手写签名行（发起行 node_id 为空；节点行/交底作业人行带对应标识）。
+         */
+        WorkPermitSignatureItem: {
+            /** Image Key */
+            image_key?: string | null;
+            /**
+             * Node Id
+             * @description 所属节点（发起行为空）
+             */
+            node_id?: string | null;
+            /**
+             * Sign Key
+             * @description 签字行标识
+             */
+            sign_key: string;
+            /** Signed At */
+            signed_at?: string | null;
+            /** Signer Name */
+            signer_name?: string | null;
         };
         /**
          * WorkPermitStatsResponse
@@ -74231,6 +74301,39 @@ export interface operations {
             };
         };
     };
+    get_person_avatars_api_v1_administration_feishu_read_person_avatars_get: {
+        parameters: {
+            query?: {
+                emails?: string[];
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_dict_str__str__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_read_resources_api_v1_administration_feishu_read_resources_get: {
         parameters: {
             query?: never;
@@ -74503,6 +74606,8 @@ export interface operations {
                 page?: number;
                 page_size?: number;
                 keyword?: string | null;
+                sort_field?: string | null;
+                sort_direction?: string;
             };
             header?: never;
             path: {

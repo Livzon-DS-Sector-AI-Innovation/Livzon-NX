@@ -3,6 +3,8 @@
   "routes": [
     "/",
     "/admin",
+    "/admin/scrap-materials",
+    "/admin/seals",
     "/admin/settings/feishu",
     "/admin/tobacco-gift",
     "/admin/tobacco-gift/items",

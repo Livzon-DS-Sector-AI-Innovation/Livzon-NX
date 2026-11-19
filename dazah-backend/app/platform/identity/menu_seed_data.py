@@ -832,6 +832,8 @@ _LEGACY_SEED_MENUS: list[dict[str, Any]] = [
                     _n("records", "领用记录", "/admin/tobacco-gift/records"),
                 ],
             ),
+            _n("seals", "印章管理", "/admin/seals"),
+            _n("scrap-materials", "废旧物资", "/admin/scrap-materials"),
             _n("notice", "公告通知（开发中）", "/admin/notice", disabled=True),
             _n("meeting", "会议管理（开发中）", "/admin/meeting", disabled=True),
             _n("approval", "文件审批（开发中）", "/admin/approval", disabled=True),

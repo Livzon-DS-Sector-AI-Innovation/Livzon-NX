@@ -47,6 +47,7 @@ import {
   getApproverConfigs,
   getWorkPermitMeta,
   getWorkPermits,
+  reassignWorkPermitNode,
   rejectWorkPermitNode,
   submitWorkPermit,
   verifyWorkPermit,
@@ -107,6 +108,22 @@ type AttachmentItem = {
   size_bytes: number
 }
 
+type SignatureItem = {
+  sign_key: string
+  node_id: string | null
+  signer_name: string | null
+  signed_at: string | null
+  image_key: string | null
+}
+
+// 与后端 MULTI_PERSON_ROLES 同口径：需交底签字/可多人的角色
+const BRIEF_WORKER_ROLES = ['worker', 'rigger', 'rigging_slacker']
+const INITIATOR_SIGN_LABELS: Record<string, string> = {
+  initiator: '发起人（作业负责人）',
+  briefer: '安全交底人',
+  briefer_receiver: '接受交底人',
+}
+
 export type WorkPermitDetailShape = {
   id: string
   permit_no: string
@@ -132,6 +149,8 @@ export type WorkPermitDetailShape = {
   reject_opinion: string | null
   remark: string | null
   nodes: NodeItem[]
+  signatures?: SignatureItem[]
+  missing_brief_names?: string[]
   gas_analyses: GasItem[]
   relations: RelationItem[]
   attachments: AttachmentItem[]
@@ -177,6 +196,8 @@ export function WorkPermitDetailView({ initialDetail }: { initialDetail: WorkPer
   const [rejectOpen, setRejectOpen] = useState<NodeItem | null>(null)
   const [rejectOpinion, setRejectOpinion] = useState('')
   const [acting, setActing] = useState(false)
+  const [reassignNode, setReassignNode] = useState<NodeItem | null>(null)
+  const [reassignUserId, setReassignUserId] = useState<string | null>(null)
   const [gasForm] = Form.useForm()
   const [relationOpen, setRelationOpen] = useState(false)
   const [relationOptions, setRelationOptions] = useState<{ value: string; label: string }[]>([])
@@ -269,6 +290,19 @@ export function WorkPermitDetailView({ initialDetail }: { initialDetail: WorkPer
       },
     )
   }, [rejectOpen, rejectOpinion, detail.id, doReviewAction])
+
+  const handleReassign = useCallback(async () => {
+    if (!reassignNode || !reassignUserId) {
+      message.warning('请选择新的审批人')
+      return
+    }
+    await doAction(
+      () => reassignWorkPermitNode(detail.id, reassignNode.id, reassignUserId),
+      `已改派「${reassignNode.node_name}」`
+    )
+    setReassignNode(null)
+    setReassignUserId(null)
+  }, [reassignNode, reassignUserId, detail.id, doAction])
 
   const gasColumns: TableProps<GasItem>['columns'] = [
     {
@@ -398,13 +432,22 @@ export function WorkPermitDetailView({ initialDetail }: { initialDetail: WorkPer
                 </Button>
               )}
             {detail.status === 'approved' && permissions.canOperate && (
-              <Button
-                type="primary"
-                loading={acting}
-                onClick={() => void doAction(() => verifyWorkPermit(detail.id), '验票完成，开工')}
-              >
-                作业前验票（开工）
-              </Button>
+              <>
+                {(detail.missing_brief_names?.length ?? 0) > 0 && (
+                  <Typography.Text type="warning">
+                    以下作业人尚未完成交底学习签字：
+                    {detail.missing_brief_names!.join('、')}
+                  </Typography.Text>
+                )}
+                <Button
+                  type="primary"
+                  loading={acting}
+                  disabled={(detail.missing_brief_names?.length ?? 0) > 0}
+                  onClick={() => void doAction(() => verifyWorkPermit(detail.id), '验票完成，开工')}
+                >
+                  作业前验票（开工）
+                </Button>
+              </>
             )}
             {(detail.status === 'active' || detail.status === 'approved') &&
               permissions.canOperate && (
@@ -539,11 +582,104 @@ export function WorkPermitDetailView({ initialDetail }: { initialDetail: WorkPer
                       </Button>
                     </>
                   )}
+                  {['pending', 'waiting'].includes(node.status) &&
+                    permissions.canOperate && (
+                      <Button
+                        size="small"
+                        onClick={() => {
+                          setReassignNode(node)
+                          setReassignUserId(null)
+                          if (userOptions.length === 0) void searchUsers('')
+                        }}
+                      >
+                        改派
+                      </Button>
+                    )}
                 </Space>
               ),
             }))}
           />
         )}
+      </Card>
+
+      <Card title="签字记录（手写签名，与飞书审批卡同口径）">
+        {(() => {
+          const sigMap = new Map(
+            (detail.signatures ?? []).map((item) => [item.sign_key, item])
+          )
+          const briefEntries: { key: string; name: string }[] = []
+          let briefIndex = 0
+          for (const person of detail.persons ?? []) {
+            if (BRIEF_WORKER_ROLES.includes(person.role)) {
+              briefEntries.push({
+                key: `brief_worker_${briefIndex}`,
+                name: person.name,
+              })
+              briefIndex += 1
+            }
+          }
+          const fmtTime = (value: string | null | undefined) =>
+            value ? new Date(value).toLocaleString('zh-CN', { hour12: false }) : ''
+          const sections: { title: string; rows: { label: string; signed: boolean; who: string; when: string }[] }[] = [
+            {
+              title: '发起签字行',
+              rows: Object.entries(INITIATOR_SIGN_LABELS).map(([key, label]) => {
+                const sig = sigMap.get(key)
+                return {
+                  label,
+                  signed: Boolean(sig),
+                  who: sig?.signer_name ?? '',
+                  when: fmtTime(sig?.signed_at),
+                }
+              }),
+            },
+          ]
+          if (briefEntries.length > 0) {
+            sections.push({
+              title: '交底作业人（批准后学习签字）',
+              rows: briefEntries.map((entry) => {
+                const sig = sigMap.get(entry.key)
+                return {
+                  label: entry.name,
+                  signed: Boolean(sig),
+                  who: sig?.signer_name ?? '',
+                  when: fmtTime(sig?.signed_at),
+                }
+              }),
+            })
+          }
+          return (
+            <Space orientation="vertical" size={12} style={{ display: 'flex' }}>
+              {sections.map((section) => (
+                <div key={section.title}>
+                  <Typography.Text strong>{section.title}</Typography.Text>
+                  <div style={{ marginTop: 4 }}>
+                    {section.rows.map((row) => (
+                      <div key={row.label}>
+                        {row.signed ? (
+                          <Typography.Text>
+                            <Tag color="green">✔</Tag>
+                            {row.label}
+                            {row.who && `　${row.who}`}
+                            {row.when && `　${row.when}`}
+                          </Typography.Text>
+                        ) : (
+                          <Typography.Text type="secondary">
+                            <Tag>⏳</Tag>
+                            {row.label}（待签）
+                          </Typography.Text>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              {sections.every((section) => section.rows.every((row) => !row.signed)) && (
+                <Typography.Text type="secondary">暂无手写签名记录</Typography.Text>
+              )}
+            </Space>
+          )
+        })()}
       </Card>
 
       <Card title="作业人员与证件（点击证件号跳转证件管理）">
@@ -748,6 +884,36 @@ export function WorkPermitDetailView({ initialDetail }: { initialDetail: WorkPer
           value={rejectOpinion}
           placeholder="驳回意见（必填）"
           onChange={(event) => setRejectOpinion(event.target.value)}
+        />
+      </Modal>
+
+      <Modal
+        open={Boolean(reassignNode)}
+        title={`改派「${reassignNode?.node_name ?? ''}」`}
+        onCancel={() => setReassignNode(null)}
+        onOk={() => void handleReassign()}
+        confirmLoading={acting}
+        okText="确认改派"
+        okButtonProps={{ disabled: !reassignUserId }}
+      >
+        <Typography.Paragraph type="secondary">
+          仅管理员可改派；限当前轮次未签字节点（审批中/未轮到）。
+        </Typography.Paragraph>
+        <Select
+          showSearch
+          allowClear
+          style={{ width: '100%' }}
+          placeholder={
+            reassignNode?.assigned_approver_name
+              ? `当前指派：${reassignNode.assigned_approver_name}`
+              : '搜索并选择新审批人'
+          }
+          value={reassignUserId ?? undefined}
+          options={userOptions}
+          onSearch={(keyword) => void searchUsers(keyword)}
+          filterOption={false}
+          notFoundContent={null}
+          onChange={(value) => setReassignUserId((value as string) ?? null)}
         />
       </Modal>
 

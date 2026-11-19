@@ -21,10 +21,12 @@ describe('administration read mirror data source', () => {
     vi.unstubAllGlobals()
   })
 
-  it('offers only the two mirror pages as binding targets', () => {
+  it('offers only the mirror pages as binding targets', () => {
     expect(getFeishuModuleDefinition('administration').pages).toEqual([
       { label: '烟酒礼品管理 / 物品清单', value: 'admin:tobacco-gift:items' },
       { label: '烟酒礼品管理 / 领用记录', value: 'admin:tobacco-gift:records' },
+      { label: '印章管理', value: 'admin:seals' },
+      { label: '废旧物资', value: 'admin:scrap-materials' },
     ])
   })
 
