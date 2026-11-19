@@ -27,7 +27,12 @@ from app.modules.hr.contract_settings_schemas import (
     ReminderConfigUpdate,
 )
 from app.modules.hr.contract_settings_service import ContractSettingsService
+from app.modules.hr.error_contract import (
+    HrSyncJobStatusEnvelope,
+    hr_sync_status_response,
+)
 from app.modules.hr.feishu.contact import FeishuContact
+from app.modules.hr.feishu_settings_service import feishu_contact_job_error_detail
 from app.modules.hr.models import HrDepartment, HrFeishuMember
 
 logger = logging.getLogger(__name__)
@@ -173,25 +178,29 @@ async def sync_hr_members(
             await session.commit()
             return {"synced": True}
 
-    await submit_job(_do_sync, task_id=task_id, ttl=600)
+    await submit_job(
+        _do_sync,
+        task_id=task_id,
+        ttl=600,
+        public_error_detail=feishu_contact_job_error_detail,
+    )
     return success_response(
         data={"task_id": task_id, "state": "running"}, message="同步任务已启动"
     )
 
 
-@router.get("/hr-members/sync-status", summary="查询飞书联系人同步状态")
+@router.get(
+    "/hr-members/sync-status",
+    summary="查询飞书联系人同步状态",
+    response_model=HrSyncJobStatusEnvelope,
+)
 async def get_members_sync_status(
     current_user: CurrentUser = None,
 ) -> Any:
     _require_user(current_user)
     from app.core.jobs import get_job_status
 
-    status = await get_job_status("hr:sync:feishu-members")
-    if not status:
-        return success_response(
-            data={"state": "idle", "progress": "无同步任务", "result": None}
-        )
-    return success_response(data=status)
+    return hr_sync_status_response(await get_job_status("hr:sync:feishu-members"))
 
 
 @router.get("/hr-members", summary="获取飞书人员列表（用于下拉选择接收人）")

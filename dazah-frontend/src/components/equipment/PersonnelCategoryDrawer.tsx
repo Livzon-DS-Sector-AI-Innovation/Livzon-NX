@@ -11,6 +11,7 @@ import {
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchCategoriesClient as fetchCategories } from '@/lib/api/equipment-client'
 import { assignCategories } from '@/actions/equipment-personnel'
+import { getActionErrorMessage, unwrapServerActionResult } from '@/lib/server-action-result'
 import type {
   EquipmentRole, CategoryAssignItem, PersonnelCategoryInfo,
 } from '@/types/equipment-personnel'
@@ -80,13 +81,13 @@ export function PersonnelCategoryDrawer({
     }
     setSubmitting(true)
     try {
-      await assignCategories(personnelId, { categories: validItems })
+      unwrapServerActionResult(await assignCategories(personnelId, { categories: validItems }))
       message.success('分类约束已更新')
       queryClient.invalidateQueries({ queryKey: ['equipment-personnel'] })
       setItems([])
       onClose()
-    } catch {
-      message.error('保存失败')
+    } catch (error) {
+      message.error(getActionErrorMessage(error, '设备人员分类保存'))
     } finally {
       setSubmitting(false)
     }

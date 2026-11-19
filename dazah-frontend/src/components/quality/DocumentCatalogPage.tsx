@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { attachmentImportFeedback, documentAttachmentAccept } from './documentAttachmentImport'
 import { useEffect, useState } from 'react'
 import { usePagePermissions } from '@/hooks/usePagePermissions'
@@ -180,7 +181,7 @@ export default function DocumentCatalogPage({ initialDepartments = [] }: Documen
       setEntryModalOpen(false)
       refresh()
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '保存失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '保存失败'))
     } finally {
       setEntrySaving(false)
     }
@@ -212,7 +213,7 @@ export default function DocumentCatalogPage({ initialDepartments = [] }: Documen
               message.success('已删除')
               refresh()
             } catch (error) {
-              message.error(error instanceof Error ? error.message : '删除失败')
+              message.error(getUserErrorMessage(error instanceof Error ? error.message : '删除失败'))
             }
           },
         })
@@ -258,7 +259,7 @@ export default function DocumentCatalogPage({ initialDepartments = [] }: Documen
       setDeptModalOpen(false)
       refresh()
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '保存失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '保存失败'))
     } finally {
       setDeptSaving(false)
     }
@@ -279,7 +280,7 @@ export default function DocumentCatalogPage({ initialDepartments = [] }: Documen
           if (selectedKey === dept.id) setSelectedKey(ALL_DEPARTMENTS_KEY)
           refresh()
         } catch (error) {
-          message.error(error instanceof Error ? error.message : '删除失败')
+          message.error(getUserErrorMessage(error instanceof Error ? error.message : '删除失败'))
         }
       },
     })
@@ -299,7 +300,7 @@ export default function DocumentCatalogPage({ initialDepartments = [] }: Documen
       }
       refresh()
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '导入失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '导入失败'))
     } finally {
       setImporting(false)
     }
@@ -325,7 +326,7 @@ export default function DocumentCatalogPage({ initialDepartments = [] }: Documen
       }
       refresh()
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '附件导入失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '附件导入失败'))
     } finally {
       setAttImporting(false)
     }
@@ -352,7 +353,7 @@ export default function DocumentCatalogPage({ initialDepartments = [] }: Documen
       URL.revokeObjectURL(url)
       message.success('导出成功')
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '导出失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '导出失败'))
     } finally {
       setExporting(false)
     }
@@ -371,7 +372,7 @@ export default function DocumentCatalogPage({ initialDepartments = [] }: Documen
       const content = await fetchDocumentEntryAttachmentContent(entryId, attachment.storage_key)
       setPreview({ attachment, ...content, loading: false })
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '预览失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '预览失败'))
       setPreview(null)
     }
   }

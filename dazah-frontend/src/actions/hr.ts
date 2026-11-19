@@ -1,10 +1,11 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { cookies } from 'next/headers'
 import type { components } from '@/types/generated/schema'
 import { filenameFromDisposition } from '@/lib/download'
 import { getAuthHeaders } from '@/lib/auth'
+import { requireActionResponse, serverActionResult, type BusinessErrorMessages } from '@/lib/server-action-result'
+import { uncertainWriteMessage, UserFacingError } from '@/lib/user-error'
 import type { EmployeeListQuery } from '@/lib/api/hr'
 import {
   EmployeeCreateInput,
@@ -40,6 +41,7 @@ import {
   NewEmployeeTrainingManualAddInput,
   PositionTrainingMappingCreateInput,
   AnnualTrainingPlanListResponse,
+  AnnualTrainingPlanCreateInput,
 } from '@/types/hr'
 
 const API_BASE =
@@ -56,6 +58,24 @@ async function authedFetch(input: string | URL | Request, init?: RequestInit): P
     ...(init?.headers as Record<string, string> | undefined),
   }
   return fetch(input, { ...init, headers })
+}
+
+type HrMutationResponse<T> = { code: number; message: string; data: T }
+type HrBusinessErrorMessages = Partial<Record<number, Partial<Record<components['schemas']['HrBusinessErrorCode'], string>>>>
+
+function hrMutation<T = unknown>(
+  operation: string,
+  label: string,
+  request: () => Promise<Response>,
+  options?: { businessMessages?: BusinessErrorMessages; revalidate?: string },
+) {
+  return serverActionResult(`hr.${operation}`, async (): Promise<HrMutationResponse<T>> => {
+    const response = await request()
+    await requireActionResponse(response, options?.businessMessages)
+    const payload = await response.json()
+    if (options?.revalidate) revalidatePath(options.revalidate)
+    return payload
+  }, uncertainWriteMessage(label))
 }
 
 export async function fetchEmployeesAction(params?: EmployeeListQuery): Promise<EmployeeListResponse> {
@@ -378,26 +398,25 @@ export async function deleteOffboardingRecord(id: string) {
 
 // ─── Annual Training Plan Actions ───
 
-export async function createAnnualTrainingPlan(data: { year: number; department: string; plan_level?: string }) {
-  const res = await authedFetch(`${API_BASE}/api/v1/hr/annual-training-plans`, {
+export async function createAnnualTrainingPlan(data: AnnualTrainingPlanCreateInput) {
+  return hrMutation<{ id?: string }>('annualPlan.create', '年度培训计划创建', () => authedFetch(`${API_BASE}/api/v1/hr/annual-training-plans`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
     cache: 'no-store',
+  }), {
+    businessMessages: { 409: { HR_ANNUAL_PLAN_DUPLICATE: '该部门本年度的培训计划已存在' } } satisfies HrBusinessErrorMessages,
+    revalidate: '/hr/training/annual-plan',
   })
-  if (!res.ok) throw new Error('创建年度培训计划失败')
-  revalidatePath('/hr/training/annual-plan')
-  return res.json()
 }
 
 export async function deleteAnnualTrainingPlan(id: string) {
-  const res = await authedFetch(`${API_BASE}/api/v1/hr/annual-training-plans/${id}`, {
+  return hrMutation('annualPlan.delete', '年度培训计划删除', () => authedFetch(`${API_BASE}/api/v1/hr/annual-training-plans/${id}`, {
     method: 'DELETE',
     cache: 'no-store',
+  }), {
+    revalidate: '/hr/training/annual-plan',
   })
-  if (!res.ok) throw new Error('删除年度培训计划失败')
-  revalidatePath('/hr/training/annual-plan')
-  return res.json()
 }
 
 export async function batchUpdatePlanItems(planId: string, data: { items: unknown[] }) {
@@ -412,33 +431,49 @@ export async function batchUpdatePlanItems(planId: string, data: { items: unknow
   return res.json()
 }
 
+const annualPlanImportMessages = {
+  400: {
+    HR_ANNUAL_PLAN_DEPARTMENT_MISSING: '无法识别部门，请在部门级模板中填写部门后重新上传',
+    HR_ANNUAL_PLAN_ITEMS_MISSING: '文档中没有有效的培训计划数据，请使用 APP1 或 APP2 模板',
+  },
+} satisfies HrBusinessErrorMessages
+
 export async function importAnnualTrainingPlan(
   file: File,
   year: number,
   planLevel?: string,
   department?: string
-): Promise<{ code: number; message: string; data: unknown }> {
-  const formData = new FormData()
-  formData.append('file', file)
+) {
+  return serverActionResult('hr.annualPlan.import', async () => {
+    if (!Number.isSafeInteger(year) || year < 1) {
+      throw new UserFacingError('请选择有效的年度')
+    }
+    if (!(file instanceof File) || !/\.docx$/i.test(file.name)) {
+      throw new UserFacingError('请选择 .docx 格式的 Word 文档')
+    }
+    if (!file.size) {
+      throw new UserFacingError('Word 文档为空，请重新选择文件')
+    }
+    const formData = new FormData()
+    formData.append('file', file)
 
-  const params = new URLSearchParams({
-    year: String(year),
-  })
-  // 计划级别和部门留空时，后端会从文档内容自动识别（APP1→部门级、APP2→公司级）
-  if (planLevel) params.set('plan_level', planLevel)
-  if (department) params.set('department', department)
+    const params = new URLSearchParams({ year: String(year) })
+    // 计划级别和部门留空时，由后端从 APP1/APP2 文档中识别。
+    if (planLevel) params.set('plan_level', planLevel)
+    if (department) params.set('department', department)
 
-  const res = await authedFetch(`${API_BASE}/api/v1/hr/annual-training-plans/import?${params}`, {
-    method: 'POST',
-    body: formData,
-    cache: 'no-store',
+    const res = await authedFetch(`${API_BASE}/api/v1/hr/annual-training-plans/import?${params}`, {
+      method: 'POST',
+      body: formData,
+      cache: 'no-store',
+    })
+    await requireActionResponse(res, annualPlanImportMessages)
+    const payload: unknown = await res.json()
+    if (!payload || typeof payload !== 'object' || !('message' in payload) || typeof payload.message !== 'string') {
+      throw new Error('Invalid annual plan import response')
+    }
+    return { message: payload.message }
   })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(err.detail || err.message || '导入失败')
-  }
-  revalidatePath('/hr/training/annual-plan')
-  return res.json()
 }
 
 // ─── STUB: Candidate/Recruitment Actions (not yet implemented) ───
@@ -619,32 +654,31 @@ export async function fetchDepartmentTreeAction(): Promise<{ code: number; messa
   return res.json()
 }
 
-export async function syncDepartmentsFromFeishuAction(forceRefresh = true): Promise<{ code: number; message: string; data: { task_id: string; state: string } }> {
-  const res = await authedFetch(`${API_BASE}/api/v1/hr/departments/sync-from-feishu?force_refresh=${forceRefresh}`, {
+export async function syncDepartmentsFromFeishuAction(forceRefresh = true) {
+  return hrMutation<{ task_id: string; state: string }>('feishu.departments.sync', '飞书部门同步', () => authedFetch(`${API_BASE}/api/v1/hr/departments/sync-from-feishu?force_refresh=${forceRefresh}`, {
     method: 'POST',
     cache: 'no-store',
-  })
-  if (!res.ok) throw new Error('从飞书同步部门失败')
-  return res.json()
+  }))
 }
 
-export async function getDepartmentSyncStatus(): Promise<{ code: number; message: string; data: { state: string; progress: string; result: unknown } }> {
-  const res = await authedFetch(`${API_BASE}/api/v1/hr/departments/sync-status`, {
-    cache: 'no-store',
-  })
-  if (!res.ok) throw new Error('查询同步状态失败')
-  return res.json()
+function fetchHrSyncStatus(operation: string, path: string) {
+  return serverActionResult(`hr.${operation}`, async (): Promise<components['schemas']['HrSyncJobStatusEnvelope']> => {
+    const response = await authedFetch(`${API_BASE}/api/v1/hr/${path}`, { cache: 'no-store' })
+    await requireActionResponse(response)
+    return response.json()
+  }, '暂未确认同步结果，请稍后刷新页面查看同步状态')
+}
+
+export async function getDepartmentSyncStatus() {
+  return fetchHrSyncStatus('feishu.departments.status', 'departments/sync-status')
 }
 
 // ─── HR 飞书设置 Server Actions ───
 
 async function hrActionFetch<T>(url: string, options?: RequestInit): Promise<T | null> {
-  const cookieStore = await cookies()
-  const authToken = cookieStore.get('auth_token')?.value
   const response = await authedFetch(url, {
     ...options,
     headers: {
-      ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
       ...(options?.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
       ...options?.headers,
     },
@@ -745,21 +779,15 @@ export async function deleteDeptRecipient(deptRecipientId: string) {
 
 // ─── 飞书联系人同步 ───
 
-export async function syncFeishuMembersAction(): Promise<{ code: number; message: string; data: unknown }> {
-  const res = await authedFetch(`${API_BASE}/api/v1/hr/hr-settings/hr-members/sync`, {
+export async function syncFeishuMembersAction() {
+  return hrMutation<{ task_id: string; state: string }>('feishu.members.sync', '飞书联系人同步', () => authedFetch(`${API_BASE}/api/v1/hr/hr-settings/hr-members/sync`, {
     method: 'POST',
     cache: 'no-store',
-  })
-  if (!res.ok) throw new Error('同步飞书联系人失败')
-  return res.json()
+  }))
 }
 
-export async function getFeishuMembersSyncStatus(): Promise<{ code: number; message: string; data: { state: string; progress: string; result: unknown } }> {
-  const res = await authedFetch(`${API_BASE}/api/v1/hr/hr-settings/hr-members/sync-status`, {
-    cache: 'no-store',
-  })
-  if (!res.ok) throw new Error('查询同步状态失败')
-  return res.json()
+export async function getFeishuMembersSyncStatus() {
+  return fetchHrSyncStatus('feishu.members.status', 'hr-settings/hr-members/sync-status')
 }
 
 // ─── 服务端 GET 函数 ───
@@ -869,6 +897,16 @@ export async function triggerEmailFetch(scanAll: boolean = true) {
 
 // ─── 岗位调动审批 ───
 
+const positionTransferReviewOptions = {
+  businessMessages: {
+    409: {
+      HR_POSITION_TRANSFER_NOT_SUBMITTED: '该记录尚未提交审批，请刷新后查看当前状态',
+      HR_POSITION_TRANSFER_APPROVAL_COMPLETED: '该记录已完成审批，请刷新后查看审批结果',
+    },
+  } satisfies HrBusinessErrorMessages,
+  revalidate: '/hr/position-transfer',
+}
+
 export async function submitPositionTransferApproval(
   id: string,
   isSupervisorLevel: boolean,
@@ -878,36 +916,30 @@ export async function submitPositionTransferApproval(
   if (customApprovers && Object.keys(customApprovers).length > 0) {
     body.custom_approvers = customApprovers
   }
-  const res = await authedFetch(`${API_BASE}/api/v1/hr/position-transfers/${id}/submit`, {
+  return hrMutation('positionTransfer.submit', '岗位调动审批提交', () => authedFetch(`${API_BASE}/api/v1/hr/position-transfers/${id}/submit`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
+  }), {
+    businessMessages: { 409: { HR_POSITION_TRANSFER_NOT_DRAFT: '只有草稿状态的记录才能提交审批，请刷新后查看当前状态' } } satisfies HrBusinessErrorMessages,
+    revalidate: '/hr/position-transfer',
   })
-  if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || err.detail || '提交审批失败') }
-  revalidatePath('/hr/position-transfer')
-  return res.json()
 }
 
 export async function approvePositionTransferNode(id: string, opinion: string) {
-  const res = await authedFetch(`${API_BASE}/api/v1/hr/position-transfers/${id}/approve-node`, {
+  return hrMutation('positionTransfer.approve', '岗位调动审批通过', () => authedFetch(`${API_BASE}/api/v1/hr/position-transfers/${id}/approve-node`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ opinion }),
-  })
-  if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || err.detail || '审批失败') }
-  revalidatePath('/hr/position-transfer')
-  return res.json()
+  }), positionTransferReviewOptions)
 }
 
 export async function rejectPositionTransferNode(id: string, opinion: string) {
-  const res = await authedFetch(`${API_BASE}/api/v1/hr/position-transfers/${id}/reject-node`, {
+  return hrMutation('positionTransfer.reject', '岗位调动审批驳回', () => authedFetch(`${API_BASE}/api/v1/hr/position-transfers/${id}/reject-node`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ opinion }),
-  })
-  if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.message || err.detail || '拒绝失败') }
-  revalidatePath('/hr/position-transfer')
-  return res.json()
+  }), positionTransferReviewOptions)
 }
 
 export async function createPositionTransfer(data: unknown) {
@@ -940,12 +972,12 @@ export async function deletePositionTransfer(id: string) {
 }
 
 export async function syncPositionTransferFromFeishuAction() {
-  const res = await authedFetch(`${API_BASE}/api/v1/hr/position-transfers/sync-from-feishu`, {
+  return hrMutation<{ total?: number; created?: number; updated?: number; deleted?: number }>('feishu.positionTransfer.sync', '飞书岗位调动同步', () => authedFetch(`${API_BASE}/api/v1/hr/position-transfers/sync-from-feishu`, {
     method: 'POST',
+  }), {
+    businessMessages: { 503: { HR_POSITION_TRANSFER_FEISHU_NOT_CONFIGURED: '岗位调动的飞书数据源未配置，请联系管理员检查人事飞书设置' } } satisfies HrBusinessErrorMessages,
+    revalidate: '/hr/position-transfer',
   })
-  if (!res.ok) throw new Error('同步飞书失败')
-  revalidatePath('/hr/position-transfer')
-  return res.json()
 }
 
 // ─── 部门级审批人配置 ───
@@ -1665,22 +1697,28 @@ export async function batchUpdatePositionTrainingListItems(
   return res.json()
 }
 
-export async function importPositionTrainingLists(
-  file: File,
-): Promise<{ code: number; message: string; data: unknown }> {
-  const formData = new FormData()
-  formData.append('file', file)
-  const res = await authedFetch(`${API_BASE}/api/v1/hr/position-training-lists/import`, {
-    method: 'POST',
-    body: formData,
-    cache: 'no-store',
+export async function importPositionTrainingLists(file: File) {
+  return hrMutation<{ department?: string; imported?: number; skipped?: number }>('positionTraining.import', '岗位培训清单导入', () => {
+    if (!(file instanceof File) || !/\.docx$/i.test(file.name)) {
+      throw new UserFacingError('请使用 APP9 模板的 .docx 文件，旧版 .doc 请先另存为 .docx')
+    }
+    if (!file.size) throw new UserFacingError('岗位培训清单为空，请重新选择文件')
+    const formData = new FormData()
+    formData.append('file', file)
+    return authedFetch(`${API_BASE}/api/v1/hr/position-training-lists/import`, {
+      method: 'POST',
+      body: formData,
+      cache: 'no-store',
+    })
+  }, {
+    businessMessages: {
+      400: {
+        HR_POSITION_TRAINING_TEMPLATE_INVALID: '文档无法解析，请使用 APP9 岗位培训清单模板',
+        HR_POSITION_TRAINING_DATA_MISSING: '文档缺少部门或培训明细，请按 APP9 模板填写后重新上传',
+      },
+    } satisfies HrBusinessErrorMessages,
+    revalidate: '/hr/training/position-training',
   })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(err.message || err.detail || '导入岗位培训清单失败')
-  }
-  revalidatePath('/hr/training/position-training')
-  return res.json()
 }
 
 export async function clearPositionTrainingListsByDept(
@@ -1936,20 +1974,22 @@ export async function confirmExamScores(
 export async function uploadPlanAttachments(
   planId: string,
   files: File[]
-): Promise<{ code: number; message: string; data: unknown }> {
-  const formData = new FormData()
-  for (const f of files) {
-    formData.append('files', f)
-  }
-  const res = await authedFetch(`${API_BASE}/api/v1/hr/annual-training-plans/${planId}/attachments`, {
-    method: 'POST',
-    body: formData,
+) {
+  return hrMutation('annualPlan.uploadAttachments', '培训计划附件上传', () => {
+    if (!Array.isArray(files) || !files.length || files.some(file => !(file instanceof File) || !file.size)) {
+      throw new UserFacingError('请选择非空附件后重新上传')
+    }
+    const formData = new FormData()
+    for (const file of files) formData.append('files', file)
+    return authedFetch(`${API_BASE}/api/v1/hr/annual-training-plans/${planId}/attachments`, {
+      method: 'POST',
+      body: formData,
+    })
+  }, {
+    businessMessages: {
+      400: { HR_ANNUAL_PLAN_ATTACHMENT_COUNT_EXCEEDED: '单次上传的附件过多，请减少本次选择的文件数量' },
+    } satisfies HrBusinessErrorMessages,
   })
-  if (!res.ok) {
-    const body = await res.json().catch(() => null)
-    throw new Error(body?.message || '上传附件失败')
-  }
-  return res.json()
 }
 
 export async function deletePlanAttachment(

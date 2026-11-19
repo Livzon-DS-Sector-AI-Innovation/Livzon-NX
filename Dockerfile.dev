@@ -43,8 +43,9 @@ ENV UV_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple \
     WATCHFILES_FORCE_POLLING=true
 
 COPY dazah-backend/pyproject.toml dazah-backend/uv.lock ./
+# Reuse dependency bytecode across worker reloads without caching bind-mounted code.
 RUN --mount=type=cache,id=dazah-backend-uv,target=/home/app/.cache/uv,sharing=locked \
-    uv sync --frozen --group dev
+    uv sync --frozen --group dev --compile-bytecode
 
 # Playwright Chromium：法规雷达与法规跟踪（CDE）的 JS 渲染站点抓取依赖
 RUN --mount=type=cache,id=dazah-debian-apt,target=/var/cache/apt,sharing=locked \

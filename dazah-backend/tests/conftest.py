@@ -1,4 +1,6 @@
+import tempfile
 from collections.abc import AsyncIterator
+from pathlib import Path
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -26,6 +28,17 @@ _test_session_factory = async_sessionmaker(
     class_=AsyncSession,
     expire_on_commit=False,
 )
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    backend_root = Path(__file__).resolve().parents[1]
+    if Path(tempfile.gettempdir()).resolve().is_relative_to(backend_root.parent):
+        # tempfile falls back to the working directory if OS temp is unwritable.
+        temp_root = backend_root / ".pytest_cache" / "tmp"
+        temp_root.mkdir(parents=True, exist_ok=True)
+        patch = pytest.MonkeyPatch()
+        patch.setattr(tempfile, "tempdir", str(temp_root))
+        config.add_cleanup(patch.undo)
 
 
 @pytest.fixture(autouse=True)

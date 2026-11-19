@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { App, Button, Checkbox, ConfigProvider, Drawer, Empty, Input, Radio, Segmented, Select, Skeleton, Space, Table, Tag, Typography } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
@@ -137,7 +138,7 @@ export default function ModulePermissionsDrawer({ user, open, onClose }: {
       setReason('')
     } catch (error) {
       if (version !== loadVersion.current) return
-      setErrorMessage(error instanceof Error ? error.message : '加载页面权限失败')
+      setErrorMessage(getUserErrorMessage(error instanceof Error ? error.message : '加载页面权限失败', '加载页面权限失败'))
     } finally {
       if (version === loadVersion.current) setLoading(false)
     }
@@ -295,7 +296,7 @@ export default function ModulePermissionsDrawer({ user, open, onClose }: {
       message.success('页面权限已保存并生效')
     } catch (error) {
       if (version !== loadVersion.current) return
-      setErrorMessage(`${error instanceof Error ? error.message : '保存页面权限失败'}。本地修改已保留；如版本冲突，请刷新最新授权后重新调整。`)
+      setErrorMessage(`${getUserErrorMessage(error instanceof Error ? error.message : '保存页面权限失败', '保存页面权限失败')}。本地修改已保留；如版本冲突，请刷新最新授权后重新调整。`)
     } finally {
       if (version === loadVersion.current) {
         savingVersion.current = null

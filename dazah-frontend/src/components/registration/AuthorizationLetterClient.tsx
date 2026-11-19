@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { DeleteOutlined, DownloadOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons'
 import {
   App,
@@ -746,7 +747,7 @@ export default function AuthorizationLetterClient({
 
       resetLedgerMainModal()
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '保存失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '保存失败'))
     } finally {
       setLedgerMainSubmitting(false)
     }
@@ -787,7 +788,7 @@ export default function AuthorizationLetterClient({
 
       resetLedgerUpdateModal()
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '保存失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '保存失败'))
     } finally {
       setLedgerUpdateSubmitting(false)
     }
@@ -812,7 +813,7 @@ export default function AuthorizationLetterClient({
       setFdaModalOpen(false)
       fdaForm.resetFields()
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '保存失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '保存失败'))
     } finally {
       setFdaSubmitting(false)
     }
@@ -829,7 +830,7 @@ export default function AuthorizationLetterClient({
       setLedgerRecords((prev) => sortLedgerRecords(prev.filter((item) => item.id !== record.id)))
       message.success('主记录已删除')
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '删除失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '删除失败'))
     }
   }
 
@@ -852,7 +853,7 @@ export default function AuthorizationLetterClient({
       setLedgerRecords((prev) => removeLedgerUpdateRecord(prev, record.id, update.id))
       message.success('更新子行已删除')
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '删除失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '删除失败'))
     }
   }
 
@@ -867,7 +868,7 @@ export default function AuthorizationLetterClient({
       setFdaRecords((prev) => prev.filter((item) => item.id !== record.id))
       message.success('FDA授权已删除')
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '删除失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '删除失败'))
     }
   }
 
@@ -882,7 +883,7 @@ export default function AuthorizationLetterClient({
       })
       message.success('FDA授权已开始下载')
     } catch (error) {
-      message.error(error instanceof Error ? error.message : 'FDA授权导出失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : 'FDA授权导出失败'))
     } finally {
       setExportingFda(false)
     }
@@ -901,7 +902,7 @@ export default function AuthorizationLetterClient({
       })
       message.success('市场授权已开始下载')
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '市场授权导出失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '市场授权导出失败'))
     } finally {
       setExportingLedger(false)
     }
@@ -923,7 +924,7 @@ export default function AuthorizationLetterClient({
       setLedgerRecords((prev) => replaceLedgerMainRecord(prev, updated))
       message.success('主记录状态已更新')
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '状态更新失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '状态更新失败'))
     } finally {
       setStatusUpdatingId(null)
     }

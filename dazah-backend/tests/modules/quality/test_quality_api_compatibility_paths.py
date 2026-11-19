@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import uuid
+from io import BytesIO
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from fastapi import UploadFile
 
 from app.modules.quality.api import quality_capa as capa_api
 from app.modules.quality.api import quality_deviation as deviation_api
@@ -296,10 +298,6 @@ async def test_quality_deviation_api_compatibility_success_paths(
         )
     ).status_code == 200
 
-    upload = SimpleNamespace(filename="import.docx")
-    monkeypatch.setattr(
-        deviation_api, "read_upload_with_limit", AsyncMock(return_value=b"file")
-    )
     monkeypatch.setattr(
         deviation_api.ie_service,
         "preview_deviation_import",
@@ -311,11 +309,19 @@ async def test_quality_deviation_api_compatibility_success_paths(
         AsyncMock(return_value={"created": 0}),
     )
     assert (
-        await deviation_api.preview_deviation_import(upload, db=db, current_user=user)
+        await deviation_api.preview_deviation_import(
+            UploadFile(BytesIO(b"file"), filename="import.docx"),
+            db=db,
+            current_user=user,
+        )
     ).status_code == 200
     assert (
         await deviation_api.confirm_deviation_import(
-            upload, True, True, db=db, current_user=user
+            UploadFile(BytesIO(b"file"), filename="import.docx"),
+            True,
+            True,
+            db=db,
+            current_user=user,
         )
     ).status_code == 200
 
@@ -382,9 +388,6 @@ async def test_quality_capa_api_compatibility_success_paths(
         capa_api.service.quality_feishu_pages,
         "sync_capa_plan_tracks_from_feishu",
         AsyncMock(return_value={"synced": 1}),
-    )
-    monkeypatch.setattr(
-        capa_api, "read_upload_with_limit", AsyncMock(return_value=b"file")
     )
     monkeypatch.setattr(
         capa_api.ie_service,
@@ -488,12 +491,21 @@ async def test_quality_capa_api_compatibility_success_paths(
         await capa_api.sync_capa_plan_tracks_from_feishu(db=db, current_user=user)
     ).status_code == 200
 
-    upload = SimpleNamespace(filename="import.docx")
     assert (
-        await capa_api.preview_capa_import(upload, db=db, current_user=user)
+        await capa_api.preview_capa_import(
+            UploadFile(BytesIO(b"file"), filename="import.docx"),
+            db=db,
+            current_user=user,
+        )
     ).status_code == 200
     assert (
-        await capa_api.confirm_capa_import(upload, True, True, db=db, current_user=user)
+        await capa_api.confirm_capa_import(
+            UploadFile(BytesIO(b"file"), filename="import.docx"),
+            True,
+            True,
+            db=db,
+            current_user=user,
+        )
     ).status_code == 200
     assert (
         (await capa_api.export_capa_template(current_user=user)).media_type

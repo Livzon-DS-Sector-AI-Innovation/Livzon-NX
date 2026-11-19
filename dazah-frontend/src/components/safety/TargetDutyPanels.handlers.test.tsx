@@ -382,6 +382,15 @@ describe('目标签约/履职评估 handler 流', () => {
     await act(flush)
 
     // 发起季度考核 → 按部门预填 → 提交
+    const quarter = container!.querySelector<HTMLButtonElement>('button[data-segmented="1"]')
+    expect(quarter).not.toBeNull()
+    mocks.getSafetyDutyAssessments.mockRejectedValueOnce(new Error('TypeError: assessment list adapter failed'))
+    await act(async () => {
+      quarter?.click()
+      await flush()
+    })
+    expect(container?.textContent).toContain('加载考核记录失败')
+
     const create = buttons('发起季度考核')[0]
     expect(create).toBeTruthy()
     await act(async () => {
@@ -389,6 +398,13 @@ describe('目标签约/履职评估 handler 流', () => {
     })
     const prefill = buttons('按部门预填考核项')[0]
     expect(prefill).toBeTruthy()
+    mocks.getSafetyDutyAssessmentTemplate.mockRejectedValueOnce(new Error('TypeError: template adapter failed'))
+    await act(async () => {
+      prefill?.click()
+      await flush()
+    })
+    expect(mocks.message.error).toHaveBeenLastCalledWith('操作未完成，请稍后重试')
+    expect(mocks.createSafetyDutyAssessment).not.toHaveBeenCalled()
     await act(async () => {
       prefill!.click()
       await flush()
@@ -397,6 +413,14 @@ describe('目标签约/履职评估 handler 流', () => {
 
     const ok = container!.querySelector<HTMLButtonElement>('button[data-modal-ok]')
     expect(ok).toBeTruthy()
+    mocks.createSafetyDutyAssessment.mockRejectedValueOnce(new Error('TypeError: assessment write adapter failed'))
+    await act(async () => {
+      ok?.click()
+      await flush()
+    })
+    expect(mocks.message.error).toHaveBeenCalledTimes(2)
+    expect(mocks.message.error).toHaveBeenLastCalledWith('操作未完成，请稍后重试')
+    expect(ok?.isConnected).toBe(true)
     await act(async () => {
       ok!.click()
       await flush()

@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, Mock
 from uuid import uuid4
 
 import pytest
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, HTTPException
 from httpx import ASGITransport, AsyncClient
 
 from app.core.database import get_db
@@ -459,6 +459,28 @@ async def test_integration_check_recomputes_after_policy_changes(monkeypatch):
     assert not after.catalog_gaps
     monkeypatch.setattr(page_policy, "PAGE_API_BINDINGS", bindings[1:])
     assert await service.integration_gaps(None, module_code="procurement")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [("GET", "/health"), ("POST", "/health/remediate"), ("POST", "/simulate")],
+)
+async def test_retired_permission_checks_have_no_routes(method: str, path: str) -> None:
+    def reject_admin_access() -> None:
+        raise HTTPException(status_code=403)
+
+    app = FastAPI()
+    app.include_router(rbac_api.rbac_router, prefix="/api/v1/identity")
+    app.dependency_overrides[rbac_api.require_identity_admin] = reject_admin_access
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        response = await client.request(
+            method, f"/api/v1/identity/admin/page-permissions{path}"
+        )
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Not Found"}
 
 
 @pytest.mark.asyncio

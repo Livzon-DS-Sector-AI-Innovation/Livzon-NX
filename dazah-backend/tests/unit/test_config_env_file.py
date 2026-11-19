@@ -44,3 +44,14 @@ def test_settings_load_frontend_url_from_selected_file(
 
     assert settings.FRONTEND_URL == "http://localhost:3000"
     settings.check()
+
+
+def test_attachment_cache_defaults_use_storage_and_bound_ram(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("QUALITY_ATTACHMENT_CACHE_DIR", raising=False)
+    monkeypatch.delenv("QUALITY_ATTACHMENT_CACHE_MAX_MEMORY_MB", raising=False)
+    settings = config.Settings(_env_file=None)
+
+    assert settings.QUALITY_ATTACHMENT_CACHE_DIR == "./storage/feishu-attachment-cache"
+    assert settings.QUALITY_ATTACHMENT_CACHE_MAX_MEMORY_MB == 64

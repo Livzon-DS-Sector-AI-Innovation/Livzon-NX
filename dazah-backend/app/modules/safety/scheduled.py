@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 MIRROR_SYNC_INTERVAL = timedelta(minutes=15)
 _MIRROR_SYNC_RETRY_SECONDS = 5
+_MIRROR_SYNC_PAGE_TIMEOUT_SECONDS = 30 * 60
 
 
 class SafetyRegulationRadarGenerator(TaskGenerator):
@@ -134,7 +135,7 @@ class SafetyPageMirrorSyncGenerator(TaskGenerator):
         timezone="Asia/Shanghai",
     )
     # 全量翻页拉取大表可能较慢，放宽超时
-    timeout_seconds = 30 * 60
+    timeout_seconds = _MIRROR_SYNC_PAGE_TIMEOUT_SECONDS
 
     async def find_due(self, session: Any) -> list[Any]:
         cutoff = datetime.now(UTC) - MIRROR_SYNC_INTERVAL
@@ -424,7 +425,7 @@ class SafetyCommitmentPushGenerator(TaskGenerator):
 # 平台 SchedulerEngine 的循环协程缺少外层异常保护，曾被其它模块的异常
 # 静默杀死（循环停止推进所有 generator）。镜像同步是安全模块的核心数据
 # 链路，这里按本模块 scheduled_task_loop 的先例自建循环兜底：单轮失败只
-# 记日志、循环永不退出；与共享引擎并存时由 Redis 锁防止同一页面重入。
+# 记日志、循环永不退出；手动同步与独立循环共用 Redis 页面锁。
 
 _mirror_sync_stop = asyncio.Event()
 
@@ -468,8 +469,12 @@ async def mirror_sync_loop() -> None:
                     if _mirror_sync_stop.is_set():
                         break
                     try:
-                        await generator.execute_one(session, page_key)
+                        async with asyncio.timeout(_MIRROR_SYNC_PAGE_TIMEOUT_SECONDS):
+                            await generator.execute_one(session, page_key)
                         synced.append(page_key)
+                    except TimeoutError:
+                        await session.rollback()
+                        logger.warning("页面镜像独立同步单页超时: page=%s", page_key)
                     except Exception:
                         logger.exception("页面镜像独立同步单页失败: page=%s", page_key)
                 await session.commit()

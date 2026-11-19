@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import PlatformNotice from '@/components/shared/PlatformNotice'
 
 import { useState, useEffect, useCallback } from 'react'
@@ -34,6 +35,7 @@ import {
 } from '@/types/pilot-workflow'
 import { fetchPilotWorkflow } from '@/lib/api/pilot-workflow'
 import { startPilotWorkflow, approvePilotWorkflowStep, uploadPilotWorkflowDocument, deletePilotWorkflow } from '@/actions/rd'
+import { getActionErrorMessage, unwrapServerActionResult } from '@/lib/server-action-result'
 
 const { Text } = Typography
 
@@ -108,7 +110,7 @@ export function PilotWorkflowDetail({ workflowId, initialWorkflow }: Props) {
   const handleApprove = async () => {
     setApproving(true)
     try {
-      const result = await approvePilotWorkflowStep(workflowId)
+      const result = unwrapServerActionResult(await approvePilotWorkflowStep(workflowId))
       if (result && typeof result === 'object' && 'status' in result) {
         const r = result as { status: string; message?: string }
         if (r.status === 'completed') {
@@ -122,8 +124,8 @@ export function PilotWorkflowDetail({ workflowId, initialWorkflow }: Props) {
         message.success('步骤已确认')
       }
       await loadWorkflow()
-    } catch {
-      message.error('确认失败')
+    } catch (error) {
+      message.error(getActionErrorMessage(error, '中试步骤确认'))
     } finally {
       setApproving(false)
     }
@@ -134,11 +136,11 @@ export function PilotWorkflowDetail({ workflowId, initialWorkflow }: Props) {
   const handleUpload = async (file: File) => {
     setUploading(true)
     try {
-      await uploadPilotWorkflowDocument(workflowId, file)
+      unwrapServerActionResult(await uploadPilotWorkflowDocument(workflowId, file))
       message.success('文档上传成功')
       await loadWorkflow()
     } catch (err) {
-      message.error(err instanceof Error ? err.message : '上传失败')
+      message.error(getActionErrorMessage(err, '中试文档上传'))
     } finally {
       setUploading(false)
     }
@@ -152,7 +154,7 @@ export function PilotWorkflowDetail({ workflowId, initialWorkflow }: Props) {
       message.success('已删除')
       router.push('/rd/pilot-workflow')
     } catch (err) {
-      message.error(err instanceof Error ? err.message : '删除失败')
+      message.error(getUserErrorMessage(err instanceof Error ? err.message : '删除失败'))
     } finally {
       setDeleting(false)
     }

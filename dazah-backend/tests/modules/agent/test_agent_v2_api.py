@@ -220,14 +220,15 @@ async def test_control_plane_tool_routes_delegate_and_enforce_admin(
     assert _response_payload(searched)["data"] == [{"operation": "agent.test"}]
 
     described = await api.describe_tool(
-        "agent.test",
-        user_id,
-        "tenant-a",
-        uuid.uuid4(),
-        db,
-        "Bearer token",
-        settings,
-        _delegation(user_id),
+        request=Request({"type": "http", "headers": []}),
+        operation="agent.test",
+        subject_user_id=user_id,
+        subject_tenant_id="tenant-a",
+        trace_id=uuid.uuid4(),
+        db=db,
+        authorization="Bearer token",
+        settings=settings,
+        x_dazah_delegation=_delegation(user_id),
     )
     assert _response_payload(described)["data"] == {"operation": "agent.test"}
 
@@ -276,12 +277,13 @@ async def test_gateway_confirmation_resolution_rejects_untrusted_subject(
     ):
         with pytest.raises(HTTPException) as exc:
             await api.resolve_confirmation_from_gateway(
-                uuid.uuid4(),
-                payload,
-                cast(Any, FakeDb)(user),
-                "Bearer token",
-                _settings(),
-                _delegation(user_id),
+                confirmation_id=uuid.uuid4(),
+                payload=payload,
+                request=Request({"type": "http", "headers": []}),
+                db=cast(Any, FakeDb)(user),
+                authorization="Bearer token",
+                settings=_settings(),
+                x_dazah_delegation=_delegation(user_id),
             )
         assert exc.value.status_code == status.HTTP_403_FORBIDDEN
 
@@ -305,14 +307,15 @@ async def test_gateway_confirmation_resolution_delegates_choice(
     monkeypatch.setattr(api, "AgentService", lambda settings: service)
 
     response = await api.resolve_confirmation_from_gateway(
-        uuid.uuid4(),
-        AgentConfirmationResolveRequest.model_validate(
+        confirmation_id=uuid.uuid4(),
+        payload=AgentConfirmationResolveRequest.model_validate(
             {"subject": _subject(user_id), "choice": choice}
         ),
-        cast(Any, FakeDb)(user),
-        "Bearer token",
-        _settings(),
-        _delegation(user_id),
+        request=Request({"type": "http", "headers": []}),
+        db=cast(Any, FakeDb)(user),
+        authorization="Bearer token",
+        settings=_settings(),
+        x_dazah_delegation=_delegation(user_id),
     )
 
     payload = _response_payload(response)["data"]
@@ -340,14 +343,15 @@ async def test_gateway_expired_confirmation_returns_conflict_response(
     monkeypatch.setattr(api, "AgentService", lambda settings: service)
 
     response = await api.resolve_confirmation_from_gateway(
-        uuid.uuid4(),
-        AgentConfirmationResolveRequest.model_validate(
+        confirmation_id=uuid.uuid4(),
+        payload=AgentConfirmationResolveRequest.model_validate(
             {"subject": _subject(user_id), "choice": "allow"}
         ),
-        cast(Any, FakeDb)(user),
-        "Bearer token",
-        _settings(),
-        _delegation(user_id),
+        request=Request({"type": "http", "headers": []}),
+        db=cast(Any, FakeDb)(user),
+        authorization="Bearer token",
+        settings=_settings(),
+        x_dazah_delegation=_delegation(user_id),
     )
 
     assert response.status_code == status.HTTP_409_CONFLICT

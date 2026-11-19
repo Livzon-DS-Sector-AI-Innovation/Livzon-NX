@@ -196,6 +196,7 @@ describe('user operation audit tab', () => {
       ip_address: '127.0.0.1', user_agent: 'audit-test-client',
       extra: {
         request: { path_params: { item_id: '123' }, query_params: { page: '2' } },
+        impersonation: { administrator_id: 'administrator-1', target_id: 'employee-1', session_id: 'simulation-1' },
         response: { status_code: 200, content_length: 24 },
         related_events: [{ action: 'update_quality_item', old_value: { status: 'draft' }, new_value: { status: 'approved' } }],
       },
@@ -214,6 +215,9 @@ describe('user operation audit tab', () => {
     expect(content).toContain('请求参数与内容')
     expect(content).toContain('content_length')
     expect(content).toContain('关联业务变更')
+    expect(content).toContain('发起管理员 ID')
+    expect(content).toContain('administrator-1')
+    expect(content).toContain('employee-1')
     expect(content).toContain('update_quality_item')
     expect(content).toContain('操作描述')
     expect(content).toContain('记录质量管理操作')

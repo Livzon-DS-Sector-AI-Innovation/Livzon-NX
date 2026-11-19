@@ -74,6 +74,10 @@ from app.modules.safety.service.work_permit_templates import (
     gas_cycle_minutes_for,
     get_template,
 )
+from app.modules.safety.work_permit_error_contract import (
+    WorkPermitSubmitErrorCode,
+    submit_validation_error,
+)
 from app.platform.audit.service import record_audit_log
 from app.platform.identity.models import User
 
@@ -690,7 +694,7 @@ async def _lock_permit(db: AsyncSession, permit_id: UUID) -> WorkPermit:
 async def _acquire_submit_lock(permit_id: UUID) -> None:
     lock_key = f"safety:work_permit:submit_lock:{permit_id}"
     if await cache_get(lock_key):
-        raise AppException(message="正在提交中，请勿重复操作")
+        raise AppException(423, "正在提交中，请勿重复操作")
     await cache_set(lock_key, "1", ex=30)
 
 
@@ -745,18 +749,22 @@ async def _submit_permit_locked(
         strict=True,
     )
     if not permit.planned_start_time or not permit.planned_end_time:
-        raise AppException(status_code=422, message="请填写作业实施时间（开始/结束）")
+        raise submit_validation_error(
+            WorkPermitSubmitErrorCode.TIME_INVALID, "请填写作业实施时间（开始/结束）"
+        )
     if permit.planned_end_time <= permit.planned_start_time:
-        raise AppException(status_code=422, message="实施结束时间必须晚于开始时间")
+        raise submit_validation_error(
+            WorkPermitSubmitErrorCode.TIME_INVALID, "实施结束时间必须晚于开始时间"
+        )
     validity = await _validity_hours(settings, permit.permit_type, permit.permit_level)
     if validity is not None:
         span = (
             permit.planned_end_time - permit.planned_start_time
         ).total_seconds() / 3600
         if span > validity:
-            raise AppException(
-                status_code=422,
-                message=(
+            raise submit_validation_error(
+                WorkPermitSubmitErrorCode.TIME_INVALID,
+                (
                     f"实施时长 {span:.1f}h 超过 {permit.permit_level} 级"
                     f"{get_template(permit.permit_type).name}有效期 {validity:g}h"
                 ),
@@ -765,9 +773,9 @@ async def _submit_permit_locked(
     # 人员证件校验：默认软提示随响应返回；cert_check_strict 开启时拦截
     cert_issues = await certificate_check_issues(db, permit)
     if cert_issues and _setting_value(settings, CERT_CHECK_STRICT_KEY, False):
-        raise AppException(
-            status_code=422,
-            message="作业人员证件校验未通过：" + "；".join(cert_issues),
+        raise submit_validation_error(
+            WorkPermitSubmitErrorCode.CERTIFICATE_INVALID,
+            "作业人员证件校验未通过：" + "；".join(cert_issues),
         )
 
     active = active_nodes_for_level(permit.permit_type, permit.permit_level)
@@ -780,9 +788,9 @@ async def _submit_permit_locked(
         if approver_id is None:
             approver_id = config_map.get(node_key)
         if approver_id is None and node_tpl["kind"] == NODE_KIND_APPROVE:
-            raise AppException(
-                status_code=422,
-                message=(
+            raise submit_validation_error(
+                WorkPermitSubmitErrorCode.APPROVER_REQUIRED,
+                (
                     f"审批节点「{node_tpl['name']}」未指定审批人，"
                     "请在提交前指派或维护默认审批人配置"
                 ),

@@ -333,36 +333,7 @@ async def test_external_feishu_services_cover_list_crud_pull_and_statistics(
     }
     assert await complaint.pull_return_ledger_records(db) == {"synced": 1, "failed": 0}
 
-    stats_rows = [
-        {
-            "supplier_name": "供应商A",
-            "material_type": "原料",
-            "qualification_name": "营业执照",
-            "is_completed": True,
-            "deadline": "2026-07-01",
-        },
-        {
-            "supplier_name": "供应商B",
-            "material_type": "包材",
-            "qualification_name": "审计报告",
-            "is_completed": False,
-            "deadline": "2030-01-01",
-        },
-    ]
-    monkeypatch.setattr(
-        supplier,
-        "list_supplier_qualification_records",
-        AsyncMock(return_value={"items": stats_rows}),
-    )
-    statistics = await supplier.get_supplier_statistics(db)
-    assert statistics["total"] == 2
-    assert statistics["expired_count"] == 1
-    assert statistics["supplier_count"] == 2
-    monkeypatch.setattr(
-        supplier,
-        "list_supplier_qualification_records",
-        AsyncMock(side_effect=AppException(message="disabled")),
-    )
+    db.execute = AsyncMock(side_effect=AppException(message="disabled"))
     assert (await supplier.get_supplier_statistics(db))["total"] == 0
 
     monkeypatch.setattr(

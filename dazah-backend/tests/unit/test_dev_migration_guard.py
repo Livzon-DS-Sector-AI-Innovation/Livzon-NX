@@ -2,6 +2,7 @@
 
 import io
 import json
+import shlex
 from contextlib import contextmanager
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -82,7 +83,31 @@ def test_current_database_never_reapplies_an_upgrade(pending, monkeypatch):
     execv = Mock()
     monkeypatch.setattr(guard.os, "execv", execv)
     assert guard.main(["serve"]) == 0
-    assert execv.call_args.args[1][1:4] == ["-m", "uvicorn", "app.main:app"]
+    python, args = execv.call_args.args
+    assert args[:-2] == [
+        python,
+        "-m",
+        "watchfiles",
+        "--target-type",
+        "command",
+        "--filter",
+        "python",
+        "--sigint-timeout",
+        "30",
+    ]
+    assert args[-1] == "/app/app"
+    assert shlex.split(args[-2]) == [
+        python,
+        "-m",
+        "uvicorn",
+        "app.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000",
+        "--workers",
+        "1",
+    ]
 
 
 def test_container_restart_with_closed_stdin_cannot_reuse_prior_approval(pending):

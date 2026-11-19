@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { usePagePermissions } from '@/hooks/usePagePermissions'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -118,7 +119,7 @@ function RecipientSelect({
         setSearchedOptions(fetched)
       } catch (error) {
         if (version !== searchVersionRef.current) return
-        message.error(`人员搜索失败：${error instanceof Error ? error.message : '请稍后重试'}`)
+        message.error(getUserErrorMessage(`人员搜索失败：${error instanceof Error ? error.message : '请稍后重试'}`))
       } finally {
         if (version === searchVersionRef.current) setSearching(false)
       }
@@ -219,7 +220,7 @@ function ChangeActionPlanDueCard({
       message.success('变更计划到期提醒设置已保存')
     } catch (error) {
       message.error(
-        `保存失败：${error instanceof Error ? error.message : '未知错误'}`
+        getUserErrorMessage(`保存失败：${error instanceof Error ? error.message : '未知错误'}`)
       )
     } finally {
       setSaving(false)
@@ -326,7 +327,7 @@ function InspectionTrendAlertCard({
       })
       .catch((error: unknown) => {
         if (cancelled) return
-        message.error(`QA 人员加载失败：${error instanceof Error ? error.message : '请稍后重试'}`)
+        message.error(getUserErrorMessage(`QA 人员加载失败：${error instanceof Error ? error.message : '请稍后重试'}`))
       })
     return () => {
       cancelled = true
@@ -356,7 +357,7 @@ function InspectionTrendAlertCard({
       message.success('成品检验趋势异常提醒设置已保存')
     } catch (error) {
       message.error(
-        `保存失败：${error instanceof Error ? error.message : '未知错误'}`
+        getUserErrorMessage(`保存失败：${error instanceof Error ? error.message : '未知错误'}`)
       )
     } finally {
       setSaving(false)
@@ -499,7 +500,7 @@ function AnomalyEscalationCard({
       message.success('成品/纯化水异常升级推送设置已保存')
     } catch (error) {
       message.error(
-        `保存失败：${error instanceof Error ? error.message : '未知错误'}`
+        getUserErrorMessage(`保存失败：${error instanceof Error ? error.message : '未知错误'}`)
       )
     } finally {
       setSaving(false)
@@ -599,7 +600,7 @@ function ItemsStockAlertCard({
       onSaved(next)
       message.success('物品库存不足预警推送设置已保存')
     } catch (error) {
-      message.error(`保存失败：${error instanceof Error ? error.message : '未知错误'}`)
+      message.error(getUserErrorMessage(`保存失败：${error instanceof Error ? error.message : '未知错误'}`))
     } finally {
       setSaving(false)
     }
@@ -614,7 +615,7 @@ function ItemsStockAlertCard({
       else if (result.status === 'unmapped') message.warning(result.message || '未配置有效接收人')
       else message.success(`测试推送完成：成功 ${result.sent} 位`)
     } catch (error) {
-      message.error(`测试失败：${error instanceof Error ? error.message : '未知错误'}`)
+      message.error(getUserErrorMessage(`测试失败：${error instanceof Error ? error.message : '未知错误'}`))
     } finally {
       setTesting(false)
     }

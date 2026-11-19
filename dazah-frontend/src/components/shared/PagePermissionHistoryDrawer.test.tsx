@@ -71,11 +71,23 @@ function button(label: string) {
   return found!
 }
 
-it('shows auditable history and previews impact before a versioned rollback', async () => {
+it('shows a safe error when authorization history cannot be loaded', async () => {
+  mocks.getRole.mockRejectedValueOnce(new Error('TypeError: internal history failure'))
   await act(async () => {
     root.render(createElement(PagePermissionHistoryDrawer, {
       targetType: 'role', targetId: 'role-1', targetName: '质量角色', grantVersion: 5,
       open: true, onClose: vi.fn(), onRolledBack: vi.fn(),
+    }))
+  })
+  await vi.waitFor(() => expect(mocks.message.error).toHaveBeenCalledWith('操作未完成，请稍后重试'))
+})
+
+it('shows auditable history and previews impact before a versioned rollback', async () => {
+  const rolledBack = vi.fn()
+  await act(async () => {
+    root.render(createElement(PagePermissionHistoryDrawer, {
+      targetType: 'role', targetId: 'role-1', targetName: '质量角色', grantVersion: 5,
+      open: true, onClose: vi.fn(), onRolledBack: rolledBack,
     }))
   })
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 30)) })
@@ -90,6 +102,11 @@ it('shows auditable history and previews impact before a versioned rollback', as
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(reason, '恢复历史配置')
     reason.dispatchEvent(new Event('input', { bubbles: true }))
   })
+  mocks.previewRole.mockRejectedValueOnce(new Error('TypeError: history preview adapter failed'))
+  await act(async () => button('恢复').click())
+  expect(mocks.message.error).toHaveBeenLastCalledWith('操作未完成，请稍后重试')
+  expect(mocks.confirm).not.toHaveBeenCalled()
+
   await act(async () => {
     button('恢复').click()
     await new Promise((resolve) => setTimeout(resolve, 0))
@@ -98,6 +115,13 @@ it('shows auditable history and previews impact before a versioned rollback', as
     audit_id: 'audit-1', expected_grant_version: 5,
   })
   const confirmation = mocks.confirm.mock.lastCall![0] as { onOk: () => Promise<void> }
+  const failedWrite = new Error('TypeError: history write adapter failed')
+  mocks.rollbackRole.mockRejectedValueOnce(failedWrite)
+  await act(async () => { await expect(confirmation.onOk()).rejects.toBe(failedWrite) })
+  expect(mocks.message.error).toHaveBeenCalledTimes(2)
+  expect(mocks.message.error).toHaveBeenLastCalledWith('操作未完成，请稍后重试')
+  expect(rolledBack).not.toHaveBeenCalled()
+  expect(reason.value).toBe('恢复历史配置')
   await act(async () => { await confirmation.onOk() })
   expect(mocks.rollbackRole).toHaveBeenCalledWith('role-1', expect.objectContaining({
     audit_id: 'audit-1', expected_grant_version: 5, reason: '恢复历史配置',
@@ -187,6 +211,10 @@ it('exports the complete role history as a CSV download', async () => {
     open: true, onClose: vi.fn(), onRolledBack: vi.fn(),
   })))
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 30)) })
+  mocks.exportRole.mockRejectedValueOnce(new Error('TypeError: history export adapter failed'))
+  await act(async () => button('导出历史（最多5000条）').click())
+  expect(mocks.message.error).toHaveBeenLastCalledWith('操作未完成，请稍后重试')
+  expect(createObjectURL).not.toHaveBeenCalled()
   await act(async () => button('导出历史（最多5000条）').click())
 
   expect(mocks.exportRole).toHaveBeenCalledWith('role-1')

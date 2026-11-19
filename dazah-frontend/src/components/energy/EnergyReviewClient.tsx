@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { App, Button, Input, InputNumber, Select, Space, Table, Typography } from 'antd'
@@ -74,7 +75,7 @@ export function EnergyReviewClient() {
       message.success('待确认区间已保存')
       setEditing(undefined)
       setStartDate(''); setEndDate(''); setReason(''); setSource(''); setReportedValue(undefined); setError('')
-    } catch (cause) { setError(cause instanceof Error ? cause.message : '待确认区间未保存') }
+    } catch (cause) { setError(getUserErrorMessage(cause instanceof Error ? cause.message : '待确认区间未保存', '待确认区间未保存')) }
     finally { setBusy(false) }
   }
 
@@ -88,7 +89,7 @@ export function EnergyReviewClient() {
       await client.invalidateQueries({ queryKey: ['energy-ledger'] })
       message.success('已清除该字段的待确认标记')
       setEditing(undefined)
-    } catch (cause) { setError(cause instanceof Error ? cause.message : '待确认标记未清除') }
+    } catch (cause) { setError(getUserErrorMessage(cause instanceof Error ? cause.message : '待确认标记未清除', '待确认标记未清除')) }
     finally { setBusy(false) }
   }
 

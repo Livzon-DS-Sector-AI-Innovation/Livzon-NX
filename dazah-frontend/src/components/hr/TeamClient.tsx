@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useState, useCallback, useEffect } from 'react'
 import { App, Button, Table, Space, Popconfirm, Input } from 'antd'
 import { PlusOutlined, SearchOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons'
@@ -34,7 +35,7 @@ export default function TeamClient({ departmentId, departmentName }: TeamClientP
       setTeams(res.data)
       setTotal(res.meta?.total || 0)
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '加载数据失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '加载数据失败'))
     } finally {
       setLoading(false)
     }
@@ -65,7 +66,7 @@ export default function TeamClient({ departmentId, departmentName }: TeamClientP
       message.success('删除成功')
       loadData()
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '删除失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '删除失败'))
     }
   }
 

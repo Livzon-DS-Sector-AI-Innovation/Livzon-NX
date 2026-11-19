@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { usePagePermissions } from '@/hooks/usePagePermissions'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -307,7 +308,7 @@ export function QualityFeishuSettingsPage({ embedded = false }: { embedded?: boo
         title: '保存飞书应用配置失败',
         description,
       })
-      message.error(error instanceof Error ? error.message : '保存飞书应用配置失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '保存飞书应用配置失败'))
     } finally {
       setAppSaving(false)
     }
@@ -341,7 +342,7 @@ export function QualityFeishuSettingsPage({ embedded = false }: { embedded?: boo
         title: '测试飞书应用连接失败',
         description,
       })
-      message.error(error instanceof Error ? error.message : '测试飞书应用连接失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '测试飞书应用连接失败'))
     } finally {
       setAppTesting(false)
     }
@@ -369,7 +370,7 @@ export function QualityFeishuSettingsPage({ embedded = false }: { embedded?: boo
         title: '执行飞书回拉失败',
         description,
       })
-      message.error(error instanceof Error ? error.message : '执行飞书回拉失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '执行飞书回拉失败'))
     } finally {
       setPulling(false)
     }
@@ -401,7 +402,7 @@ export function QualityFeishuSettingsPage({ embedded = false }: { embedded?: boo
           title: '保存实体配置失败',
           description,
         })
-        message.error(error instanceof Error ? error.message : '保存实体配置失败')
+        message.error(getUserErrorMessage(error instanceof Error ? error.message : '保存实体配置失败'))
       } finally {
         setRowSaving((current) => ({ ...current, [entityCode]: false }))
       }
@@ -440,7 +441,7 @@ export function QualityFeishuSettingsPage({ embedded = false }: { embedded?: boo
           description,
         })
         message.error(
-          error instanceof Error ? error.message : `${entityName} 连接测试失败`
+          getUserErrorMessage(error instanceof Error ? error.message : `${entityName} 连接测试失败`)
         )
       } finally {
         setRowTesting((current) => ({ ...current, [entityCode]: false }))
@@ -597,7 +598,7 @@ export function QualityFeishuSettingsPage({ embedded = false }: { embedded?: boo
         const firstCode = group[1][0].entity_code
         tables = await fetchQualityFeishuEntityTables(firstCode, appToken)
       } catch (error) {
-        message.error(error instanceof Error ? error.message : '读取子表列表失败')
+        message.error(getUserErrorMessage(error instanceof Error ? error.message : '读取子表列表失败'))
         return
       } finally {
         setBatchLoading(false)
@@ -755,7 +756,7 @@ export function QualityFeishuSettingsPage({ embedded = false }: { embedded?: boo
         title: '保存字段对齐配置失败',
         description: error instanceof Error ? error.message : '保存字段对齐配置失败',
       })
-      message.error(error instanceof Error ? error.message : '保存字段对齐配置失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '保存字段对齐配置失败'))
     } finally {
       setMappingSaving(false)
     }
@@ -787,7 +788,7 @@ export function QualityFeishuSettingsPage({ embedded = false }: { embedded?: boo
           title: '读取飞书表列表失败',
           description: error instanceof Error ? error.message : '读取飞书表列表失败',
         })
-        message.error(error instanceof Error ? error.message : '读取飞书表列表失败')
+        message.error(getUserErrorMessage(error instanceof Error ? error.message : '读取飞书表列表失败'))
       } finally {
         setRowLoadingTables((current) => ({ ...current, [entityCode]: false }))
       }

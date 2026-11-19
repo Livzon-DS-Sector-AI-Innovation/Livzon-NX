@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useState } from 'react'
 import {
   App,
@@ -125,7 +126,7 @@ export default function TargetAgreementPanel({
       const statsRes = await getSafetyTargetAgreementStats(nextYear)
       if (statsRes.code === 200) setStats(statsRes.data)
     } catch (err) {
-      setError(err instanceof Error ? err.message : '加载责任书失败')
+      setError(getUserErrorMessage(err instanceof Error ? err.message : '加载责任书失败', '加载责任书失败'))
     } finally {
       setLoading(false)
     }
@@ -196,7 +197,7 @@ export default function TargetAgreementPanel({
         message.error(res.message || '保存失败')
       }
     } catch (err) {
-      message.error(err instanceof Error ? err.message : '保存失败')
+      message.error(getUserErrorMessage(err instanceof Error ? err.message : '保存失败'))
     }
   }
 

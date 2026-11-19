@@ -347,4 +347,48 @@ describe('LivzonTaskClient', () => {
     await flush()
     expect(ui.message.error).toHaveBeenLastCalledWith('提交失败')
   })
+
+  it('preserves the task draft and reports safe feedback on rejected modifications', async () => {
+    const internal = new Error('TypeError: internal automation failure')
+    const expected = '操作未完成，请稍后重试'
+    mount()
+    await flush()
+
+    api.fetchLivzonTaskVersions.mockRejectedValueOnce(internal)
+    await act(async () => findButton('修改', true)?.click())
+    await flush()
+    expect(ui.message.error).toHaveBeenLastCalledWith(expected)
+
+    await act(async () => findButton('修改', true)?.click())
+    await flush()
+    actions.requestLivzonTaskTool.mockRejectedValueOnce(internal)
+    await act(async () => findButton('提交修改')?.click())
+    await flush()
+    expect(ui.message.error).toHaveBeenCalledTimes(2)
+    expect(container.querySelector('[role="dialog"]')?.textContent).toContain('修改自动化流程')
+    expect(actions.executeLivzonTaskConfirmation).not.toHaveBeenCalled()
+  })
+
+  it('shows failures before and after confirmation without refreshing unchanged task state', async () => {
+    const internal = new Error('TypeError: internal confirmation failure')
+    const expected = '操作未完成，请稍后重试'
+    mount()
+    await flush()
+    actions.requestLivzonTaskTool.mockRejectedValueOnce(internal)
+    await act(async () => findButton('禁用')?.click())
+    await flush()
+    expect(ui.message.error).toHaveBeenLastCalledWith(expected)
+    expect(ui.modal.confirm).not.toHaveBeenCalled()
+
+    await act(async () => findButton('禁用')?.click())
+    await flush()
+    actions.executeLivzonTaskConfirmation.mockRejectedValueOnce(internal)
+    const confirmation = ui.modal.confirm.mock.calls.at(-1)?.[0]
+    expect(confirmation).toBeDefined()
+    await expect(confirmation?.onOk()).rejects.toBe(internal)
+    expect(ui.message.error).toHaveBeenCalledTimes(2)
+    expect(ui.message.error).toHaveBeenLastCalledWith(expected)
+    expect(api.fetchLivzonTasks).toHaveBeenCalledOnce()
+    expect(findButton('禁用')).toBeDefined()
+  })
 })

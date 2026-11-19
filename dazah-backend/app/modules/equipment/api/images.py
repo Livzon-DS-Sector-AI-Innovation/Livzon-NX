@@ -16,6 +16,8 @@ from app.core.response import success_response
 from app.modules.equipment import repository as repo
 from app.modules.equipment import service
 from app.modules.equipment.schemas import WorkOrderImageResponse
+from app.modules.equipment.schemas.work_order_image import WorkOrderImageUploadError
+from app.shared.schemas import ApiResponseEnvelope
 
 router = APIRouter()
 
@@ -26,7 +28,22 @@ def _require_user(current_user: CurrentUser) -> uuid.UUID:
     return current_user.id
 
 
-@router.post("/{work_order_id}/images", summary="上传工单图片")
+@router.post(
+    "/{work_order_id}/images",
+    summary="上传工单图片",
+    response_model=ApiResponseEnvelope[list[WorkOrderImageResponse]],
+    responses={
+        400: {
+            "model": WorkOrderImageUploadError,
+            "description": (
+                "文件校验失败，或工单图片总数超限（EQUIPMENT_WORK_ORDER_IMAGE_LIMIT）"
+            ),
+        },
+        404: {"description": "工单不存在"},
+        413: {"description": "图片超过大小限制"},
+        415: {"description": "图片格式不受支持"},
+    },
+)
 async def upload_work_order_images(
     work_order_id: uuid.UUID,
     files: list[UploadFile] = File(..., description="图片文件"),

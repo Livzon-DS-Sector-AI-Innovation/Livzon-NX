@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useCallback, useEffect, useState } from 'react'
 import {
   App,
@@ -187,7 +188,7 @@ export default function HazchemPanel({
           setError(res.message || '加载危化品档案失败')
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : '加载危化品档案失败')
+        setError(getUserErrorMessage(err instanceof Error ? err.message : '加载危化品档案失败', '加载危化品档案失败'))
       } finally {
         setLoading(false)
       }
@@ -238,7 +239,7 @@ export default function HazchemPanel({
         message.error(res.message || '保存失败')
       }
     } catch (err) {
-      message.error(err instanceof Error ? err.message : '保存失败')
+      message.error(getUserErrorMessage(err instanceof Error ? err.message : '保存失败'))
     }
   }
 
@@ -311,7 +312,7 @@ export default function HazchemPanel({
       }
       return res
     } catch (err) {
-      message.error(err instanceof Error ? err.message : '上传失败')
+      message.error(getUserErrorMessage(err instanceof Error ? err.message : '上传失败'))
       return null
     } finally {
       setMsdsUploading(false)
@@ -335,7 +336,7 @@ export default function HazchemPanel({
         objectUrls: [previewSrc, downloadSrc],
       })
     } catch (err) {
-      message.error(err instanceof Error ? err.message : '预览加载失败')
+      message.error(getUserErrorMessage(err instanceof Error ? err.message : '预览加载失败'))
     }
   }
 
@@ -353,7 +354,7 @@ export default function HazchemPanel({
       document.body.removeChild(link)
       URL.revokeObjectURL(url)
     } catch (err) {
-      message.error(err instanceof Error ? err.message : '下载失败')
+      message.error(getUserErrorMessage(err instanceof Error ? err.message : '下载失败'))
     }
   }
 
@@ -414,7 +415,7 @@ export default function HazchemPanel({
         message.error(res.message || '更新失败')
       }
     } catch (err) {
-      message.error(err instanceof Error ? err.message : '更新失败')
+      message.error(getUserErrorMessage(err instanceof Error ? err.message : '更新失败'))
     } finally {
       setAiApplying(false)
     }

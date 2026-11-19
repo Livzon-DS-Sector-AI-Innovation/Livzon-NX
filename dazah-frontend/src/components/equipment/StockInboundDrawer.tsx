@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useEffect } from 'react'
 import { App, Drawer, Form, Input, InputNumber, Button, Space } from 'antd'
 import { useEquipmentStore } from '@/stores/equipment'
@@ -37,7 +38,7 @@ export function StockInboundDrawer({ onRefresh }: StockInboundDrawerProps) {
       closeStockInboundDrawer()
       onRefresh?.()
     } catch (error) {
-      if (error?.message) message.error(error.message)
+      if (error?.message) message.error(getUserErrorMessage(error.message))
     }
   }
 

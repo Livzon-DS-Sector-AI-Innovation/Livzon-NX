@@ -5,7 +5,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import DuplicateException, NotFoundException
+from app.core.exceptions import AppException, NotFoundException
 from app.modules.equipment import repository as repo
 from app.modules.equipment.models.equipment import EquipmentCategory
 from app.modules.equipment.models.personnel import (
@@ -13,6 +13,7 @@ from app.modules.equipment.models.personnel import (
     EquipmentRole,
 )
 from app.modules.equipment.schemas.personnel import (
+    ROLE_CODE_EXISTS,
     CandidateResponse,
     FeishuRefreshResult,
     PersonnelAddRequest,
@@ -36,7 +37,11 @@ from app.platform.identity.models import User
 async def create_role(db: AsyncSession, data: RoleCreate) -> RoleResponse:
     existing = await repo.get_role_by_code(db, data.code)
     if existing:
-        raise DuplicateException("角色编码", data.code)
+        raise AppException(
+            status_code=409,
+            message="角色编码已存在",
+            detail={"error_code": ROLE_CODE_EXISTS},
+        )
     role = EquipmentRole(
         name=data.name,
         code=data.code,
@@ -122,45 +127,40 @@ async def add_personnel(
     result = PersonnelAddResult(added=[], skipped=[], errors=[])
 
     for user_id in data.user_ids:
-        try:
-            # 查 identity.users
-            user_result = await db.execute(
-                select(User).where(
-                    User.id == user_id,
-                    User.is_deleted == False,  # noqa: E712
-                )
+        user_result = await db.execute(
+            select(User).where(
+                User.id == user_id,
+                User.is_deleted == False,  # noqa: E712
             )
-            user = user_result.scalar_one_or_none()
-            if not user:
-                result.errors.append(
-                    {"user_id": str(user_id), "reason": "identity.users 中未找到"}
-                )
-                continue
+        )
+        user = user_result.scalar_one_or_none()
+        if not user:
+            result.errors.append(
+                {"user_id": str(user_id), "reason": "所选人员不存在，请刷新后重新选择"}
+            )
+            continue
 
-            # 去重（按车间：同一人可加入多个车间的人员池）
-            existing = await repo.get_personnel_by_user_and_workshop(
-                db, user_id, data.workshop_code
-            )
-            if existing:
-                result.skipped.append(user_id)
-                continue
+        # 同一人可加入多个车间的人员池。
+        existing = await repo.get_personnel_by_user_and_workshop(
+            db, user_id, data.workshop_code
+        )
+        if existing:
+            result.skipped.append(user_id)
+            continue
 
-            # 冗余写入
-            personnel = EquipmentPersonnel(
-                user_id=user.id,
-                name=user.name,
-                workshop_code=data.workshop_code,
-                employee_no=user.employee_no,
-                department=user.department,
-                feishu_user_id=user.feishu_user_id,
-                feishu_open_id=user.feishu_open_id,
-                mobile=user.mobile,
-            )
-            db.add(personnel)
-            await db.flush()
-            result.added.append(personnel.id)
-        except Exception as e:
-            result.errors.append({"user_id": str(user_id), "reason": str(e)})
+        personnel = EquipmentPersonnel(
+            user_id=user.id,
+            name=user.name,
+            workshop_code=data.workshop_code,
+            employee_no=user.employee_no,
+            department=user.department,
+            feishu_user_id=user.feishu_user_id,
+            feishu_open_id=user.feishu_open_id,
+            mobile=user.mobile,
+        )
+        db.add(personnel)
+        await db.flush()
+        result.added.append(personnel.id)
 
     return result
 

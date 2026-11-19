@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from enum import StrEnum
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -47,6 +48,38 @@ class IssueType(StrEnum):
     SERIOUS = "serious"
     GENERAL = "general"
     SUGGESTION = "suggestion"
+
+
+class ValidationAuditErrorCode(StrEnum):
+    FILE_LIMIT = "VALIDATION_AUDIT_FILE_LIMIT"
+    NO_FILES = "VALIDATION_AUDIT_NO_FILES"
+    FILE_UNREADABLE = "VALIDATION_AUDIT_FILE_UNREADABLE"
+    NO_PARSED_FILES = "VALIDATION_AUDIT_NO_PARSED_FILES"
+    CROSS_FILES_REQUIRED = "VALIDATION_AUDIT_CROSS_FILES_REQUIRED"
+
+
+class ValidationAuditErrorDetail(BaseModel):
+    error_code: ValidationAuditErrorCode
+
+
+class ValidationAuditErrorResponse(BaseModel):
+    code: int
+    message: str
+    detail: ValidationAuditErrorDetail | str | None = None
+
+
+class ValidationAuditUploadSuccess(BaseModel):
+    status: Literal["success"]
+    filename: str
+    file_id: UUID
+    file_size: int
+
+
+class ValidationAuditUploadFailure(BaseModel):
+    status: Literal["failed"]
+    filename: str
+    status_code: int
+    error: str
 
 
 # ── Task ──────────────────────────────────────────────────

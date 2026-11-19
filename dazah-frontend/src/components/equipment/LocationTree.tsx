@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useState } from 'react'
 import { App, Button, Space, Popconfirm, Empty } from 'antd'
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons'
@@ -196,7 +197,7 @@ export function LocationTree({ locations, onRefresh }: LocationTreeProps) {
       message.success('删除位置成功')
       onRefresh?.()
     } catch (error) {
-      message.error(error?.message || '删除位置失败')
+      message.error(getUserErrorMessage(error?.message || '删除位置失败'))
     }
   }
 

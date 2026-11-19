@@ -20,7 +20,7 @@ for (const mode of ['light', 'dark'] as const) {
     await test.info().attach(`history-scrolled-${mode}-320`, { body: await page.screenshot(), contentType: 'image/png' })
 
     await page.goto('/production/batches/workshop/201-3/blending')
-    await page.getByRole('button', { name: '收起侧边栏', exact: true }).click()
+    await expect(page.getByRole('button', { name: '展开侧边栏', exact: true })).toBeVisible()
     await page.waitForTimeout(500)
     const remarkButton = page.getByRole('button', { name: '查看备注', exact: true })
     await remarkButton.focus()

@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import React from 'react'
 import { Button, Tag, App } from 'antd'
 import { ReloadOutlined } from '@ant-design/icons'
@@ -25,7 +26,7 @@ export default function EmailFetchPanel() {
       const res = await triggerEmailFetch()
       message.success(res.message || '抓取完成')
       refetch()
-    } catch (err) { message.error((err instanceof Error ? err.message : '') || '抓取失败') }
+    } catch (err) { message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '抓取失败')) }
     finally { setFetching(false) }
   }
 

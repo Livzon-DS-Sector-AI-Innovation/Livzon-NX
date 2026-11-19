@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { alignFeishuColumns, feishuColumnLayouts } from './feishuColumnLayout'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -152,7 +153,7 @@ function EditDeviationRecordModal({
       onSuccess?.()
     } catch (error) {
       if (error && typeof error === 'object' && 'errorFields' in error) return
-      message.error(error instanceof Error ? error.message : '更新失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '更新失败'))
     } finally {
       setSubmitting(false)
     }
@@ -391,7 +392,7 @@ export function DeviationReportRecordPage({
             message.success('删除成功')
             await queryClient.invalidateQueries({ queryKey: ['quality-deviation-report'] })
           } catch (error) {
-            message.error(error instanceof Error ? error.message : '删除失败')
+            message.error(getUserErrorMessage(error instanceof Error ? error.message : '删除失败'))
           }
         },
       })

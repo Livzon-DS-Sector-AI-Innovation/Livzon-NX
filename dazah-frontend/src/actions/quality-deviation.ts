@@ -10,7 +10,7 @@ import {
   FeishuDeviationReportRecordItem,
   QualityAiAnalysisLog,
 } from '@/types/quality'
-import { API_BASE_URL, actionFetch } from './quality-shared'
+import { API_BASE_URL, actionFetch, qualityImportErrorMessages } from './quality-shared'
 import type { components } from '@/types/generated/schema'
 
 function revalidateDeviationAiPaths(deviationId: string) {
@@ -310,7 +310,8 @@ export async function previewDeviationImport(formData: FormData) {
     {
       method: 'POST',
       body: formData,
-    }
+    },
+    qualityImportErrorMessages,
   )
   revalidatePath('/quality/deviations')
   return result
@@ -322,7 +323,8 @@ export async function confirmDeviationImport(formData: FormData, skipDuplicates:
     {
       method: 'POST',
       body: formData,
-    }
+    },
+    qualityImportErrorMessages,
   )
   revalidatePath('/quality')
   revalidatePath('/quality/deviations')

@@ -20,9 +20,6 @@ vi.mock('@/actions/admin', () => ({
   deleteDataScope: mocks.deleteScope,
   saveUserDataScope: mocks.saveScope,
 }))
-vi.mock('./UserModuleAccessDrawer', () => ({
-  default: ({ open }: { open: boolean }) => open ? <div>模块访问抽屉</div> : null,
-}))
 vi.mock('antd', async (importOriginal) => {
   const actual = await importOriginal<typeof import('antd')>()
   return { ...actual, App: { useApp: () => ({ message: mocks.message, modal: { confirm: mocks.confirm, info: mocks.info } }) } }
@@ -170,6 +167,32 @@ it('distinguishes assigned role levels from gray unassigned tags', async () => {
   expect(tags[3].className).not.toMatch(/ant-tag-(purple|blue|green|gold)/)
 })
 
+it.each(['light', 'dark'] as const)('shows the first role tag and reveals the remaining roles on hover in %s mode', async (appearance) => {
+  const projectRoles = [
+    ...roles.slice(0, 2),
+    { ...roles[0], id: 'role-c', code: 'product_qa', name: '产品QA' },
+    { ...roles[0], id: 'role-d', code: 'change_qa', name: '变更QA' },
+  ]
+  mocks.fetchUsers.mockResolvedValue({ items: [
+    { ...user, id: 'overflow', roles: projectRoles },
+    { ...user, id: 'at-limit', roles: projectRoles.slice(0, 1) },
+  ], total: 2 })
+  await renderManager(appearance)
+
+  for (const id of ['overflow', 'at-limit']) {
+    const row = host.querySelector(`tr[data-row-key="${id}"]`)
+    expect([...row?.querySelectorAll('.ant-tag') ?? []].map((tag) => tag.textContent)).toEqual(['物料QA'])
+  }
+  expect(host.querySelector('tr[data-row-key="at-limit"]')?.textContent).not.toContain('更多')
+  const trigger = button('更多（3）')
+  expect(document.body.textContent).not.toContain('产品QA')
+  await act(async () => {
+    trigger.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
+    await new Promise((resolve) => setTimeout(resolve, 150))
+  })
+  expect(document.querySelector('[role="tooltip"]')?.textContent).toBe('体系QA、产品QA、变更QA')
+})
+
 it('opens assignment in a right drawer and cancels without saving', async () => {
   await renderManager()
   await act(async () => button('分配角色').click())
@@ -184,11 +207,10 @@ it('opens assignment in a right drawer and cancels without saving', async () => 
   expect(mocks.saveScope).not.toHaveBeenCalled()
 })
 
-it('offers role assignment and read-only effective permissions with automatic module access', async () => {
+it('offers role assignment as the only row action and keeps the permissions preview', async () => {
   await renderManager()
-  expect(host.textContent).toContain('只需分配角色；模块入口随有效页面访问权限自动生效')
   const actions = [...host.querySelectorAll('.ant-table-tbody button')].map((item) => item.textContent?.trim())
-  expect(actions).toEqual(['分配角色', '有效权限'])
+  expect(actions).toEqual(['分配角色'])
   await act(async () => button('分配角色').click())
   const drawer = document.querySelector('.ant-drawer-body')!
   expect(drawer.textContent).not.toContain('模块入口随有效页面访问权限自动生效')
@@ -266,16 +288,13 @@ it('removes a selected tag, keeps selection across searches, and explains empty 
   expect(roleCheckbox('体系QA').checked).toBe(true)
 })
 
-it('opens rules and a read-only preview without requiring changes or an audit reason', async () => {
-  await renderManager()
-  await act(async () => button('了解访问规则').click())
-  const rules = mocks.info.mock.lastCall![0] as { title: string; content: React.ReactNode }
-  expect(rules.title).toBe('角色与数据范围规则')
-  await act(async () => root.render(rules.content))
-  expect(host.textContent).toContain('用户页面覆盖优先')
-  expect(host.textContent).toContain('撤销最后一个可访问页面后，入口自动关闭')
-  expect(host.textContent).toContain('系统管理员默认拥有全部模块访问权限')
-  expect(host.textContent).toContain('尚未接入页面级数据范围')
+it.each(['light', 'dark'] as const)('omits the role assignment banner and its rules link in %s mode', async (appearance) => {
+  await renderManager(appearance)
+  expect(host.textContent).not.toContain('为角色配置页面权限后，只需分配角色')
+  expect(host.textContent).not.toContain('了解访问规则')
+})
+
+it('opens a read-only preview without requiring changes or an audit reason', async () => {
   await renderManager()
   await act(async () => button('分配角色').click())
   await act(async () => button('预览权限').click())
@@ -404,12 +423,11 @@ it('uses the returned grant version when roles change again after a scope failur
   })
 })
 
-it('previews added roles and submits a versioned full replacement with a reason', async () => {
-  await renderManager()
+it.each(['light', 'dark'] as const)('confirms added roles without an access rules banner in %s mode', async (appearance) => {
+  await renderManager(appearance)
   await searchUsers('QA部')
   mocks.fetchUsers.mockClear()
   await act(async () => button('分配角色').click())
-  expect(document.body.textContent).toContain('模块入口随有效页面访问权限自动生效')
   expect(document.querySelector('[role="dialog"]')?.textContent).toContain('分配角色 · QA部公用账号')
   await act(async () => roleCheckbox('体系QA').click())
   expect(document.body.textContent).toContain('新增 1')
@@ -419,7 +437,8 @@ it('previews added roles and submits a versioned full replacement with a reason'
     reason.dispatchEvent(new Event('input', { bubbles: true }))
   })
   await act(async () => button('保存').click())
-  const confirmation = mocks.confirm.mock.lastCall![0] as { onOk: () => Promise<void> }
+  const confirmation = mocks.confirm.mock.lastCall![0] as { content: React.ReactNode; onOk: () => Promise<void> }
+  expect(mocks.assign).not.toHaveBeenCalled()
   await act(async () => confirmation.onOk())
   expect(mocks.assign).toHaveBeenCalledWith('user-1', ['role-a', 'role-b'], {
     expectedGrantVersion: 7,
@@ -428,6 +447,12 @@ it('previews added roles and submits a versioned full replacement with a reason'
   expect(mocks.fetchUsers).toHaveBeenCalledExactlyOnceWith({ keyword: 'QA部', offset: 0, limit: 20 })
   expect(mocks.saveScope).not.toHaveBeenCalled()
   expect(mocks.deleteScope).not.toHaveBeenCalled()
+
+  await act(async () => root.render(createElement(ConfigProvider, { theme: getAntdTheme(appearance) }, confirmation.content)))
+  expect(host.textContent).toContain('新增角色：体系QA')
+  expect(host.textContent).toContain('调整原因：增加体系文件维护职责')
+  expect(host.textContent).not.toContain('多个角色的页面权限合并生效')
+  expect(host.textContent).not.toContain('了解访问规则')
 })
 
 it.each(['系统管理员', '普通管理员'])('requires confirmation before replacing six selected roles with %s', async (administrator) => {

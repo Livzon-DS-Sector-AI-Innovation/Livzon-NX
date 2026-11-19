@@ -1,4 +1,4 @@
-import { getUserErrorMessage } from '@/lib/user-error'
+import { getUserErrorMessage, UserFacingError } from '@/lib/user-error'
 import type { components, paths } from '@/types/generated/schema'
 import {
   EmployeeListResponse,
@@ -110,7 +110,7 @@ function hrSettingsRequestOptions(): RequestInit {
   }
 }
 
-export class HrListReadError extends Error {
+export class HrListReadError extends UserFacingError {
   constructor(message: string, public readonly status: number) {
     super(message)
   }

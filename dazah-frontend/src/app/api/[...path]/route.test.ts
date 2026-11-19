@@ -26,6 +26,24 @@ describe('API proxy user feedback', () => {
     expect((await response.json()).message).toBe('服务暂时不可用，请稍后重试')
   })
 
+  it('normalizes a gateway HTML error without forwarding the upstream content', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('<html>nginx upstream error</html>', {
+      status: 413, headers: { 'content-type': 'text/html' },
+    })))
+    const response = await POST(new NextRequest('http://localhost/api/v1/example', { method: 'POST', body: '{}' }))
+    expect(response.status).toBe(413)
+    expect(await response.json()).toEqual({ code: 413, message: '文件过大，请缩小文件后重试', error: '文件过大，请缩小文件后重试' })
+  })
+
+  it('keeps a write failure ambiguous and never returns upstream 5xx diagnostics', async () => {
+    const fetcher = vi.fn().mockResolvedValue(Response.json({ code: 504, message: '内部信息', data: { secret: 'synthetic' } }, { status: 504 }))
+    vi.stubGlobal('fetch', fetcher)
+    const response = await POST(new NextRequest('http://localhost/api/v1/example', { method: 'POST', body: '{}' }))
+    expect(response.status).toBe(504)
+    expect(await response.json()).toEqual({ code: 504, message: '暂未确认操作结果，请先查看业务记录后再决定是否重试', error: '暂未确认操作结果，请先查看业务记录后再决定是否重试' })
+    expect(fetcher).toHaveBeenCalledTimes(1)
+  })
+
   it('never retries a write on another backend after a lost acknowledgement', async () => {
     const fetcher = vi.fn().mockRejectedValue(new Error('fixture lost response after commit'))
     vi.stubGlobal('fetch', fetcher)

@@ -1,16 +1,16 @@
 "use client"
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { PAGE_DATA_SCOPE_VISIBLE } from "@/lib/page-permission-editor"
-import { App, Button, Checkbox, ConfigProvider, Drawer, Input, Popover, Table, Tag, Typography } from "antd"
+import { App, Button, Checkbox, ConfigProvider, Drawer, Input, Popover, Table, Tag, Tooltip, Typography } from "antd"
 import Alert from "@/components/shared/PlatformNotice"
-import { AppstoreOutlined, DownOutlined, PlusOutlined, SearchOutlined, UpOutlined } from "@ant-design/icons"
+import { DownOutlined, PlusOutlined, SearchOutlined, UpOutlined } from "@ant-design/icons"
 import type { AdminUserItem, RoleItem } from "@/lib/api/client/admin"
 import { fetchAdminUsers, fetchDataScopes } from "@/lib/api/client/admin"
 import type { DepartmentItem } from "@/lib/api/server/admin"
 import { DataScopeConfig, type DataScopeSelection } from "./DataScopeConfig"
 import { assignUserRoles, deleteDataScope, saveUserDataScope } from "@/actions/admin"
-import UserModuleAccessDrawer, { type ModuleAccessUser } from "./UserModuleAccessDrawer"
 import styles from "./UserRoleManager.module.css"
 import { roleTagColor } from "@/lib/role-tag"
 
@@ -29,6 +29,7 @@ type UserListResult = { query: UserListQuery } & (
 )
 
 const USER_PAGE_SIZE = 20
+const VISIBLE_ROLE_COUNT = 1
 const ROLE_ASSIGNMENT_REASON_PRESETS = ["岗位职责调整", "临时工作授权", "权限回收"]
 
 function roleOrder(code: string) {
@@ -82,7 +83,6 @@ export function UserRoleManager({ initialRoles, initialDepartments }: UserRoleMa
     departmentNames: [],
   })
   const [saving, setSaving] = useState(false)
-  const [moduleAccessUser, setModuleAccessUser] = useState<ModuleAccessUser | null>(null)
 
   const selectedRoleSet = useMemo(() => new Set(selectedRoleIds), [selectedRoleIds])
   const originalRoleSet = useMemo(() => new Set(originalRoleIds), [originalRoleIds])
@@ -200,8 +200,8 @@ export function UserRoleManager({ initialRoles, initialDepartments }: UserRoleMa
       setDrawerOpen(false)
       if (!rolesSaved) refreshUsers()
     } catch (e) {
-      message.error(rolesSaved ? "角色已保存，请刷新确认部门数据范围是否已保存"
-        : e instanceof Error ? e.message : "分配失败")
+      message.error(getUserErrorMessage(rolesSaved ? "角色已保存，请刷新确认部门数据范围是否已保存"
+        : e instanceof Error ? e.message : "分配失败"))
     } finally {
       setSaving(false)
     }
@@ -245,10 +245,10 @@ export function UserRoleManager({ initialRoles, initialDepartments }: UserRoleMa
     })
   }
 
-  const permissionSummary = <div className="space-y-3 pt-2">
-    <Alert showIcon type={selectedSystemAdmin ? "warning" : "info"}
+  const renderPermissionSummary = (showAccessRules: boolean) => <div className="space-y-3 pt-2">
+    {(showAccessRules || selectedSystemAdmin) && <Alert showIcon type={selectedSystemAdmin ? "warning" : "info"}
       title={selectedSystemAdmin ? "系统管理员将拥有全部权限" : "多个角色的页面权限合并生效，模块入口随有效页面访问权限自动开通或关闭。"}
-      description="角色提供页面权限基线：基础权限与高风险操作取并集，数据范围按页面合并；已有用户页面覆盖仍优先于角色基线。模块内至少一个页面具有有效访问权限时，模块入口自动开通；撤销最后一个可访问页面后，入口自动关闭。系统管理员默认拥有全部模块访问权限。" />
+      description="角色提供页面权限基线：基础权限与高风险操作取并集，数据范围按页面合并；已有用户页面覆盖仍优先于角色基线。模块内至少一个页面具有有效访问权限时，模块入口自动开通；撤销最后一个可访问页面后，入口自动关闭。系统管理员默认拥有全部模块访问权限。" />}
     <div><Typography.Text strong>已选角色：</Typography.Text>{selectedRoleIds.length
       ? initialRoles.filter((role) => selectedRoleSet.has(role.id)).map((role) => <Tag key={role.id} color={roleTagColor(role.code, role.is_system)}>{role.name}</Tag>)
       : <Typography.Text type="secondary">未分配角色</Typography.Text>}</div>
@@ -273,21 +273,7 @@ export function UserRoleManager({ initialRoles, initialDepartments }: UserRoleMa
     centered: true,
     icon: null,
     okText: "返回编辑",
-    content: permissionSummary,
-  })
-
-  const showPermissionRules = () => modal.info({
-    title: "角色与数据范围规则",
-    width: 640,
-    centered: true,
-    icon: null,
-    okText: "我知道了",
-    content: <div>
-      <Typography.Text strong>模块入口随有效页面权限自动生效</Typography.Text>
-      <p>为角色配置页面权限后，只需给账号分配角色。模块内至少一个页面具有有效访问权限时，模块入口自动开通；撤销最后一个可访问页面后，入口自动关闭。多个角色合并计算，用户页面覆盖优先；明确拒绝的页面不参与入口开通。系统管理员默认拥有全部模块访问权限。</p>
-      <Typography.Text strong>角色决定页面权限基线</Typography.Text>
-      <p>多个普通角色会合并生效：页面基础权限和附加高风险操作取并集，页面数据范围按规则合并；用户页面覆盖优先。系统管理员拥有全部权限，普通管理员不能进入系统设置，两类管理员角色均单独选择。兼容部门范围仅用于尚未接入页面级数据范围的功能。</p>
-    </div>,
+    content: renderPermissionSummary(true),
   })
 
   const previewSave = () => {
@@ -311,7 +297,7 @@ export function UserRoleManager({ initialRoles, initialDepartments }: UserRoleMa
       okText: "确认保存",
       cancelText: "继续检查",
       content: <div className="space-y-3 pt-2">
-        {permissionSummary}
+        {renderPermissionSummary(false)}
         <div><Typography.Text strong>调整原因：</Typography.Text>{reason.trim()}</div>
       </div>,
       onOk: handleSave,
@@ -339,48 +325,44 @@ export function UserRoleManager({ initialRoles, initialDepartments }: UserRoleMa
     {
       title: "角色",
       key: "roles",
-      render: (_: unknown, record: AdminUserItem) => (
-        <div className="flex flex-wrap gap-1">
-          {record.roles.map((r) => (
-            <Tag key={r.id} color={roleTagColor(r.code, r.is_system)}>
-              {r.name}
-            </Tag>
-          ))}
-          {record.roles.length === 0 && <Tag>未分配</Tag>}
-        </div>
-      ),
+      width: 240,
+      render: (_: unknown, { roles }: AdminUserItem) => {
+        if (roles.length === 0) return <Tag>未分配</Tag>
+
+        const remainingRoles = roles.slice(VISIBLE_ROLE_COUNT)
+        return (
+          <div className={styles.roleTags}>
+            {roles.slice(0, VISIBLE_ROLE_COUNT).map((role) => (
+              <Tag key={role.id} title={role.name} color={roleTagColor(role.code, role.is_system)}>
+                {role.name}
+              </Tag>
+            ))}
+            {remainingRoles.length > 0 && (
+              <Tooltip title={remainingRoles.map((role) => role.name).join("、")} trigger={["hover", "focus"]}>
+                <Button type="link" size="small" className={styles.moreRoles} onClick={(event) => event.currentTarget.focus()}>
+                  更多（{remainingRoles.length}）
+                </Button>
+              </Tooltip>
+            )}
+          </div>
+        )
+      },
     },
     {
       title: "操作",
       key: "actions",
-      width: 240,
+      width: 128,
       fixed: "right" as const,
       render: (_: unknown, record: AdminUserItem) => (
-        <div className="flex flex-wrap gap-2">
-          <Button size="small" icon={<PlusOutlined />} onClick={() => openAssign(record)}>
-            分配角色
-          </Button>
-          <Button
-            size="small"
-            icon={<AppstoreOutlined />}
-            onClick={() => setModuleAccessUser({
-              id: record.id,
-              name: record.name,
-              isSystemAdmin: record.roles.some((role) => role.code === "super_admin"),
-            })}
-          >
-            有效权限
-          </Button>
-        </div>
+        <Button size="small" icon={<PlusOutlined />} onClick={() => openAssign(record)}>
+          分配角色
+        </Button>
       ),
     },
   ]
 
   return (
     <div>
-      <Alert className="mb-3" type="info" showIcon
-        title="为角色配置页面权限后，只需分配角色；模块入口随有效页面访问权限自动生效。"
-        onLearnRules={showPermissionRules} />
       <div className="mb-3 max-w-sm">
         <Input.Search
           placeholder="按姓名、部门、账号、邮箱、手机号或工号搜索"
@@ -568,13 +550,6 @@ export function UserRoleManager({ initialRoles, initialDepartments }: UserRoleMa
         </div>
         </ConfigProvider>
       </Drawer>
-
-      <UserModuleAccessDrawer
-        user={moduleAccessUser}
-        open={Boolean(moduleAccessUser)}
-        onClose={() => setModuleAccessUser(null)}
-      />
-
     </div>
   )
 }

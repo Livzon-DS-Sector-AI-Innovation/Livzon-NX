@@ -10,6 +10,7 @@ from app.core.config import get_settings
 from app.core.exceptions import AppException, NotFoundException
 from app.modules.equipment import repository as repo
 from app.modules.equipment.models.work_order_image import WorkOrderImage
+from app.modules.equipment.schemas.work_order_image import WORK_ORDER_IMAGE_LIMIT
 
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"}
 
@@ -29,26 +30,33 @@ async def upload_images(
 
     existing = await repo.get_images_by_work_order(db, work_order_id)
     if len(existing) + len(files) > 9:
-        raise AppException(message="每个工单最多上传9张图片")
+        raise AppException(
+            status_code=400,
+            message="每个工单最多上传9张图片",
+            detail={"error_code": WORK_ORDER_IMAGE_LIMIT},
+        )
 
-    upload_dir = os.path.join(settings.UPLOAD_DIR, "work-orders", str(work_order_id))
-    os.makedirs(upload_dir, exist_ok=True)
-
-    images = []
+    validated_files: list[tuple[UploadFile, str, int]] = []
+    max_bytes = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
     for file in files:
         ext = os.path.splitext(file.filename or "")[1].lower()
         if ext not in ALLOWED_EXTENSIONS:
-            raise AppException(message=f"不支持的文件类型: {ext}")
+            raise AppException(status_code=415, message="不支持的文件类型")
 
         file_size = file.size
         if file_size is None:
             raise AppException(message="无法获取文件大小")
-        max_bytes = settings.MAX_UPLOAD_SIZE_MB * 1024 * 1024
         if file_size > max_bytes:
             raise AppException(
-                message=f"文件大小超过限制（{settings.MAX_UPLOAD_SIZE_MB}MB）"
+                status_code=413,
+                message=f"文件大小超过限制（{settings.MAX_UPLOAD_SIZE_MB}MB）",
             )
+        validated_files.append((file, ext, file_size))
 
+    upload_dir = os.path.join(settings.UPLOAD_DIR, "work-orders", str(work_order_id))
+    os.makedirs(upload_dir, exist_ok=True)
+    images = []
+    for file, ext, file_size in validated_files:
         stored_name = f"{uuid.uuid4()}{ext}"
         content = await file.read()
 

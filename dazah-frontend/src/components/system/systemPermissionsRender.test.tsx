@@ -1,7 +1,7 @@
 /* @vitest-environment happy-dom */
 
 import React from 'react'
-import { App as AntdApp } from 'antd'
+import { App as AntdApp, ConfigProvider, theme } from 'antd'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -23,9 +23,6 @@ vi.mock('@/actions/admin', () => ({
   setRoleMenus: vi.fn(),
   setRolePermissions: vi.fn(),
   simulatePermission: vi.fn(),
-  simulatePagePermission: vi.fn(),
-  getPagePermissionHealth: vi.fn(async () => ({ checked_at: '', issue_count: 0, error_count: 0, warning_count: 0, issues: [] })),
-  remediatePagePermissionHealth: vi.fn(),
   updateMenu: vi.fn(),
   updateRole: vi.fn(),
 }))
@@ -45,7 +42,7 @@ vi.mock('@/lib/api/client/admin', () => ({
 
 import { DataScopeConfig } from './DataScopeConfig'
 import { DeptRoleMapper } from './DeptRoleMapper'
-import { PermissionVerification } from './PermissionVerification'
+import PermissionVerificationPage from '@/app/(dashboard)/system/permission-verification/page'
 import { RoleManager } from './RoleManager'
 import { UserRoleManager } from './UserRoleManager'
 import SystemPermissionsPanel from '@/components/settings/SystemPermissionsPanel'
@@ -174,13 +171,22 @@ describe('system permissions settings pages', () => {
     expect(deptRoleHtml).toContain('搜索用户')
     expect(deptRoleHtml).toContain('按部门查询')
     expect(deptRoleHtml).not.toContain('新增规则')
+  })
 
-    const verificationHtml = renderInApp(React.createElement(PermissionVerification))
+  it.each([
+    ['light', theme.defaultAlgorithm],
+    ['dark', theme.darkAlgorithm],
+  ] as const)('renders only the module integration check in %s appearance', (_, algorithm) => {
+    const verificationHtml = renderInApp(
+      <ConfigProvider theme={{ algorithm }}>
+        <PermissionVerificationPage />
+      </ConfigProvider>,
+    )
+    expect(verificationHtml).toContain('权限接入检查')
     expect(verificationHtml).toContain('模块权限接入完整性')
-    expect(verificationHtml).toContain('单用户权限诊断')
-    expect(verificationHtml).toContain('权限健康检查')
+    expect(verificationHtml).not.toContain('单用户权限诊断')
+    expect(verificationHtml).not.toContain('权限健康检查')
     expect(verificationHtml).toContain('当前检查结果')
-    expect(verificationHtml).not.toContain('保存后立即生效')
-    expect(verificationHtml).toContain('按用户、菜单页面和业务动作预判授权条件')
+    expect(verificationHtml).toContain('重新检查')
   })
 })

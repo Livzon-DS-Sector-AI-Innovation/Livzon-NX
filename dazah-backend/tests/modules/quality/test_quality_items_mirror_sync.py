@@ -492,3 +492,115 @@ async def test_incremental_date_route_error_propagates_for_fallback() -> None:
         await mirror._fetch_incremental_records(
             client, "tblX", sort_field="入库日期", last_synced_at=last_synced
         )
+
+
+async def test_items_list_filters_inventory_links_before_paging(db_session):
+    async def seed(snapshot_id, rows):
+        for row in rows:
+            row.page_snapshot_id = snapshot_id
+        await repo.upsert_rows_full(db_session, snapshot_id, rows)
+
+    now = datetime.now(UTC)
+    inventory = await repo.upsert_snapshot(
+        db_session,
+        page_key=PAGE_INVENTORY,
+        page_title="stock",
+        table_name="stock",
+        table_id="stock",
+        total_rows=3,
+        last_synced_at=now,
+        columns=[
+            {"key": key}
+            for key in ("物资名（规格）", "规格型号", "当前库存", "存放位置")
+        ],
+    )
+    inbound = await repo.upsert_snapshot(
+        db_session,
+        page_key=PAGE_INBOUND,
+        page_title="inbound",
+        table_name="inbound",
+        table_id="inbound",
+        total_rows=4,
+        last_synced_at=now,
+        columns=[{"key": key} for key in ("物资名称", "入库日期", "入库数量")],
+    )
+    await seed(
+        inventory.id,
+        [
+            _row(
+                "stock-1",
+                1,
+                {
+                    "物资名（规格）": "阀门_100%",
+                    "规格型号": "A",
+                    "当前库存": 0,
+                    "存放位置": "库一",
+                },
+            ),
+            _row("stock-2", 2, {"物资名（规格）": "阀门_100%", "存放位置": "库一"}),
+            _row(
+                "stock-3",
+                3,
+                {"物资名（规格）": "阀门A100B", "规格型号": "B", "存放位置": "库二"},
+            ),
+        ],
+    )
+    await seed(
+        inbound.id,
+        [
+            _row(
+                "latest",
+                3,
+                {"入库日期": "2026-10-01", "__link_record_ids": ["stock-2", "stock-1"]},
+            ),
+            _row(
+                "older", 1, {"入库日期": "2026-09-01", "__link_record_ids": ["stock-1"]}
+            ),
+            _row(
+                "other", 2, {"入库日期": "2026-11-01", "__link_record_ids": ["stock-3"]}
+            ),
+            _row("own", 4, {"物资名称": "自有名称", "入库日期": "2026-10-01"}),
+        ],
+    )
+    first = await mirror.list_items_mirror(
+        db_session, PAGE_INBOUND, keyword="_100%", page_size=1
+    )
+    assert first["total"] == 2
+    assert [item["record_id"] for item in first["items"]] == ["latest"]
+    assert {"规格型号", "当前库存"} <= set(first["fields"])
+    second = await mirror.list_items_mirror(
+        db_session, PAGE_INBOUND, keyword="_100%", page=2, page_size=1
+    )
+    assert second["items"][0]["record_id"] == "older"
+    assert second["items"][0]["当前库存"] == 0
+    exact = await mirror.list_items_mirror(
+        db_session, PAGE_INBOUND, filters={"规格型号": "A"}, page_size=1
+    )
+    assert exact["total"] == 1
+    assert exact["items"][0]["record_id"] == "older"
+    assert await mirror.list_distinct_column_values(
+        db_session, PAGE_INVENTORY, "存放位置"
+    ) == ["库一", "库二"]
+    projected = [
+        (record_id, cells)
+        async for record_id, _, _, cells in repo.iter_statistics_rows(
+            db_session,
+            inbound.id,
+            sort_field="入库日期",
+            project_fields=["入库日期", "入库数量"],
+        )
+    ]
+    assert projected[0] == ("other", {"入库日期": "2026-11-01", "入库数量": None})
+    assert await mirror.list_items_mirror(db_session, "unconfigured") == {
+        "items": [],
+        "total": 0,
+        "page": 1,
+        "page_size": 20,
+        "configured": False,
+        "fields": [],
+        "last_sync_time": None,
+    }
+    assert (
+        await mirror.list_distinct_column_values(db_session, "unconfigured", "位置")
+        == []
+    )

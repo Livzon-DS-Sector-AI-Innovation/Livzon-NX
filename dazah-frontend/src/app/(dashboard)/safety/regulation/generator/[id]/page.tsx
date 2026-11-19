@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Spin, Result, Button } from 'antd'
@@ -36,7 +37,7 @@ export default function SopDetailPage() {
         setError(response.message || '未找到该操规记录')
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : '加载失败')
+      setError(getUserErrorMessage(err instanceof Error ? err.message : '加载失败', '加载失败'))
     } finally {
       setLoading(false)
     }

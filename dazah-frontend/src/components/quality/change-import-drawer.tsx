@@ -1,5 +1,6 @@
 "use client"
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import PlatformNotice from '@/components/shared/PlatformNotice'
 
 import { useEffect, useRef, useState } from "react"
@@ -84,7 +85,7 @@ export function ChangeImportDrawer({ isOpen, onClose, onSuccess }: ChangeImportD
       formData.append("file", file)
       setPreview(unwrapServerActionResult(await previewChangeImport(formData)))
     } catch (err) {
-      setErrorMsg((err instanceof Error ? err.message : '') || "预览失败")
+      setErrorMsg(getUserErrorMessage((err instanceof Error ? err.message : '') || "预览失败", "预览失败"))
     } finally {
       setPreviewing(false)
     }
@@ -114,7 +115,7 @@ export function ChangeImportDrawer({ isOpen, onClose, onSuccess }: ChangeImportD
         onSuccess()
       }, 1500)
     } catch (err) {
-      setErrorMsg((err instanceof Error ? err.message : '') || "导入失败")
+      setErrorMsg(getUserErrorMessage((err instanceof Error ? err.message : '') || "导入失败", "导入失败"))
     } finally {
       setImporting(false)
     }
@@ -133,7 +134,7 @@ export function ChangeImportDrawer({ isOpen, onClose, onSuccess }: ChangeImportD
       a.click()
       URL.revokeObjectURL(url)
     } catch (err) {
-      setErrorMsg((err instanceof Error ? err.message : '') || "下载模板失败")
+      setErrorMsg(getUserErrorMessage((err instanceof Error ? err.message : '') || "下载模板失败", "下载模板失败"))
     }
   }
 

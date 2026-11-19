@@ -138,7 +138,7 @@ describe('PurchaseRequestImportButton', () => {
   })
 
   it('uploads a table file and renders the import result', async () => {
-    actions.importPurchaseRequestTable.mockResolvedValue(importResult())
+    actions.importPurchaseRequestTable.mockResolvedValue({ ok: true, data: importResult() })
     const onImported = vi.fn()
 
     act(() => {
@@ -181,9 +181,8 @@ describe('PurchaseRequestImportButton', () => {
 
   it('surfaces the backend error message when the import fails', async () => {
     actions.importPurchaseRequestTable.mockResolvedValue({
-      code: 400,
-      message: '上传文件为空',
-      data: null,
+      ok: false,
+      message: '请求内容有误，请检查后重试',
     })
 
     act(() => {
@@ -195,15 +194,15 @@ describe('PurchaseRequestImportButton', () => {
       await uploadProps[0].customRequest({ file, onSuccess: vi.fn() })
     })
 
-    expect(ui.message.error).toHaveBeenCalledWith('上传文件为空')
+    expect(ui.message.error).toHaveBeenCalledWith('请求内容有误，请检查后重试')
   })
 
   it('shows a warning when no request was imported', async () => {
     actions.importPurchaseRequestTable.mockResolvedValue(
-      importResult({
+      { ok: true, data: importResult({
         imported_requests: [],
         failed_rows: [{ sheet_name: 'Sheet1', row: null, message: '无法识别采购类型' }],
-      })
+      }) }
     )
 
     act(() => {
@@ -231,11 +230,11 @@ describe('PurchaseRequestImportButton', () => {
       await uploadProps[0].customRequest({ file, onSuccess: vi.fn() })
     })
 
-    expect(ui.message.error).toHaveBeenCalledWith('采购申请导入失败，请稍后重试')
+    expect(ui.message.error).toHaveBeenCalledWith('暂未确认采购申请导入结果，请先查看业务记录后再决定是否重试')
   })
 
   it('closes the result modal with the confirm button', async () => {
-    actions.importPurchaseRequestTable.mockResolvedValue(importResult())
+    actions.importPurchaseRequestTable.mockResolvedValue({ ok: true, data: importResult() })
 
     act(() => {
       root.render(<PurchaseRequestImportButton />)

@@ -6,15 +6,32 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }))
-vi.mock('./quality-shared', () => ({
+vi.mock('./quality-shared', async (importOriginal) => ({
+  ...await importOriginal<typeof import('./quality-shared')>(),
   API_BASE_URL: 'http://backend.test',
   actionFetch: mocks.actionFetch,
 }))
 
-import { addExecutionTrack, batchDeleteCapas, deleteExecutionTrack, submitEvaluation, updateCapa } from './quality-capa'
+import { addExecutionTrack, batchDeleteCapas, confirmCapaImport, deleteExecutionTrack, previewCapaImport, submitEvaluation, updateCapa } from './quality-capa'
+import { qualityImportErrorMessages } from './quality-shared'
 
 describe('quality CAPA server actions', () => {
   afterEach(() => vi.clearAllMocks())
+
+  it('uses the Word import error contract for preview and confirmation', async () => {
+    const form = new FormData()
+    await previewCapaImport(form)
+    await confirmCapaImport(form, true, false)
+
+    expect(mocks.actionFetch).toHaveBeenNthCalledWith(
+      1, 'http://backend.test/api/v1/quality/capas/import/preview',
+      { method: 'POST', body: form }, qualityImportErrorMessages,
+    )
+    expect(mocks.actionFetch).toHaveBeenNthCalledWith(
+      2, 'http://backend.test/api/v1/quality/capas/import/confirm?skip_duplicates=true&update_existing=false',
+      { method: 'POST', body: form }, qualityImportErrorMessages,
+    )
+  })
 
   it('saves the ledger fields through the local endpoint only', async () => {
     const saved = { success: true }

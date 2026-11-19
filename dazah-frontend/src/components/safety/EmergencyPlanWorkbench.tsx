@@ -7,6 +7,7 @@
 AI 生成/审核任务运行时轮询进度并锁定编辑。数据形态见 emergencyPlanModel。
  */
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import {
@@ -301,7 +302,7 @@ export default function EmergencyPlanWorkbench({
       downloadDocx(result.base64, result.fileName)
       message.success('已导出 Word')
     } catch (exportError) {
-      message.error(exportError instanceof Error ? exportError.message : '导出失败')
+      message.error(getUserErrorMessage(exportError instanceof Error ? exportError.message : '导出失败'))
     } finally {
       setExporting(false)
     }

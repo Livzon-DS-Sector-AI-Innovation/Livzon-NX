@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useState } from 'react'
 import { App, Button, Radio, Input, Select, Modal } from 'antd'
 import EmailFetchPanel from './recruitment/EmailFetchPanel'
@@ -121,7 +122,7 @@ export default function RecruitmentClient({ initialJobs }: RecruitmentClientProp
       message.success(res.message)
       refetch()
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '同步失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '同步失败'))
     } finally { setSyncing(false) }
   }
 
@@ -131,7 +132,7 @@ export default function RecruitmentClient({ initialJobs }: RecruitmentClientProp
       await deleteCandidateAction(id)
       message.success('删除成功')
       refetch()
-    } catch (err) { message.error((err instanceof Error ? err.message : '') || '删除失败') }
+    } catch (err) { message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '删除失败')) }
   }
 
   const handleStatusChange = (candidateId: string, newStatus: string) => {
@@ -142,7 +143,7 @@ export default function RecruitmentClient({ initialJobs }: RecruitmentClientProp
           message.success('面试状态已更新')
         },
         onError: (err: unknown) => {
-          message.error((err instanceof Error ? err.message : '') || '更新失败')
+          message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '更新失败'))
         },
       }
     )
@@ -156,7 +157,7 @@ export default function RecruitmentClient({ initialJobs }: RecruitmentClientProp
       const res = await createOnboardingFromInterviewAction(candidateId)
       message.success(res.message || '转入职成功')
       refetch()
-    } catch (err) { message.error((err instanceof Error ? err.message : '') || '转入职失败') }
+    } catch (err) { message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '转入职失败')) }
     finally { setTransferring(false) }
   }
 
@@ -171,7 +172,7 @@ export default function RecruitmentClient({ initialJobs }: RecruitmentClientProp
       const res = await batchAnalyzeCandidatesAction(ids)
       message.success(res.message || '批量分析完成')
       refetch()
-    } catch (err) { message.error((err instanceof Error ? err.message : '') || '批量分析失败') }
+    } catch (err) { message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '批量分析失败')) }
     finally { setAnalyzing(false) }
   }
 
@@ -191,7 +192,7 @@ export default function RecruitmentClient({ initialJobs }: RecruitmentClientProp
       setJobModalOpen(false)
       setJobFormTitle(''); setJobFormDesc(''); setJobFormReq('')
       setJobFormSalary(''); setJobFormLocation(''); setJobFormSkills('')
-    } catch (err) { message.error((err instanceof Error ? err.message : '') || '发布职位失败') }
+    } catch (err) { message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '发布职位失败')) }
     finally { setJobCreating(false) }
   }
 

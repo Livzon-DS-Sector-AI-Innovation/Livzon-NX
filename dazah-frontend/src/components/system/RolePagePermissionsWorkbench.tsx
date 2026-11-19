@@ -1,10 +1,11 @@
 "use client"
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import dynamic from "next/dynamic"
 import { App, Button, Checkbox, ConfigProvider, Dropdown, Empty, Input, Radio, Select, Spin, Tag, type InputRef } from "antd"
 import { AppstoreOutlined, BlockOutlined, CheckCircleFilled, CheckOutlined, DatabaseOutlined, DownOutlined, FileTextOutlined, FolderFilled, HistoryOutlined, LeftOutlined, RightOutlined, SearchOutlined, SwapOutlined, TeamOutlined, UpOutlined, WarningOutlined } from "@ant-design/icons"
-import { AuthorizationReasonInput } from "@/components/shared/AuthorizationReasonInput"
+import { pinyin } from "pinyin-pro"
 import PlatformNotice from "@/components/shared/PlatformNotice"
 import {
   getRolePagePermissions,
@@ -31,6 +32,7 @@ const PagePermissionHistoryDrawer = dynamic(() => import("@/components/shared/Pa
 
 type InitialLoad = { ok: true; data: RolePagePermissionsOut } | { ok: false; message: string }
 const mismatchedRoleMessage = "角色授权返回对象不一致，请重新加载"
+const reasonPresets = ["岗位权限调整", "数据范围调整", "收紧高风险权限"]
 
 type Level = "access" | "query" | "operate"
 type Grant = {
@@ -72,6 +74,32 @@ function editableState(result: RolePagePermissionsOut): Record<string, Grant> {
 
 function flattenGroups(node: PermissionTreeNode): PermissionTreeNode[] {
   return node.children?.length ? [node, ...node.children.flatMap(flattenGroups)] : []
+}
+
+function normalizeSearchText(text: string): string {
+  return text.normalize("NFKC").toLowerCase()
+}
+
+function pageSearchTerms(definition: NonNullable<RolePagePermissionsOut["definitions"]>[number]): string[] {
+  const actions = definition.sensitive_actions ?? []
+  const names = [definition.page_name, ...actions.map((action) => action.name)]
+  const pinyinTerms = names.filter((name) => /\p{Script=Han}/u.test(name)).flatMap((name) => [
+    pinyin(name, { toneType: "none", type: "array" }).join(""),
+    pinyin(name, { pattern: "first", toneType: "none", type: "array" }).join(""),
+  ])
+  return [definition.page_key, definition.route_path, ...names, ...pinyinTerms,
+    ...actions.flatMap((action) => [action.key, action.description])]
+    .map((term) => normalizeSearchText(term ?? ""))
+}
+
+function containsCharactersInOrder(text: string, keyword: string): boolean {
+  let offset = 0
+  for (const character of keyword) {
+    const index = text.indexOf(character, offset)
+    if (index === -1) return false
+    offset = index + character.length
+  }
+  return true
 }
 
 export function RolePagePermissionsRoute({ role, roles, departments, origin, initialPageKey, initialLoad }: {
@@ -181,7 +209,7 @@ export function RolePagePermissionsWorkbench({ role, roles, departments, onClose
         setModuleCode(initial?.module_code ?? next.definitions?.[0]?.module_code ?? "")
         setReason("")
         setErrorMessage("")
-      }).catch((error) => { if (version === loadVersion.current) setErrorMessage(error instanceof Error ? error.message : "加载角色页面权限失败") })
+      }).catch((error) => { if (version === loadVersion.current) setErrorMessage(getUserErrorMessage(error instanceof Error ? error.message : "加载角色页面权限失败", "加载角色页面权限失败")) })
         .finally(() => { if (version === loadVersion.current) setLoading(false) })
     })
     return () => { loadVersion.current += 1 }
@@ -195,7 +223,12 @@ export function RolePagePermissionsWorkbench({ role, roles, departments, onClose
   const groups = useMemo(() => moduleTree.flatMap(flattenGroups), [moduleTree])
   const group = groups.find((node) => node.page_key === groupKey)
   const groupKeys = useMemo(() => group && new Set(group.pageKeys), [group])
-  const keyword = search.trim().toLowerCase()
+  const searchTermsByPage = useMemo(() => new Map(moduleDefinitions.map((definition) =>
+    [definition.page_key, pageSearchTerms(definition)])), [moduleDefinitions])
+  const keyword = normalizeSearchText(search).trim()
+  const searchTokens = useMemo(() => keyword ? keyword.split(/\s+/).map((text) => ({
+    text, allowSkippedCharacters: /^\p{Script=Han}+$/u.test(text),
+  })) : [], [keyword])
   const matchesFilters = useCallback((definition: (typeof moduleDefinitions)[number]) => {
     const grant = editable[definition.page_key]
     if (authorizedOnly && !grant?.permissions.length) return false
@@ -204,11 +237,10 @@ export function RolePagePermissionsWorkbench({ role, roles, departments, onClose
     if (scopeFilter !== "any" && grant?.scopeType !== scopeFilter) return false
     if (riskFilter === "granted" && !grant?.sensitiveActions.length) return false
     if (riskFilter === "ungranted" && (!definition.sensitive_actions?.length || grant?.sensitiveActions.length)) return false
-    if (!keyword) return true
-    const actionTerms = (definition.sensitive_actions ?? []).flatMap((action) => [action.key, action.name, action.description])
-    return [definition.page_name, definition.page_key, definition.route_path, ...actionTerms]
-      .some((value) => value?.toLowerCase().includes(keyword))
-  }, [editable, authorizedOnly, sensitiveOnly, tierFilter, scopeFilter, riskFilter, keyword])
+    const terms = searchTermsByPage.get(definition.page_key) ?? []
+    return searchTokens.every(({ text, allowSkippedCharacters }) => terms.some((term) =>
+      term.includes(text) || (allowSkippedCharacters && containsCharactersInOrder(term, text))))
+  }, [editable, authorizedOnly, sensitiveOnly, tierFilter, scopeFilter, riskFilter, searchTermsByPage, searchTokens])
   const hasFilters = Boolean(keyword || authorizedOnly || sensitiveOnly || tierFilter !== "all" ||
     scopeFilter !== "any" || riskFilter !== "all")
   const visibleDefinitions = useMemo(() => !groupKeys && !hasFilters ? moduleDefinitions : moduleDefinitions.filter((definition) =>
@@ -310,7 +342,7 @@ export function RolePagePermissionsWorkbench({ role, roles, departments, onClose
       message.success("角色页面权限已保存")
     } catch (error) {
       if (version !== loadVersion.current) return
-      setErrorMessage(`${error instanceof Error ? error.message : "保存角色页面权限失败"}。本地修改已保留；如版本冲突，请刷新最新授权后重新调整。`)
+      setErrorMessage(`${getUserErrorMessage(error instanceof Error ? error.message : "保存角色页面权限失败", "保存角色页面权限失败")}。本地修改已保留；如版本冲突，请刷新最新授权后重新调整。`)
     } finally {
       if (version === loadVersion.current) {
         savingVersion.current = null
@@ -353,7 +385,7 @@ export function RolePagePermissionsWorkbench({ role, roles, departments, onClose
         okText: "确认保存", cancelText: "返回修改",
         onOk: inCurrentSession(save), onCancel: () => { pendingIdempotencyKey.current = null } })
     } catch (error) {
-      if (version === loadVersion.current) setErrorMessage(error instanceof Error ? error.message : "角色授权影响预演失败")
+      if (version === loadVersion.current) setErrorMessage(getUserErrorMessage(error instanceof Error ? error.message : "角色授权影响预演失败", "角色授权影响预演失败"))
     } finally {
       if (version === loadVersion.current) setPendingAction(null)
     }
@@ -724,9 +756,18 @@ export function RolePagePermissionsWorkbench({ role, roles, departments, onClose
       <span className={styles.draftStatus} role="status" data-dirty={hasChanges}>
         {hasChanges ? `未保存调整 ${changes.length} 个页面` : "暂无未保存调整"}
       </span>
-      <AuthorizationReasonInput className={styles.reason} aria-label="角色授权调整原因（必填）"
-        disabled={controlsDisabled} value={reason} onChange={setReason} placeholder="填写角色授权调整原因"
-        presets={["岗位权限调整", "数据范围调整", "收紧高风险权限"]} />
+      <div className={styles.reasonControls}>
+        <Input className={styles.reason} aria-label="角色授权调整原因（必填）"
+          disabled={controlsDisabled} value={reason} onChange={(event) => setReason(event.target.value)}
+          placeholder="填写角色授权调整原因" maxLength={20} showCount />
+        <div className={styles.reasonPresets} role="group" aria-label="快捷授权调整原因">
+          {reasonPresets.map((preset) => (
+            <Button key={preset} size="small" disabled={controlsDisabled} onClick={() => setReason(preset)}>
+              {preset}
+            </Button>
+          ))}
+        </div>
+      </div>
       <div className={styles.footerActions}>
         <Button loading={pendingAction === "preview"} onClick={() => void previewChanges("preview")} disabled={controlsDisabled}>预览</Button>
         <Button type="primary" aria-label="保存" aria-busy={savePending} loading={savePending}

@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { App, Button, Card, Form, Select, Spin, } from 'antd'
@@ -63,7 +64,7 @@ export default function TrainingLedgerNewClient() {
         message.warning('该员工的培训台账已存在')
         router.push(`/hr/training/ledger?employee_number=${emp.employee_number}`)
       } else {
-        message.error((err instanceof Error ? err.message : '') || '创建失败')
+        message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '创建失败'))
       }
     } finally {
       setSubmitting(false)

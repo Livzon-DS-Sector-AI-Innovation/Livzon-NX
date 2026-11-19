@@ -98,6 +98,22 @@ it('renders module navigation and account actions without page search', async ()
 })
 
 describe('TopNav module feedback', () => {
+  it('places the notice inside the existing header during an identity switch', async () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    try {
+      await act(async () => root.render(createElement(TopNav, {
+        user: { ...user, impersonation: { expires_at: '2030-01-01T00:00:00Z' } }, modules,
+        impersonationNotice: createElement('span', { 'data-simulation-notice': true }, '模拟视角 · 测试用户'),
+      })))
+      expect(host.querySelector('a[href="/auth/logout"]')).toBeNull()
+      expect(host.querySelector('header [data-simulation-notice]')?.textContent).toContain('测试用户')
+      expect(host.querySelectorAll('header nav a')).toHaveLength(modules.length)
+    } finally {
+      await act(async () => root.unmount())
+    }
+  })
   it('falls back after an avatar error and retries when the avatar URL changes', async () => {
     const host = document.createElement('div')
     document.body.append(host)

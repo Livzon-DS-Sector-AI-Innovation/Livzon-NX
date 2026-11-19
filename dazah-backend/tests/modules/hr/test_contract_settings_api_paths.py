@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
@@ -142,11 +143,11 @@ async def test_contract_settings_crud_and_job_status_paths(
     monkeypatch.setattr(jobs, "get_job_status", AsyncMock(return_value=None))
     response = await api.get_members_sync_status(user)
     assert response.status_code == 200
-    monkeypatch.setattr(
-        jobs, "get_job_status", AsyncMock(return_value={"state": "completed"})
-    )
+    completed = {"state": "completed", "progress": "完成", "result": {}}
+    monkeypatch.setattr(jobs, "get_job_status", AsyncMock(return_value=completed))
     response = await api.get_members_sync_status(user)
     assert response.status_code == 200
+    assert json.loads(response.body)["data"] == completed
 
 
 @pytest.mark.asyncio

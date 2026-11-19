@@ -11,12 +11,7 @@ export default async function UserRolesPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-xl font-semibold text-[var(--color-charcoal)]">用户角色</h1>
-        <p className="text-sm text-[var(--color-stone)] mt-1">
-          为用户分配角色，模块入口随有效页面权限自动生效。
-        </p>
-      </div>
+      <h1 className="text-xl font-semibold text-[var(--color-charcoal)]">用户角色</h1>
       <UserRoleManager initialRoles={roles} initialDepartments={departments} />
     </div>
   )

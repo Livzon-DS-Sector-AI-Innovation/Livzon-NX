@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useEffect } from 'react'
 import { App, Drawer, Form, Input, Select, DatePicker, Button, Space } from 'antd'
 import dayjs from 'dayjs'
@@ -70,7 +71,7 @@ export function CalibrationRecordDrawer({ calibrationPlans, onRefresh }: Calibra
       closeCalibrationRecordDrawer()
       onRefresh?.()
     } catch (error) {
-      if (error?.message) message.error(error.message)
+      if (error?.message) message.error(getUserErrorMessage(error.message))
     }
   }
 

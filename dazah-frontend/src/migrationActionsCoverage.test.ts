@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const deps = vi.hoisted(() => ({
   fetch: vi.fn(),
   revalidatePath: vi.fn(),
-  getAuthHeaders: vi.fn(async () => ({ Authorization: 'Bearer test' })),
+  getAuthHeaders: vi.fn(async () => ({ Authorization: 'Bearer synthetic-workspace-session' })),
 }))
 
 vi.mock('next/cache', () => ({ revalidatePath: deps.revalidatePath }))
@@ -110,7 +110,7 @@ describe('migration server action coverage', () => {
     const adminRequests = deps.fetch.mock.calls.filter(([url]) => String(url).includes('/identity/admin/'))
     expect(adminRequests.length).toBeGreaterThan(0)
     for (const [, init] of adminRequests) {
-      expect(init.headers).toEqual(expect.objectContaining({ Authorization: 'Bearer synthetic-session' }))
+      expect(init.headers).toEqual(expect.objectContaining({ Authorization: 'Bearer synthetic-workspace-session' }))
     }
   })
 

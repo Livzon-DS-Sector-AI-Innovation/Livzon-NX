@@ -144,6 +144,11 @@ describe('PurchaseSuggestionPanel', () => {
     ) as HTMLButtonElement
     expect(submitBtn).toBeTruthy()
     expect(submitBtn.textContent).toContain('1')
+    api.submitPurchaseSuggestions.mockRejectedValueOnce(new Error('TypeError: purchase submit adapter failed'))
+    await act(async () => submitBtn.click())
+    expect(document.body.textContent).toContain('操作未完成，请稍后重试')
+    expect(cb.checked).toBe(true)
+    expect(api.fetchPurchaseSuggestionsClient).toHaveBeenCalledOnce()
     await act(async () => {
       submitBtn.click()
       await new Promise((r) => setTimeout(r, 60))
@@ -178,11 +183,38 @@ describe('PurchaseSuggestionPanel', () => {
       (b.textContent || '').includes('入库'),
     ) as HTMLButtonElement
     expect(ok).toBeTruthy()
+    api.registerSuggestionArrival.mockRejectedValueOnce(new Error('TypeError: arrival adapter failed'))
+    await act(async () => ok.click())
+    expect(document.body.textContent).toContain('操作未完成，请稍后重试')
+    expect(api.fetchPurchaseSuggestionsClient).toHaveBeenCalledOnce()
+    expect(container.textContent).toContain('轴承')
+    await act(async () => btn.click())
+    const retry = [...document.querySelectorAll('button')].find((button) => button.textContent?.includes('入库') &&
+      !button.closest('[aria-hidden="true"]'))
+    expect(retry).toBeDefined()
     await act(async () => {
-      ok.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      retry?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
       await new Promise((r) => setTimeout(r, 80))
     })
     expect(api.registerSuggestionArrival).toHaveBeenCalledWith('sg-2', 5)
+    expect(api.registerSuggestionArrival).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps the recommendation available after the confirmed cancellation fails', async () => {
+    api.cancelPurchaseSuggestion.mockRejectedValueOnce(new Error('TypeError: cancellation adapter failed'))
+    await act(async () => root.render(<AntApp><PurchaseSuggestionPanel workshopCode="201-1" /></AntApp>))
+    const row = [...container.querySelectorAll('tbody tr')].find((item) => item.textContent?.includes('机械密封'))
+    const cancel = [...(row?.querySelectorAll('button') ?? [])].find((item) => item.textContent?.replace(/\s/g, '') === '取消')
+    expect(cancel).toBeDefined()
+    await act(async () => cancel?.click())
+    const confirm = [...document.querySelectorAll<HTMLButtonElement>('.ant-popconfirm button')]
+      .find((button) => button.classList.contains('ant-btn-primary'))
+    expect(confirm).toBeDefined()
+    await act(async () => confirm?.click())
+    expect(api.cancelPurchaseSuggestion).toHaveBeenCalledWith('sg-1')
+    expect(document.body.textContent).toContain('操作未完成，请稍后重试')
+    expect(api.fetchPurchaseSuggestionsClient).toHaveBeenCalledOnce()
+    expect(row?.isConnected).toBe(true)
   })
 
 

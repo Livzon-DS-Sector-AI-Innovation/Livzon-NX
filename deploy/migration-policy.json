@@ -5,6 +5,12 @@
       "to_revision": "4bd62e5d78a1",
       "backward_compatible": true,
       "review_reference": "docs/runbooks/production-offline-deployment.md#菌种台账迁移与镜像回滚"
+    },
+    {
+      "from_revision": "4bd62e5d78a1",
+      "to_revision": "f9a3d5c7e1b2",
+      "backward_compatible": true,
+      "review_reference": "docs/runbooks/production-offline-deployment.md#安全监护人名单和安全承诺迁移"
     }
   ]
 }

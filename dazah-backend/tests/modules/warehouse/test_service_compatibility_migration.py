@@ -29,6 +29,7 @@ def _service() -> WarehouseService:
             flush=AsyncMock(),
             refresh=AsyncMock(),
             rollback=AsyncMock(),
+            begin_nested=MagicMock(),
         ),
         get_any_feishu_config=AsyncMock(return_value=None),
         get_active_feishu_config=AsyncMock(return_value=None),
@@ -778,13 +779,13 @@ async def test_feishu_fetch_sync_inventory_and_dashboard_paths(
         last_synced_at=datetime.now(UTC),
     )
     service.repo.get_material_page_snapshot = AsyncMock()
-    service.repo.list_material_page_rows = AsyncMock()
     service.repo.get_material_page_snapshot.return_value = snapshot
-    service.repo.list_material_page_rows.return_value = (
-        [
-            SimpleNamespace(
-                source_record_id="r1",
-                cells={
+
+    async def batches(*args, **kwargs):
+        yield [
+            (
+                "r1",
+                {
                     "物料名称": "乙醇",
                     "预警": "库存不足",
                     "安全库存（30天）": 10,
@@ -792,9 +793,9 @@ async def test_feishu_fetch_sync_inventory_and_dashboard_paths(
                     "出库日期": "2026-08-20",
                 },
             )
-        ],
-        1,
-    )
+        ]
+
+    service.repo.iter_material_page_rows = batches
     local = await service.get_local_material_page(
         "raw-summary", keyword="乙醇", page_size=10
     )
@@ -842,9 +843,7 @@ async def test_feishu_fetch_sync_inventory_and_dashboard_paths(
         "fetch_material_page_from_feishu",
         AsyncMock(return_value=(page_config, inv_columns, inv_rows, {})),
     )
-    service.upsert_raw_material_snapshot = AsyncMock()
-    service.upsert_packaging_snapshot = AsyncMock()
-    service.upsert_product_snapshot = AsyncMock()
+    service.repo.upsert_inventory_snapshots = AsyncMock()
     assert await service._sync_inventory_page("raw-summary") == 1
     assert await service._sync_inventory_page("packaging-summary") == 1
     product_columns = [
@@ -856,7 +855,7 @@ async def test_feishu_fetch_sync_inventory_and_dashboard_paths(
         service,
         "fetch_material_page_from_feishu",
         AsyncMock(
-            side_effect=lambda key: (
+            side_effect=lambda key, **_kwargs: (
                 (
                     page_config,
                     product_columns,

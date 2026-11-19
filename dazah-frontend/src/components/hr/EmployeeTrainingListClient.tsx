@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { App, Button, Card, Checkbox, DatePicker, Empty, Input, Modal, Space, Spin, Table, Tag } from 'antd'
 import {
@@ -86,7 +87,7 @@ export default function EmployeeTrainingListClient() {
     try {
       setMembers(await fetchEmployeeTrainingMembers(department))
     } catch (e) {
-      message.error((e instanceof Error ? e.message : '') || '加载部门人员失败')
+      message.error(getUserErrorMessage((e instanceof Error ? e.message : '') || '加载部门人员失败'))
     } finally {
       setMembersLoading(false)
     }
@@ -116,7 +117,7 @@ export default function EmployeeTrainingListClient() {
         const dateTo = dateRange?.[1]?.format('YYYY-MM-DD')
         setRecords(await fetchEmployeeTrainingRecords(member.name, dateFrom, dateTo))
       } catch (e) {
-        message.error((e instanceof Error ? e.message : '') || '加载培训记录失败')
+        message.error(getUserErrorMessage((e instanceof Error ? e.message : '') || '加载培训记录失败'))
       } finally {
         setRecordsLoading(false)
       }
@@ -175,7 +176,7 @@ export default function EmployeeTrainingListClient() {
       )
       message.success('导出成功')
     } catch (e) {
-      message.error(e instanceof Error && e.message ? e.message : exportErrorMessage(e))
+      message.error(getUserErrorMessage(e instanceof Error && e.message ? e.message : exportErrorMessage(e)))
     } finally {
       setExporting(false)
     }
@@ -197,7 +198,7 @@ export default function EmployeeTrainingListClient() {
       )
       message.success('导出成功')
     } catch (e) {
-      message.error(e instanceof Error && e.message ? e.message : exportErrorMessage(e))
+      message.error(getUserErrorMessage(e instanceof Error && e.message ? e.message : exportErrorMessage(e)))
     } finally {
       setExportingZip(false)
     }
@@ -212,7 +213,7 @@ export default function EmployeeTrainingListClient() {
       message.success(res.message || '导入完成')
       await loadMembers(selectedDept)
     } catch (e) {
-      message.error((e instanceof Error ? e.message : '') || '导入失败')
+      message.error(getUserErrorMessage((e instanceof Error ? e.message : '') || '导入失败'))
     } finally {
       setImporting(false)
     }
@@ -233,7 +234,7 @@ export default function EmployeeTrainingListClient() {
       setAddName('')
       await loadMembers(selectedDept)
     } catch (e) {
-      message.error((e instanceof Error ? e.message : '') || '添加失败')
+      message.error(getUserErrorMessage((e instanceof Error ? e.message : '') || '添加失败'))
     } finally {
       setAdding(false)
     }
@@ -255,7 +256,7 @@ export default function EmployeeTrainingListClient() {
           if (selectedMember?.name === member.name) setSelectedMember(null)
           await loadMembers(selectedDept)
         } catch (e) {
-          message.error((e instanceof Error ? e.message : '') || '移除失败')
+          message.error(getUserErrorMessage((e instanceof Error ? e.message : '') || '移除失败'))
         }
       },
     })
@@ -281,7 +282,7 @@ export default function EmployeeTrainingListClient() {
           setCheckedIds(new Set())
           await loadMembers(selectedDept)
         } catch (e) {
-          message.error((e instanceof Error ? e.message : '') || '批量移除失败')
+          message.error(getUserErrorMessage((e instanceof Error ? e.message : '') || '批量移除失败'))
         } finally {
           setBatchRemoving(false)
         }
@@ -312,7 +313,7 @@ export default function EmployeeTrainingListClient() {
               setSelectedMember(null)
               await loadMembers(selectedDept)
             } catch (e) {
-              message.error((e instanceof Error ? e.message : '') || '清除失败')
+              message.error(getUserErrorMessage((e instanceof Error ? e.message : '') || '清除失败'))
             }
           },
         })
@@ -342,7 +343,7 @@ export default function EmployeeTrainingListClient() {
       }
       await loadMembers(selectedDept)
     } catch (e) {
-      message.error((e instanceof Error ? e.message : '') || '编辑失败')
+      message.error(getUserErrorMessage((e instanceof Error ? e.message : '') || '编辑失败'))
     } finally {
       setEditing(false)
     }

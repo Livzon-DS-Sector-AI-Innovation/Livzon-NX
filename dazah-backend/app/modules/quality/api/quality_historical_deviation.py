@@ -32,6 +32,9 @@ from app.modules.quality.schemas import (
     HistoricalDeviationListItem,
     UpdateHistoricalDeviationRequest,
 )
+from app.modules.quality.schemas.historical_deviation import (
+    HistoricalDeviationBatchErrorResponse,
+)
 from app.modules.quality.service.historical_deviation import (
     ai_extract_historical_deviation,
     batch_import_historical_deviations,
@@ -158,6 +161,11 @@ async def delete_historical_deviation_api(
     "/historical-deviations/{record_id}/attachments",
     summary="上传历史偏差附件（word 自动转标准 MD）",
     response_model=ApiResponseEnvelope[HistoricalDeviationAttachmentOut],
+    responses={
+        404: {"description": "历史偏差记录不存在"},
+        413: {"description": "附件超过大小限制"},
+        415: {"description": "附件格式不受支持"},
+    },
 )
 async def upload_historical_deviation_attachment_api(
     record_id: uuid.UUID,
@@ -179,6 +187,12 @@ async def upload_historical_deviation_attachment_api(
     "/historical-deviations/batch-import",
     summary="批量导入历史偏差（转 MD + 建记录 + 解析编号 + AI 提取）",
     response_model=ApiResponseEnvelope[HistoricalDeviationBatchImportResult],
+    responses={
+        400: {
+            "model": HistoricalDeviationBatchErrorResponse,
+            "description": "批量附件超限（QUALITY_HISTORICAL_DEVIATION_BATCH_LIMIT）",
+        },
+    },
 )
 async def batch_import_historical_deviations_api(
     files: list[UploadFile] = File(...),

@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   App,
@@ -190,7 +191,7 @@ function AutoSchedulingContent({
       downloadBytes(file.bytes, file.filename)
       void reloadRecords()
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '导出失败', 6)
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '导出失败'), 6)
     } finally {
       setExporting(false)
     }
@@ -281,7 +282,7 @@ function AutoSchedulingContent({
         }
         downloadBytes(file.bytes, file.filename)
       } catch (error) {
-        message.error(error instanceof Error ? error.message : '下载失败', 5)
+        message.error(getUserErrorMessage(error instanceof Error ? error.message : '下载失败'), 5)
       }
     },
     [canExport, message],

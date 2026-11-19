@@ -136,7 +136,7 @@ describe('DeviationHistoryPage', () => {
   })
 
   it('imports a batch of attachments successfully', async () => {
-    workbenchActions.batchImportHistoricalDeviations.mockResolvedValue({
+    workbenchActions.batchImportHistoricalDeviations.mockResolvedValue({ ok: true, data: {
       total: 2,
       succeeded: 2,
       failed: 0,
@@ -144,7 +144,7 @@ describe('DeviationHistoryPage', () => {
         { file_name: 'a.docx', status: 'succeeded' },
         { file_name: 'b.docx', status: 'succeeded' },
       ],
-    })
+    } })
     await renderPage()
     await act(async () => {
       triggerFileUpload([makeFile('a.docx'), makeFile('b.docx')])
@@ -157,7 +157,7 @@ describe('DeviationHistoryPage', () => {
   })
 
   it('warns with file names when part of the batch fails', async () => {
-    workbenchActions.batchImportHistoricalDeviations.mockResolvedValue({
+    workbenchActions.batchImportHistoricalDeviations.mockResolvedValue({ ok: true, data: {
       total: 3,
       succeeded: 1,
       failed: 2,
@@ -166,7 +166,7 @@ describe('DeviationHistoryPage', () => {
         { file_name: 'bad1.docx', status: 'failed' },
         { file_name: 'bad2.docx', status: 'failed' },
       ],
-    })
+    } })
     await renderPage()
     await act(async () => {
       triggerFileUpload([makeFile('ok.docx'), makeFile('bad1.docx'), makeFile('bad2.docx')])
@@ -189,19 +189,17 @@ describe('DeviationHistoryPage', () => {
   })
 
   it('surfaces import failures via toast', async () => {
-    workbenchActions.batchImportHistoricalDeviations.mockRejectedValue(
-      new Error('导入服务不可用'),
-    )
+    workbenchActions.batchImportHistoricalDeviations.mockResolvedValue({ ok: false, message: '没有执行此操作的权限，请联系管理员' })
     await renderPage()
     await act(async () => {
       triggerFileUpload([makeFile('a.docx')])
       await new Promise((resolve) => setTimeout(resolve, 100))
     })
-    expect(document.body.textContent).toContain('导入服务不可用')
+    expect(document.body.textContent).toContain('没有执行此操作的权限，请联系管理员')
   })
 
   it('reveals why AI extraction failed on a successful batch import', async () => {
-    workbenchActions.batchImportHistoricalDeviations.mockResolvedValue({
+    workbenchActions.batchImportHistoricalDeviations.mockResolvedValue({ ok: true, data: {
       total: 2,
       succeeded: 2,
       failed: 0,
@@ -213,7 +211,7 @@ describe('DeviationHistoryPage', () => {
         },
         { file_name: 'b.docx', status: 'succeeded', message: '' },
       ],
-    })
+    } })
     await renderPage()
     await act(async () => {
       triggerFileUpload([makeFile('a.docx'), makeFile('b.docx')])
@@ -231,10 +229,10 @@ describe('DeviationHistoryPage', () => {
       page_size: 20,
     })
     apiClient.fetchHistoricalDeviation.mockResolvedValue(makeDetail())
-    workbenchActions.uploadHistoricalDeviationAttachment.mockResolvedValue({
+    workbenchActions.uploadHistoricalDeviationAttachment.mockResolvedValue({ ok: true, data: {
       id: 'att1',
       file_name: 'a.docx',
-    })
+    } })
     workbenchActions.aiExtractHistoricalDeviation.mockResolvedValue(
       makeDetail({
         deviation_event: '事件',
@@ -266,10 +264,10 @@ describe('DeviationHistoryPage', () => {
     apiClient.fetchHistoricalDeviation.mockResolvedValue(
       makeDetail({ deviation_event: '已填写', deviation_content: '已填写' }),
     )
-    workbenchActions.uploadHistoricalDeviationAttachment.mockResolvedValue({
+    workbenchActions.uploadHistoricalDeviationAttachment.mockResolvedValue({ ok: true, data: {
       id: 'att1',
       file_name: 'a.docx',
-    })
+    } })
     await renderPage()
     await act(async () => {
       clickButton('编辑')
@@ -287,10 +285,10 @@ describe('DeviationHistoryPage', () => {
     workbenchActions.createHistoricalDeviation.mockResolvedValue({
       ...makeDetail({ id: 'new1', code: 'HD-202609003' }),
     })
-    workbenchActions.uploadHistoricalDeviationAttachment.mockResolvedValue({
+    workbenchActions.uploadHistoricalDeviationAttachment.mockResolvedValue({ ok: true, data: {
       id: 'att1',
       file_name: 'a.docx',
-    })
+    } })
     workbenchActions.aiExtractHistoricalDeviation.mockResolvedValue(
       makeDetail({ id: 'new1', deviation_event: '事件' }),
     )
@@ -381,4 +379,63 @@ describe('DeviationHistoryPage', () => {
       errorSpy.mockRestore()
     }
   })
+
+  it('reports denied reads and failed edits without losing the original deviation', async () => {
+    const item = makeItem({ deviation_event: '原偏差事件' })
+    const detail = makeDetail({ deviation_event: '原偏差事件' })
+    const technicalError = 'TypeError: internal history adapter'
+    apiClient.fetchHistoricalDeviations.mockResolvedValue({ items: [item], total: 1, page: 1, page_size: 20 })
+    apiClient.fetchHistoricalDeviation.mockRejectedValueOnce(new Error(technicalError)).mockResolvedValue(detail)
+    workbenchActions.updateHistoricalDeviation.mockRejectedValueOnce(new Error(technicalError))
+    workbenchActions.aiExtractHistoricalDeviation.mockRejectedValueOnce(new Error(technicalError))
+    workbenchActions.uploadHistoricalDeviationAttachment.mockResolvedValueOnce({
+      ok: false, message: '没有执行此操作的权限，请联系管理员',
+    })
+    await renderPage()
+    await act(async () => clickButton('编辑'))
+    expect(document.body.textContent).toContain('操作未完成，请稍后重试')
+    await act(async () => clickButton('编辑'))
+    await act(async () => clickButton('保存'))
+    expect(workbenchActions.updateHistoricalDeviation).toHaveBeenCalledWith(
+      item.id, expect.objectContaining({ deviation_event: '原偏差事件' }),
+    )
+    await act(async () => clickButton('重新提取'))
+    await act(async () => clickButton('覆盖并提取'))
+    expect(workbenchActions.aiExtractHistoricalDeviation).toHaveBeenCalledWith(item.id)
+
+    await act(async () => triggerDrawerUpload([makeFile('补充.docx')]))
+    await vi.waitFor(() => expect(document.body.textContent).toContain('没有执行此操作的权限，请联系管理员'))
+    expect(workbenchActions.uploadHistoricalDeviationAttachment).toHaveBeenCalledWith(item.id, expect.any(FormData))
+    expect(document.body.querySelector<HTMLTextAreaElement>('#deviation_event')?.value).toBe('原偏差事件')
+    expect(document.body.textContent).not.toContain(technicalError)
+  })
+
+  it('keeps the attachment and the row after deletion requests fail', async () => {
+    const attachment = { id: 'att-1', file_name: '留存.docx', file_size: 100, url: '/fixture/attachment' }
+    apiClient.fetchHistoricalDeviations.mockResolvedValue({ items: [makeItem()], total: 1, page: 1, page_size: 20 })
+    apiClient.fetchHistoricalDeviation.mockResolvedValue(makeDetail({ attachments: [attachment] }))
+    workbenchActions.deleteHistoricalDeviationAttachment.mockRejectedValueOnce(new Error('TypeError: internal attachment failure'))
+    workbenchActions.deleteHistoricalDeviation.mockRejectedValueOnce(new Error('TypeError: internal deviation failure'))
+    await renderPage()
+    const findDelete = (scope: ParentNode) => Array.from(scope.querySelectorAll('button'))
+      .find(button => button.textContent?.replace(/\s/g, '') === '删除')
+    const confirm = (text: string) => Array.from(document.querySelectorAll('.ant-modal-confirm'))
+      .find(modal => modal.textContent?.includes(text))?.querySelector<HTMLButtonElement>('button.ant-btn-primary')
+    await act(async () => findDelete(container)?.click())
+    expect(confirm('删除历史偏差')).toBeDefined()
+    await act(async () => confirm('删除历史偏差')?.click())
+    expect(workbenchActions.deleteHistoricalDeviation).toHaveBeenCalledWith('rec1')
+    expect(container.textContent).toContain('PC-2501001')
+
+    await act(async () => clickButton('编辑'))
+    const drawer = document.querySelector('.ant-drawer')
+    expect(drawer).not.toBeNull()
+    if (drawer) await act(async () => findDelete(drawer)?.click())
+    expect(confirm('删除附件')).toBeDefined()
+    await act(async () => confirm('删除附件')?.click())
+    expect(workbenchActions.deleteHistoricalDeviationAttachment).toHaveBeenCalledWith('rec1', attachment.id)
+    expect(document.body.textContent).toContain(attachment.file_name)
+    expect(document.body.textContent).toContain('操作未完成，请稍后重试')
+  })
+
 })

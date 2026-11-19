@@ -382,11 +382,11 @@ async function flush() {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  actions.approvePurchaseRequest.mockResolvedValue({ code: 200, message: 'success', data: {} })
-  actions.rejectPurchaseRequest.mockResolvedValue({ code: 200, message: 'success', data: {} })
+  actions.approvePurchaseRequest.mockResolvedValue({ ok: true, data: { code: 200, message: 'success', data: {} } })
+  actions.rejectPurchaseRequest.mockResolvedValue({ ok: true, data: { code: 200, message: 'success', data: {} } })
   actions.createPurchaseRequest.mockResolvedValue({ code: 200, message: 'success', data: request() })
   actions.deletePurchaseRequest.mockResolvedValue({ code: 200, message: 'success', data: { success_count: 1, fail_count: 0 } })
-  actions.submitPurchaseRequest.mockResolvedValue({ code: 200, message: 'success', data: request() })
+  actions.submitPurchaseRequest.mockResolvedValue({ ok: true, data: { code: 200, message: 'success', data: request() } })
   actions.updatePurchaseRequest.mockResolvedValue({ code: 200, message: 'success', data: request() })
   api.fetchPurchaseRequests.mockResolvedValue({ code: 200, message: 'success', data: [request()], meta: { total: 1 } })
   api.fetchPurchaseOrders.mockResolvedValue({ code: 200, message: 'success', data: [orderLine], meta: { total: 1 } })
@@ -700,7 +700,7 @@ describe('purchasing workspace and request forms', () => {
     await flush()
     expect(ui.message.error).toHaveBeenCalledWith('采购申请保存失败，请稍后重试')
 
-    actions.submitPurchaseRequest.mockResolvedValueOnce({ code: 400, message: '提交失败' })
+    actions.submitPurchaseRequest.mockResolvedValueOnce({ ok: false, message: '提交失败' })
     await act(async () => {
       const confirms = Array.from(container.querySelectorAll<HTMLButtonElement>('button[data-confirm="true"]'))
       confirms.at(-1)?.click()
@@ -714,7 +714,7 @@ describe('purchasing workspace and request forms', () => {
       confirms.at(-1)?.click()
     })
     await flush()
-    expect(ui.message.error).toHaveBeenCalledWith('采购申请提交失败，请稍后重试')
+    expect(ui.message.error).toHaveBeenCalledWith('暂未确认采购申请提交结果，请先查看业务记录后再决定是否重试')
 
     api.fetchPurchaseRequests.mockRejectedValueOnce(new Error('network'))
     await act(async () => buttonContaining('刷新')?.click())
@@ -758,11 +758,11 @@ describe('purchasing approval and order clients', () => {
       items: [{ ...item, item_category: 'hardware', material_code: 'M-1' }],
     })
     api.fetchPurchaseRequests.mockResolvedValue({ code: 200, message: 'success', data: [approvalRequest], meta: { total: 1 } })
-    actions.approvePurchaseRequest.mockResolvedValue({
+    actions.approvePurchaseRequest.mockResolvedValue({ ok: true, data: {
       code: 200,
       message: 'success',
       data: { status: 'pending_equipment_power' },
-    })
+    } })
     mount(
       <PurchaseApprovalClient
         category="electrical"
@@ -839,7 +839,7 @@ describe('purchasing approval and order clients', () => {
     act(() => buttonContaining('驳回')?.click())
     await act(async () => buttonContaining('确认驳回')?.click())
     await flush()
-    expect(ui.message.error).toHaveBeenCalledWith('审批失败，请稍后重试')
+    expect(ui.message.error).toHaveBeenCalledWith('暂未确认采购审批结果，请先查看业务记录后再决定是否重试')
   })
 
   it('covers order filters, all column layouts, export, search, and errors', async () => {

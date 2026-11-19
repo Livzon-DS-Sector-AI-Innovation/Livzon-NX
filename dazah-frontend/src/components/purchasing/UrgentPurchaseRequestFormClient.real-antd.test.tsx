@@ -123,7 +123,7 @@ beforeAll(() => {
 beforeEach(() => {
   vi.clearAllMocks()
   actions.createPurchaseRequest.mockResolvedValue({ code: 200, message: 'success', data: {} })
-  actions.submitPurchaseRequest.mockResolvedValue({ code: 200, message: 'success', data: {} })
+  actions.submitPurchaseRequest.mockResolvedValue({ ok: true, data: { code: 200, message: 'success', data: {} } })
   actions.updatePurchaseRequest.mockResolvedValue({ code: 200, message: 'success', data: {} })
   api.fetchPurchaseRequests.mockResolvedValue({ code: 200, message: 'success', data: [], meta: { total: 0 } })
   window.scrollTo = vi.fn()

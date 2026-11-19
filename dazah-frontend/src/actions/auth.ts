@@ -6,6 +6,7 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import type { User } from '@/types/user'
 import { getAuthHeaders } from '@/lib/auth'
+import { IMPERSONATION_COOKIE, IMPERSONATION_RECOVERY_PATH } from '@/lib/impersonation'
 
 export interface LoginActionState {
   error?: string
@@ -58,6 +59,7 @@ export async function loginWithPassword(
   _prevState: LoginActionState,
   formData: FormData
 ): Promise<LoginActionState> {
+  if ((await cookies()).get(IMPERSONATION_COOKIE)) redirect(IMPERSONATION_RECOVERY_PATH)
   const username = String(formData.get('username') || '').trim()
   const password = String(formData.get('password') || '')
   let token: string | null = null
@@ -104,6 +106,7 @@ export async function loginWithPassword(
 
 export async function logout() {
   const cookieStore = await cookies()
+  if (cookieStore.get(IMPERSONATION_COOKIE)) redirect(IMPERSONATION_RECOVERY_PATH)
   const token = cookieStore.get('auth_token')?.value
   if (token) {
     const res = await fetchBackend('/api/v1/identity/auth/session/logout', {

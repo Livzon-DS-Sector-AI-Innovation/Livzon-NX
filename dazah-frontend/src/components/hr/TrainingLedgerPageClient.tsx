@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { App, Tabs, Button, Upload, DatePicker, Select, Modal, AutoComplete } from 'antd'
 import { DownloadOutlined, UploadOutlined, PrinterOutlined, DeleteOutlined, SyncOutlined, PlusOutlined, CloseOutlined } from '@ant-design/icons'
@@ -109,7 +110,7 @@ export default function TrainingLedgerPageClient() {
             message.success('删除成功')
             await loadDepartments()
           } catch (err) {
-            message.error((err instanceof Error ? err.message : '') || '删除失败')
+            message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '删除失败'))
           }
         },
       })
@@ -163,7 +164,7 @@ export default function TrainingLedgerPageClient() {
       setAddInputValue('')
       await loadDepartments()
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '添加失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '添加失败'))
     } finally {
       setAddLoading(false)
     }
@@ -202,7 +203,7 @@ export default function TrainingLedgerPageClient() {
       window.URL.revokeObjectURL(downloadUrl)
       message.success('导出成功')
     } catch (e) {
-      message.error((e instanceof Error ? e.message : '') || '导出失败')
+      message.error(getUserErrorMessage((e instanceof Error ? e.message : '') || '导出失败'))
     }
   }, [selectedDept, viewTab, dateFrom, dateTo, periodLabel, message])
 
@@ -218,7 +219,7 @@ export default function TrainingLedgerPageClient() {
         message.success(res.message || '导入成功')
         setRefreshKey((k) => k + 1)
       } catch (e) {
-        message.error((e instanceof Error ? e.message : '') || '导入失败')
+        message.error(getUserErrorMessage((e instanceof Error ? e.message : '') || '导入失败'))
       }
       return false
     },
@@ -240,7 +241,7 @@ export default function TrainingLedgerPageClient() {
           message.success(res.message || '同步完成')
           setRefreshKey((k) => k + 1)
         } catch (e) {
-          message.error((e instanceof Error ? e.message : '') || '同步失败')
+          message.error(getUserErrorMessage((e instanceof Error ? e.message : '') || '同步失败'))
         } finally {
           setSyncing(false)
         }
@@ -274,7 +275,7 @@ export default function TrainingLedgerPageClient() {
           message.success(res.message || '清除成功')
           setRefreshKey((k) => k + 1)
         } catch (e) {
-          message.error((e instanceof Error ? e.message : '') || '清除失败')
+          message.error(getUserErrorMessage((e instanceof Error ? e.message : '') || '清除失败'))
         }
       },
     })

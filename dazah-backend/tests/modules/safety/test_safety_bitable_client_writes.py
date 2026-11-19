@@ -266,6 +266,31 @@ async def test_search_records_with_result_paginates_and_reports_errors() -> None
 
 
 @pytest.mark.anyio
+async def test_complete_mirror_rejects_partial_page_results() -> None:
+    client = _client()
+    response = {
+        "code": 0,
+        "data": {
+            "items": [{"record_id": "rec-1"}],
+            "has_more": True,
+            "page_token": "p2",
+        },
+    }
+    fake = _QueueHttp([_payload(response), _payload(response)])
+    original = _swap_http(fake)
+    try:
+        _, error = await client.search_records_with_result(
+            "tbl-1",
+            page_size=1,
+            require_complete=True,
+        )
+        assert error is not None and "游标" in error
+        assert len(fake.posts) == 2
+    finally:
+        bitable_module.httpx.AsyncClient = original
+
+
+@pytest.mark.anyio
 async def test_list_tables_paginates_and_requires_app_token() -> None:
     # 未提供 app_token 且客户端未绑定 → 空列表
     empty_client = SafetyBitableClient()

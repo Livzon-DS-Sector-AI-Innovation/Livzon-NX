@@ -15,6 +15,7 @@ export function AuthorizationReasonInput({ value, onChange, presets, disabled, .
     style={{ height: "var(--ant-control-height)" }}
     onChange={(event) => onChange(event.target.value)} maxLength={20} showCount
     prefix={<Dropdown trigger={["click"]} placement="topLeft" autoFocus destroyOnHidden disabled={disabled}
+      getPopupContainer={(trigger) => trigger.parentElement ?? trigger}
       menu={{
         items: presets.map((reason) => ({ key: reason, label: reason })),
         onClick: ({ key }) => {

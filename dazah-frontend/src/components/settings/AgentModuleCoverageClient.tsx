@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useCallback, useEffect, useState } from 'react'
 import { Button, Card, Col, Row, Select, Space, Statistic, Table, Tabs, Tag } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
@@ -48,7 +49,7 @@ export default function AgentModuleCoverageClient() {
     setLoading(true)
     setError(null)
     try { setData(await getAgentModuleCoverage()) }
-    catch (cause) { setData(null); setError(cause instanceof Error ? cause.message : '模块接入情况读取失败') }
+    catch (cause) { setData(null); setError(getUserErrorMessage(cause instanceof Error ? cause.message : '模块接入情况读取失败', '模块接入情况读取失败')) }
     finally { setLoading(false) }
   }, [])
   useEffect(() => {

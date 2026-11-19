@@ -17,11 +17,13 @@ import asyncio
 import hashlib
 import json
 import logging
+import tempfile
 import time
 from collections import OrderedDict
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from pathlib import Path
+from weakref import WeakValueDictionary
 
 from app.core.config import get_settings
 
@@ -33,6 +35,11 @@ Fetcher = Callable[[], Awaitable[tuple[bytes, str, str] | None]]
 _DISK_EVICT_EVERY = 20
 # 清理到上限的 80%，减少频繁触发
 _DISK_EVICT_TARGET_RATIO = 0.8
+_DISK_RETRY_SECONDS = 60
+
+
+class AttachmentCacheDiskError(OSError):
+    """后台任务无法将附件预热到磁盘。"""
 
 
 @dataclass(slots=True)
@@ -62,8 +69,9 @@ class AttachmentCache:
         self._ttl_seconds = ttl_seconds
         self._memory: OrderedDict[str, _MemoryEntry] = OrderedDict()
         self._memory_bytes = 0
-        self._locks: dict[str, asyncio.Lock] = {}
-        self._locks_guard = asyncio.Lock()
+        # 请求与等待者持有强引用，完成后无需为历史附件保留锁。
+        self._locks: WeakValueDictionary[str, asyncio.Lock] = WeakValueDictionary()
+        self._disk_retry_at = 0.0
         self._disk_writes_since_evict = 0
         self._hits = 0
         self._misses = 0
@@ -112,6 +120,9 @@ class AttachmentCache:
             self._memory_bytes -= len(entry.content)
 
     def _memory_put(self, cache_key: str, entry: _MemoryEntry) -> None:
+        if len(entry.content) > self._max_memory_bytes:
+            self._memory_pop(cache_key)
+            return
         old = self._memory.get(cache_key)
         if old is not None:
             self._memory_bytes -= len(old.content)
@@ -122,7 +133,33 @@ class AttachmentCache:
 
     # ---- 磁盘层 ----
 
-    async def _disk_read(self, cache_key: str) -> tuple[bytes, str, str] | None:
+    def _disk_failed(self, exc: OSError) -> None:
+        now = time.monotonic()
+        if now >= self._disk_retry_at:
+            logger.warning("飞书附件磁盘缓存暂不可用: %s", type(exc).__name__)
+            self._disk_retry_at = now + _DISK_RETRY_SECONDS
+
+    def _probe_disk(self) -> None:
+        self._cache_dir.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryFile(dir=self._cache_dir) as probe:
+            probe.write(b"1")
+
+    async def prepare_disk(self) -> bool:
+        """预热前确认磁盘层可写，避免为不可用的磁盘下载附件。"""
+        if not self._enabled or time.monotonic() < self._disk_retry_at:
+            return False
+        try:
+            await asyncio.to_thread(self._probe_disk)
+        except OSError as exc:
+            self._disk_failed(exc)
+            return False
+        return True
+
+    async def _disk_read(
+        self,
+        cache_key: str,
+        max_bytes: int | None,
+    ) -> tuple[bytes, str, str] | None:
         path = self._disk_path(cache_key)
         meta_path = self._meta_path(cache_key)
         try:
@@ -133,6 +170,8 @@ class AttachmentCache:
                 await asyncio.to_thread(path.unlink, missing_ok=True)
                 await asyncio.to_thread(meta_path.unlink, missing_ok=True)
                 return None
+            if max_bytes is not None and stat.st_size > max_bytes:
+                return None
             meta = await asyncio.to_thread(self._read_meta, meta_path)
             if meta is None:
                 await asyncio.to_thread(path.unlink, missing_ok=True)
@@ -140,8 +179,10 @@ class AttachmentCache:
                 return None
             content = await asyncio.to_thread(path.read_bytes)
             return content, meta["content_type"], meta["filename"]
-        except OSError:
-            logger.warning("飞书附件磁盘缓存读取失败: %s", path, exc_info=True)
+        except FileNotFoundError:
+            return None  # 其他请求可能刚清理了过期文件
+        except OSError as exc:
+            self._disk_failed(exc)
             return None
 
     async def _disk_write(
@@ -163,17 +204,12 @@ class AttachmentCache:
             return
         files = [
             p
-            for p in await asyncio.to_thread(
-                lambda: list(self._cache_dir.rglob("*"))
-            )
-            if await asyncio.to_thread(p.is_file)
-            and p.suffix != ".meta"
+            for p in await asyncio.to_thread(lambda: list(self._cache_dir.rglob("*")))
+            if await asyncio.to_thread(p.is_file) and p.suffix != ".meta"
         ]
         if not files:
             return
-        sizes = await asyncio.to_thread(
-            lambda: {p: p.stat().st_size for p in files}
-        )
+        sizes = await asyncio.to_thread(lambda: {p: p.stat().st_size for p in files})
         total = sum(sizes.values())
         if total <= self._max_disk_bytes:
             return
@@ -208,27 +244,30 @@ class AttachmentCache:
         record_id: str,
         file_token: str,
         key_suffix: str = "",
+        *,
+        disk_only: bool = False,
+        max_disk_read_bytes: int | None = None,
     ) -> tuple[bytes, str, str] | None:
         """返回 (content, content_type, filename) 或 None（未命中/过期/异常）。"""
         if not self._enabled:
             return None
         cache_key = self._cache_key(entity_code, record_id, file_token, key_suffix)
-        entry = self._memory_get(cache_key)
+        entry = None if disk_only else self._memory_get(cache_key)
         if entry is not None:
             self._hits += 1
             return entry.content, entry.content_type, entry.filename
-        disk = await self._disk_read(cache_key)
+        disk = None
+        if time.monotonic() >= self._disk_retry_at:
+            disk = await self._disk_read(cache_key, max_disk_read_bytes)
         if disk is not None:
             content, content_type, filename = disk
-            self._memory_put(
-                cache_key,
-                _MemoryEntry(
-                    content,
-                    content_type,
-                    filename,
-                    time.time() + self._ttl_seconds,
-                ),
-            )
+            if not disk_only:
+                self._memory_put(
+                    cache_key,
+                    _MemoryEntry(
+                        content, content_type, filename, time.time() + self._ttl_seconds
+                    ),
+                )
             self._hits += 1
             return disk
         self._misses += 1
@@ -243,27 +282,33 @@ class AttachmentCache:
         content_type: str,
         filename: str,
         key_suffix: str = "",
+        *,
+        disk_only: bool = False,
     ) -> None:
         if not self._enabled or not content:
             return
         cache_key = self._cache_key(entity_code, record_id, file_token, key_suffix)
-        self._memory_put(
-            cache_key,
-            _MemoryEntry(
-                content,
-                content_type,
-                filename,
-                time.time() + self._ttl_seconds,
-            ),
-        )
+        if not disk_only:
+            self._memory_put(
+                cache_key,
+                _MemoryEntry(
+                    content, content_type, filename, time.time() + self._ttl_seconds
+                ),
+            )
+        if time.monotonic() < self._disk_retry_at:
+            if disk_only:
+                raise AttachmentCacheDiskError("飞书附件磁盘缓存暂不可用")
+            return
         try:
             await self._disk_write(cache_key, content, content_type, filename)
             self._disk_writes_since_evict += 1
             if self._disk_writes_since_evict >= _DISK_EVICT_EVERY:
                 self._disk_writes_since_evict = 0
                 await self._evict_disk()
-        except OSError:
-            logger.warning("飞书附件磁盘缓存写入失败", exc_info=True)
+        except OSError as exc:
+            self._disk_failed(exc)
+            if disk_only:
+                raise AttachmentCacheDiskError("飞书附件磁盘缓存写入失败") from exc
 
     async def get_or_fetch(
         self,
@@ -272,18 +317,35 @@ class AttachmentCache:
         file_token: str,
         fetcher: Fetcher,
         key_suffix: str = "",
+        *,
+        disk_only: bool = False,
+        max_disk_read_bytes: int | None = None,
     ) -> tuple[bytes, str, str] | None:
         """未命中时持锁回源并写缓存；并发请求同一附件只回源一次。"""
         if not self._enabled:
             return await fetcher()
-        cached = await self.get(entity_code, record_id, file_token, key_suffix)
+
+        async def lookup() -> tuple[bytes, str, str] | None:
+            return await self.get(
+                entity_code,
+                record_id,
+                file_token,
+                key_suffix,
+                disk_only=disk_only,
+                max_disk_read_bytes=max_disk_read_bytes,
+            )
+
+        cached = await lookup()
         if cached is not None:
             return cached
-        lock = await self._lock_for(entity_code, record_id, file_token, key_suffix)
+        cache_key = self._cache_key(entity_code, record_id, file_token, key_suffix)
+        lock = self._lock_for(cache_key)
         async with lock:
-            cached = await self.get(entity_code, record_id, file_token, key_suffix)
+            cached = await lookup()
             if cached is not None:
                 return cached
+            if disk_only and time.monotonic() < self._disk_retry_at:
+                raise AttachmentCacheDiskError("飞书附件磁盘缓存暂不可用")
             result = await fetcher()
             if result is not None:
                 await self.set(
@@ -292,23 +354,16 @@ class AttachmentCache:
                     file_token,
                     *result,
                     key_suffix=key_suffix,
+                    disk_only=disk_only,
                 )
             return result
 
-    async def _lock_for(
-        self,
-        entity_code: str,
-        record_id: str,
-        file_token: str,
-        key_suffix: str = "",
-    ) -> asyncio.Lock:
-        cache_key = self._cache_key(entity_code, record_id, file_token, key_suffix)
-        async with self._locks_guard:
-            lock = self._locks.get(cache_key)
-            if lock is None:
-                lock = asyncio.Lock()
-                self._locks[cache_key] = lock
-            return lock
+    def _lock_for(self, cache_key: str) -> asyncio.Lock:
+        lock = self._locks.get(cache_key)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._locks[cache_key] = lock
+        return lock
 
     def stats(self) -> dict[str, int | bool]:
         return {

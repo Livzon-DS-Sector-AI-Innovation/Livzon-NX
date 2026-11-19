@@ -1,5 +1,7 @@
 'use client'
 
+import { getActionErrorMessage, unwrapServerActionResult } from '@/lib/server-action-result'
+
 import { useState, useSyncExternalStore } from 'react'
 import dayjs from 'dayjs'
 import {
@@ -149,15 +151,11 @@ export function PurchaseApprovalClient({
         opinion: values.opinion ?? '',
         result: reviewResult,
       }
-      const response =
+      const response = unwrapServerActionResult(
         reviewResult === 'approved'
           ? await approvePurchaseRequest(reviewRecord.id, payload)
-          : await rejectPurchaseRequest(reviewRecord.id, payload)
-
-      if (response.code !== 200) {
-        message.error(response.message || '审批失败')
-        return
-      }
+          : await rejectPurchaseRequest(reviewRecord.id, payload),
+      )
       const responseStatus = response.data?.status as string | undefined
       if (
         reviewResult === 'approved' &&
@@ -170,8 +168,8 @@ export function PurchaseApprovalClient({
       }
       setReviewRecord(null)
       await loadRecords(page)
-    } catch {
-      message.error('审批失败，请稍后重试')
+    } catch (error) {
+      message.error(getActionErrorMessage(error, '采购审批'))
     } finally {
       setReviewing(false)
     }

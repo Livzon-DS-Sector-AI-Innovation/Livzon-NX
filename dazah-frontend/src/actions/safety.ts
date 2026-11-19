@@ -1,6 +1,8 @@
 'use server'
 
 import { serverApiUrl } from '@/lib/server-api'
+import { requireActionResponse, serverActionResult } from '@/lib/server-action-result'
+import { uncertainWriteMessage } from '@/lib/user-error'
 import { revalidatePath } from 'next/cache'
 // 注意：以下 revalidatePath 调用指向的页面路径部分仍在开发中，待对应页面创建后将自动生效
 import { getAuthHeaders, getServerToken } from '@/lib/auth'
@@ -3970,20 +3972,40 @@ export async function deleteWorkPermit(permitId: string, pageKey?: string) {
   return response
 }
 
+const workPermitSubmitErrors = {
+  SAFETY_WORK_PERMIT_TIME_INVALID: '请检查作业实施的开始、结束时间，并确认时长符合该级别的有效期',
+  SAFETY_WORK_PERMIT_CERTIFICATE_INVALID: '作业人员证件校验未通过，请核对证件有效期和作业资格后重新提交',
+  SAFETY_WORK_PERMIT_APPROVER_REQUIRED: '有审批节点缺少审批人，请补齐指派或联系管理员配置默认审批人',
+} satisfies Record<components['schemas']['WorkPermitSubmitErrorCode'], string>
+
+async function runWorkPermitReview(
+  permitId: string,
+  transition: string,
+  operation: string,
+  body: unknown,
+) {
+  return serverActionResult(
+    operation,
+    async () => {
+      const response = await fetch(`${API_BASE}/safety/work-permits/${permitId}/${transition}`, {
+        method: 'POST',
+        headers: { ...(await getAuthHeaders()), ...workPermitHeaders() },
+        body: JSON.stringify(body),
+      })
+      await requireActionResponse(response, transition === 'submit' ? { 422: workPermitSubmitErrors } : undefined)
+      const result: ApiResponse<WorkPermitAction> = await response.json()
+      revalidatePath('/safety/work-permits')
+      return result.data
+    },
+    uncertainWriteMessage(operation),
+  )
+}
+
 export async function submitWorkPermit(
   permitId: string,
   assignments: { node_key: string; approver_user_id: string | null }[]
 ) {
-  const response = await fetchApi<WorkPermitAction>(
-    `/safety/work-permits/${permitId}/submit`,
-    {
-      method: 'POST',
-      headers: workPermitHeaders(),
-      body: JSON.stringify({ assignments }),
-    }
-  )
-  if (response.code === 200) revalidatePath('/safety/work-permits')
-  return response
+  return runWorkPermitReview(permitId, 'submit', '作业票提交', { assignments })
 }
 
 /** 作业票运行参数（当前仅人员证件校验开关）。 */
@@ -4013,16 +4035,7 @@ export async function approveWorkPermitNode(
   nodeId: string,
   opinion?: string | null
 ) {
-  const response = await fetchApi<WorkPermitAction>(
-    `/safety/work-permits/${permitId}/nodes/${nodeId}/approve`,
-    {
-      method: 'POST',
-      headers: workPermitHeaders(),
-      body: JSON.stringify({ opinion: opinion ?? null }),
-    }
-  )
-  if (response.code === 200) revalidatePath('/safety/work-permits')
-  return response
+  return runWorkPermitReview(permitId, `nodes/${nodeId}/approve`, '作业票审批通过', { opinion: opinion ?? null })
 }
 
 export async function rejectWorkPermitNode(
@@ -4030,16 +4043,7 @@ export async function rejectWorkPermitNode(
   nodeId: string,
   opinion: string
 ) {
-  const response = await fetchApi<WorkPermitAction>(
-    `/safety/work-permits/${permitId}/nodes/${nodeId}/reject`,
-    {
-      method: 'POST',
-      headers: workPermitHeaders(),
-      body: JSON.stringify({ opinion }),
-    }
-  )
-  if (response.code === 200) revalidatePath('/safety/work-permits')
-  return response
+  return runWorkPermitReview(permitId, `nodes/${nodeId}/reject`, '作业票驳回', { opinion })
 }
 
 export async function verifyWorkPermit(permitId: string) {

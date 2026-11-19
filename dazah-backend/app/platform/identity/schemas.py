@@ -163,6 +163,42 @@ class UserResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ImpersonationView(BaseModel):
+    expires_at: datetime
+
+
+class CurrentUserResponse(UserResponse):
+    impersonation: ImpersonationView | None = None
+
+
+class ImpersonationTargetRole(BaseModel):
+    id: UUID
+    name: str
+
+
+class ImpersonationTarget(BaseModel):
+    id: UUID
+    name: str
+    username: str | None
+    employee_no: str | None
+    department: str | None
+
+    roles: list[ImpersonationTargetRole]
+
+
+class ImpersonationTargets(BaseModel):
+    items: list[ImpersonationTarget]
+    total: int
+
+
+class ImpersonationStart(BaseModel):
+    target_id: UUID
+
+
+class ImpersonationExit(BaseModel):
+    administrator_restored: bool
+
+
 class UserManagementItem(UserResponse):
     last_login_at: str | None = None
 
@@ -396,19 +432,6 @@ class RolePagePermissionsPreviewOut(BaseModel):
     )
 
 
-class PagePermissionSimulationRequest(BaseModel):
-    user_id: UUID
-    page_key: str = Field(min_length=1, max_length=255)
-    permission: PagePermissionLevel
-    sensitive_action: str | None = Field(default=None, max_length=128)
-
-
-class PagePermissionSimulationOut(BaseModel):
-    allowed: bool
-    reason: str
-    effective: EffectivePageGrantOut | None = None
-
-
 class PagePermissionHistoryChangeOut(BaseModel):
     page_key: str
     page_name: str
@@ -473,48 +496,6 @@ class PagePermissionRollbackPreviewOut(BaseModel):
     affected_user_samples: list[RolePagePermissionAffectedUserOut] = Field(
         default_factory=list, max_length=20
     )
-
-
-class PagePermissionHealthIssueOut(BaseModel):
-    code: Literal[
-        "retired_page",
-        "invalid_department",
-        "missing_module_access",
-        "redundant_user_override",
-    ]
-    severity: Literal["warning", "error"]
-    target_type: Literal["role", "user"]
-    target_id: UUID
-    target_name: str
-    page_key: str
-    page_name: str
-    module_code: str | None = None
-    detail: str
-    grant_version: int = Field(ge=0)
-    remediation: Literal["remove_grant", "prune_departments", "edit"]
-
-
-class PagePermissionHealthRemediationRequest(BaseModel):
-    code: Literal["retired_page", "invalid_department", "redundant_user_override"]
-    target_type: Literal["role", "user"]
-    target_id: UUID
-    page_key: str = Field(min_length=1, max_length=255)
-    expected_grant_version: int = Field(ge=0)
-    reason: str = Field(min_length=1, max_length=500)
-
-
-class PagePermissionHealthRemediationOut(BaseModel):
-    fixed: bool = True
-    grant_version: int = Field(ge=0)
-    message: str
-
-
-class PagePermissionHealthOut(BaseModel):
-    checked_at: datetime
-    issue_count: int = Field(ge=0)
-    error_count: int = Field(ge=0)
-    warning_count: int = Field(ge=0)
-    issues: list[PagePermissionHealthIssueOut] = Field(default_factory=list)
 
 
 class PermissionModuleRolloutOut(BaseModel):

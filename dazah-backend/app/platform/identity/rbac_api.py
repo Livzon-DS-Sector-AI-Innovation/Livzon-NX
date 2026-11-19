@@ -35,15 +35,12 @@ from app.platform.identity.deps import CurrentUser, require_current_user
 from app.platform.identity.models import (
     Permission,
     Role,
-    RolePageGrant,
     User,
-    UserPageGrant,
 )
 from app.platform.identity.page_permission_repository import PagePermissionRepository
 from app.platform.identity.page_permissions import PagePermissionService
 from app.platform.identity.page_policy import (
     PAGES_BY_MODULE,
-    canonical_page_key,
     get_page_definition,
 )
 from app.platform.identity.permission_cache import (
@@ -77,16 +74,11 @@ from app.platform.identity.schemas import (
     MenuUpdateRequest,
     PageDataScopeInput,
     PageGrantInput,
-    PagePermissionHealthOut,
-    PagePermissionHealthRemediationOut,
-    PagePermissionHealthRemediationRequest,
     PagePermissionHistoryItemOut,
     PagePermissionHistoryPageOut,
     PagePermissionRollbackPreviewOut,
     PagePermissionRollbackPreviewRequest,
     PagePermissionRollbackRequest,
-    PagePermissionSimulationOut,
-    PagePermissionSimulationRequest,
     PermissionModuleIntegrationOut,
     PermissionModuleRolloutPreviewOut,
     PermissionResponse,
@@ -1846,199 +1838,6 @@ async def rollback_role_page_permissions(
     await db.commit()
     await publish_permissions_changed_all()
     result = await service.role_permissions_out(db, role=role)
-    return success_response(data=result.model_dump(mode="json"))
-
-
-@rbac_router.get(
-    "/page-permissions/health",
-    summary="检查页面权限健康状态",
-    response_model=PagePermissionHealthOut,
-)
-async def get_page_permission_health(
-    current_user: IdentityAdminUser,
-    db: AsyncSession = Depends(get_db),
-) -> JSONResponse:
-    result = await PagePermissionService().permission_health(db)
-    return success_response(data=result.model_dump(mode="json"))
-
-
-@rbac_router.post(
-    "/page-permissions/health/remediate",
-    summary="修复页面权限健康问题",
-    response_model=PagePermissionHealthRemediationOut,
-)
-async def remediate_page_permission_health_issue(
-    body: PagePermissionHealthRemediationRequest,
-    current_user: IdentityAdminUser,
-    db: AsyncSession = Depends(get_db),
-) -> JSONResponse:
-    page_repo = PagePermissionRepository()
-    permission_repo = PermissionGrantRepository()
-    service = PagePermissionService()
-    target: Role | User
-    grant: RolePageGrant | UserPageGrant | None
-    if body.target_type == "role":
-        role = await page_repo.get_role_for_update(db, role_id=body.target_id)
-        if role is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "角色不存在")
-        if role.code in {"super_admin", ORDINARY_ADMIN_ROLE_CODE}:
-            raise HTTPException(400, "系统管理员页面权限不可自动修复")
-        await _assert_not_own_role(db, current_user, role.id)
-        target = role
-        grant = await page_repo.get_role_grant_for_update(
-            db, role_id=role.id, page_key=body.page_key
-        )
-        resource_type = "identity.role_page_permissions"
-    else:
-        user = await permission_repo.get_user_for_update(db, body.target_id)
-        if user is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "用户不存在")
-        if user.id == current_user.id:
-            raise HTTPException(403, "管理员不能自动修复自己的页面权限")
-        if user.role == "admin":
-            raise HTTPException(400, "系统管理员无需页面权限修复")
-        target = user
-        grant = await page_repo.get_user_grant_for_update(
-            db, user_id=user.id, page_key=body.page_key
-        )
-        resource_type = "identity.user_page_permissions"
-    if target.grant_version != body.expected_grant_version:
-        raise HTTPException(
-            status.HTTP_409_CONFLICT,
-            f"授权版本冲突，当前版本为 {target.grant_version}",
-        )
-    if grant is None:
-        raise HTTPException(status.HTTP_409_CONFLICT, "该健康问题已被处理，请重新检查")
-    health = await service.permission_health(db)
-    issue = next(
-        (
-            item
-            for item in health.issues
-            if item.code == body.code
-            and item.target_type == body.target_type
-            and item.target_id == body.target_id
-            and item.page_key == body.page_key
-        ),
-        None,
-    )
-    if issue is None:
-        raise HTTPException(status.HTTP_409_CONFLICT, "该健康问题已变化，请重新检查")
-
-    old = (
-        await page_repo.list_role_grants(db, role_ids=[target.id])
-        if body.target_type == "role"
-        else await page_repo.list_user_grants(db, user_id=target.id)
-    )
-    message = "问题已修复"
-    if body.code in {"retired_page", "redundant_user_override"}:
-        await page_repo.remove_grant(db, grant)
-        message = (
-            "已恢复角色基线"
-            if body.code == "redundant_user_override"
-            else "已移除停用页面授权"
-        )
-    else:
-        valid_ids = await page_repo.existing_department_ids(
-            db, department_ids=set(grant.department_ids or [])
-        )
-        if not valid_ids and grant.scope_type == "departments":
-            raise HTTPException(
-                status.HTTP_409_CONFLICT,
-                "指定部门已全部失效，请进入授权编辑器选择新的数据范围",
-            )
-        grant.department_ids = sorted(valid_ids)
-        grant.updated_by = current_user.id
-        await db.flush()
-        message = "已清除失效部门引用"
-
-    target.grant_version += 1
-    target.updated_by = current_user.id
-    current = (
-        await page_repo.list_role_grants(db, role_ids=[target.id])
-        if body.target_type == "role"
-        else await page_repo.list_user_grants(db, user_id=target.id)
-    )
-    await _audit(
-        db,
-        current_user,
-        action=f"remediate_{body.target_type}_page_permissions",
-        resource_type=resource_type,
-        resource_id=target.id,
-        old_value={"grants": _grant_payload(old)},
-        new_value={
-            "grants": _grant_payload(current),
-            "reason": body.reason,
-            "grant_version": target.grant_version,
-            "health_issue": body.code,
-        },
-    )
-    if body.target_type == "role":
-        await _bump_all_user_grant_versions(db, actor_id=current_user.id)
-    else:
-        await permission_repo.create_outbox_event(
-            db,
-            user_id=target.id,
-            grant_version=target.grant_version,
-            actor_id=current_user.id,
-            event_type="identity.user_page_grants.changed.v1",
-        )
-    await db.commit()
-    if body.target_type == "role":
-        await publish_permissions_changed_all()
-    else:
-        await publish_permissions_changed(target.id)
-    result = PagePermissionHealthRemediationOut(
-        grant_version=target.grant_version, message=message
-    )
-    return success_response(data=result.model_dump(mode="json"))
-
-
-@rbac_router.post(
-    "/page-permissions/simulate",
-    summary="按页面和业务动作验证权限",
-    response_model=PagePermissionSimulationOut,
-)
-async def simulate_page_permission(
-    body: PagePermissionSimulationRequest,
-    current_user: IdentityAdminUser,
-    db: AsyncSession = Depends(get_db),
-    settings: Settings = Depends(get_settings),
-) -> JSONResponse:
-    user = await _get_target_user_or_404(db, body.user_id)
-    page_service = PagePermissionService()
-    grants = await page_service.effective_grants(db, user=user)
-    page_key = canonical_page_key(body.page_key)
-    effective = next((item for item in grants if item.page_key == page_key), None)
-    definition = get_page_definition(page_key)
-    module_allowed = bool(definition and any(
-        item.module_code == definition.module_code and "access" in item.permissions
-        for item in grants
-    ))
-    allowed = bool(
-        module_allowed
-        and effective is not None
-        and body.permission in effective.permissions
-    )
-    if module_allowed and body.sensitive_action:
-        allowed = bool(
-            allowed
-            and effective is not None
-            and body.sensitive_action in effective.sensitive_actions
-        )
-    if definition is None:
-        reason = "所选页面未登记或已失效"
-    elif not module_allowed:
-        reason = "当前模块没有可访问页面，模块入口未生效"
-    elif allowed:
-        reason = (
-            "当前账号满足模块入口及所选页面授权条件；"
-            "实际接口还需核对页面绑定、数据范围和业务规则"
-        )
-    else:
-        reason = "当前账号已获模块访问，但未获得所选页面业务权限"
-    result = PagePermissionSimulationOut(
-        allowed=allowed, reason=reason, effective=effective
-    )
     return success_response(data=result.model_dump(mode="json"))
 
 

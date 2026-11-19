@@ -36,7 +36,7 @@ from app.modules.quality.api.deps import (
 from app.modules.quality.api.deps import (
     resolve_quality_list_scope as _resolve_quality_list_scope,
 )
-from app.modules.quality.api.uploads import read_upload_with_limit
+from app.modules.quality.api.uploads import read_word_import
 from app.modules.quality.schemas import (
     ChangeActionPlanDetail,
     ChangeActionPlanListItem,
@@ -51,6 +51,7 @@ from app.modules.quality.schemas import (
     UpdateChangeActionPlanRequest,
     UpdateChangeRequest,
 )
+from app.modules.quality.schemas.import_error import QUALITY_IMPORT_ERROR_RESPONSES
 from app.modules.quality.service import quality_import_export as ie_service
 from app.modules.quality.service.change_ledger_export import (
     generate_change_ledger_export_docx,
@@ -454,6 +455,7 @@ async def sync_changes_from_feishu(
     "/changes/import/preview",
     summary="变更导入预览",
     response_model=ApiResponseEnvelope[dict[str, Any]],
+    responses=QUALITY_IMPORT_ERROR_RESPONSES,
 )
 async def preview_change_import(
     file: UploadFile = File(...),
@@ -462,9 +464,7 @@ async def preview_change_import(
     current_user: CurrentUser = None,
 ) -> JSONResponse:
     _require_user(current_user)
-    if not file.filename or not file.filename.endswith((".docx", ".doc")):
-        raise AppException(message="请上传 Word 文件 (.docx)")
-    content = await read_upload_with_limit(file, IMPORT_FILE_MAX_SIZE, "导入文件")
+    content = await read_word_import(file, IMPORT_FILE_MAX_SIZE)
     result = await ie_service.preview_change_import(
         db, content, change_type=change_type
     )
@@ -475,6 +475,7 @@ async def preview_change_import(
     "/changes/import/confirm",
     summary="确认变更导入",
     response_model=ApiResponseEnvelope[dict[str, Any]],
+    responses=QUALITY_IMPORT_ERROR_RESPONSES,
 )
 async def confirm_change_import(
     file: UploadFile = File(...),
@@ -486,9 +487,7 @@ async def confirm_change_import(
 ) -> JSONResponse:
     _require_user(current_user)
     await _require_full_change_page_scope(db, current_user)
-    if not file.filename or not file.filename.endswith((".docx", ".doc")):
-        raise AppException(message="请上传 Word 文件 (.docx)")
-    content = await read_upload_with_limit(file, IMPORT_FILE_MAX_SIZE, "导入文件")
+    content = await read_word_import(file, IMPORT_FILE_MAX_SIZE)
     result = await ie_service.confirm_change_import(
         db, content, skip_duplicates, update_existing, change_type=change_type
     )

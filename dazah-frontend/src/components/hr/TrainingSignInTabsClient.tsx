@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { Tabs, Card, Segmented, Select, Space, Button, App, AutoComplete, Modal, Checkbox, Switch } from 'antd'
 import { FormOutlined, CheckSquareOutlined, BellOutlined, SettingOutlined, BookOutlined, SaveOutlined, AuditOutlined, ToolOutlined, FileAddOutlined, FolderOpenOutlined, RobotOutlined, UserAddOutlined, PaperClipOutlined } from '@ant-design/icons'
@@ -413,7 +414,7 @@ export default function TrainingSignInTabsClient() {
       setLastAutoSaveAt(new Date().toLocaleTimeString('zh-CN', { hour12: false }))
       message.success(`已保存 ${n} 类培训资料`)
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '保存失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '保存失败'))
     } finally {
       setSavingAll(false)
     }
@@ -818,7 +819,7 @@ export default function TrainingSignInTabsClient() {
       const addedCount = merged.length - (session.employee_names || []).length
       message.success(`已拉取 ${addedCount} 位入职一周内的新员工（共 ${merged.length} 人）`)
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '拉取新员工失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '拉取新员工失败'))
     } finally {
       setFetchingNewHires(false)
     }
@@ -878,7 +879,7 @@ export default function TrainingSignInTabsClient() {
       await downloadZip(entries, `${dateStr}-${timeStr}-${contentStr}`)
       message.success(`已打包导出 ${entries.length} 份资料`)
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '导出失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '导出失败'))
     } finally {
       setExportingAll(false)
     }
@@ -1067,11 +1068,11 @@ export default function TrainingSignInTabsClient() {
           const base = curItem?.content_textbook || curItem?.content_and_textbook || ''
           if (base) setSession((prev) => ({ ...prev, topic: base }))
         } catch (err) {
-          message.error((err instanceof Error ? err.message : '') || '标记文件条目已培训失败')
+          message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '标记文件条目已培训失败'))
         }
       }
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '添加到培训台账失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '添加到培训台账失败'))
     } finally {
       setAddingLedger(false)
       setLedgerConfirmOpen(false)

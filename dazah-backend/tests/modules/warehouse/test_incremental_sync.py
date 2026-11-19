@@ -16,6 +16,8 @@ from typing import Any
 from unittest.mock import AsyncMock, patch
 from zoneinfo import ZoneInfo
 
+import pytest
+from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,7 +25,7 @@ from app.modules.warehouse.feishu_material_pages import (
     FEISHU_WAREHOUSE_MATERIAL_PAGES,
     FeishuWarehouseMaterialPage,
 )
-from app.modules.warehouse.models import MaterialPageRow
+from app.modules.warehouse.models import MaterialPageRow, RawMaterialInventory
 from app.modules.warehouse.service import WarehouseService
 
 
@@ -122,6 +124,88 @@ async def test_duplicate_sync_updates_in_place(
     assert len(rows) == 2
     cells_by_id = {row.source_record_id: row.cells for row in rows}
     assert cells_by_id["rec-1"]["物料名称"] == "物料A-改"
+
+
+async def test_repeated_material_sync_updates_only_changed_rows(
+    db_session: AsyncSession,
+) -> None:
+    service = WarehouseService(db_session)
+    page_key = "incr-test-noop"
+    await _create_snapshot(service, page_key, "tbl-noop")
+    snapshot = await service.repo.get_material_page_snapshot(page_key)
+    assert snapshot is not None
+    initial = datetime(2026, 1, 1, tzinfo=UTC)
+    later = initial + timedelta(minutes=10)
+    records = [
+        {"__record_id": "unchanged", "物料名称": "物料A"},
+        {"__record_id": "changed", "物料名称": "物料B"},
+    ]
+    await service.repo.upsert_material_page_rows(
+        snapshot.id,
+        _row_models(snapshot.id, records, now=initial),
+    )
+    await service.repo.upsert_material_page_rows_incremental(
+        snapshot.id,
+        _row_models(snapshot.id, [records[1] | {"物料名称": "新名称"}], now=later),
+    )
+    await service.repo.upsert_material_page_rows(
+        snapshot.id,
+        _row_models(
+            snapshot.id, [records[0], records[1] | {"物料名称": "新名称"}], now=later
+        ),
+    )
+
+    rows = {
+        row.source_record_id: row for row in await _all_page_rows(service, page_key)
+    }
+    assert rows["unchanged"].last_synced_at == initial
+    assert rows["changed"].last_synced_at == later
+    assert rows["changed"].row_order == 2
+
+
+async def test_inventory_batch_does_not_rewrite_identical_snapshots(
+    db_session: AsyncSession,
+) -> None:
+    repo = WarehouseService(db_session).repo
+    initial = datetime(2026, 1, 1, tzinfo=UTC)
+    later = initial + timedelta(minutes=10)
+    data = {
+        "test-inv-unchanged": {"code": "A", "name": "A", "available": 5.0},
+        "test-inv-changed": {"code": "B", "name": "B", "available": 2.0},
+    }
+    await repo.upsert_inventory_snapshots(RawMaterialInventory, data, synced_at=initial)
+    data["test-inv-changed"]["available"] = 6.0
+    await repo.upsert_inventory_snapshots(RawMaterialInventory, data, synced_at=later)
+
+    unchanged = await repo.get_raw_material_by_import_key("test-inv-unchanged")
+    changed = await repo.get_raw_material_by_import_key("test-inv-changed")
+    assert unchanged is not None and unchanged.last_synced_at == initial
+    assert changed is not None and changed.last_synced_at == later
+    assert changed.available == 6.0
+
+
+async def test_full_warehouse_pull_rejects_repeated_cursor(
+    db_session: AsyncSession,
+) -> None:
+    service = WarehouseService(db_session)
+    service.feishu_client = AsyncMock()
+    service._get_material_client = AsyncMock(return_value=service.feishu_client)
+    service.feishu_client.request.return_value = {
+        "items": [{"record_id": "rec-1", "fields": {}}],
+        "has_more": True,
+        "page_token": "again",
+    }
+
+    with pytest.raises(HTTPException) as exc:
+        await service.fetch_feishu_table_records(
+            app_token="app-test",
+            table_id="tbl-test",
+            page_size=100,
+            require_complete=True,
+        )
+
+    assert exc.value.status_code == 502
+    assert service.feishu_client.request.await_count == 2
 
 
 async def test_full_sync_soft_deletes_remote_removed_rows(
@@ -244,7 +328,7 @@ async def test_incremental_fetch_falls_back_without_sort_field(
             "hardware-summary",
             last_synced_at=datetime.now(UTC),
         )
-    full_mock.assert_awaited_once_with("hardware-summary")
+    full_mock.assert_awaited_once_with("hardware-summary", require_complete=True)
 
 
 async def test_incremental_fetch_dual_route_single_page_dedup(
@@ -578,3 +662,52 @@ async def test_sync_incremental_updates_snapshot_total_rows(
     assert refreshed is not None
     assert refreshed.total_rows == 3
     assert response.total == 3
+
+
+
+async def test_local_page_stream_keeps_global_stats_and_scope_across_batches(
+    db_session,
+):
+    from app.platform.identity.data_scope import DepartmentScope
+
+    service = WarehouseService(db_session)
+    page_key = "hardware-101-1-workshop"
+    await _create_snapshot(service, page_key, "tbl-stream-page")
+    snapshot = await service.repo.get_material_page_snapshot(page_key)
+    assert snapshot is not None
+    seeded = [
+        {
+            "__record_id": f"stream-{i}",
+            "物料名称": "螺丝" if i != 299 else "其他",
+            "车间": "　目标车间　" if i % 2 == 0 else "目标车间",
+            "日期": 1_700_000_000_000 + i * 1000,
+            "结存量": 1,
+            "金额": 2,
+            "质量状态": "合格",
+        }
+        for i in range(300)
+    ]
+    seeded.append(
+        {
+            "__record_id": "stream-outside-scope",
+            "车间": "其他车间",
+            "物料名称": "螺丝",
+            "日期": 2_000_000_000_000,
+            "结存量": 1,
+            "金额": 10000,
+        }
+    )
+    await service.repo.upsert_material_page_rows(
+        snapshot.id, _row_models(snapshot.id, seeded)
+    )
+    page = await service.get_local_material_page(
+        page_key,
+        scope=DepartmentScope(department_names={"目标车间"}),
+        keyword="螺丝",
+        page=130,
+        page_size=2,
+    )
+    assert page.total == page.stats["total"] == 299
+    assert page.stats["amount_total"] == 598
+    assert page.stats["qualified_count"] == 299
+    assert [row["__record_id"] for row in page.rows] == ["stream-40", "stream-39"]

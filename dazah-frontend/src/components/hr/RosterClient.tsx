@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useState, useCallback, useEffect } from 'react'
 import { Table, Input, Select, Tag, Tooltip, App } from 'antd'
 import { SearchOutlined, CheckCircleFilled } from '@ant-design/icons'
@@ -46,7 +47,7 @@ export default function RosterClient({
       setEmployees(res.data)
       setTotal(res.meta?.total || 0)
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '加载数据失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '加载数据失败'))
     } finally {
       setLoading(false)
     }
@@ -69,7 +70,7 @@ export default function RosterClient({
           setTotal(res.meta?.total || 0)
         }
       } catch (err) {
-        if (!cancelled) message.error((err instanceof Error ? err.message : '') || '加载数据失败')
+        if (!cancelled) message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '加载数据失败'))
       } finally {
         if (!cancelled) setLoading(false)
       }

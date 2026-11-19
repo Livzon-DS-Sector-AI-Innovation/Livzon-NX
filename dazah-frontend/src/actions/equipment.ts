@@ -3,8 +3,9 @@
 import { getServerApiBaseUrl } from '@/lib/server-api'
 import { revalidatePath } from 'next/cache'
 import { getAuthHeaders } from '@/lib/auth'
-import { ActionRequestError } from '@/lib/server-action-result'
-import { getUserErrorMessage } from '@/lib/user-error'
+import { ActionRequestError, requireActionResponse, serverActionResult } from '@/lib/server-action-result'
+import { getUserErrorMessage, uncertainWriteMessage, UserFacingError } from '@/lib/user-error'
+import type { components } from '@/types/generated/schema'
 import type { InspectionFeishuWorkshopSummary } from '@/types/inspection-feishu'
 import type {
   EquipmentImportArchive,
@@ -385,20 +386,26 @@ export async function consumeMaterials(workOrderId: string, data: MaterialConsum
 
 // ==================== 工单图片 ====================
 export async function uploadWorkOrderImages(workOrderId: string, formData: FormData) {
-  const headers = await getAuthHeaders()
-  delete headers['Content-Type']
-  const result = await fetch(`${API_BASE_URL}/api/v1/equipment/maintenance/work-orders/${workOrderId}/images`, {
-    method: 'POST',
-    headers,
-    body: formData,
-  })
-  if (!result.ok) {
-    const err = await result.json().catch(() => ({}))
-    throw new Error((err as any).message || '上传失败')
-  }
-  revalidatePath('/equipment')
-  const json = await result.json()
-  return json.data
+  return serverActionResult('equipment.workOrder.uploadImages', async () => {
+    const files = formData.getAll('files')
+    if (files.length === 0 || files.some(file => typeof file === 'string' || file.size === 0)) {
+      throw new UserFacingError('请选择非空图片后重新上传')
+    }
+    const headers = await getAuthHeaders()
+    delete headers['Content-Type']
+    const response = await fetch(`${API_BASE_URL}/api/v1/equipment/maintenance/work-orders/${encodeURIComponent(workOrderId)}/images`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    })
+    const limitMessages = {
+      EQUIPMENT_WORK_ORDER_IMAGE_LIMIT: '此工单最多保留 9 张图片，请减少本次上传的图片数量',
+    } satisfies Record<components['schemas']['WorkOrderImageLimitDetail']['error_code'], string>
+    await requireActionResponse(response, { 400: limitMessages })
+    const payload: { data?: unknown } = await response.json()
+    revalidatePath('/equipment')
+    return payload.data
+  }, uncertainWriteMessage('工单图片上传'))
 }
 
 // ==================== 抢单 ====================

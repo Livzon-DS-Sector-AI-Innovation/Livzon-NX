@@ -71,16 +71,18 @@ async def test_inventory_sync_covers_raw_packaging_product_branches() -> None:
     instance.fetch_material_page_from_feishu = AsyncMock(  # type: ignore[method-assign]
         return_value=(page, columns, [row, {"__record_id": "empty"}], {})
     )
-    instance.upsert_raw_material_snapshot = AsyncMock()  # type: ignore[method-assign]
-    instance.upsert_packaging_snapshot = AsyncMock()  # type: ignore[method-assign]
-    instance.upsert_product_snapshot = AsyncMock()  # type: ignore[method-assign]
+    write = AsyncMock()
+    instance.repo.upsert_inventory_snapshots = write
 
     assert await instance._sync_inventory_page("raw-summary") == 1
     assert await instance._sync_inventory_page("packaging-summary") == 1
     assert await instance._sync_inventory_page("product-summary") == 1
-    assert instance.upsert_raw_material_snapshot.await_count == 1
-    assert instance.upsert_packaging_snapshot.await_count == 1
-    assert instance.upsert_product_snapshot.await_count == 1
+    raw, packaging, product = [call.args for call in write.await_args_list]
+    assert raw[0] is warehouse.RawMaterialInventory
+    assert packaging[0] is warehouse.PackagingMaterialInventory
+    assert product[0] is warehouse.ProductInventory
+    assert next(iter(raw[1].values()))["available"] == 12.0
+    assert next(iter(product[1].values()))["remaining_quantity"] == 5.0
     with pytest.raises(ValueError):
         await instance._sync_inventory_page("unknown")
 

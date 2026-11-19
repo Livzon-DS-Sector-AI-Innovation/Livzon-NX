@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useMemo, useState } from 'react'
 import { App, Button, Input, InputNumber, Select, Space, Table, Tooltip, Typography, Upload } from 'antd'
 import { UploadOutlined } from '@ant-design/icons'
@@ -37,7 +38,7 @@ export function EnergyImportClient({ meters, onChanged, initialYear }: { meters:
     try {
       const data = new FormData(); data.set('file', file); data.set('year', String(year)); data.set('start_date', startDate); data.set('end_date', endDate)
       setPreview(await resolveLedgerAction(previewLedgerImport(data))); setDraft(undefined); setMapping({})
-    } catch (cause) { setError(cause instanceof Error ? cause.message : '无法读取文件') }
+    } catch (cause) { setError(getUserErrorMessage(cause instanceof Error ? cause.message : '无法读取文件', '无法读取文件')) }
     finally { setBusy(false) }
   }
 
@@ -45,7 +46,7 @@ export function EnergyImportClient({ meters, onChanged, initialYear }: { meters:
     if (!preview) return
     setBusy(true); setError('')
     try { setDraft(await resolveLedgerAction(prepareLedgerImport(preview.id))); await onChanged(); message.success('原表字段与公式已识别，可直接导入和填写') }
-    catch (cause) { setError(cause instanceof Error ? cause.message : '识别原表字段与公式失败') }
+    catch (cause) { setError(getUserErrorMessage(cause instanceof Error ? cause.message : '识别原表字段与公式失败', '识别原表字段与公式失败')) }
     finally { setBusy(false) }
   }
 
@@ -57,7 +58,7 @@ export function EnergyImportClient({ meters, onChanged, initialYear }: { meters:
     if (!mappings.length || !reason) { setError('请选择至少一个计量点映射并填写导入原因'); return }
     setBusy(true); setError('')
     try { setPreview(await resolveLedgerAction(confirmLedgerImport(preview.id, { mappings, reason }))); await onChanged(); message.success('历史原始数据已导入；重复数据不会重复入账') }
-    catch (cause) { setError(cause instanceof Error ? cause.message : '导入未完成，未覆盖已有数据') }
+    catch (cause) { setError(getUserErrorMessage(cause instanceof Error ? cause.message : '导入未完成，未覆盖已有数据', '导入未完成，未覆盖已有数据')) }
     finally { setBusy(false) }
   }
 

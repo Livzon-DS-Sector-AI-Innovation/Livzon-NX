@@ -6,6 +6,7 @@ import { DeleteOutlined, TeamOutlined, ApartmentOutlined, SearchOutlined } from 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { fetchPersonnelList } from '@/lib/api/equipment-personnel'
 import { deletePersonnel } from '@/actions/equipment-personnel'
+import { getActionErrorMessage, unwrapServerActionResult } from '@/lib/server-action-result'
 import { PersonnelInfo } from './PersonnelInfo'
 import type { EquipmentRole, Personnel } from '@/types/equipment-personnel'
 import type { ColumnsType } from 'antd/es/table'
@@ -50,11 +51,11 @@ export function PersonnelTable({ roles, workshopCode, onAddClick, onRoleClick, o
 
   const handleDelete = async (id: string) => {
     try {
-      await deletePersonnel(id)
+      unwrapServerActionResult(await deletePersonnel(id))
       message.success('人员已移除')
       queryClient.invalidateQueries({ queryKey: ['equipment-personnel'] })
-    } catch {
-      message.error('移除失败')
+    } catch (error) {
+      message.error(getActionErrorMessage(error, '设备人员移除'))
     }
   }
 

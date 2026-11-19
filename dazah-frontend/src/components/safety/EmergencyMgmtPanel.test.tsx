@@ -472,6 +472,39 @@ describe('EmergencyMgmtPanel', () => {
     expect(mocks.createEmergencyPlan).toHaveBeenCalled()
   })
 
+  it.each([
+    ['plans', '新增预案', 'createEmergencyPlan'],
+    ['drills', '新增演练', 'createEmergencyDrill'],
+    ['supplies', '新增物资', 'createEmergencySupply'],
+  ] as const)('%s 创建请求异常时保留当前表单', async (tab, buttonText, action) => {
+    mocks[action].mockRejectedValueOnce(new Error('TypeError: internal request failure'))
+    await renderPanel()
+    const create = Array.from(container.querySelectorAll<HTMLButtonElement>(`[data-tab="${tab}"] button`))
+      .find(button => button.textContent?.includes(buttonText))
+    expect(create).toBeDefined()
+    await act(async () => create?.click())
+    const confirm = container.querySelector<HTMLButtonElement>('[data-modal-open="true"] button[data-modal-ok]')
+    expect(confirm).not.toBeNull()
+    await act(async () => confirm?.click())
+
+    expect(mocks[action]).toHaveBeenCalledOnce()
+    expect(mocks.message.error).toHaveBeenCalledWith('操作未完成，请稍后重试')
+    expect(container.querySelector('[data-modal-open="true"]')).not.toBeNull()
+    expect(mocks.message.success).not.toHaveBeenCalled()
+  })
+
+  it('shows a safe message when the plan attachment cannot be downloaded', async () => {
+    mocks.fetchEmergencyPlanFileBytes.mockRejectedValueOnce(new Error('TypeError: internal file failure'))
+    await renderPanel()
+    const attachment = Array.from(container.querySelectorAll<HTMLButtonElement>('[data-tab="plans"] button'))
+      .find(button => button.textContent?.trim() === PLANS[0].file_name)
+    expect(attachment).toBeDefined()
+    await act(async () => attachment?.click())
+    expect(mocks.fetchEmergencyPlanFileBytes).toHaveBeenCalledWith(PLANS[0].id)
+    expect(mocks.message.error).toHaveBeenCalledWith('操作未完成，请稍后重试')
+    expect(container.textContent).toContain(PLANS[0].file_name)
+  })
+
   it('AI 生成预案入口打开向导（generate 模式）', async () => {
     await renderPanel()
     const plansTab = container.querySelector('[data-tab="plans"]')

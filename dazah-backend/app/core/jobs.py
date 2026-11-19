@@ -35,6 +35,7 @@ async def submit_job(
     *,
     ttl: int = 600,
     status_extra: dict[str, Any] | None = None,
+    public_error_detail: Callable[[Exception], dict[str, str] | None] | None = None,
     **kwargs: Any,
 ) -> str:
     """提交一个异步后台任务，立即返回任务 ID。
@@ -49,6 +50,7 @@ async def submit_job(
         ttl: 任务状态在 Redis 中的存活时间（秒）
         status_extra: 附加初始状态字段（如 owner），随状态一起存储；
             查询方可用于归属校验。默认 None 不附加任何字段。
+        public_error_detail: 将已知业务异常映射为可公开的结构化详情。
         **kwargs: 传给 fn 的参数
 
     Returns:
@@ -78,6 +80,7 @@ async def submit_job(
 
     async def _execute() -> None:
         hb = asyncio.create_task(_heartbeat())
+        status: dict[str, Any]
         try:
             result = await fn(**kwargs)
             status = {"state": "completed", "progress": "完成", "result": result}
@@ -103,6 +106,10 @@ async def submit_job(
                 "progress": f"失败: {str(e) or type(e).__name__}",
                 "result": None,
             }
+            if public_error_detail is not None:
+                detail = public_error_detail(e)
+                if detail:
+                    status["detail"] = detail
         finally:
             hb.cancel()
             await cache_delete(_heartbeat_key(job_id))

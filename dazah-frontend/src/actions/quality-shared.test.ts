@@ -10,10 +10,25 @@ vi.mock('next/headers', () => ({ cookies: mocks.cookies,
   headers: vi.fn(async () => new Headers({ 'X-Dazah-Page-Path': '/quality/capas' })),
 }))
 
-import { actionFetch } from './quality-shared'
+import { actionFetch, qualityImportErrorMessages } from './quality-shared'
 
 describe('quality action request boundary', () => {
   afterEach(() => vi.unstubAllGlobals())
+
+  it('maps structured Word import errors and falls back for an unknown code', async () => {
+    const response = (errorCode: string) => Response.json({
+      message: 'internal parser failure',
+      detail: { error_code: errorCode },
+    }, { status: 422 })
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce(response('QUALITY_IMPORT_INVALID_DOCUMENT'))
+      .mockResolvedValueOnce(response('UNKNOWN')))
+    const preview = () => actionFetch('/api/v1/quality/capas/import/preview',
+      { method: 'POST', body: new FormData() }, qualityImportErrorMessages)
+
+    await expect(preview()).rejects.toThrow('无法解析 Word 文档，请使用有效的 .docx 模板重新上传')
+    await expect(preview()).rejects.toThrow('填写内容有误，请检查后重试')
+  })
 
   it('adds the server auth header and unwraps the API envelope', async () => {
     const fetchMock = vi.fn().mockResolvedValue(

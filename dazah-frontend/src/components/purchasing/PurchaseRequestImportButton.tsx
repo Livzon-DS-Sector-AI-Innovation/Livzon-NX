@@ -1,5 +1,7 @@
 'use client'
 
+import { getActionErrorMessage, unwrapServerActionResult } from '@/lib/server-action-result'
+
 import { useState } from 'react'
 import { App, Button, Modal, Space, Table, Typography, Upload } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
@@ -36,7 +38,7 @@ export function PurchaseRequestImportButton({
     formData.append('file', rawFile)
     setImporting(true)
     try {
-      const response = await importPurchaseRequestTable(formData)
+      const response = unwrapServerActionResult(await importPurchaseRequestTable(formData))
       if (response.code !== 200 || !response.data) {
         message.error(response.message || '采购申请导入失败')
         return
@@ -44,8 +46,8 @@ export function PurchaseRequestImportButton({
       setResult(response.data)
       onSuccess?.(response.data)
       onImported?.()
-    } catch {
-      message.error('采购申请导入失败，请稍后重试')
+    } catch (error) {
+      message.error(getActionErrorMessage(error, '采购申请导入'))
     } finally {
       setImporting(false)
     }

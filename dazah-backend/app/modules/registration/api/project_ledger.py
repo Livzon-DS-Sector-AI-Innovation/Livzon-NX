@@ -29,6 +29,9 @@ from app.modules.registration.schemas.project_ledger import (
     ProjectLedgerWorkbookOverview,
 )
 from app.modules.registration.service.project_ledger import ProjectLedgerWorkbookService
+from app.modules.registration.workbook_error_contract import (
+    workbook_import_errors,
+)
 from app.shared.schemas import ApiResponseEnvelope
 
 logger = logging.getLogger(__name__)
@@ -68,6 +71,7 @@ async def get_project_ledger_workbook(
     "/workbook/import",
     summary="导入申报台账工作簿",
     response_model=ApiResponseEnvelope[ProjectLedgerWorkbookImportResult],
+    responses=workbook_import_errors(),
 )
 async def import_project_ledger_workbook(
     current_user: CurrentUser,

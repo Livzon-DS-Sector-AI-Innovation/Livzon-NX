@@ -17,7 +17,6 @@ READ_ONLY_POST_ROUTES = frozenset(
     {
         "/api/v1/warehouse/analytics/query",
         "/api/v1/identity/admin/permission-simulate",
-        "/api/v1/identity/admin/page-permissions/simulate",
     }
 )
 _AUTH_EVENT_ROUTES = frozenset(
@@ -25,6 +24,8 @@ _AUTH_EVENT_ROUTES = frozenset(
         "/api/v1/identity/auth/local/login",
         "/api/v1/identity/auth/callback",
         "/api/v1/identity/auth/session/logout",
+        "/api/v1/identity/auth/impersonation/start",
+        "/api/v1/identity/auth/impersonation/exit",
     }
 )
 # These existing GET endpoints have business effects, despite their HTTP method.

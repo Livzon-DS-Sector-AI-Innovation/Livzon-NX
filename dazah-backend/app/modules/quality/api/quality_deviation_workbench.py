@@ -88,6 +88,10 @@ async def update_deviation_workbench_settings(
     "/deviation-workbench/attachments",
     summary="上传偏差工作台附件（返回描述符供生成时引用）",
     response_model=ApiResponseEnvelope[DeviationWorkbenchAttachmentIn],
+    responses={
+        413: {"description": "附件超过大小限制"},
+        415: {"description": "附件格式不受支持"},
+    },
 )
 async def upload_deviation_workbench_attachment(
     file: UploadFile = File(...),

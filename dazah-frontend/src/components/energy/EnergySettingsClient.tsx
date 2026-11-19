@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useEffect, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { App, Button, Form, Input, Skeleton, Switch, Table, Tabs } from 'antd'
@@ -27,14 +28,14 @@ export function EnergySettingsClient({ options }: { options?: Options }) {
   async function run(action: () => Promise<unknown>, text: string) {
     setBusy(true); setError('')
     try { await action(); await client.invalidateQueries({ queryKey: ['energy-ledger'] }); message.success(text) }
-    catch (cause) { setError(cause instanceof Error ? cause.message : '操作未完成，请核对后重试') }
+    catch (cause) { setError(getUserErrorMessage(cause instanceof Error ? cause.message : '操作未完成，请核对后重试', '操作未完成，请核对后重试')) }
     finally { setBusy(false) }
   }
 
   if (!options) return <Skeleton active />
   if (!options.is_manager) return <PlatformNotice type="warning" title="需要能源配置管理操作权限" />
   return <>
-    {(error || queryError) && <PlatformNotice type="error" title={error || queryError?.message} description="输入已保留，请核对错误后重试。" action={queryError ? <Button onClick={() => { if (activeTab === 'bot') { void bot.refetch(); void notifications.refetch() } else { void meters.refetch() } }}>重试</Button> : undefined} />}
+    {(error || queryError) && <PlatformNotice type="error" title={getUserErrorMessage(error || queryError?.message)} description="输入已保留，请核对错误后重试。" action={queryError ? <Button onClick={() => { if (activeTab === 'bot') { void bot.refetch(); void notifications.refetch() } else { void meters.refetch() } }}>重试</Button> : undefined} />}
     <Tabs activeKey={activeTab} onChange={key => { setActiveTab(key); setError('') }} items={[
       { key: 'bot', label: '飞书机器人', children: <>
         <PlatformNotice title="原始数据提交后，通过飞书通知提交人" description="通知附带对应日期和原表的填写入口。机器人应用使用能源模块独立凭据，个人消息使用企业人员标识。请先确认应用发消息权限、人员可达及 HTTPS 地址；密钥不会回传。" />

@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import PlatformNotice from '@/components/shared/PlatformNotice'
 
 import { useEffect, useState, useCallback } from 'react'
@@ -98,7 +99,7 @@ export default function ApprovalSettingsListClient() {
       message.success(`${config.department_name} 配置已保存`)
       loadData()
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '保存失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '保存失败'))
     } finally {
       setSavingIds(prev => { const n = new Set(prev); n.delete(key); return n })
     }
@@ -111,7 +112,7 @@ export default function ApprovalSettingsListClient() {
       message.success('删除成功')
       loadData()
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '删除失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '删除失败'))
     }
   }
 

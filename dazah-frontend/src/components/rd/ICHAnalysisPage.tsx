@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useState, useEffect, useCallback } from 'react'
 import { 
   App,
@@ -194,7 +195,7 @@ export function ICHAnalysisPage() {
       message.success('ICH Q3C/Q3D 杂质识别完成，已保存')
       loadHistory(historyPage)
     } catch (error) {
-      message.error(error.message || '分析失败')
+      message.error(getUserErrorMessage(error.message || '分析失败'))
     } finally {
       setLoading(false)
     }

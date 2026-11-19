@@ -5777,6 +5777,40 @@
         "title": "ApiResponseEnvelope[ComplaintOut]",
         "type": "object"
       },
+      "ApiResponseEnvelope_CurrentUserResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/CurrentUserResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[CurrentUserResponse]",
+        "type": "object"
+      },
       "ApiResponseEnvelope_DeclarationProgressEntryResponse_": {
         "properties": {
           "code": {
@@ -7851,6 +7885,108 @@
         "title": "ApiResponseEnvelope[HistoricalDeviationDetail]",
         "type": "object"
       },
+      "ApiResponseEnvelope_ImpersonationExit_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ImpersonationExit"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[ImpersonationExit]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_ImpersonationTargets_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ImpersonationTargets"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[ImpersonationTargets]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_ImpersonationView_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ImpersonationView"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[ImpersonationView]",
+        "type": "object"
+      },
       "ApiResponseEnvelope_ImportFeishuMembersResult_": {
         "properties": {
           "code": {
@@ -8736,6 +8872,40 @@
         "title": "ApiResponseEnvelope[PageTableTabListResponse]",
         "type": "object"
       },
+      "ApiResponseEnvelope_PersonnelAddResult_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/PersonnelAddResult"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[PersonnelAddResult]",
+        "type": "object"
+      },
       "ApiResponseEnvelope_ProductQualityOut_": {
         "properties": {
           "code": {
@@ -8768,6 +8938,40 @@
           "data"
         ],
         "title": "ApiResponseEnvelope[ProductQualityOut]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_ProductResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ProductResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[ProductResponse]",
         "type": "object"
       },
       "ApiResponseEnvelope_ProjectLedgerEntryResponse_": {
@@ -12530,6 +12734,51 @@
         "title": "ApiResponseEnvelope[list[SupplierOut]]",
         "type": "object"
       },
+      "ApiResponseEnvelope_list_Union_ValidationAuditUploadSuccess__ValidationAuditUploadFailure___": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/ValidationAuditUploadSuccess"
+                },
+                {
+                  "$ref": "#/components/schemas/ValidationAuditUploadFailure"
+                }
+              ]
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[list[Union[ValidationAuditUploadSuccess, ValidationAuditUploadFailure]]]",
+        "type": "object"
+      },
       "ApiResponseEnvelope_list_ValidationExecutionListItem__": {
         "properties": {
           "code": {
@@ -12680,6 +12929,44 @@
           "data"
         ],
         "title": "ApiResponseEnvelope[list[ValidationReviewListItem]]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_list_WorkOrderImageResponse__": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/WorkOrderImageResponse"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[list[WorkOrderImageResponse]]",
         "type": "object"
       },
       "ApiResponseEnvelope_list_dict_str__Any___": {
@@ -17280,8 +17567,7 @@
       "Body_upload_files_api_v1_registration_validation_audit_tasks__task_id__files_post": {
         "properties": {
           "file_type": {
-            "title": "File Type",
-            "type": "string"
+            "$ref": "#/components/schemas/FileType"
           },
           "files": {
             "items": {
@@ -30786,6 +31072,278 @@
         "title": "CrossDeptReviewer",
         "type": "object"
       },
+      "CurrentUserResponse": {
+        "properties": {
+          "auth_source": {
+            "default": "feishu",
+            "enum": [
+              "local",
+              "feishu"
+            ],
+            "title": "Auth Source",
+            "type": "string"
+          },
+          "avatar_big": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Big"
+          },
+          "avatar_middle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Middle"
+          },
+          "avatar_thumb": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Thumb"
+          },
+          "avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Url"
+          },
+          "department": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Department"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "employee_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee No"
+          },
+          "en_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "En Name"
+          },
+          "enterprise_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enterprise Email"
+          },
+          "feishu_open_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feishu Open Id"
+          },
+          "feishu_union_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feishu Union Id"
+          },
+          "feishu_user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feishu User Id"
+          },
+          "grant_version": {
+            "default": 0,
+            "title": "Grant Version",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "impersonation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImpersonationView"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mobile": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mobile"
+          },
+          "module_codes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Module Codes",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "page_permission_rollouts": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Page Permission Rollouts",
+            "type": "object"
+          },
+          "page_permissions": {
+            "items": {
+              "$ref": "#/components/schemas/EffectivePageGrantOut"
+            },
+            "title": "Page Permissions",
+            "type": "array"
+          },
+          "permissions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Permissions",
+            "type": "array"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "role": {
+            "default": "user",
+            "enum": [
+              "admin",
+              "user"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "roles": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Roles",
+            "type": "array"
+          },
+          "status": {
+            "default": "active",
+            "enum": [
+              "active",
+              "disabled"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "tenant_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tenant Key"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "CurrentUserResponse",
+        "type": "object"
+      },
       "CustomTrainingDepartmentCreate": {
         "description": "自定义培训部门 - 创建",
         "properties": {
@@ -43691,6 +44249,52 @@
         "title": "EquipmentInspectionFeishuConfigUpdateRequest",
         "type": "object"
       },
+      "EquipmentRoleConflictDetail": {
+        "properties": {
+          "error_code": {
+            "const": "EQUIPMENT_ROLE_CODE_EXISTS",
+            "title": "Error Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "error_code"
+        ],
+        "title": "EquipmentRoleConflictDetail",
+        "type": "object"
+      },
+      "EquipmentRoleConflictResponse": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "integer"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EquipmentRoleConflictDetail"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "EquipmentRoleConflictResponse",
+        "type": "object"
+      },
       "EquipmentUpdate": {
         "description": "更新设备请求",
         "properties": {
@@ -48610,6 +49214,15 @@
         "title": "FermentationUpdate",
         "type": "object"
       },
+      "FileType": {
+        "enum": [
+          "protocol",
+          "report",
+          "attachment"
+        ],
+        "title": "FileType",
+        "type": "string"
+      },
       "FillBlankQuestion": {
         "description": "填空题",
         "properties": {
@@ -52333,6 +52946,52 @@
         "title": "HistoricalDeviationAttachmentOut",
         "type": "object"
       },
+      "HistoricalDeviationBatchErrorDetail": {
+        "properties": {
+          "error_code": {
+            "const": "QUALITY_HISTORICAL_DEVIATION_BATCH_LIMIT",
+            "title": "Error Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "error_code"
+        ],
+        "title": "HistoricalDeviationBatchErrorDetail",
+        "type": "object"
+      },
+      "HistoricalDeviationBatchErrorResponse": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "integer"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HistoricalDeviationBatchErrorDetail"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "HistoricalDeviationBatchErrorResponse",
+        "type": "object"
+      },
       "HistoricalDeviationBatchImportResult": {
         "properties": {
           "failed": {
@@ -52642,6 +53301,67 @@
         "title": "HolidayCreate",
         "type": "object"
       },
+      "HrBusinessErrorCode": {
+        "enum": [
+          "HR_ANNUAL_PLAN_DUPLICATE",
+          "HR_ANNUAL_PLAN_DEPARTMENT_MISSING",
+          "HR_ANNUAL_PLAN_ITEMS_MISSING",
+          "HR_ANNUAL_PLAN_ATTACHMENT_COUNT_EXCEEDED",
+          "HR_POSITION_TRAINING_TEMPLATE_INVALID",
+          "HR_POSITION_TRAINING_DATA_MISSING",
+          "HR_POSITION_TRANSFER_NOT_DRAFT",
+          "HR_POSITION_TRANSFER_NOT_SUBMITTED",
+          "HR_POSITION_TRANSFER_APPROVAL_COMPLETED",
+          "HR_POSITION_TRANSFER_FEISHU_NOT_CONFIGURED",
+          "HR_FEISHU_CONTACT_NOT_CONFIGURED"
+        ],
+        "title": "HrBusinessErrorCode",
+        "type": "string"
+      },
+      "HrBusinessErrorDetail": {
+        "properties": {
+          "error_code": {
+            "$ref": "#/components/schemas/HrBusinessErrorCode"
+          }
+        },
+        "required": [
+          "error_code"
+        ],
+        "title": "HrBusinessErrorDetail",
+        "type": "object"
+      },
+      "HrBusinessErrorResponse": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "integer"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HrBusinessErrorDetail"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "HrBusinessErrorResponse",
+        "type": "object"
+      },
       "HrFeishuFieldMappingItem": {
         "properties": {
           "feishu_field": {
@@ -52664,6 +53384,216 @@
           "system_field"
         ],
         "title": "HrFeishuFieldMappingItem",
+        "type": "object"
+      },
+      "HrSyncJobStatus": {
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HrBusinessErrorDetail"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "progress": {
+            "title": "Progress",
+            "type": "string"
+          },
+          "result": {
+            "title": "Result"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "progress"
+        ],
+        "title": "HrSyncJobStatus",
+        "type": "object"
+      },
+      "HrSyncJobStatusEnvelope": {
+        "description": "Status of an accepted sync, including any known failure of the job itself.",
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/HrSyncJobStatus"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "HrSyncJobStatusEnvelope",
+        "type": "object"
+      },
+      "ImpersonationExit": {
+        "properties": {
+          "administrator_restored": {
+            "title": "Administrator Restored",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "administrator_restored"
+        ],
+        "title": "ImpersonationExit",
+        "type": "object"
+      },
+      "ImpersonationStart": {
+        "properties": {
+          "target_id": {
+            "format": "uuid",
+            "title": "Target Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "target_id"
+        ],
+        "title": "ImpersonationStart",
+        "type": "object"
+      },
+      "ImpersonationTarget": {
+        "properties": {
+          "department": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Department"
+          },
+          "employee_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee No"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/ImpersonationTargetRole"
+            },
+            "title": "Roles",
+            "type": "array"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "username",
+          "employee_no",
+          "department",
+          "roles"
+        ],
+        "title": "ImpersonationTarget",
+        "type": "object"
+      },
+      "ImpersonationTargetRole": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "ImpersonationTargetRole",
+        "type": "object"
+      },
+      "ImpersonationTargets": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ImpersonationTarget"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "ImpersonationTargets",
+        "type": "object"
+      },
+      "ImpersonationView": {
+        "properties": {
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "expires_at"
+        ],
+        "title": "ImpersonationView",
         "type": "object"
       },
       "ImportConfirm": {
@@ -66372,212 +67302,6 @@
         "title": "PagePermissionDefinitionOut",
         "type": "object"
       },
-      "PagePermissionHealthIssueOut": {
-        "properties": {
-          "code": {
-            "enum": [
-              "retired_page",
-              "invalid_department",
-              "missing_module_access",
-              "redundant_user_override"
-            ],
-            "title": "Code",
-            "type": "string"
-          },
-          "detail": {
-            "title": "Detail",
-            "type": "string"
-          },
-          "grant_version": {
-            "minimum": 0.0,
-            "title": "Grant Version",
-            "type": "integer"
-          },
-          "module_code": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Module Code"
-          },
-          "page_key": {
-            "title": "Page Key",
-            "type": "string"
-          },
-          "page_name": {
-            "title": "Page Name",
-            "type": "string"
-          },
-          "remediation": {
-            "enum": [
-              "remove_grant",
-              "prune_departments",
-              "edit"
-            ],
-            "title": "Remediation",
-            "type": "string"
-          },
-          "severity": {
-            "enum": [
-              "warning",
-              "error"
-            ],
-            "title": "Severity",
-            "type": "string"
-          },
-          "target_id": {
-            "format": "uuid",
-            "title": "Target Id",
-            "type": "string"
-          },
-          "target_name": {
-            "title": "Target Name",
-            "type": "string"
-          },
-          "target_type": {
-            "enum": [
-              "role",
-              "user"
-            ],
-            "title": "Target Type",
-            "type": "string"
-          }
-        },
-        "required": [
-          "code",
-          "severity",
-          "target_type",
-          "target_id",
-          "target_name",
-          "page_key",
-          "page_name",
-          "detail",
-          "grant_version",
-          "remediation"
-        ],
-        "title": "PagePermissionHealthIssueOut",
-        "type": "object"
-      },
-      "PagePermissionHealthOut": {
-        "properties": {
-          "checked_at": {
-            "format": "date-time",
-            "title": "Checked At",
-            "type": "string"
-          },
-          "error_count": {
-            "minimum": 0.0,
-            "title": "Error Count",
-            "type": "integer"
-          },
-          "issue_count": {
-            "minimum": 0.0,
-            "title": "Issue Count",
-            "type": "integer"
-          },
-          "issues": {
-            "items": {
-              "$ref": "#/components/schemas/PagePermissionHealthIssueOut"
-            },
-            "title": "Issues",
-            "type": "array"
-          },
-          "warning_count": {
-            "minimum": 0.0,
-            "title": "Warning Count",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "checked_at",
-          "issue_count",
-          "error_count",
-          "warning_count"
-        ],
-        "title": "PagePermissionHealthOut",
-        "type": "object"
-      },
-      "PagePermissionHealthRemediationOut": {
-        "properties": {
-          "fixed": {
-            "default": true,
-            "title": "Fixed",
-            "type": "boolean"
-          },
-          "grant_version": {
-            "minimum": 0.0,
-            "title": "Grant Version",
-            "type": "integer"
-          },
-          "message": {
-            "title": "Message",
-            "type": "string"
-          }
-        },
-        "required": [
-          "grant_version",
-          "message"
-        ],
-        "title": "PagePermissionHealthRemediationOut",
-        "type": "object"
-      },
-      "PagePermissionHealthRemediationRequest": {
-        "properties": {
-          "code": {
-            "enum": [
-              "retired_page",
-              "invalid_department",
-              "redundant_user_override"
-            ],
-            "title": "Code",
-            "type": "string"
-          },
-          "expected_grant_version": {
-            "minimum": 0.0,
-            "title": "Expected Grant Version",
-            "type": "integer"
-          },
-          "page_key": {
-            "maxLength": 255,
-            "minLength": 1,
-            "title": "Page Key",
-            "type": "string"
-          },
-          "reason": {
-            "maxLength": 500,
-            "minLength": 1,
-            "title": "Reason",
-            "type": "string"
-          },
-          "target_id": {
-            "format": "uuid",
-            "title": "Target Id",
-            "type": "string"
-          },
-          "target_type": {
-            "enum": [
-              "role",
-              "user"
-            ],
-            "title": "Target Type",
-            "type": "string"
-          }
-        },
-        "required": [
-          "code",
-          "target_type",
-          "target_id",
-          "page_key",
-          "expected_grant_version",
-          "reason"
-        ],
-        "title": "PagePermissionHealthRemediationRequest",
-        "type": "object"
-      },
       "PagePermissionHistoryActorOut": {
         "properties": {
           "user_id": {
@@ -67017,77 +67741,6 @@
           "reason"
         ],
         "title": "PagePermissionRollbackRequest",
-        "type": "object"
-      },
-      "PagePermissionSimulationOut": {
-        "properties": {
-          "allowed": {
-            "title": "Allowed",
-            "type": "boolean"
-          },
-          "effective": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/EffectivePageGrantOut"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "reason": {
-            "title": "Reason",
-            "type": "string"
-          }
-        },
-        "required": [
-          "allowed",
-          "reason"
-        ],
-        "title": "PagePermissionSimulationOut",
-        "type": "object"
-      },
-      "PagePermissionSimulationRequest": {
-        "properties": {
-          "page_key": {
-            "maxLength": 255,
-            "minLength": 1,
-            "title": "Page Key",
-            "type": "string"
-          },
-          "permission": {
-            "enum": [
-              "access",
-              "query",
-              "operate"
-            ],
-            "title": "Permission",
-            "type": "string"
-          },
-          "sensitive_action": {
-            "anyOf": [
-              {
-                "maxLength": 128,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sensitive Action"
-          },
-          "user_id": {
-            "format": "uuid",
-            "title": "User Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "user_id",
-          "page_key",
-          "permission"
-        ],
-        "title": "PagePermissionSimulationRequest",
         "type": "object"
       },
       "PageTableAttachmentItem": {
@@ -68199,6 +68852,40 @@
           "user_ids"
         ],
         "title": "PersonnelAddRequest",
+        "type": "object"
+      },
+      "PersonnelAddResult": {
+        "description": "添加人员结果",
+        "properties": {
+          "added": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Added",
+            "type": "array"
+          },
+          "errors": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "skipped": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Skipped",
+            "type": "array"
+          }
+        },
+        "required": [
+          "added"
+        ],
+        "title": "PersonnelAddResult",
         "type": "object"
       },
       "PersonnelCategoryAssign": {
@@ -71436,6 +72123,59 @@
         "title": "ProcessStepUpdate",
         "type": "object"
       },
+      "ProcurementErrorCode": {
+        "enum": [
+          "PROCUREMENT_IMPORT_TABLE_INVALID",
+          "PROCUREMENT_SUBMIT_ITEMS_MISSING",
+          "PROCUREMENT_SUBMIT_AMOUNT_MISMATCH"
+        ],
+        "title": "ProcurementErrorCode",
+        "type": "string"
+      },
+      "ProcurementErrorDetail": {
+        "properties": {
+          "error_code": {
+            "$ref": "#/components/schemas/ProcurementErrorCode"
+          }
+        },
+        "required": [
+          "error_code"
+        ],
+        "title": "ProcurementErrorDetail",
+        "type": "object"
+      },
+      "ProcurementErrorResponse": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "integer"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ProcurementErrorDetail"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "ProcurementErrorResponse",
+        "type": "object"
+      },
       "ProductCreate": {
         "properties": {
           "capacity_range": {
@@ -72903,6 +73643,165 @@
           }
         },
         "title": "ProductQualityStandardUpdate",
+        "type": "object"
+      },
+      "ProductResponse": {
+        "properties": {
+          "capacity_range": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "生产批量",
+            "title": "Capacity Range"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "feishu_record_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feishu Record Id"
+          },
+          "feishu_synced_at": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feishu Synced At"
+          },
+          "formulation_code": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "制剂代码",
+            "title": "Formulation Code"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "indication": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "适应症",
+            "title": "Indication"
+          },
+          "major_category": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "产品代码",
+            "title": "Major Category"
+          },
+          "name": {
+            "description": "产品名称",
+            "maxLength": 128,
+            "title": "Name",
+            "type": "string"
+          },
+          "product_type": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "产品剂型",
+            "title": "Product Type"
+          },
+          "spec": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "生产规格",
+            "title": "Spec"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "单位",
+            "title": "Unit"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "name",
+          "id"
+        ],
+        "title": "ProductResponse",
         "type": "object"
       },
       "ProductUpdate": {
@@ -75924,6 +76823,50 @@
         "title": "QualityFeishuTableOption",
         "type": "object"
       },
+      "QualityImportErrorDetail": {
+        "properties": {
+          "error_code": {
+            "const": "QUALITY_IMPORT_INVALID_DOCUMENT",
+            "title": "Error Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "error_code"
+        ],
+        "title": "QualityImportErrorDetail",
+        "type": "object"
+      },
+      "QualityImportErrorResponse": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "integer"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/QualityImportErrorDetail"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Detail"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "detail"
+        ],
+        "title": "QualityImportErrorResponse",
+        "type": "object"
+      },
       "QualityNotificationRecipientItem": {
         "properties": {
           "name": {
@@ -76720,6 +77663,59 @@
           "month"
         ],
         "title": "RefiningBatchCreate",
+        "type": "object"
+      },
+      "RegistrationWorkbookErrorCode": {
+        "enum": [
+          "REGISTRATION_WORKBOOK_UNREADABLE",
+          "REGISTRATION_WORKBOOK_TEMPLATE_MISMATCH",
+          "REGISTRATION_WORKBOOK_CERTIFICATE_NAME_REQUIRED"
+        ],
+        "title": "RegistrationWorkbookErrorCode",
+        "type": "string"
+      },
+      "RegistrationWorkbookErrorDetail": {
+        "properties": {
+          "error_code": {
+            "$ref": "#/components/schemas/RegistrationWorkbookErrorCode"
+          }
+        },
+        "required": [
+          "error_code"
+        ],
+        "title": "RegistrationWorkbookErrorDetail",
+        "type": "object"
+      },
+      "RegistrationWorkbookErrorResponse": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "integer"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RegistrationWorkbookErrorDetail"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "RegistrationWorkbookErrorResponse",
         "type": "object"
       },
       "RegulationRevisionCreate": {
@@ -99135,6 +100131,61 @@
         "title": "UserResponse",
         "type": "object"
       },
+      "ValidationAuditErrorCode": {
+        "enum": [
+          "VALIDATION_AUDIT_FILE_LIMIT",
+          "VALIDATION_AUDIT_NO_FILES",
+          "VALIDATION_AUDIT_FILE_UNREADABLE",
+          "VALIDATION_AUDIT_NO_PARSED_FILES",
+          "VALIDATION_AUDIT_CROSS_FILES_REQUIRED"
+        ],
+        "title": "ValidationAuditErrorCode",
+        "type": "string"
+      },
+      "ValidationAuditErrorDetail": {
+        "properties": {
+          "error_code": {
+            "$ref": "#/components/schemas/ValidationAuditErrorCode"
+          }
+        },
+        "required": [
+          "error_code"
+        ],
+        "title": "ValidationAuditErrorDetail",
+        "type": "object"
+      },
+      "ValidationAuditErrorResponse": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "integer"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ValidationAuditErrorDetail"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "ValidationAuditErrorResponse",
+        "type": "object"
+      },
       "ValidationAuditTaskCreate": {
         "description": "创建审核任务",
         "properties": {
@@ -99245,6 +100296,65 @@
           }
         },
         "title": "ValidationAuditTaskUpdate",
+        "type": "object"
+      },
+      "ValidationAuditUploadFailure": {
+        "properties": {
+          "error": {
+            "title": "Error",
+            "type": "string"
+          },
+          "filename": {
+            "title": "Filename",
+            "type": "string"
+          },
+          "status": {
+            "const": "failed",
+            "title": "Status",
+            "type": "string"
+          },
+          "status_code": {
+            "title": "Status Code",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "status",
+          "filename",
+          "status_code",
+          "error"
+        ],
+        "title": "ValidationAuditUploadFailure",
+        "type": "object"
+      },
+      "ValidationAuditUploadSuccess": {
+        "properties": {
+          "file_id": {
+            "format": "uuid",
+            "title": "File Id",
+            "type": "string"
+          },
+          "file_size": {
+            "title": "File Size",
+            "type": "integer"
+          },
+          "filename": {
+            "title": "Filename",
+            "type": "string"
+          },
+          "status": {
+            "const": "success",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "filename",
+          "file_id",
+          "file_size"
+        ],
+        "title": "ValidationAuditUploadSuccess",
         "type": "object"
       },
       "ValidationDetail": {
@@ -103801,6 +104911,96 @@
         "title": "WorkOrderExternalCostUpdate",
         "type": "object"
       },
+      "WorkOrderImageLimitDetail": {
+        "properties": {
+          "error_code": {
+            "const": "EQUIPMENT_WORK_ORDER_IMAGE_LIMIT",
+            "title": "Error Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "error_code"
+        ],
+        "title": "WorkOrderImageLimitDetail",
+        "type": "object"
+      },
+      "WorkOrderImageResponse": {
+        "description": "工单图片响应",
+        "properties": {
+          "file_name": {
+            "title": "File Name",
+            "type": "string"
+          },
+          "file_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Size"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "uploaded_at": {
+            "format": "date-time",
+            "title": "Uploaded At",
+            "type": "string"
+          },
+          "work_order_id": {
+            "format": "uuid",
+            "title": "Work Order Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "work_order_id",
+          "file_name",
+          "file_size",
+          "uploaded_at"
+        ],
+        "title": "WorkOrderImageResponse",
+        "type": "object"
+      },
+      "WorkOrderImageUploadError": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "integer"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkOrderImageLimitDetail"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "WorkOrderImageUploadError",
+        "type": "object"
+      },
       "WorkOrderTransfer": {
         "description": "转派工单请求（方案E）",
         "properties": {
@@ -104929,6 +106129,35 @@
         "title": "WorkPermitRelationInput",
         "type": "object"
       },
+      "WorkPermitReviewErrorResponse": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "integer"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "WorkPermitReviewErrorResponse",
+        "type": "object"
+      },
       "WorkPermitSettingsResponse": {
         "description": "作业票运行参数（work_permit_settings 键值子集）。",
         "properties": {
@@ -105071,6 +106300,59 @@
           }
         },
         "title": "WorkPermitStatsResponse",
+        "type": "object"
+      },
+      "WorkPermitSubmitErrorCode": {
+        "enum": [
+          "SAFETY_WORK_PERMIT_TIME_INVALID",
+          "SAFETY_WORK_PERMIT_CERTIFICATE_INVALID",
+          "SAFETY_WORK_PERMIT_APPROVER_REQUIRED"
+        ],
+        "title": "WorkPermitSubmitErrorCode",
+        "type": "string"
+      },
+      "WorkPermitSubmitErrorDetail": {
+        "properties": {
+          "error_code": {
+            "$ref": "#/components/schemas/WorkPermitSubmitErrorCode"
+          }
+        },
+        "required": [
+          "error_code"
+        ],
+        "title": "WorkPermitSubmitErrorDetail",
+        "type": "object"
+      },
+      "WorkPermitSubmitErrorResponse": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "integer"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkPermitSubmitErrorDetail"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "WorkPermitSubmitErrorResponse",
         "type": "object"
       },
       "WorkPermitSubmitInput": {
@@ -124124,10 +125406,31 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_WorkOrderImageResponse__"
+                }
               }
             },
             "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkOrderImageUploadError"
+                }
+              }
+            },
+            "description": "文件校验失败，或工单图片总数超限（EQUIPMENT_WORK_ORDER_IMAGE_LIMIT）"
+          },
+          "404": {
+            "description": "工单不存在"
+          },
+          "413": {
+            "description": "图片超过大小限制"
+          },
+          "415": {
+            "description": "图片格式不受支持"
           },
           "422": {
             "content": {
@@ -124879,7 +126182,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_PersonnelAddResult_"
+                }
               }
             },
             "description": "Successful Response"
@@ -125190,6 +126495,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EquipmentRoleConflictResponse"
+                }
+              }
+            },
+            "description": "角色编码已存在（EQUIPMENT_ROLE_CODE_EXISTS）"
           },
           "422": {
             "content": {
@@ -128816,6 +130131,16 @@
             },
             "description": "Successful Response"
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HrBusinessErrorResponse"
+                }
+              }
+            },
+            "description": "可能的业务错误码：HR_ANNUAL_PLAN_DUPLICATE。通用错误可不带业务错误码。"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -128908,6 +130233,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HrBusinessErrorResponse"
+                }
+              }
+            },
+            "description": "可能的业务错误码：HR_ANNUAL_PLAN_DEPARTMENT_MISSING, HR_ANNUAL_PLAN_ITEMS_MISSING。通用错误可不带业务错误码。"
           },
           "422": {
             "content": {
@@ -129280,6 +130615,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HrBusinessErrorResponse"
+                }
+              }
+            },
+            "description": "可能的业务错误码：HR_ANNUAL_PLAN_ATTACHMENT_COUNT_EXCEEDED。通用错误可不带业务错误码。"
           },
           "422": {
             "content": {
@@ -131417,7 +132762,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Get Sync Status Api V1 Hr Departments Sync Status Get"
+                  "$ref": "#/components/schemas/HrSyncJobStatusEnvelope"
                 }
               }
             },
@@ -136792,7 +138137,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Get Members Sync Status Api V1 Hr Hr Settings Hr Members Sync Status Get"
+                  "$ref": "#/components/schemas/HrSyncJobStatusEnvelope"
                 }
               }
             },
@@ -141446,6 +142791,19 @@
             },
             "description": "Successful Response"
           },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HrBusinessErrorResponse"
+                }
+              }
+            },
+            "description": "可能的业务错误码：HR_POSITION_TRAINING_TEMPLATE_INVALID, HR_POSITION_TRAINING_DATA_MISSING。通用错误可不带业务错误码。"
+          },
+          "415": {
+            "description": "旧版 Word 文件格式不受支持"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -142269,6 +143627,16 @@
               }
             },
             "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HrBusinessErrorResponse"
+                }
+              }
+            },
+            "description": "可能的业务错误码：HR_POSITION_TRANSFER_FEISHU_NOT_CONFIGURED。通用错误可不带业务错误码。"
           }
         },
         "summary": "从飞书同步岗位调动数据",
@@ -142512,6 +143880,16 @@
             },
             "description": "Successful Response"
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HrBusinessErrorResponse"
+                }
+              }
+            },
+            "description": "可能的业务错误码：HR_POSITION_TRANSFER_NOT_SUBMITTED, HR_POSITION_TRANSFER_APPROVAL_COMPLETED。通用错误可不带业务错误码。"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -142521,6 +143899,9 @@
               }
             },
             "description": "Validation Error"
+          },
+          "423": {
+            "description": "审批正在处理"
           }
         },
         "summary": "审批通过当前节点",
@@ -142640,6 +144021,16 @@
             },
             "description": "Successful Response"
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HrBusinessErrorResponse"
+                }
+              }
+            },
+            "description": "可能的业务错误码：HR_POSITION_TRANSFER_NOT_SUBMITTED, HR_POSITION_TRANSFER_APPROVAL_COMPLETED。通用错误可不带业务错误码。"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -142709,6 +144100,16 @@
             },
             "description": "Successful Response"
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HrBusinessErrorResponse"
+                }
+              }
+            },
+            "description": "可能的业务错误码：HR_POSITION_TRANSFER_NOT_DRAFT。通用错误可不带业务错误码。"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -142718,6 +144119,9 @@
               }
             },
             "description": "Validation Error"
+          },
+          "423": {
+            "description": "审批正在提交"
           }
         },
         "summary": "提交审批",
@@ -148107,6 +149511,109 @@
         ]
       }
     },
+    "/api/v1/identity/admin/impersonation/targets": {
+      "get": {
+        "operationId": "list_impersonation_targets_api_v1_identity_admin_impersonation_targets_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "keyword",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 100,
+              "title": "Keyword",
+              "type": "string"
+            }
+          },
+          {
+            "description": "按有效角色筛选",
+            "in": "query",
+            "name": "role_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "按有效角色筛选",
+              "title": "Role Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_ImpersonationTargets_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "查询可模拟登录的用户",
+        "tags": [
+          "用户信息",
+          "用户信息"
+        ]
+      }
+    },
     "/api/v1/identity/admin/menus": {
       "get": {
         "operationId": "list_menus_api_v1_identity_admin_menus_get",
@@ -148335,116 +149842,6 @@
         ]
       }
     },
-    "/api/v1/identity/admin/page-permissions/health": {
-      "get": {
-        "operationId": "get_page_permission_health_api_v1_identity_admin_page_permissions_health_get",
-        "parameters": [
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PagePermissionHealthOut"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "检查页面权限健康状态",
-        "tags": [
-          "权限管理",
-          "权限管理"
-        ]
-      }
-    },
-    "/api/v1/identity/admin/page-permissions/health/remediate": {
-      "post": {
-        "operationId": "remediate_page_permission_health_issue_api_v1_identity_admin_page_permissions_health_remediate_post",
-        "parameters": [
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PagePermissionHealthRemediationRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PagePermissionHealthRemediationOut"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "修复页面权限健康问题",
-        "tags": [
-          "权限管理",
-          "权限管理"
-        ]
-      }
-    },
     "/api/v1/identity/admin/page-permissions/modules": {
       "get": {
         "operationId": "list_page_permission_rollouts_api_v1_identity_admin_page_permissions_modules_get",
@@ -148552,66 +149949,6 @@
           }
         },
         "summary": "预览模块页面权限发布影响",
-        "tags": [
-          "权限管理",
-          "权限管理"
-        ]
-      }
-    },
-    "/api/v1/identity/admin/page-permissions/simulate": {
-      "post": {
-        "operationId": "simulate_page_permission_api_v1_identity_admin_page_permissions_simulate_post",
-        "parameters": [
-          {
-            "in": "cookie",
-            "name": "auth_token",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Auth Token"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/PagePermissionSimulationRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PagePermissionSimulationOut"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "按页面和业务动作验证权限",
         "tags": [
           "权限管理",
           "权限管理"
@@ -150731,6 +152068,88 @@
         ]
       }
     },
+    "/api/v1/identity/auth/impersonation/exit": {
+      "post": {
+        "operationId": "exit_browser_impersonation_api_v1_identity_auth_impersonation_exit_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_ImpersonationExit_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "退出模拟登录",
+        "tags": [
+          "认证",
+          "认证"
+        ]
+      }
+    },
+    "/api/v1/identity/auth/impersonation/start": {
+      "post": {
+        "operationId": "start_browser_impersonation_api_v1_identity_auth_impersonation_start_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImpersonationStart"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_ImpersonationView_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "开始模拟登录",
+        "tags": [
+          "认证",
+          "认证"
+        ]
+      }
+    },
     "/api/v1/identity/auth/local/login": {
       "post": {
         "description": "Login with local username/password and return the same JWT used by SSO.",
@@ -151734,7 +153153,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_CurrentUserResponse_"
+                }
               }
             },
             "description": "Successful Response"
@@ -155177,15 +156598,21 @@
             },
             "description": "Successful Response"
           },
+          "413": {
+            "description": "表格文件超过大小限制"
+          },
+          "415": {
+            "description": "表格文件格式不受支持"
+          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ProcurementErrorResponse"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "请求校验失败。业务错误码：PROCUREMENT_IMPORT_TABLE_INVALID"
           }
         },
         "summary": "导入采购申请表格",
@@ -155431,6 +156858,12 @@
             },
             "description": "Successful Response"
           },
+          "404": {
+            "description": "采购申请不存在"
+          },
+          "409": {
+            "description": "当前申请不在该审批步骤"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -155500,6 +156933,12 @@
             },
             "description": "Successful Response"
           },
+          "404": {
+            "description": "采购申请不存在"
+          },
+          "409": {
+            "description": "当前申请不在该审批步骤"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -155560,15 +156999,21 @@
             },
             "description": "Successful Response"
           },
+          "404": {
+            "description": "采购申请不存在"
+          },
+          "409": {
+            "description": "采购申请状态不允许提交"
+          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ProcurementErrorResponse"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "请求校验失败。业务错误码：PROCUREMENT_SUBMIT_ITEMS_MISSING, PROCUREMENT_SUBMIT_AMOUNT_MISMATCH"
           }
         },
         "summary": "提交采购申请",
@@ -155769,15 +157214,21 @@
             },
             "description": "Successful Response"
           },
+          "413": {
+            "description": "表格文件超过大小限制"
+          },
+          "415": {
+            "description": "表格文件格式不受支持"
+          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ProcurementErrorResponse"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "请求校验失败。业务错误码：PROCUREMENT_IMPORT_TABLE_INVALID"
           }
         },
         "summary": "导入供应商清单表格",
@@ -156013,11 +157464,11 @@
           "required": true
         },
         "responses": {
-          "200": {
+          "201": {
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Create Product Api V1 Product Products Post"
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_ProductResponse_"
                 }
               }
             },
@@ -156176,11 +157627,14 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Delete Product Api V1 Product Products  Product Id  Delete"
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_NoneType_"
                 }
               }
             },
             "description": "Successful Response"
+          },
+          "404": {
+            "description": "产品不存在或已被删除"
           },
           "422": {
             "content": {
@@ -156300,11 +157754,14 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Update Product Api V1 Product Products  Product Id  Put"
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_ProductResponse_"
                 }
               }
             },
             "description": "Successful Response"
+          },
+          "404": {
+            "description": "产品不存在或已被删除"
           },
           "422": {
             "content": {
@@ -182972,15 +184429,21 @@
             },
             "description": "Successful Response"
           },
+          "413": {
+            "description": "导入文件超过大小限制"
+          },
+          "415": {
+            "description": "需要 .docx 格式的 Word 文档"
+          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/QualityImportErrorResponse"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "请求校验失败，或 Word 文档无法解析（QUALITY_IMPORT_INVALID_DOCUMENT）"
           }
         },
         "summary": "确认 CAPA 导入",
@@ -183032,15 +184495,21 @@
             },
             "description": "Successful Response"
           },
+          "413": {
+            "description": "导入文件超过大小限制"
+          },
+          "415": {
+            "description": "需要 .docx 格式的 Word 文档"
+          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/QualityImportErrorResponse"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "请求校验失败，或 Word 文档无法解析（QUALITY_IMPORT_INVALID_DOCUMENT）"
           }
         },
         "summary": "CAPA导入预览",
@@ -185664,15 +187133,21 @@
             },
             "description": "Successful Response"
           },
+          "413": {
+            "description": "导入文件超过大小限制"
+          },
+          "415": {
+            "description": "需要 .docx 格式的 Word 文档"
+          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/QualityImportErrorResponse"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "请求校验失败，或 Word 文档无法解析（QUALITY_IMPORT_INVALID_DOCUMENT）"
           }
         },
         "summary": "确认变更导入",
@@ -185736,15 +187211,21 @@
             },
             "description": "Successful Response"
           },
+          "413": {
+            "description": "导入文件超过大小限制"
+          },
+          "415": {
+            "description": "需要 .docx 格式的 Word 文档"
+          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/QualityImportErrorResponse"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "请求校验失败，或 Word 文档无法解析（QUALITY_IMPORT_INVALID_DOCUMENT）"
           }
         },
         "summary": "变更导入预览",
@@ -188236,6 +189717,12 @@
             },
             "description": "Successful Response"
           },
+          "413": {
+            "description": "附件超过大小限制"
+          },
+          "415": {
+            "description": "附件格式不受支持"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -189592,15 +191079,21 @@
             },
             "description": "Successful Response"
           },
+          "413": {
+            "description": "导入文件超过大小限制"
+          },
+          "415": {
+            "description": "需要 .docx 格式的 Word 文档"
+          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/QualityImportErrorResponse"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "请求校验失败，或 Word 文档无法解析（QUALITY_IMPORT_INVALID_DOCUMENT）"
           }
         },
         "summary": "确认偏差导入",
@@ -189652,15 +191145,21 @@
             },
             "description": "Successful Response"
           },
+          "413": {
+            "description": "导入文件超过大小限制"
+          },
+          "415": {
+            "description": "需要 .docx 格式的 Word 文档"
+          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/QualityImportErrorResponse"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "请求校验失败，或 Word 文档无法解析（QUALITY_IMPORT_INVALID_DOCUMENT）"
           }
         },
         "summary": "偏差导入预览",
@@ -195845,6 +197344,16 @@
             },
             "description": "Successful Response"
           },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HistoricalDeviationBatchErrorResponse"
+                }
+              }
+            },
+            "description": "批量附件超限（QUALITY_HISTORICAL_DEVIATION_BATCH_LIMIT）"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -196160,6 +197669,15 @@
               }
             },
             "description": "Successful Response"
+          },
+          "404": {
+            "description": "历史偏差记录不存在"
+          },
+          "413": {
+            "description": "附件超过大小限制"
+          },
+          "415": {
+            "description": "附件格式不受支持"
           },
           "422": {
             "content": {
@@ -216897,15 +218415,27 @@
             },
             "description": "Successful Response"
           },
+          "400": {
+            "description": "上传文件为空或不符合文件校验要求"
+          },
+          "401": {
+            "description": "登录已失效"
+          },
+          "403": {
+            "description": "没有批量导入权限"
+          },
+          "413": {
+            "description": "文件超过上传大小限制"
+          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/RegistrationWorkbookErrorResponse"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "请求校验失败。业务错误码：REGISTRATION_WORKBOOK_UNREADABLE, REGISTRATION_WORKBOOK_TEMPLATE_MISMATCH, REGISTRATION_WORKBOOK_CERTIFICATE_NAME_REQUIRED"
           }
         },
         "summary": "导入整本药政证书台账",
@@ -217484,15 +219014,27 @@
             },
             "description": "Successful Response"
           },
+          "400": {
+            "description": "上传文件为空或不符合文件校验要求"
+          },
+          "401": {
+            "description": "登录已失效"
+          },
+          "403": {
+            "description": "没有批量导入权限"
+          },
+          "413": {
+            "description": "文件超过上传大小限制"
+          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/RegistrationWorkbookErrorResponse"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "请求校验失败。业务错误码：REGISTRATION_WORKBOOK_UNREADABLE, REGISTRATION_WORKBOOK_TEMPLATE_MISMATCH"
           }
         },
         "summary": "导入申报进度工作簿",
@@ -221052,15 +222594,27 @@
             },
             "description": "Successful Response"
           },
+          "400": {
+            "description": "上传文件为空或不符合文件校验要求"
+          },
+          "401": {
+            "description": "登录已失效"
+          },
+          "403": {
+            "description": "没有批量导入权限"
+          },
+          "413": {
+            "description": "文件超过上传大小限制"
+          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/RegistrationWorkbookErrorResponse"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "请求校验失败。业务错误码：REGISTRATION_WORKBOOK_UNREADABLE, REGISTRATION_WORKBOOK_TEMPLATE_MISMATCH"
           }
         },
         "summary": "导入申报台账工作簿",
@@ -222561,6 +224115,16 @@
             },
             "description": "Successful Response"
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationAuditErrorResponse"
+                }
+              }
+            },
+            "description": "可能的业务错误码：VALIDATION_AUDIT_NO_FILES, VALIDATION_AUDIT_NO_PARSED_FILES, VALIDATION_AUDIT_CROSS_FILES_REQUIRED"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -222570,6 +224134,15 @@
               }
             },
             "description": "Validation Error"
+          },
+          "429": {
+            "description": "审核服务限流"
+          },
+          "502": {
+            "description": "审核服务返回异常"
+          },
+          "503": {
+            "description": "审核服务暂时不可用"
           }
         },
         "summary": "执行审核",
@@ -222748,13 +224321,21 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Upload Files Api V1 Registration Validation Audit Tasks  Task Id  Files Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_Union_ValidationAuditUploadSuccess__ValidationAuditUploadFailure___"
                 }
               }
             },
             "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationAuditErrorResponse"
+                }
+              }
+            },
+            "description": "可能的业务错误码：VALIDATION_AUDIT_FILE_LIMIT"
           },
           "422": {
             "content": {
@@ -222896,15 +224477,25 @@
             },
             "description": "Successful Response"
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationAuditErrorResponse"
+                }
+              }
+            },
+            "description": "可能的业务错误码：VALIDATION_AUDIT_NO_FILES"
+          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ValidationAuditErrorResponse"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "可能的业务错误码：VALIDATION_AUDIT_FILE_UNREADABLE"
           }
         },
         "summary": "解析文件",
@@ -225131,6 +226722,12 @@
             },
             "description": "Successful Response"
           },
+          "404": {
+            "description": "工作流不存在"
+          },
+          "409": {
+            "description": "没有待确认的步骤，请刷新工作流"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -225319,6 +226916,12 @@
               }
             },
             "description": "Successful Response"
+          },
+          "404": {
+            "description": "工作流不存在"
+          },
+          "413": {
+            "description": "中试文档超过大小限制"
           },
           "422": {
             "content": {
@@ -254542,15 +256145,27 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "description": "登录已失效"
+          },
+          "403": {
+            "description": "没有操作权限"
+          },
+          "404": {
+            "description": "作业票不存在"
+          },
+          "409": {
+            "description": "作业票或审批节点的当前状态不允许该操作"
+          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/WorkPermitReviewErrorResponse"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "请求校验失败"
           }
         },
         "summary": "审批同意（当前节点签批并推进）",
@@ -254710,15 +256325,27 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "description": "登录已失效"
+          },
+          "403": {
+            "description": "没有操作权限"
+          },
+          "404": {
+            "description": "作业票不存在"
+          },
+          "409": {
+            "description": "作业票或审批节点的当前状态不允许该操作"
+          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/WorkPermitReviewErrorResponse"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "请求校验失败"
           }
         },
         "summary": "审批驳回（整票驳回，修改后重新提交）",
@@ -254917,15 +256544,30 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "description": "登录已失效"
+          },
+          "403": {
+            "description": "没有操作权限"
+          },
+          "404": {
+            "description": "作业票不存在"
+          },
+          "409": {
+            "description": "作业票或审批节点的当前状态不允许该操作"
+          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/WorkPermitSubmitErrorResponse"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "请求校验失败。业务错误码：SAFETY_WORK_PERMIT_TIME_INVALID, SAFETY_WORK_PERMIT_CERTIFICATE_INVALID, SAFETY_WORK_PERMIT_APPROVER_REQUIRED"
+          },
+          "423": {
+            "description": "作业票正在提交"
           }
         },
         "summary": "提交审批（生成逐级审批节点链）",

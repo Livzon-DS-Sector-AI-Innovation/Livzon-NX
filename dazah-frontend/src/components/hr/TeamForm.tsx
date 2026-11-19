@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useEffect } from 'react'
 import { App, Modal, Form, Input } from 'antd'
 import { Team, TeamCreateInput, TeamUpdateInput } from '@/types/hr'
@@ -47,7 +48,7 @@ export default function TeamForm({ open, team, departmentId, onClose, onSuccess 
       onSuccess()
       onClose()
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '操作失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '操作失败'))
     }
   }
 

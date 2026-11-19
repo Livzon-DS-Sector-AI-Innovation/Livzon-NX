@@ -6,6 +6,12 @@
  */
 
 import {
+  getActionErrorMessage,
+  unwrapServerActionResult,
+  type ServerActionResult,
+} from '@/lib/server-action-result'
+
+import {
   WORK_PERMITS_PAGE_KEY,
 } from '@/lib/work-permit-api'
 
@@ -202,7 +208,9 @@ export function WorkPermitDetailView({ initialDetail }: { initialDetail: WorkPer
     const response = await getWorkPermitDetail(detail.id)
     if (response.code === 200 && response.data) {
       setDetail(response.data as unknown as WorkPermitDetailShape)
+      return true
     }
+    return false
   }, [detail.id])
 
   useEffect(() => {
@@ -231,14 +239,39 @@ export function WorkPermitDetailView({ initialDetail }: { initialDetail: WorkPer
     [reload]
   )
 
+  const doReviewAction = useCallback(
+    async <T,>(
+      action: () => Promise<ServerActionResult<T>>,
+      operation: string,
+      onSuccess: (data: T) => void,
+    ) => {
+      setActing(true)
+      let data: T
+      try {
+        data = unwrapServerActionResult(await action())
+      } catch (error) {
+        message.error(getActionErrorMessage(error, operation))
+        return
+      } finally {
+        setActing(false)
+      }
+
+      onSuccess(data)
+      const refreshed = await reload().catch(() => false)
+      if (!refreshed) message.warning('操作已完成，详情未能刷新，请手动刷新页面')
+    },
+    [reload],
+  )
+
   const handleApprove = useCallback(
     (node: NodeItem) => {
-      void doAction(
+      void doReviewAction(
         () => approveWorkPermitNode(detail.id, node.id),
-        `已签批「${node.node_name}」`
+        '作业票审批通过',
+        () => message.success(`已签批「${node.node_name}」`),
       )
     },
-    [detail.id, doAction]
+    [detail.id, doReviewAction]
   )
 
   const handleReject = useCallback(async () => {
@@ -247,13 +280,16 @@ export function WorkPermitDetailView({ initialDetail }: { initialDetail: WorkPer
       message.warning('请填写驳回意见')
       return
     }
-    await doAction(
+    await doReviewAction(
       () => rejectWorkPermitNode(detail.id, rejectOpen.id, rejectOpinion.trim()),
-      '已驳回'
+      '作业票驳回',
+      () => {
+        message.success('已驳回')
+        setRejectOpen(null)
+        setRejectOpinion('')
+      },
     )
-    setRejectOpen(null)
-    setRejectOpinion('')
-  }, [rejectOpen, rejectOpinion, detail.id, doAction])
+  }, [rejectOpen, rejectOpinion, detail.id, doReviewAction])
 
   const handleReassign = useCallback(async () => {
     if (!reassignNode || !reassignUserId) {
@@ -892,39 +928,35 @@ export function WorkPermitDetailView({ initialDetail }: { initialDetail: WorkPer
             (node) => !assignments[node.key] && !defaultsMap[node.key],
           ),
         }}
-        onOk={async () => {
-          setActing(true)
-          const response = await submitWorkPermit(
+        onOk={() => doReviewAction(
+          () => submitWorkPermit(
             detail.id,
             activeNodeTemplates.map((node) => ({
               node_key: node.key,
               approver_user_id:
                 assignments[node.key] ?? defaultsMap[node.key] ?? null,
             })),
-          )
-          setActing(false)
-          if (response.code !== 200) {
-            message.error(response.message ?? '提交失败')
-            return
-          }
-          message.success('已提交审批')
-          setSubmitOpen(false)
-          const warnings = response.data?.warnings ?? []
-          if (warnings.length > 0) {
-            Modal.warning({
-              title: '已提交，但人员证件存在以下提示',
-              width: 520,
-              content: (
-                <ul style={{ paddingLeft: 18, margin: '8px 0 0' }}>
-                  {warnings.map((item) => (
-                    <li key={item} style={{ fontSize: 13 }}>{item}</li>
-                  ))}
-                </ul>
-              ),
-            })
-          }
-          await reload()
-        }}
+          ),
+          '作业票提交',
+          (data) => {
+            message.success('已提交审批')
+            setSubmitOpen(false)
+            const warnings = data?.warnings ?? []
+            if (warnings.length > 0) {
+              Modal.warning({
+                title: '已提交，但人员证件存在以下提示',
+                width: 520,
+                content: (
+                  <ul style={{ paddingLeft: 18, margin: '8px 0 0' }}>
+                    {warnings.map((item) => (
+                      <li key={item} style={{ fontSize: 13 }}>{item}</li>
+                    ))}
+                  </ul>
+                ),
+              })
+            }
+          },
+        )}
       >
         <Typography.Paragraph type="secondary">
           按「{permitTypeLabel(detail.permit_type)}

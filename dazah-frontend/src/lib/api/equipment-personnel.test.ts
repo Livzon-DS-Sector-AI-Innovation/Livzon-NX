@@ -20,6 +20,7 @@ function lastUrl(fetchMock: ReturnType<typeof vi.fn>): string {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  vi.clearAllMocks()
 })
 
 describe('equipment-personnel workshop scoping', () => {
@@ -88,9 +89,23 @@ describe('equipment-personnel actions', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     const { createRole } = await import('@/actions/equipment-personnel')
-    await createRole({ name: '维修工' } as never)
+    await expect(createRole({ name: '维修工', code: 'fixture' })).resolves.toEqual({ ok: true, data: { id: 'r-1' } })
 
     // 人员配置页收敛为真实路由后，写操作必须按页面路由失效缓存
     expect(revalidatePathSpy).toHaveBeenCalledWith('/equipment/personnel', 'page')
+  })
+
+  it.each([
+    [409, 'EQUIPMENT_ROLE_CODE_EXISTS', '角色编码已存在，请换一个编码后重试'],
+    [409, 'UNKNOWN', '数据已发生变化，请刷新后重试'],
+    [403, 'EQUIPMENT_ROLE_CODE_EXISTS', '没有执行此操作的权限，请联系管理员'],
+    [422, null, '填写内容有误，请检查后重试'],
+  ])('uses the shared role-write feedback for HTTP %i', async (status, code, message) => {
+    vi.stubGlobal('fetch', vi.fn(() => jsonResponse({
+      message: '上游错误详情', detail: code ? { error_code: code } : null,
+    }, status)))
+    const { createRole } = await import('@/actions/equipment-personnel')
+    await expect(createRole({ name: '维修工', code: 'fixture' })).resolves.toEqual({ ok: false, message })
+    expect(revalidatePathSpy).not.toHaveBeenCalled()
   })
 })

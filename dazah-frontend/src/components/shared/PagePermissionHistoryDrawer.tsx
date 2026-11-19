@@ -1,5 +1,6 @@
 "use client"
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useEffect, useRef, useState } from "react"
 import { App, Button, DatePicker, Drawer, Empty, Input, Select, Space, Table, Tag, Typography } from "antd"
 import Alert from "@/components/shared/PlatformNotice"
@@ -136,7 +137,7 @@ export function PagePermissionHistoryDrawer({ targetType, targetId, targetName,
         setIsTruncated(Boolean(next.is_truncated))
       }
     } catch (error) {
-      if (version === loadVersion.current) message.error(error instanceof Error ? error.message : "授权历史加载失败")
+      if (version === loadVersion.current) message.error(getUserErrorMessage(error instanceof Error ? error.message : "授权历史加载失败"))
     } finally {
       if (version === loadVersion.current) setLoading(false)
     }
@@ -169,7 +170,7 @@ export function PagePermissionHistoryDrawer({ targetType, targetId, targetName,
       await onRolledBack()
       onClose()
     } catch (error) {
-      if (version === loadVersion.current) message.error(error instanceof Error ? error.message : "授权回滚失败")
+      if (version === loadVersion.current) message.error(getUserErrorMessage(error instanceof Error ? error.message : "授权回滚失败"))
       throw error
     } finally {
       if (version === loadVersion.current) setRollingBack(undefined)
@@ -189,7 +190,7 @@ export function PagePermissionHistoryDrawer({ targetType, targetId, targetName,
         content: <RollbackPreview preview={preview} />, okText: "确认回滚", cancelText: "返回历史",
         onOk: () => rollback(item, idempotencyKey) })
     } catch (error) {
-      message.error(error instanceof Error ? error.message : "回滚影响预演失败")
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : "回滚影响预演失败"))
     } finally { setPreviewing(undefined) }
   }
 
@@ -202,7 +203,7 @@ export function PagePermissionHistoryDrawer({ targetType, targetId, targetName,
       downloadCsv(result.filename, result.content)
       message.success("授权历史已导出")
     } catch (error) {
-      message.error(error instanceof Error ? error.message : "授权历史导出失败")
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : "授权历史导出失败"))
     } finally { setExporting(false) }
   }
 

@@ -1,3 +1,4 @@
+import { getUserErrorMessage } from '@/lib/user-error'
 import { Space } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
 
@@ -28,7 +29,7 @@ export default async function RegistrationCertificateManagementPage() {
         type="error"
         showIcon
         title="药政证书台账加载失败"
-        description={error instanceof Error ? error.message : '药政证书台账加载失败'}
+        description={getUserErrorMessage(error instanceof Error ? error.message : '药政证书台账加载失败', '药政证书台账加载失败')}
       />
     )
   }

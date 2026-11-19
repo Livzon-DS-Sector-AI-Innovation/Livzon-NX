@@ -74,13 +74,22 @@ test.describe('页面最小授权', () => {
         const match = params.get('keyword') === 'late-account@example.test'
         await route.fulfill({ json: { code: 200, data: {
           total: match ? 1 : 501,
-          items: [{ id: match ? 'user-501' : 'user-1', name: match ? '后页用户' : '首批用户', roles: [] }],
+          items: [{ id: match ? 'user-501' : 'user-1', name: match ? '后页用户' : '首批用户', roles: match ? [] : [
+            { id: 'first-role', name: '物料QA', code: 'material_qa', is_system: false },
+            { id: 'second-role', name: '体系QA', code: 'system_qa', is_system: false },
+          ] }],
         } } })
       })
       await page.goto('/settings?tab=permissions')
       await page.getByRole('button', { name: '用户角色', exact: true }).click()
       await expect(page.locator('html')).toHaveAttribute('data-theme', appearance)
-      await expect(page.getByRole('row', { name: /首批用户/ })).toBeVisible()
+      const firstRow = page.getByRole('row', { name: /首批用户/ })
+      await expect(firstRow).toBeVisible()
+      await expect(page.getByText('为用户分配角色，模块入口随有效页面权限自动生效。', { exact: true })).toHaveCount(0)
+      await expect(firstRow.getByText('物料QA', { exact: true })).toBeVisible()
+      await expect(firstRow.getByText('体系QA', { exact: true })).toHaveCount(0)
+      await firstRow.getByRole('button', { name: '更多（1）' }).hover()
+      await expect(page.getByRole('tooltip')).toHaveText('体系QA')
 
       const search = page.getByPlaceholder('按姓名、部门、账号、邮箱、手机号或工号搜索')
       await search.fill('late-account@example.test')
@@ -336,31 +345,22 @@ test.describe('页面最小授权', () => {
   })
 
   for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }]) {
-    test(`有效权限只读展示自动模块入口 ${viewport.width}`, async ({ context, page }, testInfo) => {
+    test(`用户角色操作列仅提供分配角色 ${viewport.width}`, async ({ context, page }) => {
       await page.setViewportSize(viewport)
       const appearance = viewport.width === 390 ? 'light' : 'dark'
       await page.addInitScript((mode) => localStorage.setItem('dazah-appearance', mode), appearance)
       await context.addCookies([{ name: 'auth_token', value: 'effective-admin', url: 'http://127.0.0.1:3200' }])
       await page.goto('/system/user-roles')
-      await expect(page.getByText('为用户分配角色，模块入口随有效页面权限自动生效。', { exact: true })).toBeVisible()
-      await expect(page.getByRole('button', { name: /模块访问$/ })).toHaveCount(0)
-      await page.getByRole('button', { name: /有效权限$/ }).click()
-      const drawer = page.getByRole('dialog')
-      await expect(drawer.getByText('已开通 1 个模块', { exact: true })).toBeVisible()
+      await expect(page.getByRole('heading', { name: '用户角色', exact: true })).toBeVisible()
+      await expect(page.getByText('为用户分配角色，模块入口随有效页面权限自动生效。', { exact: true })).toHaveCount(0)
       await expect(page.locator('html')).toHaveAttribute('data-theme', appearance)
-      await expect(drawer.getByRole('button', { name: '了解访问规则' })).toHaveCount(0)
-      await expect(drawer.getByRole('textbox', { name: '搜索模块' })).toBeVisible()
-      const hrRow = drawer.getByRole('row').filter({ hasText: '人事管理' })
-      await expect(hrRow.getByText('自动开通', { exact: true })).toBeVisible()
-      await hrRow.getByRole('button', { name: '展开行' }).click()
-      await expect(drawer.getByText('员工查看角色', { exact: true })).toBeVisible()
-      const pageRow = await drawer.getByRole('row').filter({ hasText: '员工管理' }).last().boundingBox()
-      const nextModuleRow = await drawer.getByRole('row').filter({ hasText: '仓储管理' }).boundingBox()
-      expect(pageRow && nextModuleRow && pageRow.y + pageRow.height <= nextModuleRow.y).toBe(true)
-      await expect(drawer.getByRole('checkbox')).toHaveCount(0)
-      await expect(drawer.getByRole('button', { name: /保存/ })).toHaveCount(0)
-      await expect(drawer).toHaveCSS('width', viewport.width === 390 ? '390px' : '560px')
-      await page.screenshot({ path: testInfo.outputPath('effective-permissions.png'), fullPage: true })
+      const row = page.getByRole('row', { name: /权限测试员工/ })
+      await expect(row.getByRole('button')).toHaveText(['分配角色'])
+      const assign = row.getByRole('button', { name: /分配角色$/ })
+      await expect(assign).toBeInViewport()
+      await assign.click()
+      const drawer = page.getByRole('dialog', { name: /分配角色.*权限测试员工/ })
+      await expect(drawer.getByRole('checkbox', { name: /员工查看角色/ })).toBeChecked()
     })
   }
 

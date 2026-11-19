@@ -35,7 +35,7 @@ from app.modules.quality.api.deps import (
 from app.modules.quality.api.deps import (
     resolve_quality_list_scope as _resolve_quality_list_scope,
 )
-from app.modules.quality.api.uploads import read_upload_with_limit
+from app.modules.quality.api.uploads import read_word_import
 from app.modules.quality.schemas import (
     CapaApprovalRequest,
     CapaAutoFillFromDeviation,
@@ -53,6 +53,7 @@ from app.modules.quality.schemas import (
     UpdateCapaPlanTrackRequest,
     UpdateCapaRequest,
 )
+from app.modules.quality.schemas.import_error import QUALITY_IMPORT_ERROR_RESPONSES
 from app.modules.quality.service import quality_import_export as ie_service
 from app.modules.quality.service.capa_ledger_export import (
     generate_capa_ledger_export_docx,
@@ -594,6 +595,7 @@ async def sync_capa_plan_tracks_from_feishu(
     "/capas/import/preview",
     summary="CAPA导入预览",
     response_model=ApiResponseEnvelope[dict[str, Any]],
+    responses=QUALITY_IMPORT_ERROR_RESPONSES,
 )
 async def preview_capa_import(
     file: UploadFile = File(...),
@@ -601,9 +603,7 @@ async def preview_capa_import(
     current_user: CurrentUser = None,
 ) -> JSONResponse:
     _require_user(current_user)
-    if not file.filename or not file.filename.endswith((".docx", ".doc")):
-        raise AppException(message="请上传 Word 文件 (.docx)")
-    content = await read_upload_with_limit(file, IMPORT_FILE_MAX_SIZE, "导入文件")
+    content = await read_word_import(file, IMPORT_FILE_MAX_SIZE)
     result = await ie_service.preview_capa_import(db, content)
     return success_response(data=result)
 
@@ -612,6 +612,7 @@ async def preview_capa_import(
     "/capas/import/confirm",
     summary="确认 CAPA 导入",
     response_model=ApiResponseEnvelope[dict[str, Any]],
+    responses=QUALITY_IMPORT_ERROR_RESPONSES,
 )
 async def confirm_capa_import(
     file: UploadFile = File(...),
@@ -622,9 +623,7 @@ async def confirm_capa_import(
 ) -> JSONResponse:
     _require_user(current_user)
     await _require_full_capa_page_scope(db, current_user)
-    if not file.filename or not file.filename.endswith((".docx", ".doc")):
-        raise AppException(message="请上传 Word 文件 (.docx)")
-    content = await read_upload_with_limit(file, IMPORT_FILE_MAX_SIZE, "导入文件")
+    content = await read_word_import(file, IMPORT_FILE_MAX_SIZE)
     result = await ie_service.confirm_capa_import(
         db, content, skip_duplicates, update_existing
     )

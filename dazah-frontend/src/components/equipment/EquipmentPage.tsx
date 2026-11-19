@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useEffect, useCallback, useRef, useState } from 'react'
 import { App, ConfigProvider, Tabs, Button } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
@@ -76,7 +77,7 @@ export function EquipmentPage({
       await fetchEquipmentQrcodePdf(workshopCode)
       message.success('设备报修码 PDF 已开始下载，打印覆膜后张贴到设备')
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '设备码导出失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '设备码导出失败'))
     } finally {
       setQrcodeExporting(false)
     }

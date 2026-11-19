@@ -38,3 +38,28 @@ it("passes manual input to the caller and disables both input methods when reque
   expect(input.disabled).toBe(true)
   expect(container.querySelector<HTMLButtonElement>('button[aria-label="快捷授权调整原因"]')?.disabled).toBe(true)
 })
+
+it("opens the preset menu in the trigger's root and returns focus to the reason input", async () => {
+  const host = document.createElement("div")
+  document.body.append(host)
+  const shadowRoot = host.attachShadow({ mode: "open" })
+  shadowRoot.append(container)
+  const onChange = vi.fn()
+  try {
+    await act(async () => root.render(<AuthorizationReasonInput value="" onChange={onChange} presets={presets} />))
+
+    const trigger = container.querySelector<HTMLButtonElement>('button[aria-label="快捷授权调整原因"]')
+    expect(trigger).not.toBeNull()
+    await act(async () => trigger?.click())
+
+    const preset = shadowRoot.querySelector<HTMLElement>('[role="menuitem"]')
+    expect(preset?.textContent).toBe(presets[0])
+    await act(async () => preset?.click())
+
+    expect(onChange).toHaveBeenCalledExactlyOnceWith(presets[0])
+    expect(shadowRoot.activeElement).toBe(container.querySelector("input"))
+  } finally {
+    document.body.append(container)
+    host.remove()
+  }
+})

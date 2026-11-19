@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useEffect, useState } from 'react'
 import { App, Button, Input, InputNumber, Modal, Space, Spin, Tag, Upload } from 'antd'
 import {
@@ -135,7 +136,7 @@ export default function OralExamAiModal({
         setFiles(resolved)
       })
       .catch((err) => {
-        message.error((err instanceof Error ? err.message : '') || '解析文件内容失败')
+        message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '解析文件内容失败'))
         setFiles(names.map((name) => ({ name, code: null, matched: false, attachmentCount: 0 })))
       })
       .finally(() => setResolving(false))
@@ -174,7 +175,7 @@ export default function OralExamAiModal({
       setQuestions(qs)
       message.success(`已生成 ${qs.length} 道口试问答题`)
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || 'AI 出题失败，请重试')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || 'AI 出题失败，请重试'))
     } finally {
       setGenerating(false)
     }

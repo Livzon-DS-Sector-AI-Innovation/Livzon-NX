@@ -136,7 +136,16 @@ async def test_transcribe_maps_fields_and_recalculates_critical(db_session) -> N
 
 
 @pytest.mark.asyncio
-async def test_transcribe_is_idempotent_and_skips_unchanged(db_session) -> None:
+async def test_transcribe_is_idempotent_and_skips_unchanged(
+    db_session, monkeypatch
+) -> None:
+    from app.modules.safety.service import (
+        special_operation_report,
+        special_operation_transcription,
+    )
+
+    monkeypatch.setattr(special_operation_transcription, "_TRANSCRIPTION_BATCH_SIZE", 1)
+    monkeypatch.setattr(special_operation_report, "_CRITICAL_BATCH_SIZE", 1)
     await _seed(db_session)
     try:
         first = await sync_special_operation_ledger(db_session)

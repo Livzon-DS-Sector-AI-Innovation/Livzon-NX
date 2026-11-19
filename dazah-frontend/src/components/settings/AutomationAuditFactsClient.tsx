@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useCallback, useEffect, useState } from 'react'
 import { App, Button, Descriptions, Drawer, Empty, Space, Table, Tabs, Tag, Timeline, Typography } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
@@ -54,7 +55,7 @@ export default function AutomationAuditFactsClient() {
       if (activeTab === 'definitions') setDefinitions([])
       else setRuns([])
       setTotal(0)
-      setLoadError(error instanceof Error ? error.message : '加载自动化记录失败')
+      setLoadError(getUserErrorMessage(error instanceof Error ? error.message : '加载自动化记录失败', '加载自动化记录失败'))
     } finally {
       setLoading(false)
     }
@@ -72,7 +73,7 @@ export default function AutomationAuditFactsClient() {
     try {
       setVersions(await fetchLivzonTaskVersions(item.id))
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '加载版本历史失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '加载版本历史失败'))
     } finally {
       setDetailLoading(false)
     }
@@ -84,7 +85,7 @@ export default function AutomationAuditFactsClient() {
     try {
       setSelectedRun(await fetchLivzonTaskRun(item.id))
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '加载运行详情失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '加载运行详情失败'))
     } finally {
       setDetailLoading(false)
     }

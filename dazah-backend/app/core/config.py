@@ -207,8 +207,8 @@ class Settings(BaseSettings):
     # 缓存层故障自动降级到原链路，关闭后等同原行为。
     # 平台级飞书附件字节缓存（质量/安全等模块共用；历史命名带 QUALITY 前缀）
     QUALITY_ATTACHMENT_CACHE_ENABLED: bool = True
-    QUALITY_ATTACHMENT_CACHE_DIR: str = "./data/feishu-attachment-cache"
-    QUALITY_ATTACHMENT_CACHE_MAX_MEMORY_MB: int = 500
+    QUALITY_ATTACHMENT_CACHE_DIR: str = "./storage/feishu-attachment-cache"
+    QUALITY_ATTACHMENT_CACHE_MAX_MEMORY_MB: int = 64
     QUALITY_ATTACHMENT_CACHE_MAX_DISK_MB: int = 10240
     QUALITY_ATTACHMENT_CACHE_TTL_SECONDS: int = 7200
 

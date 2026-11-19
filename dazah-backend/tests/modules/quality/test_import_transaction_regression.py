@@ -70,7 +70,9 @@ async def test_change_import_rejects_overlong_code_and_accepts_long_object(
                 files={"file": ("import.docx", b"invalid document")},
             )
             assert malformed.status_code == 422
-            assert "有效的 .docx" in malformed.json()["detail"]
+            assert malformed.json()["detail"] == {
+                "error_code": "QUALITY_IMPORT_INVALID_DOCUMENT"
+            }
             preview = await client.post(
                 "/api/v1/quality/changes/import/preview",
                 files={"file": ("import.docx", document)},

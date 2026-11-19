@@ -915,6 +915,7 @@ async def get_my_access_scope(
 @router.post("/tools/execute")
 async def execute_tool(
     payload: AgentToolExecuteRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     authorization: str | None = Header(default=None),
     settings: Settings = Depends(get_settings),
@@ -926,6 +927,7 @@ async def execute_tool(
         user_id=payload.subject.user_id, tenant_id=payload.subject.tenant_id,
         source=payload.subject.source,
         external_binding_id=payload.subject.external_binding_id,
+        request=request,
     )
     result = await AgentService(settings).execute_tool(db, request=payload)
     return success_response(data=result.model_dump(mode="json"))
@@ -1421,6 +1423,7 @@ async def search_tools(
         user_id=payload.subject.user_id, tenant_id=payload.subject.tenant_id,
         source=payload.subject.source,
         external_binding_id=payload.subject.external_binding_id,
+        request=request,
     )
     started_at = time.monotonic()
     result = await ToolCatalogService().search(db, payload)
@@ -1477,6 +1480,7 @@ async def search_tools(
     "/tools/{operation}", response_model=ApiResponseEnvelope[AgentToolCatalogEntry]
 )
 async def describe_tool(
+    request: Request,
     operation: str,
     subject_user_id: uuid.UUID,
     subject_tenant_id: str,
@@ -1490,6 +1494,7 @@ async def describe_tool(
     await require_agent_delegation(
         db, settings, x_dazah_delegation,
         user_id=subject_user_id, tenant_id=subject_tenant_id,
+        request=request,
     )
     result = await ToolCatalogService().describe(
         db,
@@ -1709,6 +1714,7 @@ async def cancel_confirmation(
 async def resolve_confirmation_from_gateway(
     confirmation_id: uuid.UUID,
     payload: AgentConfirmationResolveRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     authorization: str | None = Header(default=None),
     settings: Settings = Depends(get_settings),
@@ -1720,6 +1726,7 @@ async def resolve_confirmation_from_gateway(
         user_id=payload.subject.user_id, tenant_id=payload.subject.tenant_id,
         source=payload.subject.source,
         external_binding_id=payload.subject.external_binding_id,
+        request=request,
     )
     service = AgentService(settings)
     if payload.choice == "reject":

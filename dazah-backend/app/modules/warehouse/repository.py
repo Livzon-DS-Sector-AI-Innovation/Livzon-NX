@@ -1,14 +1,20 @@
 """Warehouse database queries live here."""
 
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Sequence
 from datetime import datetime
 from typing import Any
 from uuid import UUID
 
 from sqlalchemy import (
+    ARRAY,
     BigInteger,
+    Double,
+    Integer,
     Numeric,
+    String,
+    all_,
     asc,
+    bindparam,
     case,
     cast,
     delete,
@@ -17,6 +23,7 @@ from sqlalchemy import (
     select,
     update,
 )
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.warehouse.inspection_progress import (
@@ -43,6 +50,11 @@ from app.modules.warehouse.models import (
     PackagingMaterialInventory,
     ProductInventory,
     RawMaterialInventory,
+)
+
+_SYNC_BATCH_SIZE = 500
+InventorySnapshotModel = (
+    RawMaterialInventory | PackagingMaterialInventory | ProductInventory
 )
 
 
@@ -134,6 +146,66 @@ class WarehouseRepository:
             select(ProductInventory).where(ProductInventory.import_key == import_key)
         )
         return result.scalar_one_or_none()
+
+    async def upsert_inventory_snapshots(
+        self,
+        model: type[InventorySnapshotModel],
+        rows: dict[str, dict[str, object]],
+        *,
+        synced_at: datetime,
+    ) -> None:
+        """按导入键批量查差异，跳过无变化行；冲突时只写真实变更。"""
+        keys = list(rows)
+        for offset in range(0, len(keys), _SYNC_BATCH_SIZE):
+            batch_keys = keys[offset : offset + _SYNC_BATCH_SIZE]
+            business_fields = tuple(rows[batch_keys[0]])
+            existing = await self.session.execute(
+                select(
+                    model.import_key,
+                    model.is_deleted,
+                    *(getattr(model, field) for field in business_fields),
+                ).where(model.import_key.in_(batch_keys))
+            )
+            by_key = {row["import_key"]: row for row in existing.mappings()}
+            changed = []
+            for key in batch_keys:
+                payload = rows[key]
+                current = by_key.get(key)
+                if (
+                    current is not None
+                    and not current["is_deleted"]
+                    and all(current[field] == value for field, value in payload.items())
+                ):
+                    continue
+                changed.append(
+                    {
+                        **payload,
+                        "import_key": key,
+                        "is_deleted": False,
+                        "last_synced_at": synced_at,
+                    }
+                )
+            if not changed:
+                continue
+            statement = insert(model).values(changed)
+            columns = statement.table.c
+            updates = {
+                field: statement.excluded[field]
+                for field in (*business_fields, "is_deleted", "last_synced_at")
+            }
+            await self.session.execute(
+                statement.on_conflict_do_update(
+                    index_elements=[model.import_key],
+                    set_={**updates, "updated_at": func.now()},
+                    where=or_(
+                        model.is_deleted.is_(True),
+                        *(
+                            columns[field].is_distinct_from(statement.excluded[field])
+                            for field in business_fields
+                        ),
+                    ),
+                )
+            )
 
     async def get_active_feishu_config(self) -> WarehouseFeishuConfig | None:
         result = await self.session.execute(
@@ -701,94 +773,83 @@ class WarehouseRepository:
 
     async def upsert_material_page_rows(
         self,
-        snapshot_id: Any,
+        snapshot_id: UUID,
         rows: Sequence[MaterialPageRow],
         *,
         page_key: str | None = None,
         record_meta: dict[str, dict[str, Any]] | None = None,
     ) -> None:
-        """按 source_record_id 增量 upsert 页面行，替代全量 delete+add_all。
-
-        - 命中已有 source_record_id → 更新 cells/search_text/row_order/
-          last_synced_at，并恢复 is_deleted=False
-        - 未命中 → 新增
-        - 本地存在但本次未传入的 source_record_id → 软删（is_deleted=True）
-        - 传入 page_key + record_meta 时，对比受监控状态字段并写变更日志
-          （warehouse.material_status_transitions，检验周期统计数据源）
-        """
-        result = await self.session.execute(
-            select(MaterialPageRow).where(
-                MaterialPageRow.page_snapshot_id == snapshot_id,
-            )
+        """全量对账只回读本轮记录，未匹配的有效历史行一次软删。"""
+        await self._upsert_material_page_batches(
+            snapshot_id,
+            rows,
+            full=True,
+            page_key=page_key,
+            record_meta=record_meta,
         )
-        existing_rows: dict[str, MaterialPageRow] = {
-            row.source_record_id: row for row in result.scalars().all()
-        }
-
-        incoming_ids: set[str] = set()
-        for row in rows:
-            incoming_ids.add(row.source_record_id)
-            existing = existing_rows.get(row.source_record_id)
-            if existing:
-                self._record_status_transitions(
-                    snapshot_id,
-                    row,
-                    existing=existing,
-                    page_key=page_key,
-                    record_meta=record_meta,
-                )
-                existing.cells = row.cells
-                existing.search_text = row.search_text
-                existing.row_order = row.row_order
-                existing.last_synced_at = row.last_synced_at
-                existing.is_deleted = False
-            else:
-                self._record_status_transitions(
-                    snapshot_id,
-                    row,
-                    existing=None,
-                    page_key=page_key,
-                    record_meta=record_meta,
-                )
-                self.session.add(row)
-
-        for record_id, existing in existing_rows.items():
-            if record_id not in incoming_ids and existing.is_deleted is not True:
-                existing.is_deleted = True
-
-        await self.session.flush()
+        incoming_ids = list({row.source_record_id for row in rows})
+        await self.session.execute(
+            update(MaterialPageRow)
+            .where(
+                MaterialPageRow.page_snapshot_id == snapshot_id,
+                MaterialPageRow.is_deleted.is_(False),
+                MaterialPageRow.source_record_id
+                != all_(
+                    bindparam("incoming_ids", incoming_ids, type_=ARRAY(String)),
+                ),
+            )
+            .values(is_deleted=True)
+        )
 
     async def upsert_material_page_rows_incremental(
         self,
-        snapshot_id: Any,
+        snapshot_id: UUID,
         rows: Sequence[MaterialPageRow],
         *,
         page_key: str | None = None,
         record_meta: dict[str, dict[str, Any]] | None = None,
     ) -> None:
-        """增量同步专用：只 upsert 本次传入的变更记录，不软删未传入的历史记录。
-
-        与 upsert_material_page_rows 的差异：历史记录（本次未变更）保持原状，
-        避免高频增量拉取把未变更的旧记录误标为已删除。
-        传入 page_key + record_meta 时同样对比受监控状态字段写变更日志。
-        """
-        result = await self.session.execute(
-            select(MaterialPageRow).where(
-                MaterialPageRow.page_snapshot_id == snapshot_id,
-            )
+        """只更新发生变化的记录，保留历史、软删状态和已有行序。"""
+        await self._upsert_material_page_batches(
+            snapshot_id,
+            rows,
+            full=False,
+            page_key=page_key,
+            record_meta=record_meta,
         )
-        existing_rows: dict[str, MaterialPageRow] = {
-            row.source_record_id: row for row in result.scalars().all()
-        }
 
-        for row in rows:
-            existing = existing_rows.get(row.source_record_id)
-            if existing:
-                # 已在本地软删的记录，增量同步不应自动复活——只有全量同步
-                # （upsert_material_page_rows）确认飞书仍有该记录时才恢复，
-                # 避免飞书删除未生效 / 定时同步把已删记录反复拉回。
-                if existing.is_deleted:
-                    continue
+    async def _upsert_material_page_batches(
+        self,
+        snapshot_id: UUID,
+        rows: Sequence[MaterialPageRow],
+        *,
+        full: bool,
+        page_key: str | None,
+        record_meta: dict[str, dict[str, Any]] | None,
+    ) -> None:
+        for offset in range(0, len(rows), _SYNC_BATCH_SIZE):
+            batch = rows[offset : offset + _SYNC_BATCH_SIZE]
+            result = await self.session.scalars(
+                select(MaterialPageRow).where(
+                    MaterialPageRow.page_snapshot_id == snapshot_id,
+                    MaterialPageRow.source_record_id.in_(
+                        row.source_record_id for row in batch
+                    ),
+                )
+            )
+            existing_by_id = {row.source_record_id: row for row in result}
+            for row in batch:
+                existing = existing_by_id.get(row.source_record_id)
+                if existing is not None:
+                    if existing.is_deleted and not full:
+                        continue
+                    if (
+                        not existing.is_deleted
+                        and existing.cells == row.cells
+                        and existing.search_text == row.search_text
+                        and (not full or existing.row_order == row.row_order)
+                    ):
+                        continue
                 self._record_status_transitions(
                     snapshot_id,
                     row,
@@ -796,22 +857,29 @@ class WarehouseRepository:
                     page_key=page_key,
                     record_meta=record_meta,
                 )
+                if existing is None:
+                    self.session.add(row)
+                    continue
                 existing.cells = row.cells
                 existing.search_text = row.search_text
-                existing.row_order = row.row_order
+                if full:
+                    existing.row_order = row.row_order
                 existing.last_synced_at = row.last_synced_at
                 existing.is_deleted = False
-            else:
-                self._record_status_transitions(
-                    snapshot_id,
-                    row,
-                    existing=None,
-                    page_key=page_key,
-                    record_meta=record_meta,
-                )
-                self.session.add(row)
+            await self.session.flush()
 
-        await self.session.flush()
+    async def count_material_page_rows(self, snapshot_id: UUID) -> int:
+        return int(
+            await self.session.scalar(
+                select(func.count())
+                .select_from(MaterialPageRow)
+                .where(
+                    MaterialPageRow.page_snapshot_id == snapshot_id,
+                    MaterialPageRow.is_deleted.is_(False),
+                )
+            )
+            or 0
+        )
 
     async def upsert_material_page_row_write_through(
         self,
@@ -934,6 +1002,50 @@ class WarehouseRepository:
         )
         if transition is not None:
             self.session.add(transition)
+
+    async def iter_material_page_rows(
+        self,
+        snapshot_id: UUID,
+        *,
+        sort_date_field: str | None,
+        department_names: set[str] | None,
+    ) -> AsyncIterator[Sequence[tuple[str, dict[str, Any]]]]:
+        """Yield bounded batches of cell data in the material page's display order."""
+        row = MaterialPageRow
+        stmt = select(row.source_record_id, row.cells).where(
+            row.page_snapshot_id == snapshot_id,
+            row.is_deleted.is_(False),
+        )
+        if department_names is not None:
+            department = row.cells["车间"]
+            # Keep historical non-string cells for the service's scope check.
+            python_whitespace = (
+                "\t\n\v\f\r\x1c\x1d\x1e\x1f \x85\xa0\u1680"
+                "\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a"
+                "\u2028\u2029\u202f\u205f\u3000"
+            )
+            stmt = stmt.where(
+                func.jsonb_typeof(department).is_distinct_from("string")
+                | func.btrim(department.astext, python_whitespace).in_(department_names)
+            )
+        if sort_date_field:
+            cell = row.cells[sort_date_field]
+            date_order = case(
+                (func.jsonb_typeof(cell) == "number", cast(cell.astext, Double)),
+                (
+                    func.jsonb_typeof(cell) == "boolean",
+                    (cell.astext == "true").cast(Integer),
+                ),
+                else_=0,
+            )
+            stmt = stmt.order_by(date_order.desc())
+        stmt = stmt.order_by(row.row_order, row.created_at, row.source_record_id)
+        result = await self.session.stream(stmt.execution_options(yield_per=256))
+        try:
+            async for batch in result.partitions():
+                yield [(record_id, cells) for record_id, cells in batch]
+        finally:
+            await result.close()
 
     async def list_material_page_rows(
         self,

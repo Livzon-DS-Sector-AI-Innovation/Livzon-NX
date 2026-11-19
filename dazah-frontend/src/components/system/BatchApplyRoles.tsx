@@ -1,5 +1,6 @@
 "use client"
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useEffect, useId, useRef, useState } from "react"
 import { App, Button, Input, Progress, Radio, Select, Space, Table, Tag } from "antd"
 import PlatformNotice from "@/components/shared/PlatformNotice"
@@ -56,7 +57,7 @@ export function BatchApplyRoles({ role, roles, departmentId, departmentName, onR
       setTotal(data.total)
       setError("")
     }).catch((cause: unknown) => {
-      if (!cancelled) setError(cause instanceof Error ? cause.message : "用户加载失败，请重试")
+      if (!cancelled) setError(getUserErrorMessage(cause instanceof Error ? cause.message : "用户加载失败，请重试", "用户加载失败，请重试"))
     }).finally(() => {
       if (!cancelled) setLoading(false)
     })

@@ -1,7 +1,6 @@
 from collections.abc import Awaitable, Callable
 from typing import Annotated
 
-import jwt
 from fastapi import Cookie, Depends, HTTPException, Request, status
 from pydantic import TypeAdapter, ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +12,12 @@ from app.platform.identity.data_scope import (
     current_page_data_scope,
     current_page_key,
     current_page_visible_sections,
+)
+from app.platform.identity.impersonation import (
+    authentication_token,
+    decode_login,
+    is_impersonating_request,
+    resolve_impersonation,
 )
 from app.platform.identity.models import User
 from app.platform.identity.page_permissions import PagePermissionService
@@ -38,23 +43,15 @@ async def get_current_user(
     1. Authorization: Bearer <jwt> header (API clients)
     2. auth_token cookie (browser SSO flow)
     """
-    token = None
-
-    # 1. Try Bearer header first
-    auth = request.headers.get("Authorization", "")
-    if auth.startswith("Bearer "):
-        token = auth.removeprefix("Bearer ")
-
-    # 2. Fall back to cookie
-    if not token and auth_token:
-        token = auth_token
+    token = authentication_token(request, auth_token)
+    if is_impersonating_request(request, token):
+        return await resolve_impersonation(request, db, settings, token or "")
 
     if not token:
         return None
 
-    try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
-    except jwt.InvalidTokenError:
+    payload = decode_login(token, settings)
+    if payload is None:
         return None
 
     repo = UserRepository()

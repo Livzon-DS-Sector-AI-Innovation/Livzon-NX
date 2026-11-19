@@ -108,8 +108,10 @@ test.describe('LLM 模型配置', () => {
     await expect(page.getByText('已激活此配置')).toBeVisible()
     await expect(existingRow).toContainText('当前使用')
 
+    const capabilityNotice = page.getByText('已重新检测模型能力', { exact: true })
+    await expect(capabilityNotice).toHaveCount(0)
     await existingRow.getByRole('button').nth(0).click()
-    await expect(page.getByText('已重新检测模型能力')).toBeVisible()
+    await expect(capabilityNotice).toBeVisible()
 
     await existingRow.getByRole('button').nth(1).click()
     const editDialog = page.getByRole('dialog', { name: '编辑 LLM 配置' })

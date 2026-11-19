@@ -1,5 +1,6 @@
 'use client'
 
+import { getActionErrorMessage, unwrapServerActionResult } from '@/lib/server-action-result'
 import { useState } from 'react'
 import { Form, Input, Upload, Button, App, Card, Radio, Typography } from 'antd'
 import {
@@ -13,6 +14,7 @@ import {
   createValidationAuditTask,
   uploadValidationAuditFiles,
 } from '@/actions/validation-audit'
+import { summarizeUpload } from './upload-feedback'
 
 const { Dragger } = Upload
 const { Text } = Typography
@@ -71,21 +73,14 @@ export default function ValidationAuditNewClient() {
 
       setSubmitting(true)
 
-      const createResult = await createValidationAuditTask({
+      const task = unwrapServerActionResult(await createValidationAuditTask({
         task_name: values.task_name,
         product_name: values.product_name,
         method_name: values.method_name,
         source_company: values.source_company,
         audit_mode: values.audit_mode,
-      })
-
-      if (!createResult.success || !createResult.data) {
-        message.error(createResult.message)
-        setSubmitting(false)
-        return
-      }
-
-      const taskId = createResult.data.id
+      }))
+      const taskId = task.id
 
       // 联合审核需要区分方案/报告两类文件；单文件组上传无法表达分类，
       // 引导到详情页分类型上传，避免报告被错误标记为方案。
@@ -102,19 +97,19 @@ export default function ValidationAuditNewClient() {
       }
       formData.append('file_type', values.audit_mode)
 
-      const uploadResult = await uploadValidationAuditFiles(taskId, formData)
-      if (!uploadResult.success) {
-        message.error(`文件上传失败: ${uploadResult.message}`)
-        setSubmitting(false)
-        return
+      try {
+        const items = unwrapServerActionResult(await uploadValidationAuditFiles(taskId, formData))
+        const summary = summarizeUpload(items)
+        if (summary.failedIndexes.size) message.warning(`任务已创建。${summary.message}`)
+        else message.success('任务创建成功，正在进入审核...')
+      } catch (error) {
+        message.warning(`任务已创建。${getActionErrorMessage(error, '审核文件上传')}`)
       }
 
-      message.success('任务创建成功，正在进入审核...')
       router.push(detailHrefWithReturnTo(`/registration/validation-audit/${taskId}`, returnToList()))
     } catch (error) {
-      if (error instanceof Error) {
-        message.error(error.message)
-      }
+      if (typeof error === 'object' && error !== null && 'errorFields' in error) return
+      message.error(getActionErrorMessage(error, '审核任务创建'))
     } finally {
       setSubmitting(false)
     }

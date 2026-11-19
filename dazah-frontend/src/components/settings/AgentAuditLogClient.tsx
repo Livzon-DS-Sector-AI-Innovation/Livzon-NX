@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useCallback, useEffect, useState } from 'react'
 import {
   App,
@@ -137,7 +138,7 @@ export default function AgentAuditLogClient() {
       setItems(result.items || [])
       setTotal(result.total)
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '加载审计日志失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '加载审计日志失败'))
     } finally {
       setLoading(false)
     }
@@ -153,7 +154,7 @@ export default function AgentAuditLogClient() {
     try {
       setDetail(await fetchAgentAuditSession(record.id))
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '加载审计详情失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '加载审计详情失败'))
     } finally {
       setDetailLoading(false)
     }

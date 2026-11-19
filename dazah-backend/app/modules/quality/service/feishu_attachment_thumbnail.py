@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import io
 import logging
 from pathlib import Path
@@ -31,6 +32,8 @@ _MAX_DIMENSION = 512
 
 THUMBNAIL_IMAGE_EXTS = frozenset({".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"})
 JPEG_QUALITY = 80
+_WARMUP_MAX_BYTES = 8 * 1024 * 1024
+_WARMUP_MAX_PIXELS = 8_000_000
 
 
 def _clamp_dimension(value: int, fallback: int) -> int:
@@ -46,6 +49,8 @@ def build_thumbnail(
     filename: str,
     max_width: int,
     max_height: int,
+    *,
+    max_pixels: int | None = None,
 ) -> bytes | None:
     """把图片字节缩放为 max_width×max_height 的 JPEG；非图片或失败返回 None。"""
     ext = Path(filename).suffix.lower()
@@ -53,6 +58,8 @@ def build_thumbnail(
         return None
     try:
         with Image.open(io.BytesIO(content)) as opened:
+            if max_pixels is not None and opened.width * opened.height > max_pixels:
+                return None
             source: Image.Image = opened
             source.thumbnail((max_width, max_height))
             rgb: Image.Image
@@ -78,6 +85,8 @@ async def get_attachment_thumbnail(
     file_token: str,
     max_width: int = DEFAULT_MAX_WIDTH,
     max_height: int = DEFAULT_MAX_HEIGHT,
+    *,
+    disk_only: bool = False,
 ) -> tuple[bytes, str, str] | None:
     """返回缩略图 (content, content_type, filename)；非图片/生成失败返回 None。
 
@@ -90,12 +99,29 @@ async def get_attachment_thumbnail(
     key_suffix = f"thumb:{width}x{height}"
 
     async def _fetch() -> tuple[bytes, str, str] | None:
-        content, _content_type, filename = (
-            await get_inspection_feishu_attachment_content(
-                db, entity_code, record_id, file_token
-            )
+        (
+            content,
+            _content_type,
+            filename,
+        ) = await get_inspection_feishu_attachment_content(
+            db,
+            entity_code,
+            record_id,
+            file_token,
+            disk_only=disk_only,
+            max_bytes=_WARMUP_MAX_BYTES if disk_only else None,
         )
-        thumb = build_thumbnail(content, filename, width, height)
+        if disk_only:
+            thumb = await asyncio.to_thread(
+                build_thumbnail,
+                content,
+                filename,
+                width,
+                height,
+                max_pixels=_WARMUP_MAX_PIXELS,
+            )
+        else:
+            thumb = build_thumbnail(content, filename, width, height)
         if thumb is None:
             return None
         stem = Path(filename).stem or "attachment"
@@ -107,4 +133,5 @@ async def get_attachment_thumbnail(
         file_token,
         _fetch,
         key_suffix=key_suffix,
+        disk_only=disk_only,
     )

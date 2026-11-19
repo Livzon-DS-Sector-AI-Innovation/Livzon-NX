@@ -31,6 +31,9 @@ from app.modules.registration.schemas.declaration_progress import (
 from app.modules.registration.service.declaration_progress import (
     DeclarationProgressWorkbookService,
 )
+from app.modules.registration.workbook_error_contract import (
+    workbook_import_errors,
+)
 from app.shared.schemas import ApiResponseEnvelope
 
 logger = logging.getLogger(__name__)
@@ -70,6 +73,7 @@ async def get_declaration_progress_workbook(
     "/workbook/import",
     summary="导入申报进度工作簿",
     response_model=ApiResponseEnvelope[DeclarationProgressWorkbookImportResult],
+    responses=workbook_import_errors(),
 )
 async def import_declaration_progress_workbook(
     current_user: CurrentUser,

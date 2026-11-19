@@ -10,6 +10,7 @@ vi.mock('@/components/system', () => ({
     DeptRoleMapper: () => <div>角色映射内容</div>,
   PermissionVerification: () => <div>权限检查内容</div>,
 }))
+vi.mock('./ImpersonationPanel', () => ({ default: () => <div>模拟登录内容</div> }))
 
 import SystemPermissionsPanel from './SystemPermissionsPanel'
 
@@ -26,10 +27,19 @@ it('switches between authorization and checks without exposing menu management',
     expect(tabs.map((tab) => tab.textContent)).toEqual(['角色与授权', '权限检查'])
     await act(async () => tabs[1].click())
     expect(tabs[1].getAttribute('aria-selected')).toBe('true')
-    expect(host.querySelector('nav[aria-label="权限管理子导航"]')).toBeNull()
-    expect(host.textContent).toContain('权限检查内容')
+    const checks = host.querySelector('nav[aria-label="权限管理子导航"]')
+    const checkButtons = Array.from(checks?.querySelectorAll('button') ?? [])
+    expect(checkButtons.map((button) => button.textContent?.trim())).toEqual(['模拟登录', '权限接入检查'])
+    expect(checkButtons[0].getAttribute('aria-current')).toBe('page')
+    expect(host.textContent).toContain('模拟登录内容')
+    expect(host.textContent).not.toContain('权限检查内容')
     expect(host.textContent).not.toContain('角色设置内容')
     expect(host.textContent).not.toContain('菜单管理')
+    await act(async () => checkButtons[1].click())
+    expect(checkButtons[1].getAttribute('aria-current')).toBe('page')
+    expect(host.textContent).toContain('权限检查内容')
+    expect(host.textContent).toContain('检查各模块的页面、接口和 Livzon 工具是否完整接入权限体系。')
+    expect(host.textContent).not.toContain('模拟登录内容')
 
     await act(async () => tabs[1].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true })))
     expect(tabs[0].getAttribute('aria-selected')).toBe('true')
@@ -46,6 +56,8 @@ it('switches between authorization and checks without exposing menu management',
     expect(userRoles.getAttribute('aria-current')).toBe('page')
     expect(host.textContent).toContain('用户角色内容')
     expect(host.textContent).not.toContain('权限检查内容')
+    await act(async () => tabs[1].click())
+    expect(host.textContent).toContain('模拟登录内容')
   } finally {
     await act(async () => root.unmount())
     host.remove()

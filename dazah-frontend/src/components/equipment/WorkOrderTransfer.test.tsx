@@ -182,6 +182,11 @@ describe('WorkOrderDetailDrawer 转派（方案E）', () => {
     const ok = [...document.querySelectorAll('button')].find(
       (b) => b.textContent === '确 定' || b.textContent === 'OK',
     ) as HTMLButtonElement
+    api.updateWorkOrderExternalCost.mockRejectedValueOnce(new Error('TypeError: cost update adapter failed'))
+    await act(async () => ok.click())
+    expect(api.updateWorkOrderExternalCost).toHaveBeenCalledOnce()
+    expect(document.body.textContent).toContain('操作未完成，请稍后重试')
+    expect(ok.isConnected).toBe(true)
     await act(async () => {
       ok.dispatchEvent(new MouseEvent('click', { bubbles: true }))
       await new Promise((r) => setTimeout(r, 80))
@@ -190,5 +195,6 @@ describe('WorkOrderDetailDrawer 转派（方案E）', () => {
       'wo-1',
       expect.objectContaining({ external_cost: 0 }),
     )
+    expect(api.updateWorkOrderExternalCost).toHaveBeenCalledTimes(2)
   })
 })

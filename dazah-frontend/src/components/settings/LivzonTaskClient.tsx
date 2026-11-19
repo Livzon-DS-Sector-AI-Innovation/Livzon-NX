@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ClockCircleOutlined, EditOutlined, EyeOutlined, FileTextOutlined, FormOutlined, PlayCircleOutlined, ReloadOutlined } from '@ant-design/icons'
 import {
@@ -325,7 +326,7 @@ export default function LivzonTaskClient() {
       setItems(result.items)
       setInteractions(interactionPage.items)
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '加载 Livzon Task 失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '加载 Livzon Task 失败'))
     } finally {
       setLoading(false)
     }
@@ -383,7 +384,7 @@ export default function LivzonTaskClient() {
           message.success(successText)
           await loadTasks()
         } catch (error) {
-          message.error(error instanceof Error ? error.message : '执行失败')
+          message.error(getUserErrorMessage(error instanceof Error ? error.message : '执行失败'))
           throw error
         }
       },
@@ -403,7 +404,7 @@ export default function LivzonTaskClient() {
         isEnabled(item) ? 'Livzon Task 已禁用' : 'Livzon Task 已确认并启用',
       )
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '操作失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '操作失败'))
     } finally {
       setActionLoadingId(null)
     }
@@ -442,7 +443,7 @@ export default function LivzonTaskClient() {
         ),
       })
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '试运行预览失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '试运行预览失败'))
     }
   }
 
@@ -462,7 +463,7 @@ export default function LivzonTaskClient() {
       setDetailRuns(runs)
       if (runs[0]) setDetailRun(await fetchLivzonTaskRun(runs[0].id))
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '加载详情失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '加载详情失败'))
     } finally {
       setDetailLoading(false)
     }
@@ -486,7 +487,7 @@ export default function LivzonTaskClient() {
       setDetailVersion(version || null)
     } catch (error) {
       setEditingItem(null)
-      message.error(error instanceof Error ? error.message : '加载修改数据失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '加载修改数据失败'))
     }
   }
 
@@ -529,7 +530,7 @@ export default function LivzonTaskClient() {
       await confirmToolExecution('agent.update_automation', body, editingKind === 'scheduled' ? '定时任务已修改' : '自动化已修改')
       setEditingItem(null)
     } catch (error) {
-      if (error instanceof Error) message.error(error.message)
+      if (error instanceof Error) message.error(getUserErrorMessage(error.message))
     } finally {
       setSaving(false)
     }
@@ -675,7 +676,7 @@ export default function LivzonTaskClient() {
       interactionForm.resetFields()
       await loadTasks()
     } catch (error) {
-      if (error instanceof Error) message.error(error.message)
+      if (error instanceof Error) message.error(getUserErrorMessage(error.message))
     } finally {
       setInteractionSaving(false)
     }
