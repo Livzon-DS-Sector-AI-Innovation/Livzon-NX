@@ -1,5 +1,8 @@
 import { expect, test } from '@playwright/test'
 
+const queryAccessNoticeTitle = '当前菜单仅授予入口权限。'
+const queryAccessNoticeMessage = '查看业务数据请联系管理员开通查询权限。'
+
 test.describe('页面最小授权', () => {
   for (const { appearance, width } of [{ appearance: 'light', width: 1280 }, { appearance: 'dark', width: 390 }]) {
     test(`角色映射跨搜索保留用户并展示分配确认 ${appearance}`, async ({ context, page }) => {
@@ -470,16 +473,91 @@ test.describe('页面最小授权', () => {
     })
   }
 
-  for (const token of ['page-denied', 'page-access']) {
-    test(`${token} 在服务端页面取数前拒绝`, async ({ context, page, request }) => {
+  for (const { token, status } of [{ token: 'page-denied', status: 403 }, { token: 'page-access', status: 200 }]) {
+    test(`${token} 直接访问供应商管理且服务端不取数`, async ({ context, page, request }) => {
       await context.addCookies([{ name: 'auth_token', value: token, url: 'http://127.0.0.1:3200' }])
-      const response = await page.goto('/purchasing/supplier')
-      expect(response?.status()).toBe(403)
-      await expect(page.getByRole('heading', { name: '页面访问受限' })).toBeVisible()
-      await expect(page.getByText(token === 'page-access'
-        ? '可以访问此页面，但尚未获得查询数据权限。请联系管理员授权。'
-        : '未获得当前菜单页面的访问权限。')).toBeVisible()
+      const response = await page.goto('/purchasing/supplier?page=2')
+      expect(response?.status()).toBe(status)
+      if (status === 200) {
+        await expect(page).toHaveURL(/\/purchasing\/supplier\?page=2$/)
+        await expect(page.getByRole('heading', { name: queryAccessNoticeTitle })).toBeVisible()
+        await expect(page.getByRole('complementary', { name: '采购管理侧边栏' })).toBeVisible()
+        expect(response?.headers()['cache-control']).toContain('no-store')
+        expect((await context.request.head('/purchasing/supplier?page=2')).status()).toBe(200)
+        const internal = await context.request.get('/page-access-notice/purchasing/supplier', {
+          headers: { 'X-Dazah-Page-Access-Notice': 'query-required' },
+        })
+        expect(internal.status()).toBe(404)
+      } else {
+        await expect(page.getByRole('heading', { name: '页面访问受限' })).toBeVisible()
+        await expect(page.getByText('未获得当前菜单页面的访问权限。')).toBeVisible()
+      }
       const calls = await request.get(`http://127.0.0.1:4100/__test/page-requests?token=${token}`)
+      expect((await calls.json()).count).toBe(0)
+    })
+  }
+
+  for (const { appearance, width } of [{ appearance: 'light', width: 1280 }, { appearance: 'dark', width: 390 }]) {
+    test(`仅入口提示保留站内导航并支持刷新 ${appearance}`, async ({ context, page, request }) => {
+      const token = `page-access-navigation-${appearance}`
+      await context.addCookies([{ name: 'auth_token', value: token, url: 'http://127.0.0.1:3200' }])
+      await page.setViewportSize({ width, height: 844 })
+      await page.addInitScript((mode) => localStorage.setItem('dazah-appearance', mode), appearance)
+      await page.goto('/purchasing/order')
+
+      const sidebar = page.getByRole('complementary', { name: '采购管理侧边栏' })
+      const supplier = sidebar.getByRole('menuitem', { name: '供应商管理' })
+      const order = sidebar.getByRole('menuitem', { name: '采购订单' })
+      const content = page.getByRole('main')
+      const notice = content.getByRole('alert').filter({ hasText: queryAccessNoticeTitle })
+      const mobileMenu = page.getByRole('button', { name: '采购管理菜单', exact: true })
+      await expect(page.getByRole('heading', { name: '采购订单' })).toBeVisible()
+      await page.locator('html').evaluate((element) => element.setAttribute('data-test-navigation', 'same-document'))
+      await supplier.click()
+
+      await expect(page).toHaveURL(/\/purchasing\/supplier$/)
+      await expect(notice).toBeVisible()
+      await expect(notice.getByRole('heading', { name: queryAccessNoticeTitle })).toBeVisible()
+      await expect(notice.getByText(queryAccessNoticeMessage, { exact: true })).toBeVisible()
+      await expect(page.locator('html')).toHaveAttribute('data-test-navigation', 'same-document')
+      await expect(page.locator('html')).toHaveAttribute('data-theme', appearance)
+      await expect(page.getByRole('navigation', { name: '业务模块' })).toBeVisible()
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width)
+      const [card, area] = await Promise.all([
+        notice.boundingBox(),
+        content.evaluate((element) => {
+          const { left, top } = element.getBoundingClientRect()
+          return { left, top, width: element.clientWidth, height: element.clientHeight }
+        }),
+      ])
+      if (!card) throw new Error('权限提示卡片需可见')
+      expect(Math.abs((card.x + card.width / 2) - (area.left + area.width / 2))).toBeLessThan(2)
+      expect(Math.abs((card.y + card.height / 2) - (area.top + area.height / 2))).toBeLessThan(56)
+      expect(card.width).toBeLessThan(area.width)
+      if (width < 701) {
+        expect(card.width).toBeGreaterThan(width / 2)
+        await mobileMenu.click()
+      }
+      await expect(supplier).toHaveClass(/ant-menu-item-selected/)
+
+      const reloaded = await page.reload()
+      expect(reloaded?.status()).toBe(200)
+      await expect(notice).toBeVisible()
+      await page.locator('html').evaluate((element) => element.setAttribute('data-test-navigation', 'same-document'))
+      if (width < 701) await mobileMenu.click()
+      await order.click()
+      await expect(page).toHaveURL(/\/purchasing\/order$/)
+      await expect(page.getByRole('heading', { name: '采购订单' })).toBeVisible()
+      await expect(notice).toHaveCount(0)
+      await expect(page.locator('html')).toHaveAttribute('data-test-navigation', 'same-document')
+      if (width < 701) {
+        await supplier.click()
+        await expect(notice).toBeVisible()
+        await expect(mobileMenu).toHaveAttribute('aria-expanded', 'false')
+      }
+      const calls = await request.get('http://127.0.0.1:4100/__test/page-requests', {
+        params: { token, path: '/api/v1/procurement/suppliers' },
+      })
       expect((await calls.json()).count).toBe(0)
     })
   }
@@ -495,12 +573,74 @@ test.describe('页面最小授权', () => {
     expect(response?.status()).toBe(403)
   })
 
-  for (const token of ['ledger-denied', 'ledger-access']) {
+  test('已配置但暂未开放的菜单在平台内显示提示', async ({ context, page }) => {
+    await context.addCookies([{ name: 'auth_token', value: 'e2e-admin', url: 'http://127.0.0.1:3200' }])
+    await page.goto('/production/label-verification')
+    const sidebar = page.getByRole('complementary', { name: '生产管理侧边栏' })
+    await expect(sidebar.getByRole('menuitem', { name: '标签复核', exact: true })).toHaveClass(/ant-menu-item-selected/)
+    const root = page.locator('html')
+    await root.evaluate((element) => element.setAttribute('data-test-navigation', 'same-document'))
+    await sidebar.getByText('批次管理', { exact: true }).hover()
+    await page.getByRole('menuitem', { name: '102二车间', exact: true }).click()
+
+    const content = page.getByRole('main')
+    const heading = content.getByRole('heading', { name: '页面暂未开放' })
+    const missingMenu = '/production/batches/workshop/102-2'
+    await expect(page).toHaveURL(new RegExp(`${missingMenu}$`))
+    await expect(heading).toBeVisible()
+    await expect(root).toHaveAttribute('data-test-navigation', 'same-document')
+    await expect(sidebar).toBeVisible()
+    await expect(page.getByRole('navigation', { name: '业务模块' })).toBeVisible()
+    await expect(page.getByRole('navigation', { name: '页面层级' }).getByText('102二车间', { exact: true })).toBeVisible()
+
+    const response = await page.goto(`${missingMenu}?page=2`)
+    expect(response?.status()).toBe(200)
+    expect(response?.headers()['cache-control']).toContain('no-store')
+    await expect(page).toHaveURL(new RegExp(`${missingMenu}\\?page=2$`))
+    await expect(heading).toBeVisible()
+    await sidebar.getByRole('menuitem', { name: '标签复核', exact: true }).click()
+    await expect(page).toHaveURL(/\/production\/label-verification$/)
+    await expect(heading).toHaveCount(0)
+  })
+
+  for (const { path, width, mode } of [
+    { path: '/production/batches/workshop/102-2/unregistered', width: 1280, mode: 'light' },
+    { path: '/purchasing/request/unregistered', width: 390, mode: 'dark' },
+  ]) {
+    test(`平台 404 复用内容区提示 ${width}px`, async ({ context, page }) => {
+      await context.addCookies([{ name: 'auth_token', value: 'e2e-admin', url: 'http://127.0.0.1:3200' }])
+      await page.setViewportSize({ width, height: 844 })
+      await page.addInitScript((theme) => localStorage.setItem('dazah-appearance', theme), mode)
+
+      const response = await page.goto(path)
+      // Next.js keeps the initial 200 when the Dashboard starts streaming before notFound().
+      expect([200, 404]).toContain(response?.status())
+      await expect(page.locator('meta[name="robots"][content="noindex"]')).toHaveCount(1)
+      await expect(page).toHaveURL(`http://127.0.0.1:3200${path}`)
+      await expect(page.locator('html')).toHaveAttribute('data-theme', mode)
+      const content = page.getByRole('main')
+      const card = content.getByRole('alert').filter({ hasText: '页面未找到' })
+      await expect(card.getByRole('heading', { name: '页面未找到' })).toBeVisible()
+      await expect(card.getByText('请检查访问地址，或通过菜单前往其他页面。')).toBeVisible()
+      await expect(page.getByRole('navigation', { name: '业务模块' })).toBeVisible()
+      const [bounds, area] = await Promise.all([card.boundingBox(), content.boundingBox()])
+      if (!bounds || !area) throw new Error('提示卡片和工作区需可见')
+      expect(Math.abs((bounds.y + bounds.height / 2) - (area.y + area.height / 2))).toBeLessThan(60)
+      if (width < 701) {
+        expect(bounds.width).toBeGreaterThan(width / 2)
+        await page.getByRole('button', { name: '采购管理菜单', exact: true }).click()
+        await expect(page.getByRole('dialog', { name: '采购管理菜单' })).toBeVisible()
+      }
+    })
+  }
+
+  for (const { token, status } of [{ token: 'ledger-denied', status: 403 }, { token: 'ledger-access', status: 200 }]) {
     test(`${token} 在偏差详情服务端取数前拒绝`, async ({ context, page, request }) => {
       await context.addCookies([{ name: 'auth_token', value: token, url: 'http://127.0.0.1:3200' }])
       const response = await page.goto('/quality/deviations/00000000-0000-0000-0000-000000000001')
-      expect(response?.status()).toBe(403)
-      await expect(page.getByRole('heading', { name: '页面访问受限' })).toBeVisible()
+      expect(response?.status()).toBe(status)
+      if (status === 200) await expect(page.getByRole('heading', { name: queryAccessNoticeTitle })).toBeVisible()
+      else await expect(page.getByRole('heading', { name: '页面访问受限' })).toBeVisible()
       const calls = await request.get(`http://127.0.0.1:4100/__test/page-requests?token=${token}`)
       expect((await calls.json()).count).toBe(0)
     })

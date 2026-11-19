@@ -5,6 +5,7 @@ import { redirect } from "next/navigation"
 import { headers } from "next/headers"
 import { expandEquipmentPagePermissions, getModuleByKey, getPageKeyByPath } from "@/lib/menu-config"
 import { EQUIPMENT_CONSOLE_MODULE_HEADER, EQUIPMENT_MODULE_TABS, isEquipmentModule } from '@/lib/equipment-page-permissions'
+import { PAGE_ACCESS_NOTICE_HEADER, QUERY_PERMISSION_REQUIRED } from '@/lib/page-access-notice'
 import '@/lib/dayjs-config'
 import MaintenanceBoundary from '@/components/shared/MaintenanceBoundary'
 
@@ -22,6 +23,7 @@ export default async function DashboardLayout({
   }
 
   const requestHeaders = await headers()
+  const isAccessNoticeRequest = requestHeaders.get(PAGE_ACCESS_NOTICE_HEADER) === QUERY_PERMISSION_REQUIRED
   const pathname = requestHeaders.get('X-Dazah-Page-Path') || ''
   const moduleKey = pathname.split('/')[1]
   const currentModule = getModuleByKey(moduleKey)
@@ -39,7 +41,7 @@ export default async function DashboardLayout({
 
   return (
     <AntdProvider>
-      <MaintenanceBoundary><AppShell user={user}>{canRender ? children : null}</AppShell></MaintenanceBoundary>
+      <MaintenanceBoundary><AppShell user={user}>{isAccessNoticeRequest || canRender ? children : null}</AppShell></MaintenanceBoundary>
     </AntdProvider>
   )
 }
