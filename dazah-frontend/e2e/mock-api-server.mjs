@@ -212,13 +212,18 @@ const server = createServer(async (request, response) => {
   if (handleBusinessTodos(request, response, pageTestToken)) return
   if (pageTestToken.startsWith('page-') && request.url?.startsWith('/api/v1/procurement/')) {
     pageBusinessRequests.set(pageTestToken, (pageBusinessRequests.get(pageTestToken) || 0) + 1)
+    const pathname = request.url.split('?')[0]
+    const key = `${pageTestToken}:${pathname}`
+    pageBusinessRequests.set(key, (pageBusinessRequests.get(key) || 0) + 1)
   }
   if (pageTestToken.startsWith('ledger-') && request.url?.startsWith('/api/v1/quality/')) {
     pageBusinessRequests.set(pageTestToken, (pageBusinessRequests.get(pageTestToken) || 0) + 1)
   }
   if (request.url?.startsWith('/__test/page-requests?')) {
-    const token = new URL(request.url, 'http://localhost').searchParams.get('token')
-    response.end(JSON.stringify({ count: pageBusinessRequests.get(token) || 0 }))
+    const params = new URL(request.url, 'http://localhost').searchParams
+    const token = params.get('token')
+    const path = params.get('path')
+    response.end(JSON.stringify({ count: pageBusinessRequests.get(path ? `${token}:${path}` : token) || 0 }))
     return
   }
   if (request.url?.startsWith('/__test/ledger-write?')) {
@@ -325,12 +330,17 @@ const server = createServer(async (request, response) => {
       return
     }
     if (pageTestToken.startsWith('page-')) {
+      const canNavigate = pageTestToken.startsWith('page-access-navigation-')
       const permissions = pageTestToken === 'page-query' ? ['access', 'query']
-        : pageTestToken === 'page-access' ? ['access'] : []
+        : pageTestToken === 'page-access' || canNavigate ? ['access'] : []
       response.end(JSON.stringify({ code: 200, data: { ...currentUser, role: 'user',
         module_codes: pageTestToken === 'page-query' ? [] : ['procurement'], page_permission_rollouts: { procurement: 'enforced' },
-        page_permissions: [{ page_key: 'purchasing:supplier', module_code: 'procurement', permissions,
-          sensitive_actions: [], source: 'user', data_scope: { scope_type: 'not_applicable' } }],
+        page_permissions: [
+          { page_key: 'purchasing:supplier', module_code: 'procurement', permissions,
+            sensitive_actions: [], source: 'user', data_scope: { scope_type: 'not_applicable' } },
+          ...(canNavigate ? [{ page_key: 'purchasing:order', module_code: 'procurement', permissions: ['access', 'query'],
+            sensitive_actions: [], source: 'user', data_scope: { scope_type: 'not_applicable' } }] : []),
+        ],
       } }))
       return
     }

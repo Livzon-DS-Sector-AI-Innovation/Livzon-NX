@@ -10,6 +10,7 @@ import { Tabs } from 'antd'
 import { useAuthStore } from '@/stores/auth'
 import {
   EQUIPMENT_MODULE_TABS,
+  getQueryableEquipmentTabs,
   hasEquipmentPageAccess,
   isEquipmentModule,
   type EquipmentModule,
@@ -31,19 +32,20 @@ export function ModuleTabs({
     [user],
   )
 
-  // 未指定模块（或指定模块无权限）时自动落到首个有权限的模块，避免空内容
+  const fallbackModule = getQueryableEquipmentTabs(user)[0]?.module
+
+  // 未指定有效模块时落到首个可查询模块。
   useEffect(() => {
     const param = searchParams.get('module')
     const current = isEquipmentModule(param) ? param : undefined
     if (current && visible.some((tab) => tab.module === current)) return
-    const fallback = visible[0]?.module
-    if (fallback) {
+    if (fallbackModule) {
       router.replace(
-        `/equipment?workshop=${encodeURIComponent(workshop)}&module=${fallback}`,
+        `/equipment?workshop=${encodeURIComponent(workshop)}&module=${fallbackModule}`,
         { scroll: false },
       )
     }
-  }, [searchParams, visible, workshop, router])
+  }, [searchParams, visible, workshop, router, fallbackModule])
 
   const go = (module: string) => {
     router.push(
