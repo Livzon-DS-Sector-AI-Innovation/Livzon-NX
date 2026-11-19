@@ -99,12 +99,13 @@ describe('ModuleTabs（统一工作台模块切换）', () => {
     )
   })
 
-  it('按页面授权过滤模块 Tab；无模块参数时自动落到首个有权限模块', async () => {
+  it('保留仅入口模块 Tab；无模块参数时自动落到首个可查询模块', async () => {
     currentRoute.module = ''
     authStore.state.user = {
       ...authStore.state.user,
       role: 'user',
       page_permissions: [
+        { page_key: 'equipment:assets', module_code: 'equipment', permissions: ['access'] },
         { page_key: 'equipment:inspection', module_code: 'equipment', permissions: ['access', 'query'] },
         { page_key: 'equipment:spare-parts', module_code: 'equipment', permissions: ['access', 'query'] },
       ],
@@ -112,8 +113,7 @@ describe('ModuleTabs（统一工作台模块切换）', () => {
     renderTabs(undefined)
     await act(async () => { await new Promise((r) => setTimeout(r, 0)) })
 
-    // 仅渲染授权模块，且自动 replace 到首个授权模块（设备台账在巡检之后被过滤）
-    expect(tabLabels()).toEqual(['设备巡检', '备件管理'])
+    expect(tabLabels()).toEqual(['设备台账', '设备巡检', '备件管理'])
     expect(navigation.replace).toHaveBeenCalledWith(
       '/equipment?workshop=103&module=inspection',
       { scroll: false },

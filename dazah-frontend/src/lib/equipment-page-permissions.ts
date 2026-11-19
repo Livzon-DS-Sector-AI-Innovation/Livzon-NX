@@ -100,3 +100,11 @@ export function hasAnyEquipmentModuleAccess(
 ): boolean {
   return EQUIPMENT_MODULE_TABS.some((tab) => hasEquipmentPageAccess(user, tab.key))
 }
+
+export function getQueryableEquipmentTabs(user: EquipmentPermissionUser | null | undefined) {
+  if (user?.role === 'admin') return EQUIPMENT_MODULE_TABS
+  const grants = expandedGrants(user)
+  return EQUIPMENT_MODULE_TABS.filter(({ key }) => grants.some((grant) =>
+    grant.page_key === key && grant.permissions?.includes('access') && grant.permissions.includes('query'),
+  ))
+}
