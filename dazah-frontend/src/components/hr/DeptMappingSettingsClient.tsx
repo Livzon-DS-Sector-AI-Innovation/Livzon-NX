@@ -122,7 +122,12 @@ export default function DeptMappingSettingsClient() {
   // 行 = 飞书部门 ∪ 映射源（去重、过滤伪部门、排序）
   const rows: RowVM[] = useMemo(() => {
     const sources = new Set<string>(feishuDepts)
-    for (const m of mappings) sources.add(m.source_name)
+    for (const m of mappings) {
+      // person 行是"人员归属"Tab 的人员→台账部门配置（PersonDeptMappingClient 渲染），
+      // 不是部门，不进本对照表
+      if (m.mapping_type === 'person') continue
+      sources.add(m.source_name)
+    }
     // 过滤伪部门：冻结用户桶 / 公司 / 公司级 / exclude 类型源，均非真实部门
     const isPseudo = (s: string) =>
       s.startsWith('冻结用户') || s === '公司' || s === '公司级' ||

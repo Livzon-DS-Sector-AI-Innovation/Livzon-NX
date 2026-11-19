@@ -311,6 +311,24 @@ describe('DeptMappingSettingsClient 双 Tab 与人员归属', () => {
     expect(container.textContent).toContain('201二车间（DR）')
   })
 
+  it('部门映射对照表不显示 person 人员行，人员归属面板仍显示', async () => {
+    await renderPage()
+
+    // 部门映射对照表：只含真实部门行，人员名（person 源）不得混入
+    const deptTable = Array.from(container.querySelectorAll('table')).find((t) =>
+      t.textContent?.includes('201二车间（多拉）'),
+    )
+    expect(deptTable).toBeTruthy()
+    expect(deptTable?.textContent).not.toContain('安志刚')
+
+    // 人员归属面板：person 行数据不受影响，仍按 姓名/归属部门 显示
+    const personTable = Array.from(container.querySelectorAll('table')).find((t) =>
+      t.textContent?.includes('安志刚'),
+    )
+    expect(personTable).toBeTruthy()
+    expect(personTable?.textContent).toContain('201二车间（DR）')
+  })
+
   it('页面查询授权可打开配置，写入和删除分别授权，撤销后不再放行', async () => {
     Object.assign(permissions, { canQuery: true, canSync: false, canDelete: false })
     await renderPage()
