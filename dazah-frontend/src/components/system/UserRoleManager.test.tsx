@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { ConfigProvider } from 'antd'
 import type { AdminUserItem, RoleItem } from '@/lib/api/client/admin'
 import { getAntdTheme } from '@/lib/antd-theme'
+import { SEARCH_DELAY_MS } from '@/hooks/useSearchFilter'
 
 const mocks = vi.hoisted(() => ({
   fetchUsers: vi.fn(), fetchScopes: vi.fn(), assign: vi.fn(), deleteScope: vi.fn(),
@@ -55,6 +56,7 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount())
   host.remove()
+  vi.useRealTimers()
   vi.unstubAllGlobals()
 })
 
@@ -107,10 +109,11 @@ async function setInputValue(element: HTMLInputElement, value: string) {
 async function searchUsers(keyword: string) {
   const input = host.querySelector<HTMLInputElement>('input[placeholder^="按姓名"]')!
   await setInputValue(input, keyword)
-  await act(async () => host.querySelector<HTMLButtonElement>('.ant-input-search-btn')!.click())
+  await act(async () => { await vi.advanceTimersByTimeAsync(SEARCH_DELAY_MS) })
 }
 
 it.each(['light', 'dark'] as const)('searches the full directory and resets pagination in %s mode', async (appearance) => {
+  vi.useFakeTimers()
   const match = { ...user, id: 'user-501', name: '后页用户', email: 'account@example.test' }
   mocks.fetchUsers.mockResolvedValueOnce({ items: [user], total: 501 })
     .mockResolvedValueOnce({ items: [{ ...user, name: '第二页用户' }], total: 501 })
@@ -121,17 +124,25 @@ it.each(['light', 'dark'] as const)('searches the full directory and resets pagi
   expect(mocks.fetchUsers).toHaveBeenLastCalledWith({ keyword: '', offset: 20, limit: 20 })
   expect(host.textContent).toContain('第二页用户')
 
+  const input = host.querySelector<HTMLInputElement>('input[aria-label="搜索用户"]')!
+  await setInputValue(input, 'ACC')
+  await act(async () => { await vi.advanceTimersByTimeAsync(SEARCH_DELAY_MS - 1) })
+  expect(mocks.fetchUsers).toHaveBeenCalledTimes(2)
+  expect(host.textContent).toContain('正在查询用户…')
   await searchUsers('  ACCOUNT@example.test  ')
+  expect(mocks.fetchUsers).toHaveBeenCalledTimes(3)
   expect(mocks.fetchUsers).toHaveBeenLastCalledWith({ keyword: 'ACCOUNT@example.test', offset: 0, limit: 20 })
   expect(host.textContent).toContain(match.name)
   expect(host.textContent).not.toContain('第二页用户')
 
   await act(async () => host.querySelector<HTMLElement>('.ant-input-clear-icon')!.click())
+  await act(async () => { await vi.advanceTimersByTimeAsync(0) })
   expect(mocks.fetchUsers).toHaveBeenLastCalledWith({ keyword: '', offset: 0, limit: 20 })
   expect(host.textContent).toContain(user.name)
 })
 
 it('ignores stale requests and lets the latest failed search be retried', async () => {
+  vi.useFakeTimers()
   let finishOldSearch: (result: { items: AdminUserItem[]; total: number }) => void = () => {}
   await renderManager()
   mocks.fetchUsers.mockImplementationOnce(() => new Promise((resolve) => { finishOldSearch = resolve }))
@@ -424,6 +435,7 @@ it('uses the returned grant version when roles change again after a scope failur
 })
 
 it.each(['light', 'dark'] as const)('confirms added roles without an access rules banner in %s mode', async (appearance) => {
+  vi.useFakeTimers()
   await renderManager(appearance)
   await searchUsers('QA部')
   mocks.fetchUsers.mockClear()

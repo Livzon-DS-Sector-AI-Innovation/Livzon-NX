@@ -5,6 +5,64 @@ test.use({ launchOptions: { args: ['--disable-features=PaintHolding'] } })
 
 const settings = '/settings?tab=permissions&view=impersonation'
 
+test('模拟身份横幅在首屏和窄屏保持在顶部栏内', async ({ page, context, baseURL }) => {
+  await context.addCookies([
+    { name: 'auth_token', value: 'impersonation-admin', url: baseURL! },
+    { name: 'impersonation_token', value: 'impersonation-procurement', url: baseURL!, httpOnly: true },
+  ])
+  // Keep the server-rendered page visible before Ant Design injects its client styles.
+  await page.route('**/*', route => route.request().resourceType() === 'script' ? route.abort() : route.continue())
+  const header = page.getByRole('banner')
+  const banner = header.locator('[data-platform-notice="warning"]').filter({ hasText: '采购验收用户' })
+  const feedback = header.getByRole('button', { name: '问题反馈' })
+
+  for (const hydrated of [false, true]) {
+    if (hydrated) await page.unrouteAll()
+    await page.emulateMedia({ colorScheme: hydrated ? 'dark' : 'light' })
+    await page.goto('/purchasing/supplier')
+    await expect(banner).toBeVisible()
+    if (hydrated) await expect(feedback).toBeEnabled()
+
+    for (const width of [1280, 768, 390, 320]) {
+      await page.setViewportSize({ width, height: 720 })
+      const toolbar = (await header.boundingBox())!
+      const notice = (await banner.boundingBox())!
+      const logo = (await header.getByText('API', { exact: true }).boundingBox())!
+      const name = (await banner.getByText('采购验收用户', { exact: true }).boundingBox())!
+      const restore = (await banner.getByRole('button', { name: '返回管理员身份' }).boundingBox())!
+      const feedbackButton = (await feedback.boundingBox())!
+      const view = `${hydrated ? '交互就绪后' : '首屏'} ${width}px`
+      expect(notice.y, `${view} 横幅顶部`).toBeGreaterThanOrEqual(toolbar.y)
+      expect(notice.y + notice.height, `${view} 横幅底部`).toBeLessThanOrEqual(toolbar.y + toolbar.height)
+      expect(notice.x, `${view} 横幅左侧`).toBeGreaterThanOrEqual(logo.x + logo.width)
+      expect(notice.x + notice.width, `${view} 横幅右侧`).toBeLessThanOrEqual(feedbackButton.x)
+      expect(name.width, `${view} 用户名称仍可见`).toBeGreaterThan(24)
+      expect(restore.x, `${view} 返回按钮左侧`).toBeGreaterThanOrEqual(name.x + name.width)
+      expect(restore.x + restore.width, `${view} 返回按钮右侧`).toBeLessThanOrEqual(notice.x + notice.width)
+    }
+  }
+})
+
+test('模拟登录输入关键词后自动筛选并可清空', async ({ page, context, baseURL }) => {
+  await context.addCookies([{ name: 'auth_token', value: 'impersonation-admin', url: baseURL! }])
+  await page.goto(settings)
+  const search = page.getByRole('searchbox', { name: '搜索姓名、账号或工号' })
+  const target = page.getByRole('row', { name: /采购验收用户/ })
+  await expect(target).toBeVisible()
+
+  await search.fill('没有此账号')
+  await expect(page.getByText('暂无可模拟的用户')).toBeVisible()
+  await search.fill('  procurement-test  ')
+  await expect(target).toBeVisible()
+
+  const cleared = page.waitForRequest(request => new URL(request.url()).pathname.endsWith('/impersonation/targets')
+    && new URL(request.url()).searchParams.get('keyword') === '')
+  await page.getByRole('button', { name: '清空搜索' }).click()
+  expect(new URL((await cleared).url()).searchParams.get('offset')).toBe('0')
+  await expect(search).toHaveValue('')
+  await expect(target).toBeVisible()
+})
+
 test('模拟登录切换权限视角并在同一浏览器恢复管理员', async ({ page, context }) => {
   await page.addInitScript(() => {
     document.addEventListener('animationstart', (event) => {
@@ -51,10 +109,8 @@ test('模拟登录切换权限视角并在同一浏览器恢复管理员', async
     .toHaveAttribute('aria-current', 'page')
   const search = page.getByRole('searchbox', { name: '搜索姓名、账号或工号' })
   await search.fill('没有此用户')
-  await search.press('Enter')
   await expect(page.getByText('暂无可模拟的用户')).toBeVisible()
   await search.fill('采购')
-  await search.press('Enter')
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
   await expect(page.getByRole('columnheader', { name: '角色', exact: true })).toBeVisible()
   const targetRow = page.getByRole('row').filter({ hasText: '采购验收用户' })
@@ -71,10 +127,8 @@ test('模拟登录切换权限视角并在同一浏览器恢复管理员', async
   await roleOptions.getByText('采购查询员', { exact: true }).click()
   await expect(targetRow).toBeVisible()
   await search.fill('没有此账号')
-  await search.press('Enter')
   await expect(page.getByText('暂无可模拟的用户')).toBeVisible()
   await search.fill('procurement-test')
-  await search.press('Enter')
   await roleFilter.click()
   await roleOptions.getByText('全部角色', { exact: true }).click()
   await expect(targetRow).toBeVisible()

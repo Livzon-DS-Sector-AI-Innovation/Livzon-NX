@@ -9,6 +9,7 @@ import type { ModuleMenu } from "@/lib/menu-config"
 import { ModuleIcon } from "@/components/icons"
 import type { User } from "@/types/user"
 import { ToolbarActions } from "./ToolbarActions"
+import styles from "./TopNav.module.css"
 
 interface TopNavProps {
   user: User
@@ -42,7 +43,7 @@ export function TopNav({ user, modules, impersonationNotice }: TopNavProps) {
 
   return (
     <header className="h-16 bg-[var(--color-canvas)] border-b border-[var(--color-hairline)] flex items-center px-2 sm:px-5 shrink-0">
-      <div className="flex h-full min-w-0 flex-1 items-center">
+      <div className={`flex h-full min-w-0 flex-1 items-center ${impersonationNotice ? styles.impersonationNavigation : ''}`}>
         {/* Logo */}
         <div className="flex items-center gap-2.5 mr-2 lg:mr-4 shrink-0">
           <div className="w-7 h-7 rounded-[var(--rounded-md)] bg-[var(--color-primary-fill)] flex items-center justify-center">
@@ -88,9 +89,9 @@ export function TopNav({ user, modules, impersonationNotice }: TopNavProps) {
       {impersonationNotice}
 
       {/* Right Section */}
-      <div className={`flex items-center gap-1.5 ml-2 lg:ml-4 shrink-0 ${impersonationNotice ? 'xl:ml-0 xl:flex-1 xl:justify-end' : ''}`}>
+      <div className={`flex items-center gap-1.5 ml-2 lg:ml-4 shrink-0 ${impersonationNotice ? `${styles.impersonationActions} xl:ml-0 xl:flex-1 xl:justify-end` : ''}`}>
         <ToolbarActions key={user.id} user={user} modules={modules} />
-        <div className="ml-2 flex items-center gap-2 h-8 px-2 rounded-[var(--rounded-md)]">
+        <div className={`ml-2 flex items-center gap-2 h-8 px-2 rounded-[var(--rounded-md)] ${impersonationNotice ? styles.impersonationAvatar : ''}`}>
           <Avatar
             size={28}
             src={avatarFailed ? undefined : user.avatar_url || undefined}

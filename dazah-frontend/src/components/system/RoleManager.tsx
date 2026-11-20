@@ -4,7 +4,7 @@ import { getUserErrorMessage } from '@/lib/user-error'
 import { useState } from "react"
 import Link, { useLinkStatus } from "next/link"
 import { App, Button, Drawer, Form, Input, Popconfirm, Table, Tag } from "antd"
-import { PlusOutlined } from "@ant-design/icons"
+import { CloseCircleFilled, PlusOutlined, SearchOutlined } from "@ant-design/icons"
 import type { PermissionItem, RoleItem } from "@/lib/api/client/admin"
 import type { MenuFlatItem } from "@/lib/menu-tree"
 import { createRole, deleteRole, updateRole } from "@/actions/admin"
@@ -36,16 +36,22 @@ interface RoleManagerProps {
 
 export function RoleManager({ initialRoles: roles, origin }: RoleManagerProps) {
   const { message } = App.useApp()
+  const [search, setSearch] = useState("")
+  const [page, setPage] = useState(1)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [editing, setEditing] = useState<RoleItem | "new" | null>(null)
   const [saving, setSaving] = useState(false)
   const [form] = Form.useForm<RoleFormValues>()
   const creating = editing === "new"
+  const keyword = trimRoleWhitespace(search).toLowerCase()
   const orderedRoles = [
     ...roles.filter((role) => role.code === "super_admin"),
     ...roles.filter((role) => role.code === "ordinary_admin"),
     ...roles.filter((role) => role.code !== "super_admin" && role.code !== "ordinary_admin"),
   ]
+  const visibleRoles = keyword ? orderedRoles.filter((role) =>
+    role.name.toLowerCase().includes(keyword) || role.code.toLowerCase().includes(keyword),
+  ) : orderedRoles
 
   const openCreate = () => {
     setEditing("new")
@@ -97,11 +103,18 @@ export function RoleManager({ initialRoles: roles, origin }: RoleManagerProps) {
   }
 
   return <div>
-    <div className="mb-3"><Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-      新建角色
-    </Button></div>
-    <Table rowKey="id" dataSource={orderedRoles} tableLayout="fixed" scroll={{ x: 900 }}
-      pagination={{ pageSize: 20, showSizeChanger: false }} columns={[
+    <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+      <Input allowClear={{ clearIcon: <CloseCircleFilled aria-label="清空搜索" /> }}
+        prefix={<SearchOutlined aria-hidden />} className="w-full sm:max-w-72"
+        role="searchbox" aria-label="搜索角色" placeholder="搜索角色名称或标识" value={search} onChange={(event) => {
+          setSearch(event.target.value)
+          setPage(1)
+        }} />
+      <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新建角色</Button>
+    </div>
+    <Table rowKey="id" dataSource={visibleRoles} tableLayout="fixed" scroll={{ x: 900 }}
+      locale={{ emptyText: keyword ? "没有符合搜索条件的角色" : "暂无角色" }}
+      pagination={{ current: page, onChange: setPage, pageSize: 20, showSizeChanger: false }} columns={[
       { title: "角色名称", dataIndex: "name", key: "name", width: 152, ellipsis: true },
       { title: "角色标识", dataIndex: "code", key: "code", width: 180, ellipsis: true },
       { title: "类型", dataIndex: "is_system", key: "is_system", width: 110, render: (value: boolean, role: RoleItem) => {

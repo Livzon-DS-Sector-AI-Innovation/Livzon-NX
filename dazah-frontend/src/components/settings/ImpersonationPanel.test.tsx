@@ -4,6 +4,7 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { describe, expect, it, vi } from 'vitest'
 import { ConfigProvider, theme } from 'antd'
+import { SEARCH_DELAY_MS } from '@/hooks/useSearchFilter'
 import { listImpersonationTargets, startImpersonation } from '@/lib/api/client/impersonation'
 import { finishImpersonationListReturn, saveImpersonationListState } from '@/lib/impersonationListState'
 import ImpersonationPanel from './ImpersonationPanel'
@@ -106,6 +107,59 @@ it('restores the filters and moves to the last available page if results shrank'
     await act(async () => root.unmount())
     host.remove()
     sessionStorage.clear()
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  }
+})
+
+it('searches after Chinese composition ends, resets pagination and restores the list on clear', async () => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  vi.useFakeTimers()
+  const list = vi.mocked(listImpersonationTargets)
+  list.mockClear()
+  list.mockResolvedValueOnce({ total: 22, items: [] })
+  list.mockResolvedValueOnce({ total: 22, items: [] })
+  list.mockResolvedValueOnce({ total: 0, items: [] })
+  const host = document.createElement('div')
+  document.body.append(host)
+  const root = createRoot(host)
+  try {
+    await act(async () => root.render(<ConfigProvider theme={{ token: { motion: false } }}>
+      <ImpersonationPanel roles={[]} />
+    </ConfigProvider>))
+    await act(async () => { await vi.advanceTimersByTimeAsync(100) })
+    await act(async () => host.querySelector<HTMLButtonElement>('.ant-pagination-next button')!.click())
+    await act(async () => { await vi.advanceTimersByTimeAsync(100) })
+    expect(list.mock.lastCall?.[0]).toEqual({ keyword: '', role_id: undefined, offset: 20, limit: 20 })
+
+    const input = host.querySelector<HTMLInputElement>('input[role="searchbox"]')!
+    const write = (value: string) => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value)
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    }
+    await act(async () => {
+      input.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }))
+      write('cai')
+    })
+    await act(async () => { await vi.advanceTimersByTimeAsync(SEARCH_DELAY_MS) })
+    expect(list).toHaveBeenCalledTimes(2)
+
+    await act(async () => {
+      write('  采购  ')
+      input.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true }))
+    })
+    await act(async () => { await vi.advanceTimersByTimeAsync(SEARCH_DELAY_MS) })
+    await act(async () => { await vi.advanceTimersByTimeAsync(100) })
+    expect(list.mock.lastCall?.[0]).toEqual({ keyword: '采购', role_id: undefined, offset: 0, limit: 20 })
+    expect(host.textContent).toContain('暂无可模拟的用户')
+
+    await act(async () => host.querySelector('[aria-label="清空搜索"]')!.closest('button')!.click())
+    await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+    expect(input.value).toBe('')
+    expect(list.mock.lastCall?.[0]).toEqual({ keyword: '', role_id: undefined, offset: 0, limit: 20 })
+  } finally {
+    await act(async () => root.unmount())
+    host.remove()
     vi.useRealTimers()
     vi.unstubAllGlobals()
   }
