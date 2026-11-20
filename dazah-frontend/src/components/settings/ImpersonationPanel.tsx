@@ -3,9 +3,11 @@
 import { getUserErrorMessage } from '@/lib/user-error'
 import { useEffect, useState } from 'react'
 import { Button, Input, Modal, Select, Table, Tag, Tooltip, Typography } from 'antd'
+import { CloseCircleFilled, SearchOutlined } from '@ant-design/icons'
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query'
 import { switchWorkspaceIdentity } from '@/components/auth/WorkspaceIdentitySync'
 import PlatformNotice from '@/components/shared/PlatformNotice'
+import { useSearchFilter } from '@/hooks/useSearchFilter'
 import { listImpersonationTargets, startImpersonation, type ImpersonationTarget } from '@/lib/api/client/impersonation'
 import { saveImpersonationListState, takeRestoredImpersonationListState } from '@/lib/impersonationListState'
 import type { RoleItem } from '@/lib/api/server/admin'
@@ -21,9 +23,12 @@ export default function ImpersonationPanel({ roles }: { roles: RoleOption[] }) {
 
 function ImpersonationTargets({ roles }: { roles: RoleOption[] }) {
   const [keyword, setKeyword] = useState('')
-  const [searchText, setSearchText] = useState('')
   const [roleId, setRoleId] = useState('')
   const [page, setPage] = useState(1)
+  const { inputProps, searchPending, setSearchText } = useSearchFilter(keyword, (value) => {
+    setKeyword(value)
+    setPage(1)
+  })
   const [ready, setReady] = useState(false)
   const [target, setTarget] = useState<ImpersonationTarget>()
   const [pending, setPending] = useState(false)
@@ -46,19 +51,19 @@ function ImpersonationTargets({ roles }: { roles: RoleOption[] }) {
     return () => {
       cancelled = true
     }
-  }, [roles])
+  }, [roles, setSearchText])
 
   const query = useQuery({
     queryKey: ['settings', 'impersonation-targets', keyword, roleId, page],
     queryFn: ({ signal }) => listImpersonationTargets({
       keyword, role_id: roleId || undefined, offset: (page - 1) * PAGE_SIZE, limit: PAGE_SIZE,
     }, signal),
-    enabled: ready,
+    enabled: ready && !searchPending,
     retry: false,
   })
 
   const total = query.data?.total
-  if (total !== undefined) {
+  if (!searchPending && total !== undefined) {
     const lastPage = Math.max(1, Math.ceil(total / PAGE_SIZE))
     if (page > lastPage) setPage(lastPage)
   }
@@ -81,19 +86,15 @@ function ImpersonationTargets({ roles }: { roles: RoleOption[] }) {
 
   return <div className="space-y-4">
     <div className="flex flex-wrap items-center gap-2">
-      <Input.Search
+      <Input
+        {...inputProps}
+        role="searchbox"
         aria-label="搜索姓名、账号或工号"
         placeholder="搜索姓名、账号或工号"
-        allowClear
+        prefix={<SearchOutlined aria-hidden />}
+        allowClear={{ clearIcon: <CloseCircleFilled aria-label="清空搜索" /> }}
         maxLength={100}
-        enterButton="搜索"
         className="max-w-sm"
-        value={searchText}
-        onChange={(event) => setSearchText(event.target.value)}
-        onSearch={(value) => {
-          setKeyword(value.trim())
-          setPage(1)
-        }}
       />
       <Select<string>
         aria-label="按角色筛选"
@@ -107,7 +108,7 @@ function ImpersonationTargets({ roles }: { roles: RoleOption[] }) {
         }}
       />
     </div>
-    {query.isError
+    {query.isError && !searchPending
       ? <PlatformNotice
         type="error"
         title={query.error.message}
@@ -118,12 +119,12 @@ function ImpersonationTargets({ roles }: { roles: RoleOption[] }) {
         rowKey="id"
         size="small"
         scroll={{ x: 600 }}
-        loading={query.isFetching}
-        locale={{ emptyText: query.isPending ? '正在查询用户…' : '暂无可模拟的用户' }}
-        dataSource={query.data?.items ?? []}
+        loading={searchPending || query.isFetching}
+        locale={{ emptyText: searchPending || query.isPending ? '正在查询用户…' : '暂无可模拟的用户' }}
+        dataSource={searchPending ? [] : query.data?.items ?? []}
         pagination={{
           current: page, pageSize: PAGE_SIZE, total: query.data?.total,
-          showSizeChanger: false, onChange: setPage,
+          showSizeChanger: false, disabled: searchPending, onChange: setPage,
         }}
         columns={[
           { title: '姓名', dataIndex: 'name' },

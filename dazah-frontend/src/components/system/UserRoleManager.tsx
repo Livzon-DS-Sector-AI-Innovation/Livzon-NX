@@ -5,7 +5,8 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { PAGE_DATA_SCOPE_VISIBLE } from "@/lib/page-permission-editor"
 import { App, Button, Checkbox, ConfigProvider, Drawer, Input, Popover, Table, Tag, Tooltip, Typography } from "antd"
 import Alert from "@/components/shared/PlatformNotice"
-import { DownOutlined, PlusOutlined, SearchOutlined, UpOutlined } from "@ant-design/icons"
+import { CloseCircleFilled, DownOutlined, PlusOutlined, SearchOutlined, UpOutlined } from "@ant-design/icons"
+import { useSearchFilter } from "@/hooks/useSearchFilter"
 import type { AdminUserItem, RoleItem } from "@/lib/api/client/admin"
 import { fetchAdminUsers, fetchDataScopes } from "@/lib/api/client/admin"
 import type { DepartmentItem } from "@/lib/api/server/admin"
@@ -41,6 +42,7 @@ function roleOrder(code: string) {
 export function UserRoleManager({ initialRoles, initialDepartments }: UserRoleManagerProps) {
   const { message, modal } = App.useApp()
   const [query, setQuery] = useState<UserListQuery>({ keyword: "", page: 1 })
+  const { inputProps, searchPending } = useSearchFilter(query.keyword, (keyword) => setQuery({ keyword, page: 1 }))
   const [listResult, setListResult] = useState<UserListResult | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [openFooterPanel, setOpenFooterPanel] = useState<"scope" | "reason" | null>(null)
@@ -128,7 +130,7 @@ export function UserRoleManager({ initialRoles, initialDepartments }: UserRoleMa
     return () => { cancelled = true }
   }, [message, query])
 
-  const loading = listResult?.query !== query
+  const loading = searchPending || listResult?.query !== query
   const loadError = loading ? undefined : listResult.error
   const refreshUsers = () => setQuery((current) => ({ ...current }))
 
@@ -364,10 +366,13 @@ export function UserRoleManager({ initialRoles, initialDepartments }: UserRoleMa
   return (
     <div>
       <div className="mb-3 max-w-sm">
-        <Input.Search
+        <Input
+          {...inputProps}
+          role="searchbox"
+          aria-label="搜索用户"
           placeholder="按姓名、部门、账号、邮箱、手机号或工号搜索"
-          allowClear
-          onSearch={(value) => setQuery({ keyword: value.trim(), page: 1 })}
+          prefix={<SearchOutlined aria-hidden />}
+          allowClear={{ clearIcon: <CloseCircleFilled aria-label="清空搜索" /> }}
         />
       </div>
       <Table
@@ -380,12 +385,13 @@ export function UserRoleManager({ initialRoles, initialDepartments }: UserRoleMa
             <span>{loadError}</span>
             <Button type="link" onClick={refreshUsers}>重试</Button>
           </div>
-        ) : query.keyword ? "没有符合条件的用户" : "暂无用户" }}
+        ) : loading ? "正在查询用户…" : query.keyword ? "没有符合条件的用户" : "暂无用户" }}
         pagination={{
           current: query.page,
           total: listResult?.query.keyword === query.keyword && listResult.error === undefined ? listResult.total : 0,
           pageSize: USER_PAGE_SIZE,
           showSizeChanger: false,
+          disabled: searchPending,
           onChange: (page) => setQuery((current) => ({ ...current, page })),
         }}
         size="middle"

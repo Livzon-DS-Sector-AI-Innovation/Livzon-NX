@@ -3,8 +3,10 @@
 import { getUserErrorMessage } from '@/lib/user-error'
 import { useEffect, useId, useRef, useState } from "react"
 import { App, Button, Input, Progress, Radio, Select, Space, Table, Tag } from "antd"
+import { CloseCircleFilled, SearchOutlined } from "@ant-design/icons"
 import PlatformNotice from "@/components/shared/PlatformNotice"
 import { applyDeptRolesToUser } from "@/actions/admin"
+import { useSearchFilter } from "@/hooks/useSearchFilter"
 import { fetchAdminUsers, type AdminUserItem, type AdminUserQuery, type RoleItem } from "@/lib/api/client/admin"
 
 type Assignment = { user: AdminUserItem; roleIds: string[] }
@@ -33,13 +35,21 @@ export function BatchApplyRoles({ role, roles, departmentId, departmentName, onR
   const [keyword, setKeyword] = useState("")
   const [selected, setSelected] = useState<Assignment[]>([])
   const [commonRoleIds, setCommonRoleIds] = useState<string[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState("")
+  const [fetching, setLoading] = useState(true)
+  const [loadError, setError] = useState("")
   const [running, setRunning] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [results, setResults] = useState<ApplyResult[]>([])
   const [reload, setReload] = useState(0)
   const [scope, setScope] = useState<AdminUserQuery["user_scope"]>(role ? "department" : undefined)
+  const { inputProps, searchPending } = useSearchFilter(keyword, (value) => {
+    setKeyword(value)
+    setPage(1)
+    setLoading(true)
+    setError("")
+  })
+  const loading = fetching || searchPending
+  const error = searchPending ? "" : loadError
   const busy = useRef(false)
   const locked = confirming || running
   const roleOptions = (roles ?? (role ? [role] : [])).map(({ id, name }) => ({ value: id, label: name }))
@@ -135,20 +145,18 @@ export function BatchApplyRoles({ role, roles, departmentId, departmentName, onR
           setScope(event.target.value); setPage(1); setLoading(true); setError("")
         }} />
       </Space>}
-      <Input.Search
+      <Input
+        {...inputProps}
+        role="searchbox"
         aria-label={role ? "搜索部门用户" : "搜索用户"}
         placeholder={role ? "按姓名搜索用户" : "按姓名、部门、账号、邮箱、手机号或工号搜索"}
-        enterButton="搜索"
-        allowClear
+        prefix={<SearchOutlined aria-hidden />}
+        allowClear={{ clearIcon: <CloseCircleFilled aria-label="清空搜索" /> }}
         disabled={locked}
-        onSearch={(value) => {
-          setPage(1)
-          setKeyword(value.trim())
-          refresh()
-      }} />
+      />
       {error && <PlatformNotice type="error" title={error} showRulesLink={!!role}
         action={<Button onClick={refresh}>{role ? "重试" : "重试搜索"}</Button>} />}
-      {!error && <Table<AdminUserItem> rowKey="id" size="small" loading={loading} dataSource={users}
+      {!error && <Table<AdminUserItem> rowKey="id" size="small" loading={loading} dataSource={loading ? [] : users}
         locale={{ emptyText: loading ? "正在查询用户" : "未找到符合条件的用户" }}
         scroll={{ x: 560 }} columns={[
           { title: "姓名", dataIndex: "name", render: (_, user) => role ? user.name : <div className="break-words">

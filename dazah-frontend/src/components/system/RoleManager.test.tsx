@@ -10,16 +10,17 @@ import styles from './RoleManager.module.css'
 
 vi.mock('@/actions/admin', () => ({ createRole: vi.fn(), updateRole: vi.fn(), deleteRole: vi.fn() }))
 
+function enter(input: HTMLInputElement, value: string) {
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(input, value)
+  input.dispatchEvent(new Event('input', { bubbles: true }))
+}
+
 it.each(['light', 'dark'])('validates and saves the new role form in %s mode', async (appearance) => {
   const host = document.createElement('div')
   document.body.append(host)
   const root = createRoot(host)
   const button = (label: string) => Array.from(document.querySelectorAll('button'))
     .find((item) => item.textContent?.replace(/\s/g, '') === label)
-  const enter = (input: HTMLInputElement, value: string) => {
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(input, value)
-    input.dispatchEvent(new Event('input', { bubbles: true }))
-  }
   const errors = (field: Element | null) => [...(field?.querySelectorAll('.ant-form-item-explain-error') ?? [])]
     .map((item) => item.textContent)
   const submit = async () => act(async () => button('保存')?.click())
@@ -163,6 +164,48 @@ it.each(['light', 'dark'])('shows 20 roles per page and recovers after deleting 
     expect(deleteRole).toHaveBeenCalledExactlyOnceWith('role-21')
     expect(rows()).toHaveLength(20)
     expect(host.querySelector('.ant-pagination-item-active')?.textContent).toBe('1')
+  } finally {
+    await act(async () => root.unmount())
+    host.remove()
+  }
+})
+
+it('searches role names and codes across pages and restores the list on clear', async () => {
+  const roles = Array.from({ length: 20 }, (_, index) => ({
+    id: `role-${index + 1}`, name: `测试角色 ${index + 1}`, code: `role_${index + 1}`, is_system: false, permissions: [],
+  }))
+  const reviewer = { id: 'reviewer', name: '质量审核角色', code: 'qa_reviewer', is_system: false, permissions: [] }
+  const host = document.createElement('div')
+  document.body.append(host)
+  const root = createRoot(host)
+  const rowIds = () => Array.from(host.querySelectorAll('tbody tr[data-row-key]'), (row) => row.getAttribute('data-row-key'))
+  const firstPageIds = roles.map((role) => role.id)
+  try {
+    await act(async () => root.render(<App><RoleManager initialRoles={[...roles, reviewer]} /></App>))
+    const input = host.querySelector<HTMLInputElement>('input[role="searchbox"][aria-label="搜索角色"]')!
+    expect(rowIds()).toEqual(firstPageIds)
+
+    await act(async () => host.querySelector<HTMLButtonElement>('.ant-pagination-next button')!.click())
+    expect(rowIds()).toEqual([reviewer.id])
+    await act(async () => enter(input, '角色'))
+    expect(rowIds()).toEqual(firstPageIds)
+
+    await act(async () => enter(input, '　审核  '))
+    expect(rowIds()).toEqual([reviewer.id])
+    await act(async () => enter(input, 'QA_REVIEW'))
+    expect(rowIds()).toEqual([reviewer.id])
+    await act(async () => enter(input, '没有匹配'))
+    expect(rowIds()).toEqual([])
+    expect(host.querySelector('.ant-table-placeholder')?.textContent).toContain('没有符合搜索条件的角色')
+
+    await act(async () => host.querySelector('[aria-label="清空搜索"]')!.closest('button')!.click())
+    expect(input.value).toBe('')
+    expect(rowIds()).toEqual(firstPageIds)
+    await act(async () => enter(input, '　 '))
+    expect(rowIds()).toEqual(firstPageIds)
+
+    await act(async () => root.render(<App><RoleManager initialRoles={[]} /></App>))
+    expect(host.querySelector('.ant-table-placeholder')?.textContent).toContain('暂无角色')
   } finally {
     await act(async () => root.unmount())
     host.remove()

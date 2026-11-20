@@ -131,13 +131,17 @@
 }
 
 .toolbar {
-  flex: none;
-  max-inline-size: min(38vw, 34rem);
+  flex: 0 1 auto;
+  min-inline-size: 0;
+  max-inline-size: min(44vw, 34rem);
   margin-inline: 6px;
 }
 
 .toolbar .notice:global(.ant-alert) {
   --impersonation-radius: var(--rounded-xl);
+  /* Keep the toolbar layout on the server-rendered frame before Ant Design styles load. */
+  display: flex;
+  align-items: center;
   container-type: normal;
   flex-wrap: nowrap;
   padding: 4px 8px;
@@ -146,9 +150,13 @@
 .toolbar .notice :global(.ant-alert-section),
 .toolbar .notice :global(.ant-alert-content) {
   flex: 0 1 auto;
+  min-inline-size: 0;
 }
 
 .toolbar .notice:global(.ant-alert) :global(.ant-alert-icon) {
+  display: inline-flex;
+  flex: none;
+  line-height: 0;
   margin-inline-end: 5px;
 }
 
@@ -159,13 +167,79 @@
 }
 
 .toolbar .summary {
+  font-size: var(--ant-font-size, 0.875rem);
+  white-space: nowrap;
+}
+
+.toolbar .restore:global(.ant-btn) {
+  display: inline-flex;
+  justify-content: center;
+  gap: var(--ant-margin-xs, 8px);
+  font-size: var(--ant-font-size, 0.875rem);
   white-space: nowrap;
 }
 
 .toolbar .name {
+  min-inline-size: 0;
   max-inline-size: 8rem;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.compactLabel {
+  display: none;
+}
+
+@media (width < 64rem) {
+  .toolbar {
+    max-inline-size: 52vw;
+    margin-inline: 4px;
+  }
+
+  .toolbar .notice:global(.ant-alert) {
+    padding-inline: 4px;
+  }
+
+  .toolbar .summaryLabel,
+  .toolbar .restoreLabel {
+    display: none;
+  }
+
+  .toolbar .compactLabel {
+    display: inline;
+  }
+
+  .toolbar .notice:global(.ant-alert) :global(.ant-alert-actions) {
+    margin-inline-start: 4px;
+  }
+
+  .toolbar .restore:global(.ant-btn) {
+    gap: 4px;
+    padding-inline: 5px;
+  }
+}
+
+@media (width < 40rem) {
+  .toolbar .summary {
+    gap: 4px;
+  }
+
+  .toolbar .name {
+    padding-inline: 4px;
+  }
+
+  .toolbar .restore > :global(.ant-btn-icon) {
+    display: none;
+  }
+
+  .toolbar .restore:global(.ant-btn-loading) > :global(.ant-btn-icon) {
+    display: inline-flex;
+    position: absolute;
+  }
+
+  .toolbar .restore:global(.ant-btn-loading) .compactLabel {
+    visibility: hidden;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

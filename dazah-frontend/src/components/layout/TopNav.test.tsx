@@ -110,6 +110,7 @@ describe('TopNav module feedback', () => {
       expect(host.querySelector('a[href="/auth/logout"]')).toBeNull()
       expect(host.querySelector('header [data-simulation-notice]')?.textContent).toContain('测试用户')
       expect(host.querySelectorAll('header nav a')).toHaveLength(modules.length)
+      expect([...host.querySelectorAll('header button')].map((button) => button.textContent)).toEqual(['反馈', '我的待办'])
     } finally {
       await act(async () => root.unmount())
     }

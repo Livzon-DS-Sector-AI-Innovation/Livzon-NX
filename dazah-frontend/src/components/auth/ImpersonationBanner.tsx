@@ -54,9 +54,10 @@ export function ImpersonationBanner({ name, expiresAt, inToolbar = false }: {
 
   const title = <span className={styles.summary}>
     {name ? <>
-      <span>当前处于</span>{' '}
+      {inToolbar && <span className={styles.compactLabel}>模拟</span>}
+      <span className={styles.summaryLabel}>当前处于</span>{' '}
       <strong className={styles.name}>{name}</strong>{' '}
-      <span>用户的模拟视角</span>
+      <span className={styles.summaryLabel}>用户的模拟视角</span>
     </> : '模拟登录暂不可用或已结束'}
   </span>
   const button = <Button
@@ -67,7 +68,8 @@ export function ImpersonationBanner({ name, expiresAt, inToolbar = false }: {
     loading={pending}
     onClick={restore}
   >
-    <span>{inToolbar && error ? '重试返回' : '返回管理员身份'}</span>
+    <span className={styles.restoreLabel}>{inToolbar && error ? '重试返回' : '返回管理员身份'}</span>
+    {inToolbar && <span className={styles.compactLabel} aria-hidden="true">{error ? '重试' : '返回'}</span>}
   </Button>
 
   return <div ref={banner} className={inToolbar ? styles.toolbar : styles.container}>
