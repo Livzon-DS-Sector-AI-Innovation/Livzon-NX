@@ -138,7 +138,7 @@ describe('dormitory 镜像 API', () => {
     const result = await recommendDormitoryRooms('administration', {
       name: '张三',
     })
-    expect(result.recommendations[0].room_no).toBe('301')
+    expect(result.recommendations?.[0]?.room_no).toBe('301')
     const [url, init] = mocks.fetch.mock.calls[0]
     expect(String(url)).toContain('/dormitory/checkin-recommend')
     expect(init.method).toBe('POST')
