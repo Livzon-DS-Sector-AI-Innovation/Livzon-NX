@@ -2,6 +2,7 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { SEARCH_DELAY_MS } from '@/hooks/useSearchFilter'
 
 const mocks = vi.hoisted(() => ({ list: vi.fn(), apply: vi.fn(), confirm: vi.fn(), close: vi.fn() }))
 vi.mock('@/actions/admin', () => ({ applyDeptRolesToUser: mocks.apply, createDeptRule: vi.fn(), deleteDeptRule: vi.fn() }))
@@ -34,6 +35,7 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount())
   host.remove()
+  vi.useRealTimers()
 })
 async function show() {
   await act(async () => root.render(createElement(BatchApplyRoles, {
@@ -58,13 +60,16 @@ async function showUserSearch() {
   await act(async () => root.render(createElement(BatchApplyRoles, { roles, onRunningChange: mocks.close })))
 }
 
-async function search(keyword: string) {
-  const input = host.querySelector<HTMLInputElement>('input[aria-label="搜索用户"]')!
+async function enter(input: HTMLInputElement, value: string) {
   await act(async () => {
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, keyword)
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value)
     input.dispatchEvent(new Event('input', { bubbles: true }))
   })
-  await act(async () => button('搜索').click())
+}
+
+async function search(keyword: string) {
+  await enter(host.querySelector<HTMLInputElement>('input[aria-label="搜索用户"]')!, keyword)
+  await act(async () => { await vi.advanceTimersByTimeAsync(SEARCH_DELAY_MS) })
 }
 
 async function toggleRole(label: string, name: string) {
@@ -81,6 +86,7 @@ async function toggleRole(label: string, name: string) {
 }
 
 it('searches across the directory, keeps selections across keywords, and appends the same roles to both users', async () => {
+  vi.useFakeTimers()
   mocks.list.mockResolvedValueOnce({ items: users, total: 2 })
     .mockResolvedValueOnce({ items: [users[0]], total: 1 })
     .mockResolvedValueOnce({ items: [users[1]], total: 1 })
@@ -195,7 +201,8 @@ it('shows permission failures and offers a read retry without enabling writes', 
 it.each([
   ['输入部门名称', '质量部', 'department_name'],
   ['输入飞书部门 ID', 'od-quality', 'department_id'],
-])('requires a role and accepts the single selector %s', async (placeholder, value, field) => {
+])('automatically queries a department after selecting a role and entering %s', async (placeholder, value, field) => {
+  vi.useFakeTimers()
   await act(async () => root.render(createElement(DeptRoleMapper, {
     initialRules: [], initialDepartments: [], initialRoles: [
       { id: 'role1', code: 'reader', name: '质量查询', is_system: false, permissions: [] },
@@ -205,30 +212,29 @@ it.each([
   const departmentTab = [...host.querySelectorAll<HTMLElement>('[role="tab"]')]
     .find((item) => item.textContent === '按部门查询')!
   await act(async () => departmentTab.click())
-  await act(async () => button('查询部门用户').click())
-  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 100)) })
-  expect(document.body.textContent).toContain('请选择角色')
-  expect(document.body.textContent).toContain('飞书部门 ID 或部门名称至少填写一个')
+  const input = document.querySelector<HTMLInputElement>(`input[placeholder="${placeholder}"]`)!
+  await enter(input, ` ${value} `)
+  await act(async () => { await vi.advanceTimersByTimeAsync(SEARCH_DELAY_MS) })
   expect(mocks.list).toHaveBeenCalledTimes(1)
   const departmentPanel = document.getElementById(departmentTab.getAttribute('aria-controls') ?? '')
   const departmentRole = departmentPanel?.querySelector('[role="combobox"]')
   expect(departmentRole).toBeTruthy()
   await act(async () => departmentRole!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })))
   await act(async () => document.querySelector<HTMLElement>('.ant-select-item-option')!.click())
-  const input = document.querySelector<HTMLInputElement>(`input[placeholder="${placeholder}"]`)!
-  await act(async () => {
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value)
-    input.dispatchEvent(new Event('input', { bubbles: true }))
-  })
-  await act(async () => button('查询部门用户').click())
+  await act(async () => { await vi.advanceTimersByTimeAsync(SEARCH_DELAY_MS) })
   expect(mocks.list).toHaveBeenLastCalledWith(expect.objectContaining({ [field]: value, user_scope: 'department' }))
   expect(document.body.textContent).toContain('保存应用角色')
   await act(async () => host.querySelector<HTMLInputElement>('section[aria-label="部门用户角色分配"] thead input[type="checkbox"]')!.click())
-  await act(async () => {
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, `${value}2`)
-    input.dispatchEvent(new Event('input', { bubbles: true }))
-  })
+  await enter(input, `${value}2`)
   expect(document.querySelector('section[aria-label="部门用户角色分配"]')).toBeNull()
+  await act(async () => { await vi.advanceTimersByTimeAsync(SEARCH_DELAY_MS) })
+  const section = host.querySelector('section[aria-label="部门用户角色分配"]')
+  expect(section?.textContent).toContain('已选 0 位用户')
+  expect(mocks.list).toHaveBeenLastCalledWith(expect.objectContaining({ [field]: `${value}2`, offset: 0 }))
+  await enter(input, ' ')
+  await act(async () => { await vi.advanceTimersByTimeAsync(SEARCH_DELAY_MS) })
+  expect(document.querySelector('section[aria-label="部门用户角色分配"]')).toBeNull()
+  expect(mocks.list).toHaveBeenCalledTimes(3)
 })
 
 it('allows supplementing missing-department users while retaining department selections', async () => {
