@@ -18,6 +18,19 @@ import { drainReactScheduler } from './test/react-scheduler-teardown'
 
 export {}
 
+// 4) 全局 URL 防泄漏：多个组件测试为下载/blob 场景 stub 全局 URL 为
+//    普通对象（非构造器）。任何残留都会让后续用例点击锚点时
+//    happy-dom navigator `new URL` 抛 "URL is not a constructor"，
+//    unhandled 错误使整个分片 exit 1（blob 断言全过也照样挂）。
+//    每个用例前强制恢复模块加载时的真实 URL 构造器。
+const realURL = globalThis.URL
+
+afterEach(() => {
+  if (globalThis.URL !== realURL) {
+    globalThis.URL = realURL
+  }
+})
+
 declare global {
   // React 19 测试环境的 act 支持标志（happy-dom / vitest 未声明）
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined
