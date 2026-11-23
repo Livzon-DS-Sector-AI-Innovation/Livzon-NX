@@ -82,7 +82,9 @@ class BlendingInput(BaseModel):
     )
 
     blend_batch: Mapped[str] = mapped_column(
-        String(32), nullable=False, comment="混合批号"
+        String(255),
+        nullable=False,
+        comment="混合批号（源表可能多批号连写，如 MC-260714 USMC-M-2607007 …）",
     )
     input_batch_no: Mapped[str] = mapped_column(
         String(128),

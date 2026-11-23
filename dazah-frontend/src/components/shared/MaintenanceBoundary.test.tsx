@@ -103,3 +103,49 @@ it('closes requests at the announced deadline even if subsequent probes fail', a
     await expect(window.fetch('/settings', { method: 'POST' })).rejects.toThrow('请停止操作')
   } finally { act(() => root.unmount()); host.remove() }
 })
+
+it('backs off probing when the status endpoint is unavailable (dev 404)', async () => {
+  vi.useFakeTimers()
+  const fetcher = vi.fn(async (input: RequestInfo | URL) =>
+    String(input).includes('__dazah_maintenance_status')
+      ? new Response(null, { status: 404 })
+      : new Response('{}'))
+  vi.stubGlobal('fetch', fetcher)
+  const host = document.createElement('div')
+  document.body.append(host)
+  const root = createRoot(host)
+  try {
+    await act(async () => root.render(<MaintenanceBoundary>原页面</MaintenanceBoundary>))
+    await act(async () => vi.advanceTimersByTimeAsync(10_000))
+    const probeCalls = fetcher.mock.calls.filter(call => String(call[0]).includes('__dazah_maintenance_status')).length
+    // 退避节奏 1s→2s→4s→8s：10 秒内仅 4 次探测（旧行为为 11 次）
+    expect(probeCalls).toBeLessThanOrEqual(4)
+    expect(probeCalls).toBeGreaterThanOrEqual(2)
+    expect(host.textContent).toBe('原页面')
+  } finally { act(() => root.unmount()); host.remove() }
+})
+
+it('recovers to 1s probing once the status endpoint is healthy again', async () => {
+  vi.useFakeTimers()
+  let healthy = false
+  const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+    if (!String(input).includes('__dazah_maintenance_status')) return new Response('{}')
+    return healthy ? new Response(null, { status: 204 }) : new Response(null, { status: 404 })
+  })
+  vi.stubGlobal('fetch', fetcher)
+  const host = document.createElement('div')
+  document.body.append(host)
+  const root = createRoot(host)
+  const probeCount = () => fetcher.mock.calls.filter(call => String(call[0]).includes('__dazah_maintenance_status')).length
+  try {
+    await act(async () => root.render(<MaintenanceBoundary>原页面</MaintenanceBoundary>))
+    await act(async () => vi.advanceTimersByTimeAsync(7_000)) // 退避中：0,1,3,7s → 4 次
+    const duringBackoff = probeCount()
+    healthy = true
+    // 7s 末下一次探测排在 15s（退避 8s）；推进 12s 覆盖恢复后的 1s 节奏
+    await act(async () => vi.advanceTimersByTimeAsync(12_000))
+    const afterRecovery = probeCount() - duringBackoff
+    expect(duringBackoff).toBeLessThanOrEqual(4)
+    expect(afterRecovery).toBeGreaterThanOrEqual(3)
+  } finally { act(() => root.unmount()); host.remove() }
+})
