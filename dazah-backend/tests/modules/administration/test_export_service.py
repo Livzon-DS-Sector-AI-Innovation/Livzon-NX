@@ -84,3 +84,93 @@ def test_build_workbook_embeds_images_avatars_and_formats_values() -> None:
     assert sheet.cell(row=2, column=2).value == "常晶晶"
     # 图片嵌入：1 张附件缩略图 + 1 张人员头像
     assert len(sheet._images) == 2
+
+
+async def test_download_attachment_bytes_prefers_tmp_url(monkeypatch) -> None:
+    """有 tmp_url 走 tmp 通道；失败回退 file_token 直下；全失败返回 None。"""
+    from app.modules.administration import export_service as es
+
+    calls: list[str] = []
+
+    class _Client:
+        async def download_media_via_tmp_url(self, tmp_url: str):
+            calls.append("tmp:" + tmp_url)
+            if "bad" in tmp_url:
+                raise RuntimeError("tmp channel down")
+            return (b"png-bytes", "image/png", None)
+
+        async def download_media(self, token: str):
+            calls.append("direct:" + token)
+            return (b"direct-bytes", "image/png", None)
+
+    # 1) tmp_url 成功
+    item = {
+        "tmp_url": "https://open.feishu.cn/open-apis/drive/v1/medias/x/download",
+        "file_token": "tok-1",
+    }
+    result = await es._download_attachment_bytes(_Client(), item)
+    assert result == b"png-bytes"
+    assert calls == ["tmp:https://open.feishu.cn/open-apis/drive/v1/medias/x/download"]
+
+    # 2) tmp 失败 → 回退直下
+    calls.clear()
+    item["tmp_url"] = "https://open.feishu.cn/open-apis/drive/v1/medias/bad"
+    result = await es._download_attachment_bytes(_Client(), item)
+    assert result == b"direct-bytes"
+    assert calls[-1] == "direct:tok-1"
+
+    # 3) 非 open.feishu 前缀 → 直接走直下
+    calls.clear()
+    item["tmp_url"] = "https://other.example.com/x"
+    result = await es._download_attachment_bytes(_Client(), item)
+    assert result == b"direct-bytes"
+
+    # 4) 无 file_token 且 tmp 失败 → None
+    calls.clear()
+    item["tmp_url"] = "https://open.feishu.cn/open-apis/drive/v1/medias/bad"
+    item["file_token"] = ""
+    assert await es._download_attachment_bytes(_Client(), item) is None
+
+
+def test_downscale_helpers() -> None:
+    """压图成功/坏内容跳过；头像居中裁方并缩放。"""
+    import struct
+    import zlib
+
+    from app.modules.administration import export_service as es
+
+    def _png(width: int, height: int) -> bytes:
+        def chunk(tag: bytes, data: bytes) -> bytes:
+            return (
+                struct.pack(">I", len(data))
+                + tag
+                + data
+                + struct.pack(">I", zlib.crc32(tag + data))
+            )
+
+        header = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
+        raw = b"".join(b"\x00" + b"\xff\x00\x00" * width for _ in range(height))
+        return (
+            b"\x89PNG\r\n\x1a\n"
+            + chunk(b"IHDR", header)
+            + chunk(b"IDAT", zlib.compress(raw))
+            + chunk(b"IEND", b"")
+        )
+
+    ok = es._downscale_image(_png(200, 100), 64, 64)
+    assert ok is not None and ok[1] <= 64
+    assert es._downscale_image(b"not-a-png", 64, 64) is None
+
+    avatar = es._downscale_avatar(_png(80, 40))
+    assert avatar is not None and avatar[1] == avatar[2]
+    assert es._downscale_avatar(b"garbage") is None
+
+
+async def test_collect_person_avatar_bytes_empty_emails(monkeypatch) -> None:
+    """无邮箱记录 → 不发起下载，返回空映射。"""
+    from app.modules.administration import export_service as es
+
+    result = await es._collect_person_avatar_bytes(
+        None, [{"fields": {"负责人": "纯文本无邮箱"}}]
+    )
+    assert result == {}

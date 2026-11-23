@@ -197,3 +197,21 @@ def test_search_text_excludes_content() -> None:
     assert "2026-第03号" in text and "培训通知" in text
     # 元数据搜索文本不含公告内容，防止关键字搜索泄露内容线索
     assert "正文内容" not in _build_search_text("A", "B", "C", "D", "E")
+
+
+def test_clean_notice_no_and_published_at() -> None:
+    """编号/日期清洗：分隔符归一、非零填充解析、非法输入返回 None。"""
+    from app.modules.administration.notice_service import (
+        _clean_notice_no,
+        _clean_published_at,
+    )
+
+    assert _clean_notice_no("  Notice-1  ") == "Notice-1"
+    assert _clean_notice_no("") is None
+
+    assert _clean_published_at("2026-11-23") == "2026-11-23"
+    assert _clean_published_at("2026/11/23") == "2026-11-23"
+    assert _clean_published_at("2026年11月23日") == "2026-11-23"
+    assert _clean_published_at("2026-3-5") == "2026-03-05"
+    assert _clean_published_at("not-a-date") is None
+    assert _clean_published_at("") is None
