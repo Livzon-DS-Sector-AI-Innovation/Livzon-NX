@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import uuid
 from datetime import date, datetime
 from typing import Any
 
@@ -48,7 +49,7 @@ class RepairFeishuConfig(BaseModel):
         server_default="201-1",
         comment="车间代码（如 101-1 / 201-1）",
     )
-    feishu_app_id: Mapped[str | None] = mapped_column(
+    feishu_app_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("equipment.feishu_apps.id"),
         nullable=True,
         comment="关联的飞书自建应用（凭据存于 feishu_apps，与巡检共用应用登记）",

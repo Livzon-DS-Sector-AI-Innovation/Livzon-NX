@@ -153,7 +153,7 @@ async def update_repair_config(
     current_user: CurrentUser = None,
 ) -> JSONResponse:
     _require_user(current_user)
-    detail = await service.update_config(db, workshop, payload.model_dump())
+    detail = await service.update_config(db, workshop, payload)
     return success_response(
         data=RepairConfigDetail.model_validate(detail).model_dump(mode="json")
     )

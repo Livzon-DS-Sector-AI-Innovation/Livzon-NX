@@ -17,6 +17,7 @@ from app.modules.equipment.models.repair_ledger import (
     RepairFeishuConfig,
     RepairRecord,
 )
+from app.modules.equipment.schemas.repair_ledger import RepairConfigUpdateRequest
 from app.modules.equipment.service import repair_ledger as service
 
 
@@ -282,14 +283,16 @@ async def test_update_config_registers_manual_app(db_session: AsyncSession) -> N
         detail = await service.update_config(
             db_session,
             workshop,
-            {
-                "app_id": f"cli_manual_{workshop}",
-                "app_secret": "test-secret",
-                "app_token": "https://example.feishu.cn/base/testbase123",
-                "table_id": "https://example.feishu.cn/base/testbase123?table=tblXYZ&view=vewABC",
-                "base_url": "https://example.feishu.cn/base/testbase123",
-                "is_enabled": True,
-            },
+            RepairConfigUpdateRequest(
+                app_id=f"cli_manual_{workshop}",
+                app_secret="test-secret",
+                app_token="https://example.feishu.cn/base/testbase123",
+                table_id=(
+                    "https://example.feishu.cn/base/testbase123?table=tblXYZ&view=vewABC"
+                ),
+                base_url="https://example.feishu.cn/base/testbase123",
+                is_enabled=True,
+            ),
         )
         assert detail["app_token"] == "testbase123"
         assert detail["table_id"] == "tblXYZ"
@@ -320,12 +323,12 @@ async def test_update_config_rejects_view_id(db_session: AsyncSession) -> None:
             await service.update_config(
                 db_session,
                 workshop,
-                {
-                    "feishu_app_id": str(app.id),
-                    "app_token": "base1234567890",
-                    "table_id": "vewABC123",
-                    "is_enabled": True,
-                },
+                RepairConfigUpdateRequest(
+                    feishu_app_id=app.id,
+                    app_token="base1234567890",
+                    table_id="vewABC123",
+                    is_enabled=True,
+                ),
             )
     finally:
         await db_session.rollback()

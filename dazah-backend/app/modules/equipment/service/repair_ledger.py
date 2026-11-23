@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta, timezone
 from typing import Any
@@ -29,6 +30,7 @@ from app.modules.equipment.models.repair_ledger import (
     RepairRecord,
     RepairSyncState,
 )
+from app.modules.equipment.schemas.repair_ledger import RepairConfigUpdateRequest
 from app.modules.equipment.service import feishu_app as feishu_app_service
 from app.platform.integrations.feishu.bitable import BitableClient
 from app.platform.integrations.feishu.utils import (
@@ -59,7 +61,6 @@ _FIELD_MATCHERS: list[tuple[tuple[str, ...], str]] = [
     (("备注",), "remark"),
     (("设备",), "equipment_text"),
 ]
-
 
 # ── 配置 ────────────────────────────────────────────────────────
 
@@ -207,18 +208,17 @@ async def _resolve_app_token(
 
 
 async def _resolve_target_app(
-    db: AsyncSession, payload: dict[str, Any]
+    db: AsyncSession, data: RepairConfigUpdateRequest
 ) -> EquipmentFeishuApp:
     """解析配置指向的飞书应用：下拉选择优先，其次手输登记。"""
-    feishu_app_id = payload.get("feishu_app_id")
-    if feishu_app_id:
-        app = await feishu_app_service.get_app_by_id(db, str(feishu_app_id))
+    if data.feishu_app_id is not None:
+        app = await feishu_app_service.get_app_by_id(db, data.feishu_app_id)
         if app is None:
             raise AppException(message="所选应用不存在或已删除", status_code=404)
         return app
 
-    manual_app_id = str(payload.get("app_id") or "").strip()
-    submitted_secret = str(payload.get("app_secret") or "").strip()
+    manual_app_id = data.app_id.strip()
+    submitted_secret = (data.app_secret or "").strip()
     if not manual_app_id:
         raise AppException(
             message="请选择已登记应用，或填写新应用的 App ID 与 App Secret"
@@ -239,7 +239,7 @@ async def _resolve_target_app(
             message="新 App ID 需同时填写 App Secret（保存后登记为可复用应用）"
         )
     app = EquipmentFeishuApp(
-        name=(str(payload.get("app_name") or "").strip() or manual_app_id),
+        name=(data.app_name.strip() or manual_app_id),
         app_id=manual_app_id,
         app_secret=encrypt_api_key(submitted_secret),
     )
@@ -249,18 +249,18 @@ async def _resolve_target_app(
 
 
 async def update_config(
-    db: AsyncSession, workshop_code: str, payload: dict[str, Any]
+    db: AsyncSession, workshop_code: str, data: RepairConfigUpdateRequest
 ) -> dict[str, Any]:
     row = await _get_config_row(db, workshop_code)
-    app = await _resolve_target_app(db, payload)
+    app = await _resolve_target_app(db, data)
     secret = feishu_app_service.decrypt_app_secret(app.app_secret)
 
     app_token = await _resolve_app_token(
         app_id=app.app_id,
         app_secret=secret,
-        raw_app_token=str(payload.get("app_token") or "").strip(),
+        raw_app_token=data.app_token.strip(),
     )
-    table_id = normalize_table_id(str(payload.get("table_id") or "")) or ""
+    table_id = normalize_table_id(data.table_id) or ""
     if table_id.startswith("vew"):
         raise AppException(
             message=(
@@ -268,7 +268,7 @@ async def update_config(
                 "请使用数据表 ID（链接中 table= 参数，以 tbl 开头）"
             ),
         )
-    is_enabled = bool(payload.get("is_enabled"))
+    is_enabled = data.is_enabled
     if is_enabled and (not secret or not app_token or not table_id):
         raise AppException(
             message="启用同步需选择已配置 Secret 的应用，并填写多维表格链接与数据表",
@@ -281,7 +281,7 @@ async def update_config(
     row.is_enabled = is_enabled
     row.app_token = app_token
     row.table_id = table_id
-    row.base_url = _normalized_base_url(payload.get("base_url"))
+    row.base_url = _normalized_base_url(data.base_url)
     await db.commit()
     return await get_config_detail(db, workshop_code)
 
@@ -392,6 +392,14 @@ def _truncate(value: str | None, limit: int) -> str | None:
     return value[:limit]
 
 
+# 需要特殊解析的镜像列；未列出的列一律按文本处理
+_TEXT_PARSER: Callable[[Any], Any] = _text_value
+_VALUE_PARSERS: dict[str, Callable[[Any], Any]] = {
+    "repaired_at": _date_value,
+    "person_text": _person_value,
+}
+
+
 def normalize_record_fields(fields: dict[str, Any]) -> dict[str, Any]:
     """飞书记录 fields → 检修记录镜像列；其余列保留在 raw_fields。
 
@@ -402,18 +410,12 @@ def normalize_record_fields(fields: dict[str, Any]) -> dict[str, Any]:
     values: dict[str, Any] = {}
     for field_name, field_value in (fields or {}).items():
         for keywords, target in _FIELD_MATCHERS:
-            if any(keyword in field_name for keyword in keywords):
-                if target == "repaired_at":
-                    parsed = _date_value(field_value)
-                elif target == "person_text":
-                    parsed = _person_value(field_value)
-                elif target == "fault_desc":
-                    parsed = _text_value(field_value)
-                else:
-                    parsed = _text_value(field_value)
-                if parsed is not None:
-                    values[target] = parsed
-                break
+            if not any(keyword in field_name for keyword in keywords):
+                continue
+            parsed = _VALUE_PARSERS.get(target, _TEXT_PARSER)(field_value)
+            if parsed is not None:
+                values[target] = parsed
+            break
     return values
 
 
