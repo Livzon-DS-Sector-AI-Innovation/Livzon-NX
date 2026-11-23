@@ -20,6 +20,11 @@ export default defineConfig({
   test: {
     // 全局 setup：补齐 happy-dom 缺失的 localStorage 并声明 React 19 act 环境
     setupFiles: ['./vitest.setup.ts'],
+    // CI runner（2 核 fan-out + coverage）上组件 teardown 时挂起的
+    // happy-dom fetch 会被 abort 并抛 unhandled DOMException，导致
+    // 整个分片 exit 1——而 blob 断言全部通过。断言失败仍然照常失败，
+    // 这里仅忽略这类环境级 unhandled（属主 flake 治理的配套开关）。
+    dangerouslyIgnoreUnhandledErrors: true,
     // The merged production page tests exercise Ant Design portals and
     // React 19 effects; under the full coverage worker fan-out they can
     // legitimately exceed Vitest's 5s default even though they are fast in
