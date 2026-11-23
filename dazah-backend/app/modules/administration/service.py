@@ -38,6 +38,7 @@ from app.modules.administration.schemas import (
     TobaccoGiftChartItem,
     TobaccoGiftDashboardStats,
 )
+from app.modules.hr.public_api import get_avatar_urls_by_emails
 from app.platform.integrations.feishu.auth import FeishuAuth
 from app.platform.integrations.feishu.read_mirror import (
     ModuleFeishuReadMirrorService,
@@ -46,11 +47,18 @@ from app.platform.integrations.feishu.read_mirror import (
 
 logger = logging.getLogger("dazah.administration")
 
-#: 烟酒礼品两个镜像页面的 page key（与菜单、page_policy 登记保持一致）。
+#: 行政模块镜像页面的 page key（与菜单、page_policy 登记保持一致）。
 PAGE_KEY_TOBACCO_GIFT_ITEMS = "admin:tobacco-gift:items"
 PAGE_KEY_TOBACCO_GIFT_RECORDS = "admin:tobacco-gift:records"
+PAGE_KEY_SEALS = "admin:seals"
+PAGE_KEY_SCRAP_MATERIALS = "admin:scrap-materials"
 ADMINISTRATION_READ_PAGE_KEYS = frozenset(
-    {PAGE_KEY_TOBACCO_GIFT_ITEMS, PAGE_KEY_TOBACCO_GIFT_RECORDS}
+    {
+        PAGE_KEY_TOBACCO_GIFT_ITEMS,
+        PAGE_KEY_TOBACCO_GIFT_RECORDS,
+        PAGE_KEY_SEALS,
+        PAGE_KEY_SCRAP_MATERIALS,
+    }
 )
 
 READ_MIRROR_MODELS = ReadMirrorModels(
@@ -251,6 +259,25 @@ async def build_read_mirror_service(
     )
 
 
+#: 单次头像解析的邮箱数上限（镜像分页每页至多 100 行，人员字段去重后远小于此）。
+_PERSON_AVATAR_EMAIL_LIMIT = 100
+
+
+async def resolve_person_avatars(
+    session: AsyncSession, emails: list[str]
+) -> dict[str, str]:
+    """按企业邮箱批量解析镜像人员头像（复用 hr 通讯录公开能力）。
+
+    镜像记录的人员字段只带 open_id/name/email；open_id 跨应用不可关联，
+    邮箱在全租户稳定，因此以邮箱为关联键。
+    """
+    normalized = [item.strip() for item in emails if item and item.strip()]
+    if not normalized:
+        return {}
+    bounded = normalized[:_PERSON_AVATAR_EMAIL_LIMIT]
+    return await get_avatar_urls_by_emails(session, bounded)
+
+
 async def prune_resource_history(session: AsyncSession, resource_id: uuid.UUID) -> None:
     """同步成功后清理该数据表的非激活镜像版本与过期同步运行记录。
 
@@ -258,13 +285,17 @@ async def prune_resource_history(session: AsyncSession, resource_id: uuid.UUID) 
     15 分钟同步一次，不清理会让镜像表和同步记录无限增长。
     """
     resource = (
-        await session.execute(
-            select(AdministrationFeishuReadResource).where(
-                AdministrationFeishuReadResource.id == resource_id,
-                AdministrationFeishuReadResource.is_deleted.is_(False),
+        (
+            await session.execute(
+                select(AdministrationFeishuReadResource).where(
+                    AdministrationFeishuReadResource.id == resource_id,
+                    AdministrationFeishuReadResource.is_deleted.is_(False),
+                )
             )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     if resource is None or resource.active_mirror_version is None:
         return
     await session.execute(
@@ -557,3 +588,44 @@ class AdministrationTobaccoGiftService:
                 requisition.resource.last_complete_sync_at if requisition else None
             ),
         )
+
+
+async def decorate_records_for_display(
+    session: AsyncSession, data: dict[str, Any]
+) -> dict[str, Any]:
+    """把镜像记录里的关联字段装饰为可读名称（展示层，不影响存储）。
+
+    飞书 records/search 对单向关联字段只返回 ``link_record_ids``，没有名称，
+    前端镜像表格会把这种复杂值渲染成「查看详情」按钮、抽屉里显示原始 JSON。
+    这里用物品清单镜像把 ID 解析成名称，直接替换为纯文本字符串。
+    """
+    records = data.get("records") or []
+    has_link = any(
+        isinstance(value, dict) and "link_record_ids" in value
+        for record in records
+        for value in (record.get("fields") or {}).values()
+    )
+    if not has_link:
+        return data
+
+    inventory = await AdministrationRepository(session).get_default_bound_table(
+        PAGE_KEY_TOBACCO_GIFT_ITEMS
+    )
+    name_by_record = _extract_inventory(inventory).name_by_record if inventory else {}
+    inventory_available = bool(name_by_record)
+    for record in records:
+        fields = record.get("fields") or {}
+        for field_name, value in fields.items():
+            if not (isinstance(value, dict) and "link_record_ids" in value):
+                continue
+            texts, record_ids = _as_link(value)
+            if not texts and not record_ids:
+                fields[field_name] = ""
+                continue
+            fields[field_name] = _resolve_item_name(
+                texts,
+                record_ids,
+                name_by_record,
+                inventory_available=inventory_available,
+            )
+    return data

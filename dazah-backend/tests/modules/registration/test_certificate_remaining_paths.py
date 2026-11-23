@@ -145,8 +145,11 @@ def test_certificate_workbook_parser_and_sheet_writer() -> None:
     incomplete.remove(incomplete["国际GMP"])
     incomplete_stream = BytesIO()
     incomplete.save(incomplete_stream)
-    with pytest.raises(Exception, match="缺少子表"):
+    with pytest.raises(
+        AppException, match="REGISTRATION_WORKBOOK_TEMPLATE_MISMATCH"
+    ) as error:
         certificate._load_entries_from_workbook_bytes(incomplete_stream.getvalue())
+    assert "缺少子表" in error.value.message
 
     workbook = Workbook()
     sheet = workbook.active

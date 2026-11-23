@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useCallback, useEffect, useState } from 'react'
 import { App, Button, Select, Skeleton, Space, Tag, Typography } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
@@ -46,7 +47,7 @@ export default function MemoryGovernanceClient() {
       setPolicy(result)
       setMode(result.tenant_mode)
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '记忆治理策略加载失败')
+      setError(getUserErrorMessage(cause instanceof Error ? cause.message : '记忆治理策略加载失败', '记忆治理策略加载失败'))
     } finally {
       setLoading(false)
     }
@@ -65,7 +66,7 @@ export default function MemoryGovernanceClient() {
       setMode(result.tenant_mode)
       message.success('租户记忆策略已保存')
     } catch (cause) {
-      message.error(cause instanceof Error ? cause.message : '租户记忆策略保存失败')
+      message.error(getUserErrorMessage(cause instanceof Error ? cause.message : '租户记忆策略保存失败', '租户记忆策略保存失败'))
     } finally {
       setSaving(false)
     }

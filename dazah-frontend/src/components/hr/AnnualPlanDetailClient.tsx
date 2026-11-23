@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useEffect, useState } from 'react'
 import { App, Button, Input, Spin, Space, Tag, Upload, Popconfirm } from 'antd'
 import {
@@ -15,6 +16,7 @@ import Link from 'next/link'
 import { AnnualTrainingPlan, PlanAttachment, PlanAttachmentSection, AttachmentPreview } from '@/types/hr'
 import { fetchPlanItems, fetchAnnualTrainingPlanById, fetchPlanAttachments, fetchPlanAttachmentSections, fetchSectionPreview, fetchAttachmentPreview, exportAnnualTrainingPlanWord } from '@/lib/api/client/hr'
 import { batchUpdatePlanItems, uploadPlanAttachments, deletePlanAttachment } from '@/actions/hr'
+import { getActionErrorMessage, unwrapServerActionResult } from '@/lib/server-action-result'
 import AttachmentPreviewModal from './AttachmentPreviewModal'
 
 // ── 附件编号归一化（与后端 normalize_annex_no 同规则）──
@@ -103,7 +105,7 @@ export default function AnnualPlanDetailClient({
       const res = await fetchSectionPreview(section.id)
       setPreviewData(res.data ?? null)
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '预览失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '预览失败'))
       setPreviewData(null)
     } finally {
       setPreviewLoading(false)
@@ -118,7 +120,7 @@ export default function AnnualPlanDetailClient({
       const res = await fetchAttachmentPreview(att.id)
       setPreviewData(res.data ?? null)
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '预览失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '预览失败'))
       setPreviewData(null)
     } finally {
       setPreviewLoading(false)
@@ -155,7 +157,7 @@ export default function AnnualPlanDetailClient({
       setRows(planRows)
       await loadAttachments()
     } catch (err) {
-      message.error('加载失败: ' + ((err instanceof Error ? err.message : '') || ''))
+      message.error(getUserErrorMessage('加载失败: ' + ((err instanceof Error ? err.message : '') || '')))
     } finally {
       setLoading(false)
     }
@@ -164,11 +166,11 @@ export default function AnnualPlanDetailClient({
   const handleUpload = async (file: File) => {
     setUploading(true)
     try {
-      await uploadPlanAttachments(planId, [file])
+      unwrapServerActionResult(await uploadPlanAttachments(planId, [file]))
       message.success(`已上传 ${file.name}`)
       await loadAttachments()
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '上传失败')
+      message.error(getActionErrorMessage(err, '培训计划附件上传'))
     } finally {
       setUploading(false)
     }
@@ -181,7 +183,7 @@ export default function AnnualPlanDetailClient({
       message.success('附件已删除')
       await loadAttachments()
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '删除失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '删除失败'))
     }
   }
 
@@ -237,7 +239,7 @@ export default function AnnualPlanDetailClient({
       message.success('保存成功')
       await loadData()
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '保存失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '保存失败'))
     } finally {
       setSaving(false)
     }
@@ -248,7 +250,7 @@ export default function AnnualPlanDetailClient({
       await exportAnnualTrainingPlanWord(planId, plan?.plan_level === '公司级')
       message.success('导出成功')
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '导出失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '导出失败'))
     }
   }
 

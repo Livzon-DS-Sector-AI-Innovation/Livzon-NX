@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { App, AutoComplete, DatePicker, Form, Input, Modal, Space, Tag } from 'antd'
 import dayjs from 'dayjs'
@@ -151,7 +152,7 @@ export default function ManualNewEmployeeModal({
     } catch (err) {
       // 表单校验失败（(typeof err === 'object' && err !== null && 'errorFields' in err)）不提示；接口错误提示原因
       if (!(typeof err === 'object' && err !== null && 'errorFields' in err)) {
-        message.error((err instanceof Error ? err.message : '') || '手动新增新员工失败')
+        message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '手动新增新员工失败'))
       }
     } finally {
       setSubmitting(false)

@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { Button, Modal, Space, Spin } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
 import { DownloadOutlined, FileTextOutlined } from '@ant-design/icons'
@@ -75,7 +76,7 @@ function DocxPreview({ src, fileName }: { src: string; fileName: string }) {
         if (!controller.signal.aborted) container.replaceChildren(rendered)
       } catch (cause) {
         if (!controller.signal.aborted) {
-          setError(cause instanceof Error ? cause.message : '文档加载失败')
+          setError(getUserErrorMessage(cause instanceof Error ? cause.message : '文档加载失败', '文档加载失败'))
         }
       } finally {
         if (!controller.signal.aborted) setLoading(false)

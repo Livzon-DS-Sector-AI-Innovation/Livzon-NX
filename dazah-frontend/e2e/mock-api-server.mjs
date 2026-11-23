@@ -34,6 +34,19 @@ const currentUser = {
   ],
 }
 
+const simulatedUser = {
+  id: '00000000-0000-0000-0000-000000000042',
+  name: '采购验收用户',
+  username: 'procurement-test',
+  employee_no: 'CI-042',
+  department: '采购部',
+}
+const simulationRoles = [
+  { id: 'procurement-reader', name: '采购查询员', code: 'procurement_reader', is_system: false, permissions: [] },
+  { id: 'supplier-reviewer', name: '供应商审核员', code: 'supplier_reviewer', is_system: false, permissions: [] },
+  { id: 'finance-reviewer', name: '财务复核员', code: 'finance_reviewer', is_system: false, permissions: [] },
+]
+
 const pendingPurchaseRequest = {
   id: '22222222-2222-2222-2222-222222222222',
   category: 'hardware',
@@ -199,13 +212,18 @@ const server = createServer(async (request, response) => {
   if (handleBusinessTodos(request, response, pageTestToken)) return
   if (pageTestToken.startsWith('page-') && request.url?.startsWith('/api/v1/procurement/')) {
     pageBusinessRequests.set(pageTestToken, (pageBusinessRequests.get(pageTestToken) || 0) + 1)
+    const pathname = request.url.split('?')[0]
+    const key = `${pageTestToken}:${pathname}`
+    pageBusinessRequests.set(key, (pageBusinessRequests.get(key) || 0) + 1)
   }
   if (pageTestToken.startsWith('ledger-') && request.url?.startsWith('/api/v1/quality/')) {
     pageBusinessRequests.set(pageTestToken, (pageBusinessRequests.get(pageTestToken) || 0) + 1)
   }
   if (request.url?.startsWith('/__test/page-requests?')) {
-    const token = new URL(request.url, 'http://localhost').searchParams.get('token')
-    response.end(JSON.stringify({ count: pageBusinessRequests.get(token) || 0 }))
+    const params = new URL(request.url, 'http://localhost').searchParams
+    const token = params.get('token')
+    const path = params.get('path')
+    response.end(JSON.stringify({ count: pageBusinessRequests.get(path ? `${token}:${path}` : token) || 0 }))
     return
   }
   if (request.url?.startsWith('/__test/ledger-write?')) {
@@ -219,7 +237,72 @@ const server = createServer(async (request, response) => {
     return
   }
 
+  if (pageTestToken === 'impersonation-admin') {
+    if (request.url === '/api/v1/identity/admin/roles') {
+      response.end(JSON.stringify({ code: 200, data: simulationRoles }))
+      return
+    }
+    if (request.url?.startsWith('/api/v1/identity/admin/impersonation/targets')) {
+      const params = new URL(request.url, 'http://localhost').searchParams
+      const keyword = params.get('keyword') || ''
+      const roleId = params.get('role_id')
+      const roles = simulationRoles.slice(0, 2).map(({ id, name }) => ({ id, name }))
+      const matchingKeyword = [simulatedUser.name, simulatedUser.username, simulatedUser.employee_no]
+        .some(value => value.includes(keyword))
+      const items = matchingKeyword && (!roleId || roles.some(role => role.id === roleId))
+        ? [{ ...simulatedUser, roles }] : []
+      if (items.length && keyword === simulatedUser.username && roleId === roles[0].id) {
+        const earlierUsers = Array.from({ length: 20 }, (_, index) => ({
+          ...simulatedUser, roles, id: `pagination-user-${index}`,
+          name: `分页验收用户 ${index + 1}`, username: `${keyword}-${index + 1}`,
+        }))
+        items.unshift(...earlierUsers)
+      }
+      const offset = Number(params.get('offset') || 0)
+      const limit = Number(params.get('limit') || 20)
+      response.end(JSON.stringify({ code: 200, data: { items: items.slice(offset, offset + limit), total: items.length } }))
+      return
+    }
+  }
+  if (request.url === '/api/v1/identity/auth/impersonation/start' && request.method === 'POST') {
+    const payload = await readJsonBody(request)
+    if (!request.headers.cookie?.includes('auth_token=impersonation-admin') || payload.target_id !== simulatedUser.id) {
+      response.statusCode = 403
+      response.end(JSON.stringify({ message: '无权开始模拟' }))
+      return
+    }
+    response.setHeader('Set-Cookie', 'impersonation_token=impersonation-procurement; HttpOnly; SameSite=Lax; Path=/')
+    response.end(JSON.stringify({ code: 200, data: { expires_at: new Date(Date.now() + 1800000).toISOString() } }))
+    return
+  }
+  if (request.url === '/api/v1/identity/auth/impersonation/exit' && request.method === 'POST') {
+    response.setHeader('Set-Cookie', 'impersonation_token=; Max-Age=0; Path=/')
+    response.end(JSON.stringify({ code: 200, data: { administrator_restored: true } }))
+    return
+  }
+
+  const annualPlanTest = ['annual-plan-read', 'annual-plan-import-revoked', 'annual-plan-writes'].includes(pageTestToken)
   if (request.url?.startsWith('/api/v1/identity/me')) {
+    if (annualPlanTest) {
+      response.end(JSON.stringify({ code: 200, data: { ...currentUser, role: 'user', module_codes: ['hr'],
+        page_permission_rollouts: { hr: 'enforced' },
+        page_permissions: [{ page_key: 'hr:training:annual-plan', module_code: 'hr',
+          permissions: ['access', 'query', 'operate'],
+          sensitive_actions: pageTestToken === 'annual-plan-import-revoked' ? ['bulk_import'] : pageTestToken === 'annual-plan-writes' ? ['delete'] : [],
+          source: 'user', data_scope: { scope_type: 'all' } }],
+      } }))
+      return
+    }
+    if (pageTestToken === 'impersonation-procurement') {
+      response.end(JSON.stringify({ code: 200, data: {
+        ...currentUser, ...simulatedUser, role: 'user', module_codes: ['procurement'],
+        page_permissions: [{ page_key: 'purchasing:supplier', module_code: 'procurement',
+          permissions: ['access', 'query'], sensitive_actions: [], source: 'user',
+          data_scope: { scope_type: 'not_applicable' } }],
+        impersonation: { expires_at: new Date(Date.now() + 1800000).toISOString() },
+      } }))
+      return
+    }
     if (pageTestToken === 'ordinary-admin-feedback') {
       response.end(JSON.stringify({ code: 200, data: { ...currentUser, roles: ['ordinary_admin'] } }))
       return
@@ -247,12 +330,17 @@ const server = createServer(async (request, response) => {
       return
     }
     if (pageTestToken.startsWith('page-')) {
+      const canNavigate = pageTestToken.startsWith('page-access-navigation-')
       const permissions = pageTestToken === 'page-query' ? ['access', 'query']
-        : pageTestToken === 'page-access' ? ['access'] : []
+        : pageTestToken === 'page-access' || canNavigate ? ['access'] : []
       response.end(JSON.stringify({ code: 200, data: { ...currentUser, role: 'user',
         module_codes: pageTestToken === 'page-query' ? [] : ['procurement'], page_permission_rollouts: { procurement: 'enforced' },
-        page_permissions: [{ page_key: 'purchasing:supplier', module_code: 'procurement', permissions,
-          sensitive_actions: [], source: 'user', data_scope: { scope_type: 'not_applicable' } }],
+        page_permissions: [
+          { page_key: 'purchasing:supplier', module_code: 'procurement', permissions,
+            sensitive_actions: [], source: 'user', data_scope: { scope_type: 'not_applicable' } },
+          ...(canNavigate ? [{ page_key: 'purchasing:order', module_code: 'procurement', permissions: ['access', 'query'],
+            sensitive_actions: [], source: 'user', data_scope: { scope_type: 'not_applicable' } }] : []),
+        ],
       } }))
       return
     }
@@ -273,6 +361,40 @@ const server = createServer(async (request, response) => {
         : currentUser
     response.end(JSON.stringify({ code: 200, message: 'success', data: user }))
     return
+  }
+
+  if (annualPlanTest) {
+    const pathname = request.url?.split('?')[0]
+    if (request.method === 'GET' && pathname === '/api/v1/hr/annual-training-plans') {
+      const data = pageTestToken === 'annual-plan-writes'
+        ? [{ id: 'fixture-plan', department: '公司', plan_level: '公司级', year: new Date().getFullYear() }]
+        : []
+      response.end(JSON.stringify({ code: 200, data, meta: { total: data.length, page: 1, page_size: 200 } }))
+      return
+    }
+    if (request.method === 'GET' && pathname === '/api/v1/hr/training/departments') {
+      response.end(JSON.stringify({ code: 200, data: ['质量部'] }))
+      return
+    }
+    if (pageTestToken === 'annual-plan-writes' && request.method === 'POST' && pathname === '/api/v1/hr/annual-training-plans') {
+      request.resume()
+      response.statusCode = 409
+      response.end(JSON.stringify({
+        code: 409, message: '检测到重复年度计划', detail: { error_code: 'HR_ANNUAL_PLAN_DUPLICATE' },
+      }))
+      return
+    }
+    if (pageTestToken === 'annual-plan-writes' && request.method === 'DELETE' && pathname === '/api/v1/hr/annual-training-plans/fixture-plan') {
+      response.statusCode = 403
+      response.end(JSON.stringify({ code: 403, message: '未获得当前高风险业务动作授权' }))
+      return
+    }
+    if (request.method === 'POST' && pathname === '/api/v1/hr/annual-training-plans/import') {
+      request.resume()
+      response.statusCode = 403
+      response.end(JSON.stringify({ code: 403, message: '未获得当前高风险业务动作授权' }))
+      return
+    }
   }
 
   if (pageTestToken.startsWith('ledger-') && request.url?.startsWith('/api/v1/quality/deviations')) {
@@ -297,6 +419,27 @@ const server = createServer(async (request, response) => {
     }
     response.end(JSON.stringify({ code: 200, data: [], meta: { total: 0, page: 1, page_size: 20 } }))
     return
+  }
+
+  if (authorization === 'Bearer assignment-layout-admin') {
+    const roles = Array.from({ length: 12 }, (_, index) => ({
+      id: `role-${index + 1}`, name: `测试角色 ${index + 1}`, code: `test_role_${index + 1}`,
+      description: index === 11
+        ? '可以查看质量管理模块中的偏差记录、调查报告和供应商资料，并按授权范围维护审核记录。'.repeat(2)
+        : '用于核对角色列表与授权表单布局。',
+      is_system: false, permissions: [], grant_version: 1,
+    }))
+    const departments = Array.from({ length: 12 }, (_, index) => ({
+      feishu_department_id: `dept-${index + 1}`, name: `测试部门 ${index + 1}`, parent_feishu_department_id: null,
+    }))
+    roles.push({ id: 'role-ordinary-admin', name: '普通管理员', code: 'ordinary_admin',
+      description: '', is_system: true, permissions: [], grant_version: 1 })
+    roles.push({ id: 'role-super-admin', name: '系统管理员', code: 'super_admin',
+      description: '', is_system: true, permissions: [], grant_version: 1 })
+    if (request.url === '/api/v1/identity/admin/roles' || request.url === '/api/v1/identity/departments') {
+      response.end(JSON.stringify({ code: 200, data: request.url.endsWith('/roles') ? roles : departments }))
+      return
+    }
   }
 
   if (authorization === 'Bearer effective-admin') {

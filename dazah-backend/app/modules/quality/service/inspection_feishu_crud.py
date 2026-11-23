@@ -836,9 +836,41 @@ def _find_attachment_in_record(
     return None
 
 
+async def _get_attachment_response(
+    http: httpx.AsyncClient,
+    url: str,
+    headers: dict[str, str],
+    max_bytes: int | None,
+) -> tuple[int, bytes, str]:
+    if max_bytes is None:
+        resp = await http.get(url, headers=headers)
+        return resp.status_code, resp.content, resp.headers.get("content-type", "")
+
+    bounded_headers = {**headers, "Accept-Encoding": "identity"}
+    async with http.stream("GET", url, headers=bounded_headers) as resp:
+        content_type = resp.headers.get("content-type", "")
+        if resp.status_code != 200 or content_type.startswith(
+            ("application/json", "text/html")
+        ):
+            return resp.status_code, b"", content_type
+        if resp.headers.get("content-encoding", "identity").lower() != "identity":
+            raise AppException(message="预热附件响应编码不受支持", status_code=502)
+        size = resp.headers.get("content-length", "")
+        if size.isdecimal() and int(size) > max_bytes:
+            raise AppException(message="附件超过预热大小限制", status_code=413)
+        content = bytearray()
+        async for chunk in resp.aiter_raw(chunk_size=64 * 1024):
+            if len(content) + len(chunk) > max_bytes:
+                raise AppException(message="附件超过预热大小限制", status_code=413)
+            content.extend(chunk)
+        return resp.status_code, bytes(content), content_type
+
+
 async def _download_attachment_bytes(
     url: str,
     token: str,
+    *,
+    max_bytes: int | None = None,
 ) -> tuple[bytes | None, str, str]:
     """按 safety 模块已验证的策略下载飞书附件（含错误体校验）。
 
@@ -857,14 +889,17 @@ async def _download_attachment_bytes(
     async def _try(headers: dict[str, str] | None) -> tuple[bytes, str] | None:
         nonlocal forbidden
         async with httpx.AsyncClient(timeout=30, follow_redirects=True) as http:
-            resp = await http.get(url, headers=headers or {})
-        if resp.status_code == 403:
+            status_code, content, content_type = await _get_attachment_response(
+                http,
+                url,
+                headers or {},
+                max_bytes,
+            )
+        if status_code == 403:
             forbidden = True
             return None
-        if resp.status_code != 200:
+        if status_code != 200:
             return None
-        content = resp.content
-        content_type = resp.headers.get("content-type") or ""
         if not content:
             return None
         if content_type.startswith("application/json") or content_type.startswith(
@@ -885,6 +920,8 @@ async def _download_attachment_bytes(
 async def _download_media_bytes(
     file_token: str,
     token: str,
+    *,
+    max_bytes: int | None = None,
 ) -> tuple[bytes | None, str, str]:
     """通过 drive 媒体接口下载附件（记录接口未返回临时链接时的兜底）。"""
     from app.platform.integrations.feishu.utils import OPEN_API_BASE_URL
@@ -892,16 +929,16 @@ async def _download_media_bytes(
     async with httpx.AsyncClient(
         base_url=OPEN_API_BASE_URL, timeout=30, follow_redirects=True
     ) as http:
-        resp = await http.get(
+        status_code, content, content_type = await _get_attachment_response(
+            http,
             f"/drive/v1/medias/{file_token}/download",
-            headers={"Authorization": f"Bearer {token}"},
+            {"Authorization": f"Bearer {token}"},
+            max_bytes,
         )
-    if resp.status_code != 200:
-        return None, "", "forbidden" if resp.status_code in (401, 403) else "invalid"
-    content = resp.content
+    if status_code != 200:
+        return None, "", "forbidden" if status_code in (401, 403) else "invalid"
     if not content:
         return None, "", "invalid"
-    content_type = resp.headers.get("content-type") or ""
     if content_type.startswith("application/json"):
         return None, "", "forbidden"
     return content, content_type, ""
@@ -922,6 +959,9 @@ async def get_inspection_feishu_attachment_content(
     entity_code: str,
     record_id: str,
     file_token: str,
+    *,
+    disk_only: bool = False,
+    max_bytes: int | None = None,
 ) -> tuple[bytes, str, str]:
     """代理下载检验记录附件（飞书附件 url 需带 access token 才能访问）。
 
@@ -961,11 +1001,15 @@ async def get_inspection_feishu_attachment_content(
         url = attachment.get("url") or attachment.get("tmp_url")
         if url:
             content, content_type, reason = await _download_attachment_bytes(
-                url, token
+                url,
+                token,
+                max_bytes=max_bytes,
             )
         else:
             content, content_type, reason = await _download_media_bytes(
-                file_token, token
+                file_token,
+                token,
+                max_bytes=max_bytes,
             )
         if content is None:
             if reason == "forbidden":
@@ -983,7 +1027,12 @@ async def get_inspection_feishu_attachment_content(
         return content, content_type, filename
 
     result = await get_attachment_cache().get_or_fetch(
-        entity_code, record_id, file_token, _fetch
+        entity_code,
+        record_id,
+        file_token,
+        _fetch,
+        disk_only=disk_only,
+        max_disk_read_bytes=max_bytes,
     )
     # _fetch 失败会抛异常直接传播，成功时 result 必不为 None
     if result is None:

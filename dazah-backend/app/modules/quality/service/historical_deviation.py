@@ -40,6 +40,7 @@ from app.core.upload_security import (
 )
 from app.modules.quality.models import HistoricalDeviation
 from app.modules.quality.schemas.historical_deviation import (
+    HISTORICAL_DEVIATION_BATCH_LIMIT,
     CreateHistoricalDeviationRequest,
     HistoricalDeviationAttachmentOut,
     HistoricalDeviationBatchImportResult,
@@ -292,6 +293,8 @@ async def upload_historical_deviation_attachment(
 ) -> HistoricalDeviationAttachmentOut:
     if not file.filename:
         raise AppException(message="附件文件名不能为空")
+    if Path(file.filename).suffix.lower() not in ALLOWED_EXT:
+        raise AppException(status_code=415, message="附件格式不受支持")
     file_name, content = await read_upload_secure(
         file,
         max_bytes=ATTACHMENT_MAX_SIZE,
@@ -410,7 +413,11 @@ async def batch_import_historical_deviations(
     不算导入失败（记录与 MD 已就绪，可后续手动提取）。
     """
     if len(files) > MAX_BATCH_FILES:
-        raise AppException(message=f"单次最多上传 {MAX_BATCH_FILES} 个附件")
+        raise AppException(
+            status_code=400,
+            message=f"单次最多上传 {MAX_BATCH_FILES} 个附件",
+            detail={"error_code": HISTORICAL_DEVIATION_BATCH_LIMIT},
+        )
     results: list[HistoricalDeviationBatchImportResultItem] = []
     succeeded = 0
     for file in files:

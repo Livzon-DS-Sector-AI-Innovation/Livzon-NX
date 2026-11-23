@@ -208,7 +208,8 @@ async def test_sync_inventory_from_feishu_page_isolation(
     """sync_inventory_from_feishu 单页失败不阻断其他页。"""
     service = WarehouseService(db_session)
 
-    async def fake_fetch(page_key: str):
+    async def fake_fetch(page_key: str, *, require_complete: bool = False):
+        assert require_complete is True
         if page_key == "raw-summary":
             raise RuntimeError("feishu down")
         if page_key == "packaging-summary":

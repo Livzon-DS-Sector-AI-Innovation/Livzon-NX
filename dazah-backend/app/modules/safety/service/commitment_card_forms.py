@@ -3,17 +3,27 @@
 分步表单（仿作业票 chat 卡）：车间装置 → 特殊危险作业 → 隐患与承包商 →
 重大危险源与承诺确认。字段名与日报 enterprise_status JSONB 键一致。
 
+同一套分步构建器服务两类表单（module 区分，落库目标不同）::
+
+    module="commitment"    安全员/负责人 DM 填报 → 当日日报
+    module="commitment_ws" 车间填报（value/name 额外携带车间名）→ 车间填报记录
+
 按钮 value 协议（card.action.trigger 回调分派）::
 
-    {"module": "commitment", "act": "...", "date": "YYYY-MM-DD", "step": n}
+    {"module": "...", "act": "...", "date": "YYYY-MM-DD", "step": n[, "ws": 车间名]}
     act ∈ start_form / step_save / form_prev / form_cancel / submit
 
-表单提交时 ``action.form_value`` 携带 input/select 的 name→value。
+form_submit 回调不回传 value，动作编码进按钮 name：
+``cm|{module}|{act}|{date}|{step}[|{ws}]``；表单提交时 ``action.form_value``
+携带 input/select 的 name→value。
 """
 
 from __future__ import annotations
 
 from typing import Any
+
+MODULE_REPORT = "commitment"
+MODULE_WORKSHOP = "commitment_ws"
 
 # 步骤定义：1 车间装置 2 特殊作业 3 隐患/承包商 4 重大危险源+承诺确认
 STEP_TITLES = {
@@ -51,18 +61,58 @@ _NUM_FIELDS: dict[int, list[tuple[str, str]]] = {
 }
 
 
-def cm_submit_name(act: str, report_date: str, step: int) -> str:
+def cm_submit_name(
+    act: str, report_date: str, step: int, module: str = MODULE_REPORT,
+    ws_name: str = "",
+) -> str:
     """form_submit 按钮的动作编码（回调不回传 value，只回传 name）。
 
-    格式 ``cm|{act}|{date}|{step}``，由承诺分发器还原。
+    格式 ``cm|{module}|{act}|{date}|{step}[|{ws_name}]``，由承诺分发器
+    还原；车间名可能含括号等字符但不允许含 ``|``（配置侧已校验）。
+    旧 4 段格式（无 module 段）按 module=commitment 兼容解析。
     """
-    return f"cm|{act}|{report_date}|{step}"
+    prefix = "cm" if module == MODULE_REPORT else "cmws"
+    if ws_name:
+        return f"{prefix}|{act}|{report_date}|{step}|{ws_name}"
+    return f"cm|{module}|{act}|{report_date}|{step}"
+
+
+def parse_submit_name(name: str) -> dict[str, Any] | None:
+    """还原 cm_submit_name 编码；非本模块格式返回 None。"""
+    parts = str(name or "").split("|")
+    if parts[0] == "cm" and len(parts) >= 5:
+        return {
+            "module": parts[1],
+            "act": parts[2],
+            "date": parts[3],
+            "step": parts[4],
+            "ws": "|".join(parts[5:]) or "",
+        }
+    if parts[0] == "cmws" and len(parts) >= 5:
+        return {
+            "module": MODULE_WORKSHOP,
+            "act": parts[1],
+            "date": parts[2],
+            "step": parts[3],
+            "ws": "|".join(parts[4:]),
+        }
+    # 旧 4 段格式兼容：cm|{act}|{date}|{step}
+    if parts[0] == "cm" and len(parts) == 4:
+        return {
+            "module": MODULE_REPORT,
+            "act": parts[1],
+            "date": parts[2],
+            "step": parts[3],
+            "ws": "",
+        }
+    return None
 
 
 def _btn(
     text: str,
     value: dict[str, Any],
     *,
+    module: str = MODULE_REPORT,
     type_: str = "default",
     form_submit: bool = False,
 ) -> dict[str, Any]:
@@ -70,7 +120,7 @@ def _btn(
         "tag": "button",
         "text": {"tag": "plain_text", "content": text},
         "type": type_,
-        "value": {"module": "commitment", **value},
+        "value": {"module": module, **value},
     }
     if form_submit:
         # 卡片 2.0：表单提交按钮显式声明；回调按钮必须省略 action_type
@@ -270,13 +320,32 @@ def build_step_card(
     values: dict[str, Any],
     *,
     total: int = TOTAL_STEPS,
+    module: str = MODULE_REPORT,
+    ws_name: str = "",
+    ws_reporter: str = "",
 ) -> dict[str, Any]:
-    """构建分步表单卡；最后一步提交按钮带承诺确认校验。"""
-    title = f"安全承诺填报 {report_date} · {STEP_TITLES[step]}"
+    """构建分步表单卡；最后一步提交按钮带承诺确认校验。
+
+    module=commitment_ws 时为车间填报卡（标题带车间名，value/name 携带
+    车间名，提交落车间填报记录）。
+    """
+    if module == MODULE_WORKSHOP:
+        owner = f" · 填报人：{ws_reporter}" if ws_reporter else ""
+        title = f"企业状态填报 · {ws_name}{owner} · {STEP_TITLES[step]}"
+    else:
+        title = f"安全承诺填报 {report_date} · {STEP_TITLES[step]}"
     body: list[dict[str, Any]] = [
         _md(f"**进度**：第 {step}/{total} 步 · {STEP_TITLES[step]}"),
         _hr(),
     ]
+
+    def _nav_value(act: str) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "act": act, "date": report_date, "step": step,
+        }
+        if module == MODULE_WORKSHOP:
+            payload["ws"] = ws_name
+        return payload
 
     if step in _NUM_FIELDS:
         form_elements: list[dict[str, Any]] = []
@@ -286,14 +355,17 @@ def build_step_card(
             )
         submit = _btn(
             "保存并下一步",
-            {"act": "step_save", "date": report_date, "step": step},
+            _nav_value("step_save"),
+            module=module,
             type_="primary",
             form_submit=True,
         )
         # 表单内交互组件必须有非空 name（否则提交时报 200530）；
         # form_submit 回调不回传 value，动作编码进 name
         submit_with_name = dict(submit)
-        submit_with_name["name"] = cm_submit_name("step_save", report_date, step)
+        submit_with_name["name"] = cm_submit_name(
+            "step_save", report_date, step, module=module, ws_name=ws_name
+        )
         body.append(
             {"tag": "form", "name": "commitment_form",
              "elements": [*form_elements, submit_with_name]}
@@ -302,11 +374,10 @@ def build_step_card(
         # 卡片 2.0 不支持 tag:"action" 容器，按钮直接放 body 顶层（同作业票卡）
         if step > 1:
             body.append(
-                _btn("上一步", {"act": "form_prev", "date": report_date, "step": step})
+                _btn("上一步", _nav_value("form_prev"), module=module)
             )
         body.append(
-            _btn("取消", {"act": "form_cancel", "date": report_date, "step": step},
-                 type_="danger")
+            _btn("取消", _nav_value("form_cancel"), module=module, type_="danger")
         )
         return _card(title, body)
 
@@ -365,7 +436,8 @@ def build_step_card(
         # 第③步：保存进状态后回第④步卡；仅最后一步（含承诺确认）做最终提交
         submit = _btn(
             "保存并下一步",
-            {"act": "step_save", "date": report_date, "step": step},
+            _nav_value("step_save"),
+            module=module,
             type_="primary",
             form_submit=True,
         )
@@ -373,13 +445,16 @@ def build_step_card(
     else:
         submit = _btn(
             "提交安全承诺填报",
-            {"act": "submit", "date": report_date, "step": step},
+            _nav_value("submit"),
+            module=module,
             type_="primary",
             form_submit=True,
         )
         submit_name_act = "submit"
     submit_with_name = dict(submit)
-    submit_with_name["name"] = cm_submit_name(submit_name_act, report_date, step)
+    submit_with_name["name"] = cm_submit_name(
+        submit_name_act, report_date, step, module=module, ws_name=ws_name
+    )
     body.append(
         {"tag": "form", "name": "commitment_form",
          "elements": [*form_elements, submit_with_name]}
@@ -387,11 +462,10 @@ def build_step_card(
     body.append(_hr())
     # 卡片 2.0 不支持 tag:"action" 容器，按钮直接放 body 顶层（同作业票卡）
     body.append(
-        _btn("上一步", {"act": "form_prev", "date": report_date, "step": step})
+        _btn("上一步", _nav_value("form_prev"), module=module)
     )
     body.append(
-        _btn("取消", {"act": "form_cancel", "date": report_date, "step": step},
-             type_="danger")
+        _btn("取消", _nav_value("form_cancel"), module=module, type_="danger")
     )
     return _card(title, body, template="blue")
 
@@ -400,8 +474,32 @@ def build_reminder_card(
     report_date: str,
     status_text: str,
     detail_url: str,
+    *,
+    module: str = MODULE_REPORT,
+    ws_name: str = "",
+    ws_reporter: str = "",
+    kind: str = "reminder",
 ) -> dict[str, Any]:
-    """每日填报提醒卡（定时推送入口）。"""
+    """每日填报提醒卡（定时推送入口）；kind=cancel 用于取消后的回显。"""
+    if module == MODULE_WORKSHOP:
+        start_payload: dict[str, Any] = {
+            "act": "start_form", "date": report_date, "ws": ws_name,
+        }
+        body = [
+            _md(f"**日期**：{report_date}"),
+            _md(status_text),
+            _hr(),
+            # 卡片 2.0 不支持 tag:"action" 容器，按钮直接放 body 顶层
+            _btn("开始填报", start_payload, module=module, type_="primary"),
+            {
+                "tag": "button",
+                "text": {"tag": "plain_text", "content": "网页端查看"},
+                "type": "default",
+                "url": detail_url,
+            },
+        ]
+        prefix = "催办" if kind == "remind" else "填报提醒"
+        return _card(f"{prefix} · {ws_name} · {report_date}", body, template="orange")
     body = [
         _md(f"**日期**：{report_date}"),
         _md(status_text),
@@ -423,13 +521,102 @@ def build_reminder_card(
 
 
 def build_receipt_card(
-    report_date: str, status: str, publisher_hint: str
+    report_date: str, status: str, publisher_hint: str,
+    *, ws_name: str = "",
 ) -> dict[str, Any]:
     """填报完成回执卡。"""
+    title = (
+        f"企业状态填报回执 · {ws_name} · {report_date}"
+        if ws_name
+        else f"安全承诺填报回执 · {report_date}"
+    )
     body = [
         _md(f"**日期**：{report_date}"),
         _md(f"**填报状态**：{status}"),
         _md(publisher_hint),
         _md("如需修改可在网页端编辑；感谢您的填报。"),
     ]
-    return _card(f"安全承诺填报回执 · {report_date}", body, template="green")
+    return _card(title, body, template="green")
+
+
+def _yes_no_label(value: Any) -> str:
+    return {"yes": "是", "no": "否"}.get(str(value or "").strip(), "未确认")
+
+
+def build_announcement_markdown(item: dict[str, Any]) -> str:
+    """把日报渲染为公告摘要 markdown（汇总卡/签署卡共用）。"""
+    status = item.get("enterprise_status") or {}
+    risk = item.get("risk_assessment") or {}
+    lines = [f"**承诺日期**：{item.get('report_date', '')}"]
+    lines.append(
+        f"**生产车间**：共 {status.get('workshop_total', 0)} 个，运行 "
+        f"{status.get('workshop_running', 0)} 个，停产 "
+        f"{status.get('workshop_stopped', 0)} 个，检修 "
+        f"{status.get('workshop_maintenance', 0)} 个"
+    )
+    special = status.get("special_work") or {}
+    lines.append(
+        f"**当日特殊危险作业**：{status.get('special_work_total', 0)} 处"
+        f"（一级动火 {special.get('hot_work_level1', 0)}、二级动火 "
+        f"{special.get('hot_work_level2', 0)}、登高 {special.get('height_work', 0)}、"
+        f"受限空间 {special.get('confined_space', 0)}、其他 {special.get('other', 0)}）"
+    )
+    lines.append(
+        f"**一般安全生产隐患**：{status.get('hazard_count', 0)} 条，整改情况："
+        f"{_yes_no_label(status.get('hazard_rectified'))}"
+    )
+    lines.append(
+        f"**重大危险源安全状态**：{_yes_no_label(status.get('major_hazard_safe'))}，"
+        f"包保责任制：{_yes_no_label(status.get('responsibility_implemented'))}"
+    )
+    if risk:
+        lines.append(
+            f"**AI 风险研判**：{risk.get('risk_level', '')} "
+            f"— {risk.get('summary', '')}"
+        )
+    lines.append(
+        f"**承诺人（主要负责人）**：{item.get('publisher_name') or '待发布'}"
+    )
+    lines.append(
+        "> 依据《危险化学品企业安全风险研判与承诺公告制度》"
+        "（应急〔2018〕74号）每日发布"
+    )
+    return "\n".join(lines)
+
+
+def build_signature_card(
+    report_date: str,
+    signer_name: str,
+    summary_markdown: str,
+    sign_url: str,
+    reuse_available: bool,
+) -> dict[str, Any]:
+    """企业安全承诺签署卡（推送给主要负责人）。
+
+    「✔ 用上次签名」为回调按钮（服务端复用最近签名落库并 PATCH 本卡）；
+    无历史签名时不渲染该按钮。
+    """
+    body = [
+        _md(f"**承诺日期**：{report_date}"),
+        _md(summary_markdown),
+        _hr(),
+        _md(f"请以主要负责人名义完成当日手写签名（签署人：**{signer_name}**）。"),
+        {
+            "tag": "button",
+            "text": {"tag": "plain_text", "content": "🖊 手写签名"},
+            "type": "primary",
+            "url": sign_url,
+        },
+    ]
+    if reuse_available:
+        body.append(
+            _btn(
+                "✔ 用上次签名",
+                {
+                    "act": "sign_reuse", "date": report_date,
+                },
+                module=MODULE_REPORT,
+                type_="default",
+            )
+        )
+    return _card(f"企业安全承诺签署 · {report_date}", body, template="purple")

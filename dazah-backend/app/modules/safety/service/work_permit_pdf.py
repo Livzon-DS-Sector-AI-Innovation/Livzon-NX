@@ -26,7 +26,10 @@ from app.modules.safety.service.work_permit_signatures import (
     read_signature_image,
 )
 from app.modules.safety.service.work_permit_templates import (
+    INITIATOR_SIGN_KEYS,
     PERMIT_TEMPLATES,
+    brief_sign_key,
+    brief_worker_entries,
 )
 
 logger = logging.getLogger(__name__)
@@ -342,6 +345,71 @@ def build_ticket_html(
             '<table class="sign"><tr><th>签字行</th><th>签名</th>'
             "<th>时间</th><th>状态</th></tr>"
             + sign_rows_html
+            + "</table>"
+        )
+
+    # ── 发起签字行（发起人/安全交底人/接受交底人，node_id 为空的表单签字行） ──
+    initiator_labels = {
+        "initiator": "发起人（作业负责人）",
+        "briefer": "安全交底人",
+        "briefer_receiver": "接受交底人",
+    }
+    initiator_rows = ""
+    for sk in INITIATOR_SIGN_KEYS:
+        signature = signatures.get(sk)
+        signature_img = ""
+        when = ""
+        status_text = "未签"
+        if signature is not None:
+            signature_img = _sig_img_html(
+                signature.image_key, signature_images.get(sk)
+            )
+            when = _fmt_dt(signature.signed_at)
+            status_text = "已签"
+        signer = signature.signer_name if signature else ""
+        initiator_rows += (
+            f"<tr><td>{_esc(initiator_labels.get(sk, sk))}</td>"
+            f"<td>{signature_img} {_esc(signer)}</td>"
+            f"<td>{_esc(when)}</td>"
+            f"<td>{_esc(status_text)}</td></tr>"
+        )
+    if initiator_rows:
+        html_parts.append(
+            '<div class="section-title">发起签字行</div>'
+            '<table class="sign"><tr><th>签字行</th><th>签名</th>'
+            "<th>时间</th><th>状态</th></tr>"
+            + initiator_rows
+            + "</table>"
+        )
+
+    # ── 作业人交底签字（批准后学习签字，brief_worker_{i}） ──
+    brief_rows = ""
+    for index, person in brief_worker_entries(permit.persons):
+        signature = signatures.get(brief_sign_key(index))
+        signature_img = ""
+        when = ""
+        status_text = "未签"
+        if signature is not None:
+            signature_img = _sig_img_html(
+                signature.image_key, signature_images.get(brief_sign_key(index))
+            )
+            when = _fmt_dt(signature.signed_at)
+            status_text = "已签"
+        name_text = str(person.get("name") or "—")
+        if person.get("external"):
+            name_text += "（外部）"
+        brief_rows += (
+            f"<tr><td>{_esc(name_text)}</td>"
+            f"<td>{signature_img}</td>"
+            f"<td>{_esc(when)}</td>"
+            f"<td>{_esc(status_text)}</td></tr>"
+        )
+    if brief_rows:
+        html_parts.append(
+            '<div class="section-title">作业人交底签字</div>'
+            '<table class="sign"><tr><th>作业人</th><th>签名</th>'
+            "<th>时间</th><th>状态</th></tr>"
+            + brief_rows
             + "</table>"
         )
 

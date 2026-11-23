@@ -56,8 +56,10 @@ describe('ImportPreviewDrawer', () => {
     const [payload, skip, update] = confirm.mock.calls[0]
     expect(payload.get('file').name).toBe('测试.docx')
     expect([skip, update]).toEqual([true, false])
-    expect(close).toHaveBeenCalledOnce()
-    expect(success).toHaveBeenCalledOnce()
+    await vi.waitFor(() => {
+      expect(close).toHaveBeenCalledOnce()
+      expect(success).toHaveBeenCalledOnce()
+    })
   })
 
   it('keeps the file and dialog after a failed import so the user can retry', async () => {
@@ -71,7 +73,10 @@ describe('ImportPreviewDrawer', () => {
     expect(success).not.toHaveBeenCalled()
     await click('确认导入')
     expect(confirm).toHaveBeenCalledTimes(2)
-    expect(success).toHaveBeenCalledOnce()
+    await vi.waitFor(() => {
+      expect(close).toHaveBeenCalledOnce()
+      expect(success).toHaveBeenCalledOnce()
+    })
   })
 
   it('shows partial failures and preserves the drawer instead of reporting a complete import', async () => {

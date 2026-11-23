@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { NextRequest } from 'next/server'
 import { proxy } from './proxy'
+import { MENU_PAGE_UNAVAILABLE, PAGE_ACCESS_NOTICE_HEADER, PAGE_ACCESS_NOTICE_PATH, PAGE_NOT_FOUND, QUERY_PERMISSION_REQUIRED } from '@/lib/page-access-notice'
 
 vi.mock('@/lib/server-api', () => ({ getServerApiBaseUrl: () => 'http://backend.test' }))
 afterEach(() => vi.unstubAllGlobals())
@@ -9,6 +10,16 @@ function sessionRequest(url: string, init: ConstructorParameters<typeof NextRequ
   const headers = new Headers(init.headers)
   headers.set('cookie', 'auth_token=session-fixture')
   return new NextRequest(url, { ...init, headers })
+}
+
+const noticeRequestHeader = `x-middleware-request-${PAGE_ACCESS_NOTICE_HEADER.toLowerCase()}`
+
+function expectAccessNotice(response: Response) {
+  expect(response.status).toBe(200)
+  expect(response.headers.get('x-middleware-next')).toBe('1')
+  expect(response.headers.get('location')).toBeNull()
+  expect(response.headers.get(noticeRequestHeader)).toBe(QUERY_PERMISSION_REQUIRED)
+  expect(response.headers.get('cache-control')).toBe('private, no-store')
 }
 
 it.each([undefined, 'expired-fixture'])('设备页未登录或会话失效时进入登录页：%s', async token => {
@@ -91,27 +102,49 @@ it('directs a partially authorized directory to its queryable child without gran
 
 it('does not turn directory visibility or access-only grants into query authorization', async () => {
   qualityMe('quality:deviations:deviation-ledger', ['access'])
-  expect((await proxy(sessionRequest('http://frontend.test/quality/deviations'))).status).toBe(403)
+  expectAccessNotice(await proxy(sessionRequest('http://frontend.test/quality/deviations')))
   qualityMe('quality:capas:capa-ledger')
   expect((await proxy(sessionRequest('http://frontend.test/quality/deviations'))).status).toBe(403)
 })
 
 function me(permissions: string[], status = 'enforced', role = 'user') {
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: {
+  vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => new Response(JSON.stringify({ data: {
     role, module_codes: ['hr'], page_permission_rollouts: { hr: status },
     page_permissions: [{ page_key: 'hr:employee-management:profile', module_code: 'hr', permissions }],
   } }))))
 }
 
-it('blocks unauthorized and access-only pages before Server Components can execute', async () => {
+it('blocks unauthorized pages before Server Components can execute', async () => {
   me([])
   const denied = await proxy(sessionRequest('http://frontend.test/hr/profile'))
   expect(denied.status).toBe(403)
   expect(denied.headers.get('x-middleware-next')).toBeNull()
+  expect(denied.headers.get(noticeRequestHeader)).toBeNull()
+})
+
+it.each(['GET', 'HEAD'])('rewrites access-only %s requests to the notice and preserves query context', async (method) => {
   me(['access'])
-  const accessOnly = await proxy(sessionRequest('http://frontend.test/hr/profile'))
-  expect(accessOnly.status).toBe(403)
-  expect(await accessOnly.text()).toContain('尚未获得查询数据权限')
+  const response = await proxy(sessionRequest('http://frontend.test/hr/profile?page=2', { method }))
+  expectAccessNotice(response)
+  expect(response.headers.get('x-middleware-request-x-dazah-page-path')).toBe('/hr/profile')
+})
+
+it('returns 403 for access-only writes without rewriting or redirecting', async () => {
+  me(['access'])
+  for (const path of ['/hr/profile', '/hr']) {
+    const response = await proxy(sessionRequest(`http://frontend.test${path}`, { method: 'POST' }))
+    expect(response.status).toBe(403)
+    expect(response.headers.get('x-middleware-rewrite')).toBeNull()
+    expect(response.headers.get('location')).toBeNull()
+  }
+})
+
+it.each(['', '/hr/profile'])('rejects direct notice requests even with a spoofed notice marker: %s', async (suffix) => {
+  const response = await proxy(sessionRequest(`http://frontend.test${PAGE_ACCESS_NOTICE_PATH}${suffix}`, {
+    headers: { [PAGE_ACCESS_NOTICE_HEADER]: QUERY_PERMISSION_REQUIRED },
+  }))
+  expect(response.status).toBe(404)
+  expect(response.headers.get('x-middleware-next')).toBeNull()
 })
 
 it('strips a URL token without accepting it as a session', async () => {
@@ -120,11 +153,30 @@ it('strips a URL token without accepting it as a session', async () => {
   expect(response.headers.get('set-cookie')).toBeNull()
 })
 
-it('lets a query-authorized page render with server-supplied context', async () => {
+it('marks a query-authorized menu path for routing fallback and replaces a forged query notice', async () => {
   me(['access', 'query'])
-  const response = await proxy(sessionRequest('http://frontend.test/hr/profile'))
+  const response = await proxy(sessionRequest('http://frontend.test/hr/profile', {
+    headers: { [PAGE_ACCESS_NOTICE_HEADER]: QUERY_PERMISSION_REQUIRED },
+  }))
   expect(response.headers.get('x-middleware-next')).toBe('1')
   expect(response.headers.get('x-middleware-request-x-dazah-page-path')).toBe('/hr/profile')
+  expect(response.headers.get(noticeRequestHeader)).toBe(MENU_PAGE_UNAVAILABLE)
+})
+
+it.each([
+  { path: '/production/batches/workshop/102-2', method: 'GET', marker: MENU_PAGE_UNAVAILABLE },
+  { path: '/production/batches/workshop/102-2', method: 'HEAD', marker: MENU_PAGE_UNAVAILABLE },
+  { path: '/production/batches/workshop/102-2', method: 'POST', marker: null },
+  { path: '/production/batches/workshop/102-2/unregistered', method: 'GET', marker: PAGE_NOT_FOUND },
+  { path: '/unregistered', method: 'GET', marker: null },
+])('only marks module GET or HEAD requests for the appropriate fallback: $method $path', async ({ path, method, marker }) => {
+  me([], 'enforced', 'admin')
+  const response = await proxy(sessionRequest(`http://frontend.test${path}`, {
+    method,
+    headers: { [PAGE_ACCESS_NOTICE_HEADER]: MENU_PAGE_UNAVAILABLE },
+  }))
+  expect(response.headers.get('x-middleware-next')).toBe('1')
+  expect(response.headers.get(noticeRequestHeader)).toBe(marker)
 })
 
 it('derives module landing from an authorized child and enforces saved grants in draft status', async () => {
@@ -157,6 +209,36 @@ it('lets an enforced module root render when its overview entry is authorized', 
   const response = await proxy(sessionRequest('http://frontend.test/production'))
   expect(response.headers.get('x-middleware-next')).toBe('1')
   expect(response.headers.get('location')).toBeNull()
+})
+
+it('rewrites an access-only overview and denies a write to it', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => new Response(JSON.stringify({ data: {
+    role: 'user', page_permissions: [{
+      page_key: 'production:overview', module_code: 'production', permissions: ['access'],
+    }],
+  } }))))
+  const url = 'http://frontend.test/production'
+  expectAccessNotice(await proxy(sessionRequest(url)))
+  expect((await proxy(sessionRequest(url, { method: 'POST' }))).status).toBe(403)
+})
+
+it.each([false, true])('gates the equipment console by selected or queryable tabs (query grant: %s)', async (withQuery) => {
+  vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => new Response(JSON.stringify({ data: {
+    role: 'user', page_permissions: [
+      { page_key: 'equipment:workshop-103:assets-103', module_code: 'equipment', permissions: ['access'] },
+      ...(withQuery ? [{ page_key: 'equipment:inspection', module_code: 'equipment', permissions: ['access', 'query'] }] : []),
+    ],
+  } }))))
+
+  const consoleUrl = 'http://frontend.test/equipment'
+  const search = '?workshop=103&module=assets'
+  expectAccessNotice(await proxy(sessionRequest(consoleUrl + search)))
+  const unknownTab = '?module=unknown'
+  for (const query of ['', unknownTab]) {
+    const response = await proxy(sessionRequest(consoleUrl + query))
+    if (withQuery) expect(response.headers.get('x-middleware-next')).toBe('1')
+    else expectAccessNotice(response)
+  }
 })
 
 it('redirects an enforced module root without an overview grant to the first authorized child', async () => {

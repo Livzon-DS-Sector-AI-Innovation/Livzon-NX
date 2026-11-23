@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useCallback, useEffect, useState } from 'react'
 import { App, Button, Card, Collapse, Descriptions, Drawer, Empty, Form, Modal, Popconfirm, Input, Select, Space, Spin, Statistic, Table, Tag, Tooltip, Typography, Upload } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
@@ -132,7 +133,7 @@ export function ValidationAiReviewPanel() {
           message.success('已提交 AI 审核，正在运行…')
         }
       } catch (error) {
-        message.error(error instanceof Error ? error.message : '发起审核失败')
+        message.error(getUserErrorMessage(error instanceof Error ? error.message : '发起审核失败'))
       }
     },
     [message, canOperate]
@@ -148,7 +149,7 @@ export function ValidationAiReviewPanel() {
           message.success('已重新提交 AI 审核')
         }
       } catch (error) {
-        message.error(error instanceof Error ? error.message : '重新审核失败')
+        message.error(getUserErrorMessage(error instanceof Error ? error.message : '重新审核失败'))
       }
     },
     [message, canOperate]
@@ -163,7 +164,7 @@ export function ValidationAiReviewPanel() {
         if (detailId === reviewId) setDetailId(null)
         queryClient.invalidateQueries({ queryKey: REVIEW_LIST_KEY })
       } catch (error) {
-        message.error(error instanceof Error ? error.message : '删除失败')
+        message.error(getUserErrorMessage(error instanceof Error ? error.message : '删除失败'))
       }
     },
     [message, queryClient, detailId, canDelete]
@@ -191,7 +192,7 @@ export function ValidationAiReviewPanel() {
         URL.revokeObjectURL(url)
         message.success('审核报告已导出')
       } catch (error) {
-        message.error(error instanceof Error ? error.message : '导出失败')
+        message.error(getUserErrorMessage(error instanceof Error ? error.message : '导出失败'))
       } finally {
         setExportingId(null)
       }
@@ -225,7 +226,7 @@ export function ValidationAiReviewPanel() {
       openDetail(created.id)
       message.success('审核会话已创建，可点击开始审核')
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '创建失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '创建失败'))
     } finally {
       setSubmitting(false)
     }

@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 from sqlalchemy import pool as sa_pool
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core.config import get_settings
@@ -112,17 +113,31 @@ async def test_sync_resolves_people_and_writes_jsonb() -> None:
             assert "ou_zhang" in str(contact_kwargs)
 
             row = (
-                await session.execute(
-                    SeedCulture.__table__.select().where(
-                        SeedCulture.batch_no == "SC-SYNC-01"
+                (
+                    await session.execute(
+                        SeedCulture.__table__.select().where(
+                            SeedCulture.batch_no == "SC-SYNC-01"
+                        )
                     )
                 )
-            ).mappings().first()
+                .mappings()
+                .first()
+            )
             assert row is not None
-            people = row["prepare_operator"]
+            people = row["prepare_operator_people"]
             assert isinstance(people, list)
             assert people[0]["name"] == "张三"
             assert people[0]["avatar_url"] == "https://avatar/zhang.png"
+            assert (
+                await session.scalar(
+                    text(
+                        "SELECT prepare_operator FROM production.seed_cultures "
+                        "WHERE id = :id"
+                    ),
+                    {"id": row["id"]},
+                )
+                == "张三"
+            )
             assert row["ph_before_adjust"] == 6.5
             assert row["tank_remarks"] == "A107"
             assert row["prepare_date"] == date(2025, 6, 1)

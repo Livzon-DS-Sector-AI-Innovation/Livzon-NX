@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useState, useCallback, useEffect } from 'react'
 import { App, Button, Table, Space, Input, Tag } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
@@ -49,7 +50,7 @@ export default function DepartureClient({
       setRecords(res.data)
       setTotal(res.meta?.total || 0)
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '加载数据失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '加载数据失败'))
     } finally {
       setLoading(false)
     }
@@ -67,7 +68,7 @@ export default function DepartureClient({
       message.success(res.message)
       loadData()
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '同步失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '同步失败'))
     } finally {
       setSyncing(false)
     }

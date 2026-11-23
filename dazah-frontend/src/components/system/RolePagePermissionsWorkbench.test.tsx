@@ -199,6 +199,37 @@ it.each([
   })] }))
 })
 
+it.each(['light', 'dark'] as const)('finds fuzzy matches in the current module in %s mode', async (mode) => {
+  const data = result('A')
+  data.definitions = [
+    { ...data.definitions![0], page_key: 'hr:settings:feishu', page_name: '飞书设置', route_path: '/hr/settings/feishu-config',
+      sensitive_actions: [{ key: 'sync', name: '同步配置', category: 'integration_admin', description: '更新外部业务配置' }] },
+    { page_key: 'hr:settings:reminder', module_code: 'hr', page_name: '提醒设置', route_path: '/hr/settings/reminder' },
+    { page_key: 'production:feishu', module_code: 'production', page_name: '飞书设置', route_path: '/production/feishu' },
+  ]
+  mocks.get.mockResolvedValue(data)
+  await act(async () => root.render(createElement(ConfigProvider, { theme: getAntdTheme(mode) },
+    createElement(RolePagePermissionsWorkbench, { role: role('A'), departments: [], onClose: vi.fn() }))))
+
+  const input = host.querySelector<HTMLInputElement>('[aria-label="搜索角色页面权限"]')!
+  const searchFor = async (value: string) => act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value)
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  const list = host.querySelector('section[aria-labelledby="role-page-permission-list"]')!
+  const visiblePages = () => [...list.querySelectorAll('article strong')].map((name) => name.textContent)
+
+  for (const keyword of ['飞置', ' FEISHUSHEZHI ', 'fssz', 'CONFIG　设置', 'sync 外部配置', '/hr/settings/feishu-config', 'hr:settings:feishu']) {
+    await searchFor(keyword)
+    expect(visiblePages(), keyword).toEqual(['飞书设置'])
+    expect(host.querySelector('#role-page-permission-detail')?.getAttribute('aria-label')).toBe('页面权限详情：飞书设置')
+  }
+  await searchFor('飞置 reminder')
+  expect(list.textContent).toContain('当前筛选没有匹配页面')
+  await searchFor('  ')
+  expect(visiblePages()).toEqual(['飞书设置', '提醒设置'])
+})
+
 it('disables batch controls for an empty search and restores them after clearing it', async () => {
   mocks.get.mockResolvedValue(result('A'))
   await show('A')
@@ -349,6 +380,30 @@ async function show(id: string) {
   })
 }
 
+it('opens the searchable role list from its label and switches using the full role name', async () => {
+  const currentRole = role('A')
+  const longRole = { ...role('B'), name: '质量管理中心原料药生产全过程质量审核与放行复核负责人' }
+  const onRoleChange = vi.fn()
+  await act(async () => root.render(createElement(RolePagePermissionsWorkbench, {
+    role: currentRole, roles: [currentRole, longRole], departments: [], onClose: vi.fn(), onRoleChange,
+    initialLoad: { ok: true, data: result('A') },
+  })))
+
+  const picker = host.querySelector('[role="combobox"][aria-labelledby="permission-role-label"]')
+  const label = host.querySelector('#permission-role-label')
+  expect(picker?.getAttribute('aria-expanded')).toBe('false')
+  expect(label?.textContent).toBe('当前角色')
+  await act(async () => label?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true })))
+  expect(picker?.getAttribute('aria-expanded')).toBe('true')
+  expect(document.querySelector('[role="option"][aria-selected="true"]')?.textContent).toBe(currentRole.name)
+  const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')]
+    .find((item) => item.textContent === longRole.name)
+  expect(option).toBeTruthy()
+  await act(async () => option?.click())
+  expect(picker?.getAttribute('aria-expanded')).toBe('false')
+  expect(onRoleChange).toHaveBeenCalledExactlyOnceWith(longRole.id)
+})
+
 it('uses server-loaded permissions on the first render without a second request', async () => {
   await act(async () => root.render(createElement(RolePagePermissionsWorkbench, {
     role: role('A'), departments: [], onClose: vi.fn(), initialLoad: { ok: true, data: result('A') },
@@ -436,6 +491,25 @@ it('requires an adjustment reason before starting save confirmation', async () =
   expect(mocks.replace).not.toHaveBeenCalled()
 })
 
+it('offers three reasons in the footer and sends the selected reason through save confirmation', async () => {
+  mocks.get.mockResolvedValue(result('A'))
+  mocks.replace.mockResolvedValue({ ok: true, data: { ...result('A'), grant_version: 4 } })
+  await show('A')
+  const input = host.querySelector<HTMLInputElement>('footer input[placeholder="填写角色授权调整原因"]')!
+  const shortcuts = [...host.querySelectorAll<HTMLButtonElement>('footer [aria-label="快捷授权调整原因"] button')]
+  expect(input.maxLength).toBe(20)
+  expect(host.querySelector('footer')?.textContent).toContain('0 / 20')
+  expect(shortcuts.map((item) => item.textContent)).toEqual(['岗位权限调整', '数据范围调整', '收紧高风险权限'])
+  await act(async () => shortcuts[1].click())
+  expect(input.value).toBe('数据范围调整')
+  expect(mocks.preview).not.toHaveBeenCalled()
+
+  await act(async () => host.querySelector<HTMLInputElement>('[data-page-name] input[value="query"]')!.click())
+  await act(async () => button('保存').click())
+  await act(async () => mocks.confirm.mock.lastCall![0].onOk())
+  expect(mocks.replace).toHaveBeenCalledWith('A', expect.objectContaining({ reason: '数据范围调整' }))
+})
+
 it('keeps edits and restores both buttons after a preview failure', async () => {
   mocks.get.mockResolvedValue(result('A'))
   mocks.preview.mockRejectedValue(new Error('影响预演失败'))
@@ -463,6 +537,8 @@ it('disables both actions during preview and ignores a late preview for a previo
   await act(async () => button('预览').click())
   expect(button('预览').disabled).toBe(true)
   expect(button('保存').disabled).toBe(true)
+  const shortcuts = [...host.querySelectorAll<HTMLButtonElement>('[aria-label="快捷授权调整原因"] button')]
+  expect(shortcuts.map((shortcut) => shortcut.disabled)).toEqual([true, true, true])
   await show('B')
   await act(async () => pending.resolve({ role_id: 'A', grant_version: 3, member_count: 2,
     affected_user_count: 1, expanded_user_count: 1, restricted_user_count: 0,
@@ -672,7 +748,7 @@ it('confirms the filtered group count and edits only matching pages', async () =
   expect(host.querySelector('#role-page-permission-list')?.textContent).toContain('2 个页面')
   const input = host.querySelector<HTMLInputElement>('[aria-label="搜索角色页面权限"]')!
   await act(async () => {
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, '员工档案')
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, '员案')
     input.dispatchEvent(new Event('input', { bubbles: true }))
   })
   expect(host.querySelector('#role-page-permission-list')?.textContent).toContain('1 个页面')

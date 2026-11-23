@@ -1,6 +1,8 @@
 import { redirect } from 'next/navigation'
 import { getCurrentUser } from '@/actions/auth'
 import { getFirstAuthorizedModulePath, NO_AUTHORIZED_PAGE_PATH } from '@/lib/menu-config'
+import { AntdProvider } from '@/components/AntdProvider'
+import { ImpersonationBanner } from '@/components/auth/ImpersonationBanner'
 
 export default async function NoAccessPage() {
   const user = await getCurrentUser()
@@ -9,8 +11,9 @@ export default async function NoAccessPage() {
   if (landingPath !== NO_AUTHORIZED_PAGE_PATH) redirect(landingPath)
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[var(--color-surface)] p-6">
-      <section className="w-full max-w-xl rounded-[var(--rounded-lg)] border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-8 text-center">
+    <main className="flex min-h-screen flex-col bg-[var(--color-surface)] p-6">
+      {user.impersonation && <AntdProvider><ImpersonationBanner name={user.name} expiresAt={user.impersonation.expires_at} /></AntdProvider>}
+      <section className="m-auto w-full max-w-xl rounded-[var(--rounded-lg)] border border-[var(--color-hairline)] bg-[var(--color-canvas)] p-8 text-center">
         <h1 className="text-[22px] font-semibold text-[var(--color-charcoal)]">
           账号已登录，暂未分配可访问的业务页面
         </h1>
@@ -23,9 +26,9 @@ export default async function NoAccessPage() {
               重新检查权限
             </button>
           </form>
-          <a href="/auth/logout" className="rounded-[var(--rounded-sm)] border border-[var(--color-hairline)] px-4 py-2 text-[14px] text-[var(--color-charcoal)]">
+          {!user.impersonation && <a href="/auth/logout" className="rounded-[var(--rounded-sm)] border border-[var(--color-hairline)] px-4 py-2 text-[14px] text-[var(--color-charcoal)]">
             退出登录
-          </a>
+          </a>}
         </div>
       </section>
     </main>

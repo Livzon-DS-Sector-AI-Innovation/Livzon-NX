@@ -73,7 +73,7 @@ export function DataScopeConfig({ departments, value, onChange, segmented = fals
         </>}
       </Radio.Group>
       {value.scopeType === "departments" && (
-        <div className="mt-2 max-h-64 overflow-y-auto rounded-md border border-hairline p-3">
+        <div className="mt-2 max-h-[clamp(76px,14dvh,144px)] overflow-y-auto rounded-md border border-hairline p-2">
           <Tree
             key="data-scope-dept-tree"
             checkable

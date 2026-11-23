@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { App, Button, Modal } from 'antd'
 import {
@@ -1048,7 +1049,7 @@ export default function SopContentEditor({
       await updateSopContent(regulationId, fullContent, 'reviewed')
       setJustSaved(true); setIsDirty(false); onSaved()
     } catch (err: unknown) {
-      message.error(err instanceof Error ? err.message : '保存失败')
+      message.error(getUserErrorMessage(err instanceof Error ? err.message : '保存失败'))
     } finally { setSaving(false) }
   }, [fullContent, message, onSaved, regulationId])
 
@@ -1066,7 +1067,7 @@ export default function SopContentEditor({
       setTimeout(() => URL.revokeObjectURL(url), 60000)
       message.success('已打开打印窗口，可在打印对话框中选择「另存为 PDF」')
     } catch (err: unknown) {
-      message.error(err instanceof Error ? err.message : '导出失败')
+      message.error(getUserErrorMessage(err instanceof Error ? err.message : '导出失败'))
     } finally { setExporting(false) }
   }, [message, regulationId, regulationName])
 
@@ -1079,7 +1080,7 @@ export default function SopContentEditor({
       setSaving(false)
       await handleExport()
     } catch (err: unknown) {
-      message.error(err instanceof Error ? err.message : '保存失败')
+      message.error(getUserErrorMessage(err instanceof Error ? err.message : '保存失败'))
       setSaving(false)
     }
   }, [fullContent, handleExport, message, onSaved, regulationId])

@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useRouter } from 'next/navigation'
 import { App, Card, Form, Input, Select, Button, DatePicker, Space } from 'antd'
 import { ArrowLeftOutlined } from '@ant-design/icons'
@@ -19,7 +20,7 @@ export function CreateCapa() {
       message.success('创建成功')
       router.push('/quality/capas')
     } catch (error) {
-      message.error((error instanceof Error ? error.message : '') || '创建失败')
+      message.error(getUserErrorMessage((error instanceof Error ? error.message : '') || '创建失败'))
     }
   }
 

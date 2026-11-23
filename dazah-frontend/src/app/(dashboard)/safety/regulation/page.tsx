@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useEffect, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { useRouter } from 'next/navigation'
@@ -514,7 +515,7 @@ export default function RegulationPage() {
         previewData?.file_name || previewTarget.document_original_name
       )
     } catch (err) {
-      message.error(err instanceof Error ? err.message : '下载失败')
+      message.error(getUserErrorMessage(err instanceof Error ? err.message : '下载失败'))
     } finally {
       setPreviewDownloading(false)
     }

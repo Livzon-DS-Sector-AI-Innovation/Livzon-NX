@@ -2,6 +2,7 @@
 
 from fastapi import UploadFile
 
+from app.core.exceptions import AppException
 from app.core.upload_security import read_upload_secure
 
 
@@ -22,3 +23,9 @@ async def read_upload_with_limit(
         what=what,
     )
     return content
+
+
+async def read_word_import(file: UploadFile, max_bytes: int) -> bytes:
+    if not (file.filename or "").lower().endswith(".docx"):
+        raise AppException(status_code=415, message="请上传 Word 文件 (.docx)")
+    return await read_upload_with_limit(file, max_bytes, "导入文件")

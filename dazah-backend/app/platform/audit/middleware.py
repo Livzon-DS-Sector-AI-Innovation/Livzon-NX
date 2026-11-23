@@ -249,6 +249,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
             except (ValueError, TypeError, AttributeError):
                 pass
         response_detail: dict[str, Any] = {"status_code": status_code}
+        impersonation = getattr(request.state, "impersonation", None)
         if response_bytes and response_bytes.isdecimal():
             response_detail["content_length"] = int(response_bytes)
         try:
@@ -275,6 +276,10 @@ class AuditMiddleware(BaseHTTPMiddleware):
                             "target": target or None,
                             "request": request_details,
                             "response": response_detail,
+                            **(
+                                {"impersonation": impersonation.audit_fields()}
+                                if impersonation is not None else {}
+                            ),
                         },
                     )
                 )

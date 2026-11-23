@@ -27,6 +27,7 @@ from app.modules.administration.service import (
     _extract_inventory,
     _extract_requisitions,
     _resolve_field_name,
+    decorate_records_for_display,
 )
 
 # ---------- 值提取纯函数 ----------
@@ -289,4 +290,56 @@ def test_module_exports_page_keys() -> None:
     assert admin_service.ADMINISTRATION_READ_PAGE_KEYS >= {
         "admin:tobacco-gift:items",
         "admin:tobacco-gift:records",
+        "admin:seals",
+        "admin:scrap-materials",
     }
+
+
+async def test_decorate_records_replaces_link_ids_with_names(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """领用物品的 link ID 装饰为物品名称；空关联与普通字段不动。"""
+
+    async def _get_default(self: Any, page_key: str) -> MirroredTable | None:
+        return _inventory_table()
+
+    monkeypatch.setattr(
+        "app.modules.administration.service.AdministrationRepository.get_default_bound_table",
+        _get_default,
+    )
+    data = {
+        "records": [
+            {
+                "record_id": "r1",
+                "fields": {
+                    "领用物品（一）": {"link_record_ids": ["rec-wly"]},
+                    "领用物品（二）": {"link_record_ids": []},
+                    "领用物品（三）": {"link_record_ids": ["rec-gone"]},
+                    "领用数量（一）": 2,
+                },
+            },
+            {"record_id": "r2", "fields": {}},
+        ]
+    }
+    decorated = await decorate_records_for_display(session=None, data=data)  # type: ignore[arg-type]
+    fields = decorated["records"][0]["fields"]
+    assert fields["领用物品（一）"] == "五粮液"
+    assert fields["领用物品（二）"] == ""
+    assert fields["领用物品（三）"] == "已删除物品"
+    assert fields["领用数量（一）"] == 2
+    assert decorated["records"][1]["fields"] == {}
+
+
+async def test_decorate_records_skips_repo_without_link_fields(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _boom(_self: Any, _page_key: str) -> MirroredTable | None:
+        raise AssertionError("无关联字段时不应查询物品清单")
+
+    monkeypatch.setattr(
+        "app.modules.administration.service.AdministrationRepository.get_default_bound_table",
+        _boom,
+    )
+    data = {"records": [{"record_id": "r1", "fields": {"领用数量（一）": 3}}]}
+    decorated = await decorate_records_for_display(session=None, data=data)  # type: ignore[arg-type]
+    assert decorated["records"][0]["fields"]["领用数量（一）"] == 3

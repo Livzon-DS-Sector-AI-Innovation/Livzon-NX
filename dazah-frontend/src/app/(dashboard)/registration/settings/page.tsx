@@ -1,3 +1,4 @@
+import { getUserErrorMessage } from '@/lib/user-error'
 import Alert from '@/components/shared/PlatformNotice'
 
 import { RegistrationSettingsPage, RegistrationQueryProvider } from '@/components/registration'
@@ -35,7 +36,7 @@ export default async function RegistrationSettingsPageRoute() {
         type="error"
         showIcon
         title="注册设置加载失败"
-        description={error instanceof Error ? error.message : '注册设置加载失败'}
+        description={getUserErrorMessage(error instanceof Error ? error.message : '注册设置加载失败', '注册设置加载失败')}
       />
     )
   }

@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useMemo, useState, useTransition } from 'react'
 import { App, Button, Card, Col, Input, InputNumber, Row, Select, Space, Switch, Tag, Typography } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
@@ -63,7 +64,7 @@ export default function CertificateReminderSettingsCard({
         message.success('证书到期提醒配置已保存')
         router.refresh()
       } catch (error) {
-        message.error(error instanceof Error ? error.message : '提醒配置保存失败')
+        message.error(getUserErrorMessage(error instanceof Error ? error.message : '提醒配置保存失败'))
       }
     })
   }
@@ -86,7 +87,7 @@ export default function CertificateReminderSettingsCard({
         message.warning(result?.detail || '测试消息发送失败')
       }
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '测试消息发送失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '测试消息发送失败'))
     } finally {
       setTesting(false)
     }

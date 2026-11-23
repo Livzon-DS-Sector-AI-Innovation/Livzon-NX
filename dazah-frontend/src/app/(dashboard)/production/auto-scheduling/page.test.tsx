@@ -403,9 +403,12 @@ describe('AutoSchedulingPage', () => {
     expect(document.body.textContent).toContain('生成请求失败')
   })
 
-  it('reports export failure with the error message', async () => {
+  it.each([
+    ['导出服务不可用', '导出服务不可用'],
+    ['TypeError: internal export failure', '操作未完成，请稍后重试'],
+  ])('shows a safe export error for %s', async (error, expected) => {
     actions.generateScheduleDraft.mockResolvedValue(DRAFT_RESULT)
-    actions.exportScheduleDraft.mockRejectedValue(new Error('导出服务不可用'))
+    actions.exportScheduleDraft.mockRejectedValue(new Error(error))
     await render()
     await act(async () => {
       findButton('生成草稿').click()
@@ -415,7 +418,8 @@ describe('AutoSchedulingPage', () => {
       findButton('下载 Excel').click()
       await new Promise((r) => setTimeout(r, 80))
     })
-    expect(document.body.textContent).toContain('导出服务不可用')
+    expect(document.body.textContent).toContain(expected)
+    if (error !== expected) expect(document.body.textContent).not.toContain(error)
   })
 
   it('warns when adding a tank block without a complete range', async () => {
@@ -670,6 +674,21 @@ describe('AutoSchedulingPage', () => {
     const buttons = [...container.querySelectorAll('table button')]
     expect(buttons.some(b => b.textContent?.trim() === '下载')).toBe(download)
     expect(Boolean(container.querySelector('table .ant-btn-dangerous'))).toBe(remove)
+  })
+
+  it('shows safe feedback and keeps the draft available when its download fails', async () => {
+    const technicalError = 'TypeError: internal draft download failure'
+    setViewUser(['access', 'query', 'operate'], ['sensitive_export'])
+    mockHistory()
+    actions.downloadScheduleDraftRecordFile.mockRejectedValueOnce(new Error(technicalError))
+    await render()
+    const download = [...container.querySelectorAll<HTMLButtonElement>('table button')].find(button => button.textContent?.trim() === '下载')
+    expect(download).toBeDefined()
+    await act(async () => download?.click())
+    expect(actions.downloadScheduleDraftRecordFile).toHaveBeenCalledWith(HISTORY_RECORD.id)
+    await vi.waitFor(() => expect(document.body.textContent).toContain('操作未完成，请稍后重试'))
+    expect(document.body.textContent).not.toContain(technicalError)
+    expect(download?.isConnected).toBe(true)
   })
 
   it('removes historical actions when sensitive grants are revoked', async () => {

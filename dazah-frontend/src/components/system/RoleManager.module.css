@@ -1,0 +1,4 @@
+.grantVersionCell:global(.ant-table-cell) {
+  padding-inline: 2px !important;
+  white-space: nowrap;
+}

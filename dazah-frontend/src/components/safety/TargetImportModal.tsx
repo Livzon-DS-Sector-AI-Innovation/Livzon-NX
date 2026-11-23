@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useState } from 'react'
 import { App, Button, Modal, Space, Typography, Upload } from 'antd'
 import PlatformNotice from '@/components/shared/PlatformNotice'
@@ -40,7 +41,7 @@ export default function TargetImportModal({
     try {
       await onDownload()
     } catch (err) {
-      message.error(err instanceof Error ? err.message : '模板下载失败')
+      message.error(getUserErrorMessage(err instanceof Error ? err.message : '模板下载失败'))
     } finally {
       setDownloading(false)
     }
@@ -56,7 +57,7 @@ export default function TargetImportModal({
       setResult(res)
       if (res.ok) setFile(null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : '导入失败')
+      setError(getUserErrorMessage(err instanceof Error ? err.message : '导入失败', '导入失败'))
     } finally {
       setImporting(false)
     }

@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
@@ -59,7 +60,7 @@ export default function NewEmployeeTrainingDetailClient({ planId }: { planId: st
       const data = await fetchNewEmployeeTrainingPlan(planId)
       setPlan(data)
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '加载培训计划失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '加载培训计划失败'))
     } finally {
       setLoading(false)
     }
@@ -96,7 +97,7 @@ export default function NewEmployeeTrainingDetailClient({ planId }: { planId: st
       })
       setTrainees(traineeList.map((t) => ({ key: t.name, title: `${t.name}（${t.department}）` })))
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '加载参训人员列表失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '加载参训人员列表失败'))
       setTraineeModalOpen(false)
     } finally {
       setTraineeLoading(false)
@@ -126,7 +127,7 @@ export default function NewEmployeeTrainingDetailClient({ planId }: { planId: st
       message.success(res.message || '已创建培训会话，请在培训资料页面完善信息')
       setTraineeModalOpen(false)
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '开始培训失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '开始培训失败'))
     } finally {
       setStarting(false)
     }
@@ -148,7 +149,7 @@ export default function NewEmployeeTrainingDetailClient({ planId }: { planId: st
       addForm.resetFields()
       loadData()
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '添加失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '添加失败'))
     }
   }
 
@@ -165,7 +166,7 @@ export default function NewEmployeeTrainingDetailClient({ planId }: { planId: st
           message.success('已删除')
           router.push('/hr/training/new-employee')
         } catch (err) {
-          message.error((err instanceof Error ? err.message : '') || '删除失败')
+          message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '删除失败'))
         }
       },
     })
@@ -186,7 +187,7 @@ export default function NewEmployeeTrainingDetailClient({ planId }: { planId: st
       document.body.removeChild(a)
       message.success('岗位培训确认表已导出')
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '导出失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '导出失败'))
     } finally {
       setExporting(false)
     }

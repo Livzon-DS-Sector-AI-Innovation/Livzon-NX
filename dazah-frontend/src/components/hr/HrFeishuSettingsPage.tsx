@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { App, Button, Card, Collapse, Drawer, Form, Input, Modal, Select, Space, Switch, Table, Tag, Typography, Upload } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
@@ -315,7 +316,7 @@ export function HrFeishuSettingsPage() {
     } catch (error) {
       const description = error instanceof Error ? (error instanceof Error ? error.message : '') : '保存飞书应用配置失败'
       setResultNotice({ type: 'error', title: '保存飞书应用配置失败', description })
-      message.error(error instanceof Error ? (error instanceof Error ? error.message : '') : '保存飞书应用配置失败')
+      message.error(getUserErrorMessage(error instanceof Error ? (error instanceof Error ? error.message : '') : '保存飞书应用配置失败'))
     } finally {
       setContactSaving(false)
       setAppSaving(false)
@@ -338,7 +339,7 @@ export function HrFeishuSettingsPage() {
     } catch (error) {
       const description = error instanceof Error ? (error instanceof Error ? error.message : '') : '测试飞书应用连接失败'
       setResultNotice({ type: 'error', title: '测试飞书应用连接失败', description })
-      message.error(error instanceof Error ? (error instanceof Error ? error.message : '') : '测试飞书应用连接失败')
+      message.error(getUserErrorMessage(error instanceof Error ? (error instanceof Error ? error.message : '') : '测试飞书应用连接失败'))
     } finally {
       setContactTesting(false)
       setAppTesting(false)
@@ -366,7 +367,7 @@ export function HrFeishuSettingsPage() {
       } catch (error) {
         const description = error instanceof Error ? (error instanceof Error ? error.message : '') : '保存实体配置失败'
         setResultNotice({ type: 'error', title: '保存实体配置失败', description })
-        message.error(error instanceof Error ? (error instanceof Error ? error.message : '') : '保存实体配置失败')
+        message.error(getUserErrorMessage(error instanceof Error ? (error instanceof Error ? error.message : '') : '保存实体配置失败'))
       } finally {
         setRowSaving((current) => ({ ...current, [entityCode]: false }))
       }
@@ -390,7 +391,7 @@ export function HrFeishuSettingsPage() {
       } catch (error) {
         const description = error instanceof Error ? (error instanceof Error ? error.message : '') : `${entityName} 连接测试失败`
         setResultNotice({ type: 'error', title: `${entityName} 连接测试失败`, description })
-        message.error(error instanceof Error ? (error instanceof Error ? error.message : '') : `${entityName} 连接测试失败`)
+        message.error(getUserErrorMessage(error instanceof Error ? (error instanceof Error ? error.message : '') : `${entityName} 连接测试失败`))
       } finally {
         setRowTesting((current) => ({ ...current, [entityCode]: false }))
       }
@@ -464,7 +465,7 @@ export function HrFeishuSettingsPage() {
       queryClient.invalidateQueries({ queryKey: ['hr-feishu-settings', 'entities'] })
     } catch (error) {
       setResultNotice({ type: 'error', title: '保存字段对齐配置失败', description: error instanceof Error ? (error instanceof Error ? error.message : '') : '保存字段对齐配置失败' })
-      message.error(error instanceof Error ? (error instanceof Error ? error.message : '') : '保存字段对齐配置失败')
+      message.error(getUserErrorMessage(error instanceof Error ? (error instanceof Error ? error.message : '') : '保存字段对齐配置失败'))
     } finally {
       setMappingSaving(false)
     }
@@ -482,7 +483,7 @@ export function HrFeishuSettingsPage() {
         message.success(`已读取 ${tables.length} 张表`)
       } catch (error) {
         setResultNotice({ type: 'error', title: '读取飞书表列表失败', description: error instanceof Error ? (error instanceof Error ? error.message : '') : '读取飞书表列表失败' })
-        message.error(error instanceof Error ? (error instanceof Error ? error.message : '') : '读取飞书表列表失败')
+        message.error(getUserErrorMessage(error instanceof Error ? (error instanceof Error ? error.message : '') : '读取飞书表列表失败'))
       } finally {
         setRowLoadingTables((current) => ({ ...current, [entityCode]: false }))
       }
@@ -502,7 +503,7 @@ export function HrFeishuSettingsPage() {
       message.success('邮箱配置保存成功')
       emailQuery.refetch()
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '保存失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '保存失败'))
     } finally {
       setEmailSaving(false)
     }
@@ -517,7 +518,7 @@ export function HrFeishuSettingsPage() {
       setEmailTestResult(`IMAP: ${results.imap || '未测试'} | SMTP: ${results.smtp || '未测试'}`)
       message.success('测试完成')
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '测试失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '测试失败'))
     } finally {
       setEmailTesting(false)
     }
@@ -1061,7 +1062,7 @@ export function HrFeishuSettingsPage() {
                             message.success('PDF 模板上传成功')
                             options.onSuccess?.(res)
                           } catch (err) {
-                            message.error((err instanceof Error ? err.message : '') || '上传失败')
+                            message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '上传失败'))
                             options.onError?.(
                               err instanceof Error ? err : new Error('上传失败'),
                             )

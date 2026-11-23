@@ -28,6 +28,7 @@ from app.modules.safety.models import SpecialWorkCertificate
 from app.modules.safety.service.work_certificate_import import (
     match_sheet_rule,
     merge_records,
+    normalize_department,
     parse_certificate_workbook,
     parse_date_cell,
     parse_sheet,
@@ -87,6 +88,70 @@ def test_match_sheet_rules_cover_summary_tabs() -> None:
     assert match_sheet_rule("说明页") is None
 
 
+def test_match_sheet_rule_label_exact() -> None:
+    """类别中文 label（导出子表名）精确命中，优先于关键词规则。"""
+    expected = {
+        "焊接与热切割作业": "welding_cutting",
+        "电工作业": "electrician",
+        # 「起重司索工」label 若走关键词会被「起重」误判为起重机司机
+        "起重司索工": "lifting_rigging",
+        "锅炉作业（司炉工）": "boiler_operator",
+        # 全/半角括号差异容错
+        "锅炉作业(司炉工)": "boiler_operator",
+        "特种设备安全管理（A证）": "special_equipment_management",
+    }
+    for name, category in expected.items():
+        rule = match_sheet_rule(name)
+        assert rule is not None, name
+        assert rule.category == category, name
+    # 带「人员」的原表名不等于 label，仍走关键词路径
+    legacy = match_sheet_rule("特种设备管理人员（A证)")
+    assert legacy is not None
+    assert legacy.category == "special_equipment_management"
+
+
+def test_normalize_department_rules() -> None:
+    """车间名称归一化：数字简写补全/括号变体/机修统一/原样保留。"""
+    cases: list[tuple[str | None, str | None, bool]] = [
+        # 数字简写补全（含数字型单元格转成的文本）
+        ("103", "103车间", True),
+        ("101", "101车间", True),
+        ("201一", "201一车间", True),
+        ("201二", "201二车间", True),
+        ("203", "203车间", True),
+        # 代码式（equipment 车间编码风格）
+        ("201-1", "201一车间", True),
+        ("201—2", "201二车间", True),
+        # 括号内容是车间区分标识，保留并补「车间」（括号统一全角）
+        ("201二（多拉）", "201二车间（多拉）", True),
+        ("201二(多拉)", "201二车间（多拉）", True),
+        ("201二车间（多拉）", "201二车间（多拉）", False),
+        # 机修前缀统一
+        ("机修工", "机修", True),
+        ("机修班长", "机修", True),
+        ("机修班组", "机修", True),
+        # 已是标准写法不变
+        ("101车间", "101车间", False),
+        ("101二车间", "101二车间", False),
+        ("201一车间", "201一车间", False),
+        ("201车间", "201车间", False),
+        ("机修", "机修", False),
+        # 非车间部门原样保留（仅去空白，不算变化）
+        (" 动力科 ", "动力科", False),
+        ("热动站", "热动站", False),
+        ("QC", "QC", False),
+        ("污水处理", "污水处理", False),
+        ("102预混剂", "102预混剂", False),
+        ("生产管理部", "生产管理部", False),
+        # 空值
+        (None, None, False),
+        ("", None, False),
+        (" ", None, False),
+    ]
+    for raw, expected, changed in cases:
+        assert normalize_department(raw) == (expected, changed), raw
+
+
 def test_parse_date_cell_variants() -> None:
     assert parse_date_cell("2025.11.26", month_end=True) == date(2025, 11, 26)
     assert parse_date_cell("2013.7.12", month_end=False) == date(2013, 7, 12)
@@ -97,9 +162,9 @@ def test_parse_date_cell_variants() -> None:
     assert parse_date_cell("2028.05", month_end=True) == date(2028, 5, 31)
     assert parse_date_cell("2028.12", month_end=True) == date(2028, 12, 31)
     # 区间取截止端
-    assert parse_date_cell(
-        "2025.11.26-2028.11.25", month_end=True
-    ) == date(2028, 11, 25)
+    assert parse_date_cell("2025.11.26-2028.11.25", month_end=True) == date(
+        2028, 11, 25
+    )
     # Excel 串行数（41410 = 2013-05-01）
     assert parse_date_cell(41410, month_end=False) == (
         xlrd.xldate_as_datetime(41410, 0).date()
@@ -121,37 +186,130 @@ def _ledger_sheets() -> dict[str, list[list[Any]]]:
     return {
         "电焊": [
             ["2026年焊接与热切割作业"],
-            ["编号", "姓名", "车间", "岗位", "入职日期", "初领日期",
-             "有效日期", "证书编号", "复审日期", "备注", "学历"],
-            [1, f"{_MARK}吴义龙", "101", "机修", "2013.07.12", "2019.12.09",
-             "2029.02.12", "T640202197008161234", "2029.02", "公司", "高中"],
-            [2, f"{_MARK}丁金虎", "", "", "2013.07.12", "2020.01.17",
-             "2032.02.11", "T640221198210232345", "2032.02", "公司", "高中"],
+            [
+                "编号",
+                "姓名",
+                "车间",
+                "岗位",
+                "入职日期",
+                "初领日期",
+                "有效日期",
+                "证书编号",
+                "复审日期",
+                "备注",
+                "学历",
+            ],
+            [
+                1,
+                f"{_MARK}吴义龙",
+                "101",
+                "机修",
+                "2013.07.12",
+                "2019.12.09",
+                "2029.02.12",
+                "T640202197008161234",
+                "2029.02",
+                "公司",
+                "高中",
+            ],
+            [
+                2,
+                f"{_MARK}丁金虎",
+                "",
+                "",
+                "2013.07.12",
+                "2020.01.17",
+                "2032.02.11",
+                "T640221198210232345",
+                "2032.02",
+                "公司",
+                "高中",
+            ],
             [3, None, "", "", "", "", "", "", "", "", ""],
             ["", "合计", "", "", "", "", "", "", "", "", ""],
         ],
         "电工（高）": [
             ["2026年高压电工操作证统计表"],
-            ["序号", "姓名", "入职日期", "有效日期", "发证日期",
-             "高压证书编号", "复审", "学历", "备注"],
-            [1, f"{_MARK}林宗伟", "2012.05.04", "2028.08.11", "2016.07.13",
-             "T150102198310122345", "2028.08", "大专", "公司"],
+            [
+                "序号",
+                "姓名",
+                "入职日期",
+                "有效日期",
+                "发证日期",
+                "高压证书编号",
+                "复审",
+                "学历",
+                "备注",
+            ],
+            [
+                1,
+                f"{_MARK}林宗伟",
+                "2012.05.04",
+                "2028.08.11",
+                "2016.07.13",
+                "T150102198310122345",
+                "2028.08",
+                "大专",
+                "公司",
+            ],
         ],
         "电工（低）": [
             ["2026年低压电工操作证统计表"],
-            ["序号", "姓名", "入职日期", "有效日期", "发证日期",
-             "低压证书编号", "复审", "备注", "学历"],
-            [1, f"{_MARK}林宗伟", "2012.05.04", "2030.01.09", "2016.08.20",
-             "T150102198310122345", "2030.01", "公司", "大专"],
+            [
+                "序号",
+                "姓名",
+                "入职日期",
+                "有效日期",
+                "发证日期",
+                "低压证书编号",
+                "复审",
+                "备注",
+                "学历",
+            ],
+            [
+                1,
+                f"{_MARK}林宗伟",
+                "2012.05.04",
+                "2030.01.09",
+                "2016.08.20",
+                "T150102198310122345",
+                "2030.01",
+                "公司",
+                "大专",
+            ],
         ],
         "管理人员": [
             ["2026年持证人员汇总表"],
-            ["序号", "从业类别", "证件类型", "姓名", "学历", "职位",
-             "领证日期", "复审日期", "有效期", "继续再教育时间", "电话",
-             "身份证号", "专业"],
-            [1, "主要负责人", "危化生产", f"{_MARK}史润", "本科", "副总经理",
-             "2025.11.26", "2028.11.25", "2025.11.26-2028.11.25",
-             "2026.11.26", "133", "1426", "生物科学"],
+            [
+                "序号",
+                "从业类别",
+                "证件类型",
+                "姓名",
+                "学历",
+                "职位",
+                "领证日期",
+                "复审日期",
+                "有效期",
+                "继续再教育时间",
+                "电话",
+                "身份证号",
+                "专业",
+            ],
+            [
+                1,
+                "主要负责人",
+                "危化生产",
+                f"{_MARK}史润",
+                "本科",
+                "副总经理",
+                "2025.11.26",
+                "2028.11.25",
+                "2025.11.26-2028.11.25",
+                "2026.11.26",
+                "133",
+                "1426",
+                "生物科学",
+            ],
         ],
         "设备说明": [["这是一个无关子表"], ["内容"]],
     }
@@ -175,17 +333,59 @@ def test_parse_certificate_workbook_sheets() -> None:
     assert sample["qualification_scope"] == "主要负责人 危化生产"
 
 
+def test_parse_sheet_normalizes_department() -> None:
+    """车间列归一化写入 department，原始写法变化时记入备注留痕。"""
+    sheets = {
+        "叉车": [
+            ["2026年叉车作业操作证统计表"],
+            ["编号", "姓名", "车间", "取证日期", "有效日期", "证书编号"],
+            [1, f"{_MARK}马学忠", "201一（多拉）", "2021.12", "2029.11", "6402211"],
+            [2, f"{_MARK}热动站工", " 热动站 ", "2021.12", "2029.11", "6402212"],
+        ]
+    }
+    result = parse_sheet(
+        _build_matrix("叉车", sheets["叉车"]), match_sheet_rule("叉车")
+    )
+    # 括号内容（多拉）是车间区分标识，保留
+    assert result.records[0].department == "201一车间（多拉）"
+    assert result.records[0].remark
+    assert "车间原值201一（多拉）" in result.records[0].remark
+    # 原样保留的部门：去空白即可，不记备注
+    assert result.records[1].department == "热动站"
+    assert not result.records[1].remark
+
+
 def test_parse_sheet_expiry_error_row() -> None:
     sheets = {
         "叉车": [
             ["2026年叉车作业操作证统计表"],
-            ["编号", "姓名", "车间", "技能证书", "入职日期", "取证日期",
-             "有效日期", "聘用起止日期", "等级", "证书编号", "学历"],
-            [1, f"{_MARK}马学忠", "101车间", "叉车作业操作证", "2018.08.01",
-             "2021.12", "2029.11", "2021.12.31-2029.11.30", "N1",
-             "640221199107233456", "高中"],
-            [2, f"{_MARK}坏行", "", "", "", "2020.08", "未知日期", "", "",
-             "", ""],
+            [
+                "编号",
+                "姓名",
+                "车间",
+                "技能证书",
+                "入职日期",
+                "取证日期",
+                "有效日期",
+                "聘用起止日期",
+                "等级",
+                "证书编号",
+                "学历",
+            ],
+            [
+                1,
+                f"{_MARK}马学忠",
+                "101车间",
+                "叉车作业操作证",
+                "2018.08.01",
+                "2021.12",
+                "2029.11",
+                "2021.12.31-2029.11.30",
+                "N1",
+                "640221199107233456",
+                "高中",
+            ],
+            [2, f"{_MARK}坏行", "", "", "", "2020.08", "未知日期", "", "", "", ""],
         ]
     }
     result = parse_sheet(
@@ -195,9 +395,7 @@ def test_parse_sheet_expiry_error_row() -> None:
     record = result.records[0]
     assert record.qualification_scope == "叉车作业操作证、N1"
     assert record.expiry_date == date(2029, 11, 30)  # 月精度取月末
-    assert result.errors == [
-        {"row": 4, "reason": "有效日期无法解析：未知日期，已跳过"}
-    ]
+    assert result.errors == [{"row": 4, "reason": "有效日期无法解析：未知日期，已跳过"}]
 
 
 def _build_matrix(name: str, rows: list[list[Any]]):  # noqa: ANN202
@@ -232,8 +430,10 @@ def test_merge_records_electrician_high_low() -> None:
 @pytest.fixture
 async def import_user(db_session: AsyncSession) -> User:
     user = User(
-        id=uuid4(), name=f"{_MARK}用户{uuid4().hex[:8]}",
-        role="user", status="active",
+        id=uuid4(),
+        name=f"{_MARK}用户{uuid4().hex[:8]}",
+        role="user",
+        status="active",
     )
     db_session.add(user)
     await db_session.flush()
@@ -272,9 +472,7 @@ async def _cleanup_imported(db: AsyncSession) -> None:
     )
     if ids:
         await db.execute(
-            delete(SpecialWorkCertificate).where(
-                SpecialWorkCertificate.id.in_(ids)
-            )
+            delete(SpecialWorkCertificate).where(SpecialWorkCertificate.id.in_(ids))
         )
     await db.commit()
 
@@ -297,7 +495,10 @@ async def test_import_parse_and_commit_flow(
         assert parse_res.status_code == 200
         preview = parse_res.json()["data"]
         assert {sheet["sheet"] for sheet in preview["sheets"]} == {
-            "电焊", "电工（高）", "电工（低）", "管理人员",
+            "电焊",
+            "电工（高）",
+            "电工（低）",
+            "管理人员",
         }
         assert preview["skipped_sheets"] == [
             {"sheet": "设备说明", "reason": "未识别的子表"}
@@ -329,9 +530,7 @@ async def test_import_parse_and_commit_flow(
         )
         assert len(rows) == 4
         electrician = next(
-            row
-            for row in rows
-            if row.certificate_category == "electrician"
+            row for row in rows if row.certificate_category == "electrician"
         )
         assert electrician.certificate_no == "T150102198310122345"
         assert electrician.expiry_date == date(2028, 8, 11)
@@ -363,9 +562,7 @@ async def test_import_updates_changed_expiry(
         content = _xlsx_bytes(sheets)
         first = await import_client.post(
             "/api/v1/safety/work-certificates/import",
-            files={
-                "file": ("ledger.xlsx", content, "application/octet-stream")
-            },
+            files={"file": ("ledger.xlsx", content, "application/octet-stream")},
         )
         assert first.status_code == 200
         assert first.json()["data"]["created"] == 4
@@ -376,9 +573,7 @@ async def test_import_updates_changed_expiry(
         second = await import_client.post(
             "/api/v1/safety/work-certificates/import",
             files={
-                "file": (
-                    "ledger.xlsx", updated_content, "application/octet-stream"
-                )
+                "file": ("ledger.xlsx", updated_content, "application/octet-stream")
             },
         )
         assert second.status_code == 200
@@ -388,8 +583,7 @@ async def test_import_updates_changed_expiry(
 
         row = await db_session.scalar(
             select(SpecialWorkCertificate).where(
-                SpecialWorkCertificate.certificate_no
-                == "T640202197008161234"
+                SpecialWorkCertificate.certificate_no == "T640202197008161234"
             )
         )
         assert row is not None
@@ -429,5 +623,88 @@ async def test_create_conflict_only_within_category(
             },
         )
         assert other_category.status_code == 200
+    finally:
+        await _cleanup_imported(db_session)
+
+
+async def test_export_workbook_roundtrip(
+    import_client: AsyncClient, db_session: AsyncSession
+) -> None:
+    """导出按类别分表（sheet 名=类别 label）→ 导出文件可直接再导入闭环。"""
+    try:
+        content = _xlsx_bytes(_ledger_sheets())
+        import_res = await import_client.post(
+            "/api/v1/safety/work-certificates/import",
+            files={
+                "file": (
+                    "2026年持证人员汇总表.xlsx",
+                    content,
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+            },
+        )
+        assert import_res.status_code == 200
+        assert import_res.json()["data"]["created"] == 4
+
+        export_res = await import_client.get("/api/v1/safety/work-certificates/export")
+        assert export_res.status_code == 200
+        assert export_res.headers["content-type"].startswith(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        assert "attachment" in export_res.headers.get("content-disposition", "")
+
+        workbook = openpyxl.load_workbook(io.BytesIO(export_res.content))
+        # 子表名 = 类别中文 label；断言按本测试数据过滤（全量导出
+        # 可能同时含测试库中其他并存数据）
+        sheetnames = set(workbook.sheetnames)
+        assert {
+            "焊接与热切割作业",
+            "电工作业",
+            "危化品安全管理人员",
+        } <= sheetnames
+        welding = workbook["焊接与热切割作业"]
+        header = [cell.value for cell in welding[2]]
+        assert header[:5] == ["姓名", "车间", "证书编号", "取证日期", "有效日期"]
+
+        def _my_rows(sheet_name: str) -> list[Any]:
+            return [
+                row
+                for row in workbook[sheet_name].iter_rows(min_row=3, values_only=True)
+                if row[0] and str(row[0]).startswith(_MARK)
+            ]
+
+        welding_rows = _my_rows("焊接与热切割作业")
+        assert len(welding_rows) == 2
+        # 数字简写「101」导入时已归一，导出为标准车间名
+        assert welding_rows[0][1] == "101车间"
+        electrician_rows = _my_rows("电工作业")
+        assert len(electrician_rows) == 1  # 高低压电工合并为一条
+
+        # 回导：label 子表名精确命中类别，库内数据与导出一致不新建
+        reimport = await import_client.post(
+            "/api/v1/safety/work-certificates/import",
+            files={
+                "file": (
+                    "持证人员汇总表_20260101.xlsx",
+                    export_res.content,
+                    "application/octet-stream",
+                )
+            },
+        )
+        assert reimport.status_code == 200
+        result = reimport.json()["data"]
+        assert result["created"] == 0
+        assert result["updated"] == 0
+        assert result["unchanged"] >= 4
+        assert result["row_errors"] == []
+
+        rows = list(
+            await db_session.scalars(
+                select(SpecialWorkCertificate).where(
+                    SpecialWorkCertificate.person_name.like(f"{_MARK}%")
+                )
+            )
+        )
+        assert len(rows) == 4  # 回导未产生重复
     finally:
         await _cleanup_imported(db_session)

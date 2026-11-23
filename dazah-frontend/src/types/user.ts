@@ -1,7 +1,7 @@
 import type { components } from '@/types/generated/schema'
 
 export type User = Pick<
-  components['schemas']['UserResponse'],
+  components['schemas']['CurrentUserResponse'],
   | 'id'
   | 'name'
   | 'username'
@@ -20,4 +20,5 @@ export type User = Pick<
   | 'page_permissions'
   | 'page_permission_rollouts'
   | 'grant_version'
+  | 'impersonation'
 >

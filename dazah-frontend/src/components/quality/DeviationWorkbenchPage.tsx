@@ -1,5 +1,8 @@
 'use client'
 
+import { getActionErrorMessage, unwrapServerActionResult } from '@/lib/server-action-result'
+
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { App, Button, Card, Collapse, DatePicker, Drawer, Form, Input, Modal, Select, Space, Spin, Table, Tag, Typography, Upload } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
@@ -186,7 +189,7 @@ function SettingsDrawer({
       onSaved(result)
       onClose()
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '保存失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '保存失败'))
     } finally {
       setSaving(false)
     }
@@ -314,12 +317,11 @@ export function DeviationWorkbenchPage({ initialRecordId }: { initialRecordId?: 
     const formData = new FormData()
     formData.append('file', file)
     try {
-      const descriptor = await uploadDeviationWorkbenchAttachment(formData)
-      if (!descriptor) throw new Error('上传失败')
+      const descriptor = unwrapServerActionResult(await uploadDeviationWorkbenchAttachment(formData))
       setDescriptors((prev) => [...prev, descriptor])
       message.success('上传成功（word 已自动转标准 MD）')
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '上传失败')
+      message.error(getActionErrorMessage(error, '偏差工作台附件上传'))
     }
   }
 
@@ -347,7 +349,7 @@ export function DeviationWorkbenchPage({ initialRecordId }: { initialRecordId?: 
       }
       invalidate()
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '生成失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '生成失败'))
     } finally {
       setGenerating(false)
     }
@@ -381,7 +383,7 @@ export function DeviationWorkbenchPage({ initialRecordId }: { initialRecordId?: 
       setReport(detail)
       window.scrollTo({ top: 0, behavior: 'smooth' })
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '加载失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '加载失败'))
     }
   }
 
@@ -399,7 +401,7 @@ export function DeviationWorkbenchPage({ initialRecordId }: { initialRecordId?: 
           if (report?.id === reportId) setReport(null)
           invalidate()
         } catch (error) {
-          message.error(error instanceof Error ? error.message : '删除失败')
+          message.error(getUserErrorMessage(error instanceof Error ? error.message : '删除失败'))
         }
       },
     })

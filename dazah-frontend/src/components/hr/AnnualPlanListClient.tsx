@@ -1,22 +1,29 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { App, AutoComplete, Button, Row, Col, Popconfirm, Spin, Modal, Form, Select, Upload, Input } from 'antd'
+import { App, AutoComplete, Button, Row, Col, Popconfirm, Spin, Modal, Form, Select, Tooltip, Upload, Input } from 'antd'
 import { PlusOutlined, ImportOutlined, FileTextOutlined } from '@ant-design/icons'
 import Link from 'next/link'
 import { AnnualTrainingPlan } from '@/types/hr'
 import { fetchAnnualTrainingPlans, fetchTrainingDepartments } from '@/lib/api/client/hr'
 import { createAnnualTrainingPlan, deleteAnnualTrainingPlan, importAnnualTrainingPlan } from '@/actions/hr'
+import { usePagePermissions } from '@/hooks/usePagePermissions'
+import { getActionErrorMessage, unwrapServerActionResult } from '@/lib/server-action-result'
 import { with201SubDepts } from './trainingDept'
 
 // 年份选项：从去年到未来 5 年（自动跟随当前年份扩展），2025 年之前的年份不展示
 const CURRENT_YEAR = new Date().getFullYear()
 const YEAR_OPTIONS = Array.from({ length: 7 }, (_, i) => CURRENT_YEAR - 1 + i)
+const IMPORT_PERMISSION_MESSAGE = '您没有年度培训计划的批量导入权限，请联系管理员'
+const IMPORT_UNKNOWN_MESSAGE = '暂未确认年度培训计划的导入结果，请先查看列表后再决定是否重新导入'
+// 文件达到 Next.js Server Action 的 50 MiB 请求上限时，连同 multipart 开销必定超限。
+const IMPORT_REQUEST_LIMIT = 50 * 1024 * 1024
 
 export default function AnnualPlanListClient() {
   const router = useRouter()
   const { message } = App.useApp()
+  const { canImport } = usePagePermissions('hr:training:annual-plan')
 
   const [plans, setPlans] = useState<AnnualTrainingPlan[]>([])
   const [loading, setLoading] = useState(true)
@@ -32,7 +39,7 @@ export default function AnnualPlanListClient() {
   const [importing, setImporting] = useState(false)
   const [importFile, setImportFile] = useState<File | null>(null)
 
-  const loadPlans = async () => {
+  const loadPlans = useCallback(async () => {
     setLoading(true)
     try {
       const res = await fetchAnnualTrainingPlans({
@@ -40,24 +47,24 @@ export default function AnnualPlanListClient() {
         page_size: 200
       })
       setPlans(res.data || [])
-    } catch (err) {
-      message.error('加载计划列表失败: ' + ((err instanceof Error ? err.message : '') || '未知错误'))
+    } catch {
+      message.error('年度培训计划列表加载失败，请刷新后查看')
     } finally {
       setLoading(false)
     }
-  }
+  }, [message, selectedYear])
 
   useEffect(() => {
     queueMicrotask(loadPlans)
-  }, [selectedYear])
+  }, [loadPlans])
 
   const handleDelete = async (id: string) => {
     try {
-      await deleteAnnualTrainingPlan(id)
+      unwrapServerActionResult(await deleteAnnualTrainingPlan(id))
       setPlans((prev) => prev.filter((p) => p.id !== id))
       message.success('删除成功')
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '删除失败')
+      message.error(getActionErrorMessage(err, '年度培训计划删除'))
     }
   }
 
@@ -77,11 +84,11 @@ export default function AnnualPlanListClient() {
   const handleCreate = async (values: { year: number; department: string; plan_level: string }) => {
     setSubmitting(true)
     try {
-      const res = await createAnnualTrainingPlan({
+      const res = unwrapServerActionResult(await createAnnualTrainingPlan({
         year: values.year,
         department: values.department,
         plan_level: values.plan_level,
-      })
+      }))
       message.success('年度培训计划创建成功')
       setIsModalOpen(false)
       form.resetFields()
@@ -92,22 +99,26 @@ export default function AnnualPlanListClient() {
         loadPlans()
       }
     } catch (err) {
-      const msg = (err instanceof Error ? err.message : '') || ''
-      if (msg.includes('已存在') || msg.includes('Duplicate')) {
-        message.error('该部门年度培训计划已存在')
-      } else {
-        message.error(msg || '创建失败')
-      }
+      message.error(getActionErrorMessage(err, '年度培训计划创建'))
     } finally {
       setSubmitting(false)
     }
   }
 
   const handleImport = async () => {
+    if (importing) return
+    if (!canImport) {
+      message.error(IMPORT_PERMISSION_MESSAGE)
+      return
+    }
     try {
       const values = await importForm.validateFields()
       if (!importFile) {
         message.error('请选择Word文档')
+        return
+      }
+      if (importFile.size >= IMPORT_REQUEST_LIMIT) {
+        message.error('文件过大，请缩小文件后重试')
         return
       }
       setImporting(true)
@@ -115,14 +126,18 @@ export default function AnnualPlanListClient() {
         importFile,
         values.year
       )
-      message.success(res.message || '导入成功')
+      if (!res.ok) {
+        message.error(res.reference ? `${IMPORT_UNKNOWN_MESSAGE}（错误标识：${res.reference}）` : res.message)
+        return
+      }
+      message.success(res.data.message || '导入成功')
       setImportModalOpen(false)
       importForm.resetFields()
       setImportFile(null)
       loadPlans()
     } catch (err) {
       if ((typeof err === 'object' && err !== null && 'errorFields' in err)) return // 表单校验错误
-      message.error((err instanceof Error ? err.message : '') || '导入失败')
+      message.error(IMPORT_UNKNOWN_MESSAGE)
     } finally {
       setImporting(false)
     }
@@ -144,9 +159,17 @@ export default function AnnualPlanListClient() {
           />
         </div>
         <div className="flex gap-2">
-          <Button icon={<ImportOutlined />} onClick={() => setImportModalOpen(true)}>
-            导入文档
-          </Button>
+          <Tooltip title={canImport ? null : IMPORT_PERMISSION_MESSAGE} trigger={['hover', 'focus']}>
+            <span
+              role={canImport ? undefined : 'group'}
+              aria-label={canImport ? undefined : IMPORT_PERMISSION_MESSAGE}
+              tabIndex={canImport ? undefined : 0}
+            >
+              <Button icon={<ImportOutlined />} disabled={!canImport} onClick={() => setImportModalOpen(true)}>
+                导入文档
+              </Button>
+            </span>
+          </Tooltip>
           <Button type="primary" icon={<PlusOutlined />} onClick={openModal}>
             新建年度计划
           </Button>
@@ -403,7 +426,7 @@ export default function AnnualPlanListClient() {
           initialValues={{ year: new Date().getFullYear() }}
           className="mt-4"
         >
-          <Form.Item label="年度" name="year" rules={[{ required: true }]}>
+          <Form.Item label="年度" name="year" rules={[{ required: true, message: '请选择年度' }]}>
             <Select
               options={YEAR_OPTIONS.map((y) => ({ label: `${y}年`, value: y }))}
               placeholder="选择年度"

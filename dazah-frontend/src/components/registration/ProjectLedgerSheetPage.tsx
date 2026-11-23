@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import Link from 'next/link'
 import { usePagePermissions } from '@/hooks/usePagePermissions'
 import { useMemo, useState, useTransition } from 'react'
@@ -450,7 +451,7 @@ export default function ProjectLedgerSheetPage({ detail }: ProjectLedgerSheetPag
       const payload = await fetchProjectLedgerRecordHistory(targetRecord.record_id)
       setHistoryPayload(payload)
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '获取历史失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '获取历史失败'))
     } finally {
       setHistoryLoading(false)
     }
@@ -470,7 +471,7 @@ export default function ProjectLedgerSheetPage({ detail }: ProjectLedgerSheetPag
         setSelectedRecordId(null)
         router.refresh()
       } catch (error) {
-        message.error(error instanceof Error ? error.message : '删除失败')
+        message.error(getUserErrorMessage(error instanceof Error ? error.message : '删除失败'))
       }
     })
   }
@@ -496,7 +497,7 @@ export default function ProjectLedgerSheetPage({ detail }: ProjectLedgerSheetPag
         form.resetFields()
         router.refresh()
       } catch (error) {
-        message.error(error instanceof Error ? error.message : '保存失败')
+        message.error(getUserErrorMessage(error instanceof Error ? error.message : '保存失败'))
       }
     })
   }

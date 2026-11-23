@@ -120,9 +120,7 @@ async def test_save_config_persists_encrypted_secret(
     assert "super-secret-value" not in (data.get("app_secret") or "")
 
     row = (
-        await db_session.execute(
-            AdministrationFeishuConfig.__table__.select()
-        )
+        await db_session.execute(AdministrationFeishuConfig.__table__.select())
     ).first()
     assert row is not None
     stored = getattr(row, "encrypted_app_secret", None)
@@ -354,3 +352,51 @@ async def test_module_root_endpoint_registered(client: Any) -> None:
     assert resp.status_code == 200
     data = resp.json()
     assert data["code"] == "administration"
+
+
+# ---------- 镜像人员头像 ----------
+
+
+async def test_person_avatars_empty_emails_returns_empty_map(
+    client: Any,
+    clean_feishu_config: None,
+) -> None:
+    resp = await client.get(f"{API}/feishu-read/person-avatars")
+    assert resp.status_code == 200
+    assert resp.json()["data"] == {}
+
+
+async def test_person_avatars_resolves_via_hr_public_api(
+    client: Any,
+    db_session: AsyncSession,
+    clean_feishu_config: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _fake_lookup(_session: AsyncSession, emails: list[str]) -> dict[str, str]:
+        assert "changjingjing@livzon.cn" in emails
+        return {"changjingjing@livzon.cn": "https://avatar.example/chang.png"}
+
+    monkeypatch.setattr(
+        "app.modules.administration.service.get_avatar_urls_by_emails",
+        _fake_lookup,
+    )
+    resp = await client.get(
+        f"{API}/feishu-read/person-avatars",
+        params={"emails": ["changjingjing@livzon.cn", "missing@livzon.cn"]},
+    )
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    assert data == {"changjingjing@livzon.cn": "https://avatar.example/chang.png"}
+
+
+async def test_person_avatars_rejects_cross_page_context(
+    viewer_client: Any,
+    clean_feishu_config: None,
+) -> None:
+    """仅授权物品清单页的用户，拿印章页上下文调用 → 403。"""
+    resp = await viewer_client.get(
+        f"{API}/feishu-read/person-avatars",
+        params={"emails": ["changjingjing@livzon.cn"]},
+        headers={"X-Dazah-Page-Key": "admin:seals"},
+    )
+    assert resp.status_code == 403

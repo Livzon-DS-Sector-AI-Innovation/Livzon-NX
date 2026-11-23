@@ -18,6 +18,11 @@ from app.core.deps import CurrentUser
 from app.core.exceptions import AppException, NotFoundException
 from app.core.response import paginated_response, success_response
 from app.core.upload_security import read_upload_secure
+from app.modules.hr.error_contract import (
+    HrBusinessError,
+    HrBusinessErrorCode,
+    hr_error_response,
+)
 from app.modules.hr.position_training_service import PositionTrainingListService
 from app.modules.hr.schemas import (
     PositionTrainingListCreate,
@@ -364,7 +369,17 @@ def _parse_import_docx(content: bytes) -> dict[str, Any]:
     }
 
 
-@router.post("/import", summary="导入岗位培训清单（Word）")
+@router.post(
+    "/import",
+    summary="导入岗位培训清单（Word）",
+    responses={
+        400: hr_error_response(
+            HrBusinessErrorCode.HR_POSITION_TRAINING_TEMPLATE_INVALID,
+            HrBusinessErrorCode.HR_POSITION_TRAINING_DATA_MISSING,
+        ),
+        415: {"description": "旧版 Word 文件格式不受支持"},
+    },
+)
 async def import_position_training_list(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
@@ -393,18 +408,20 @@ async def import_position_training_list(
     ext = safe_name.rsplit(".", 1)[-1].lower()
     if ext == "doc":
         raise AppException(
-            status_code=400,
+            status_code=415,
             message="暂不支持 .doc 格式，请将文件另存为 .docx 格式后上传",
         )
 
     # 解析文档
     try:
         parsed = _parse_import_docx(content)
-    except Exception:
+    except Exception as exc:
         logger.exception("解析 Word 文档失败")
-        raise AppException(
-            status_code=400, message="文档解析失败，请确认文件格式与 APP9 模板一致"
-        )
+        raise HrBusinessError(
+            400,
+            "文档解析失败，请确认文件格式与 APP9 模板一致",
+            HrBusinessErrorCode.HR_POSITION_TRAINING_TEMPLATE_INVALID,
+        ) from exc
 
     department = parsed.get("department", "")
     position = parsed.get("position", "")
@@ -419,8 +436,10 @@ async def import_position_training_list(
         department = normalized
 
     if not department or not items:
-        raise AppException(
-            status_code=400, message="未能从文档中识别出部门或培训明细，请检查文件格式"
+        raise HrBusinessError(
+            400,
+            "未能从文档中识别出部门或培训明细，请检查文件格式",
+            HrBusinessErrorCode.HR_POSITION_TRAINING_DATA_MISSING,
         )
 
     service = PositionTrainingListService(db)

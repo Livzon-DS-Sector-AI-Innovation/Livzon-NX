@@ -211,21 +211,30 @@ def test_parse_complete_certificate_workbook() -> None:
 
 
 def test_certificate_workbook_rejects_missing_sheet_bad_header_and_empty_name() -> None:
-    with pytest.raises(AppException, match="缺少子表"):
+    with pytest.raises(
+        AppException, match="REGISTRATION_WORKBOOK_TEMPLATE_MISMATCH"
+    ) as error:
         cert._load_entries_from_workbook_bytes(
             _certificate_workbook_bytes(missing_last=True)
         )
-    with pytest.raises(AppException, match="表头不匹配"):
+    assert "缺少子表" in error.value.message
+    with pytest.raises(
+        AppException, match="REGISTRATION_WORKBOOK_TEMPLATE_MISMATCH"
+    ) as error:
         cert._load_entries_from_workbook_bytes(
             _certificate_workbook_bytes(bad_header=True)
         )
+    assert "表头不匹配" in error.value.message
 
     workbook = load_workbook(BytesIO(_certificate_workbook_bytes()))
     first = workbook[str(cert.CERTIFICATE_SHEET_CONFIG[0]["name"])]
     headers = cert._get_sheet_headers(cert.CERTIFICATE_SHEET_CONFIG[0])
     first.cell(3, headers.index("证照名称") + 1, "")
-    with pytest.raises(AppException, match="证照名称为空"):
+    with pytest.raises(
+        AppException, match="REGISTRATION_WORKBOOK_CERTIFICATE_NAME_REQUIRED"
+    ) as error:
         cert._parse_sheet_entries(first, cert.CERTIFICATE_SHEET_CONFIG[0])
+    assert "证照名称为空" in error.value.message
 
 
 def test_fill_certificate_sheet_reuses_rows_clears_stale_and_adds_rows() -> None:

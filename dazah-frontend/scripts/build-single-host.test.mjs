@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
+import { transpileConfig } from 'next/dist/build/next-config-ts/transpile-config.js';
 import ts from 'typescript';
 import { buildSingleHost } from './build-single-host.mjs';
 
@@ -9,10 +10,8 @@ test('single-host compiler bounds module concurrency while retaining optimizatio
   const previous = process.env.DAZAH_SINGLE_HOST_BUILD;
   try {
     process.env.DAZAH_SINGLE_HOST_BUILD = '1';
-    const compiled = ts.transpileModule(readFileSync('next.config.ts', 'utf8'), {
-      compilerOptions: { module: ts.ModuleKind.ESNext },
-    }).outputText;
-    const { default: config } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`);
+    const dir = process.cwd();
+    const { default: config } = await transpileConfig({ nextConfigPath: path.join(dir, 'next.config.ts'), dir });
     const input = { parallelism: 100, cache: true, optimization: { minimize: true } };
     const result = config.webpack(input);
     assert.equal(result.parallelism, 1);

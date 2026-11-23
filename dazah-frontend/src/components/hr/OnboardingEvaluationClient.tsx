@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useState } from 'react'
 import { App,
   Button,
@@ -85,7 +86,7 @@ export default function OnboardingEvaluationClient() {
       downloadBytes(bytes, filename)
       message.success('员工上岗评估表已生成')
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '生成失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '生成失败'))
     } finally {
       setSubmitting(false)
     }

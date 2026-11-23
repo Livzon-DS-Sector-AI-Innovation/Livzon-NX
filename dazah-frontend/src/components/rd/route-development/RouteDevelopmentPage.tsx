@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { Button, Input, Table, Tag, Card, Upload, App, Progress, Tooltip, Space, Popconfirm } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
@@ -118,7 +119,7 @@ export function RouteDevelopmentPage({ initialRoutes, initialTotal }: RouteDevel
       setWorkflowRoute(newRoute)
       message.success('工作流已创建，开始文献解析')
     } catch (error) {
-      message.error('创建路线失败: ' + (error instanceof Error ? error.message : '未知错误'))
+      message.error(getUserErrorMessage('创建路线失败: ' + (error instanceof Error ? error.message : '未知错误')))
     } finally {
       setCreating(false)
     }

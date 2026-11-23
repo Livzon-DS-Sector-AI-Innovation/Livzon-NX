@@ -1,3 +1,4 @@
+import { getUserErrorMessage } from '@/lib/user-error'
 import type { ReactNode } from 'react'
 import { useEffect, useRef, useState } from 'react'
 import { qualityTokens } from '../themeTokens'
@@ -83,7 +84,7 @@ async function openFeishuAttachment(
     const blobUrl = URL.createObjectURL(blob)
     window.open(blobUrl, '_blank')
   } catch (err) {
-    message.error(err instanceof Error ? err.message : '附件下载失败')
+    message.error(getUserErrorMessage(err instanceof Error ? err.message : '附件下载失败'))
   }
 }
 

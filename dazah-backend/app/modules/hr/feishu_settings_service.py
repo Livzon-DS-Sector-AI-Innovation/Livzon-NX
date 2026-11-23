@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.exceptions import AppException
 from app.core.llm import decrypt_api_key, encrypt_api_key, mask_api_key
+from app.modules.hr.error_contract import HrBusinessErrorCode
 from app.modules.hr.models import HrFeishuAppSettings, HrFeishuEntitySetting
 from app.modules.hr.schemas import (
     HrFeishuAppSettingsDetail,
@@ -301,6 +302,14 @@ class HrFeishuNotConfigured(AppException):
             message=message
             or "人事飞书应用未配置，请先在人事-飞书设置中填写 App ID 与 App Secret",
         )
+
+
+def feishu_contact_job_error_detail(error: Exception) -> dict[str, str] | None:
+    if isinstance(error, HrFeishuNotConfigured):
+        return {
+            "error_code": HrBusinessErrorCode.HR_FEISHU_CONTACT_NOT_CONFIGURED.value
+        }
+    return None
 
 
 # 双应用用途常量：contact=通讯录/部门管理；bitable=多维表格

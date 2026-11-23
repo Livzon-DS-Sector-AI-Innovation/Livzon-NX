@@ -32,7 +32,7 @@ import {
   Upload,
 } from 'antd'
 import dayjs from 'dayjs'
-import { ImportOutlined } from '@ant-design/icons'
+import { DownloadOutlined, ImportOutlined } from '@ant-design/icons'
 import type { ColumnsType } from 'antd/es/table'
 import type { UploadFile } from 'antd/es/upload/interface'
 
@@ -41,6 +41,7 @@ import WorkCertificateImportModal from '@/components/safety/WorkCertificateImpor
 import {
   createWorkCertificate,
   deleteWorkCertificate,
+  exportWorkCertificates,
   getCertificateCategories,
   getCertificateExpirySummary,
   getWorkCertificates,
@@ -119,6 +120,7 @@ export function WorkCertificatePanel({
   const [aiError, setAiError] = useState<string | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
+  const [exporting, setExporting] = useState(false)
 
   const load = useCallback(
     async (
@@ -170,6 +172,46 @@ export function WorkCertificatePanel({
       return () => clearTimeout(timer)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // ── base64 → Blob → 触发下载（客户端） ──
+  const downloadBase64 = (base64: string, filename: string, mimeType: string) => {
+    const byteCharacters = atob(base64)
+    const byteNumbers = new Array(byteCharacters.length)
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i)
+    }
+    const blob = new Blob([new Uint8Array(byteNumbers)], { type: mimeType })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    window.URL.revokeObjectURL(url)
+  }
+
+  const handleExport = useCallback(async () => {
+    setExporting(true)
+    try {
+      const response = await exportWorkCertificates(
+        WORK_CERTIFICATES_PAGE_KEY
+      )
+      if (response.code !== 200 && response.code !== 0) {
+        message.error(response.message ?? '导出失败')
+        return
+      }
+      const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+      downloadBase64(
+        response.data ?? '',
+        `持证人员汇总表_${stamp}.xlsx`,
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      )
+      message.success('导出成功')
+    } finally {
+      setExporting(false)
+    }
   }, [])
 
   const openCreate = useCallback(() => {
@@ -274,7 +316,7 @@ export function WorkCertificatePanel({
     {
       title: '姓名',
       dataIndex: 'person_name',
-      width: 110,
+      width: 100,
       render: (value: string, record) => (
         <a
           onClick={() => setDetail(record)}
@@ -286,12 +328,12 @@ export function WorkCertificatePanel({
         </a>
       ),
     },
-    { title: '证件类别', dataIndex: 'certificate_category_label', width: 150 },
-    { title: '证件号', dataIndex: 'certificate_no', width: 150, render: (v: string | null) => v ?? '-' },
+    { title: '证件类别', dataIndex: 'certificate_category_label', width: 175 },
+    { title: '证件号', dataIndex: 'certificate_no', width: 190, render: (v: string | null) => v ?? '-' },
     {
       title: '有效期至',
       dataIndex: 'expiry_date',
-      width: 120,
+      width: 150,
       render: (value: string | null, record) => (
         <Space size={4}>
           {value ?? '-'}
@@ -313,20 +355,32 @@ export function WorkCertificatePanel({
     {
       title: '附件',
       dataIndex: 'files',
+      width: 110,
       render: (files: CertificateRow['files'], record) =>
-        (files ?? []).length === 0
-          ? '-'
-          : files.map((file) => (
+        (files ?? []).length === 0 ? (
+          '-'
+        ) : (
+          <div style={{ maxWidth: 160 }}>
+            {files.map((file) => (
               <a
                 key={file.id}
                 href={certificateFilePreviewUrl(record.id, file.id)}
                 target="_blank"
                 rel="noreferrer"
-                style={{ marginRight: 8 }}
+                title={file.file_name}
+                style={{
+                  display: 'block',
+                  maxWidth: 160,
+                  overflow: 'hidden',
+                  whiteSpace: 'nowrap',
+                  textOverflow: 'ellipsis',
+                }}
               >
                 {file.file_name}
               </a>
-            )),
+            ))}
+          </div>
+        ),
     },
     {
       title: '操作',
@@ -416,6 +470,13 @@ export function WorkCertificatePanel({
             }}
           />
           <Button onClick={() => void load(page)}>刷新</Button>
+          <Button
+            icon={<DownloadOutlined />}
+            loading={exporting}
+            onClick={() => void handleExport()}
+          >
+            导出 Excel
+          </Button>
           {permissions.canOperate && (
             <Button icon={<ImportOutlined />} onClick={() => setImportOpen(true)}>
               Excel 导入

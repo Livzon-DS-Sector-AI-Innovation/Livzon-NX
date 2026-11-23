@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import {
   App,
@@ -209,7 +210,7 @@ export default function TrainingNotificationClient({
       for (const e of entries) downloadBytes(e.bytes, e.name)
       message.success('培训通知已生成')
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '生成失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '生成失败'))
     } finally {
       setExporting(false)
     }

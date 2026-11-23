@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 
 import { getBackendFallbackUrls } from '@/lib/server-api'
-import { getUserErrorMessage } from '@/lib/user-error'
+import { getUserErrorMessage, uncertainWriteMessage } from '@/lib/user-error'
 
 export async function GET(request: NextRequest) {
   return proxyRequest(request)
@@ -49,6 +49,7 @@ function buildForwardHeaders(request: NextRequest): Headers {
 }
 
 async function proxyRequest(request: NextRequest) {
+  const readOnly = ['GET', 'HEAD', 'OPTIONS'].includes(request.method)
   const pathname = request.nextUrl.pathname
   const searchParams = request.nextUrl.searchParams.toString()
   const backendPath = `${pathname}${searchParams ? `?${searchParams}` : ''}`
@@ -76,7 +77,18 @@ async function proxyRequest(request: NextRequest) {
         return NextResponse.redirect(response.url)
       }
 
-      if (response.headers.get('content-type')?.includes('text/event-stream')) {
+      const contentType = response.headers.get('content-type') || ''
+      const json = contentType.includes('application/json') || contentType.includes('+json')
+      if (!response.ok && (!json || response.status >= 500)) {
+        // An upstream failure may follow a committed change. Keep the originating status.
+        const message = response.status >= 500 && !readOnly
+          ? uncertainWriteMessage('操作')
+          : getUserErrorMessage(undefined, '请求未完成，请稍后重试', response.status)
+        await response.body?.cancel().catch(() => undefined)
+        return NextResponse.json({ code: response.status, message, error: message }, { status: response.status })
+      }
+
+      if (contentType.includes('text/event-stream')) {
         return new NextResponse(response.body, {
           status: response.status,
           statusText: response.statusText,
@@ -88,8 +100,7 @@ async function proxyRequest(request: NextRequest) {
         })
       }
 
-      const contentType = response.headers.get('content-type') || ''
-      if (!contentType.includes('application/json')) {
+      if (!json) {
         const headers = new Headers()
         const forwardedHeaders = [
           'content-type',
@@ -153,12 +164,12 @@ async function proxyRequest(request: NextRequest) {
       lastError = error
       // A missing acknowledgement can follow a committed write. Trying another
       // backend automatically could repeat the operation without a receipt.
-      if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method)) break
+      if (!readOnly) break
     }
   }
 
   console.error('Proxy error:', lastError instanceof Error ? lastError.name : 'UnknownError')
-  const message = ['GET', 'HEAD', 'OPTIONS'].includes(request.method) ? '服务暂时不可用，请稍后重试' :
+  const message = readOnly ? '服务暂时不可用，请稍后重试' :
     '请求响应中断，请先查看业务记录确认是否已保存，不要重复提交'
   return NextResponse.json({ error: message, message }, { status: 502 })
 }

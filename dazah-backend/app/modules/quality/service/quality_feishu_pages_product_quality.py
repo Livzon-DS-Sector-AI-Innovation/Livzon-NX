@@ -24,16 +24,8 @@ from app.modules.quality.service.quality_feishu_pages import (
     _search_entity_records,
     _update_entity_record,
 )
-from app.modules.quality.service.quality_feishu_settings import (
-    ensure_quality_feishu_entity_settings,
-)
 
 logger = logging.getLogger(__name__)
-
-
-async def _ensure_entity(db: AsyncSession, entity_code: str) -> None:
-    """Ensure the entity code is seeded in the database before use."""
-    await ensure_quality_feishu_entity_settings(db)
 
 
 # ============ Product Quality Standard Record ============
@@ -99,7 +91,6 @@ async def list_product_quality_records(
     page: int = 1,
     page_size: int = 20,
 ) -> dict[str, Any]:
-    await _ensure_entity(db, entity_code)
     _, entity = await _resolve_runtime_entity(db, entity_code, direction="pull")
     records = await _search_entity_records(db, entity_code)
     items = [_map_product_quality_record(record, entity) for record in records]
@@ -130,7 +121,6 @@ async def get_product_quality_record(
     entity_code: str,
     record_id: str,
 ) -> dict[str, Any] | None:
-    await _ensure_entity(db, entity_code)
     _, entity = await _resolve_runtime_entity(db, entity_code, direction="pull")
     records = await _search_entity_records(db, entity_code)
     for record in records:
@@ -144,7 +134,6 @@ async def create_product_quality_record(
     entity_code: str,
     data: dict[str, Any],
 ) -> dict[str, Any]:
-    await _ensure_entity(db, entity_code)
     runtime, entity = await _resolve_runtime_entity(db, entity_code, direction="push")
     fields: dict[str, Any] = {}
     _set_if_present(fields, entity, "客户名称", data.get("customer_name"))
@@ -183,7 +172,6 @@ async def update_product_quality_record(
     record_id: str,
     data: dict[str, Any],
 ) -> dict[str, Any]:
-    await _ensure_entity(db, entity_code)
     runtime, entity = await _resolve_runtime_entity(db, entity_code, direction="push")
     fields: dict[str, Any] = {}
     _set_if_present(fields, entity, "客户名称", data.get("customer_name"))
@@ -220,7 +208,6 @@ async def delete_product_quality_record(
     entity_code: str,
     record_id: str,
 ) -> None:
-    await _ensure_entity(db, entity_code)
     await _delete_entity_record(db, entity_code, record_id)
 
 
@@ -229,8 +216,8 @@ async def pull_product_quality_records(
     entity_code: str,
 ) -> dict[str, int]:
     """Pull product quality records from Feishu. Returns {synced, failed}."""
-    await _ensure_entity(db, entity_code)
     try:
+        await _resolve_runtime_entity(db, entity_code, direction="pull")
         records = await _search_entity_records(db, entity_code)
         return {"synced": len(records), "failed": 0}
     except Exception:

@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import {
@@ -138,7 +139,7 @@ export default function LLMConfigClient({ embedded = false }: LLMConfigClientPro
       loadConfigs()
     } catch (error) {
       if (error && typeof error === 'object' && 'errorFields' in error) return
-      message.error(error instanceof Error ? error.message : '保存配置失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '保存配置失败'))
     } finally {
       setSaving(false)
     }
@@ -186,7 +187,7 @@ export default function LLMConfigClient({ embedded = false }: LLMConfigClientPro
       message.success(res.data.detail)
     } catch (error) {
       if (error && typeof error === 'object' && 'errorFields' in error) return
-      message.error(error instanceof Error ? error.message : '连通性测试失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '连通性测试失败'))
     } finally {
       setProbing(null)
     }
@@ -199,7 +200,7 @@ export default function LLMConfigClient({ embedded = false }: LLMConfigClientPro
       message.success(res.data.detail)
       loadConfigs()
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '模型能力检测失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '模型能力检测失败'))
     } finally {
       setTestingId(null)
     }
@@ -211,7 +212,7 @@ export default function LLMConfigClient({ embedded = false }: LLMConfigClientPro
       const res = await testLLMConnection()
       message.success(res.data.detail)
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '当前模型连接测试失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '当前模型连接测试失败'))
     } finally {
       setTestingConnection(false)
     }

@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Table, Tag, Space, Popconfirm, Select, Modal, Input, App } from 'antd'
@@ -90,7 +91,7 @@ export default function CandidateListView({
       setEmailModalOpen(false)
       onRefresh?.()
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '邮件发送失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '邮件发送失败'))
     } finally {
       setSending(false)
     }

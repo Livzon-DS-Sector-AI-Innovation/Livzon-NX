@@ -35,13 +35,13 @@ async def get_batch_profile(
         ),
         {"bn": batch_no},
     )
-    sc = sc_rows.first()
+    sc = sc_rows.mappings().first()
     if sc:
-        cols = sc_rows.keys()
         result["seed_culture"] = {
             k: str(v) if hasattr(v, "isoformat") else v
-            for k, v in zip(cols, sc)
+            for k, v in sc.items()
             if k not in ("created_by", "updated_by", "is_deleted")
+            and not k.endswith("_people")
         }
 
     # 2. 发酵记录

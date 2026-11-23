@@ -78,11 +78,32 @@ async def test_warmup_execute_calls_service() -> None:
     mock_warm.assert_awaited_once()
 
 
+@pytest.fixture(autouse=True)
+def _mock_cache_disk(monkeypatch: pytest.MonkeyPatch) -> AsyncMock:
+    check = AsyncMock(return_value=True)
+    monkeypatch.setattr(warmup_mod, "get_attachment_cache", lambda: MagicMock(
+        enabled=True, prepare_disk=check,
+    ), raising=False)
+    return check
+
+
+async def test_warmup_skips_unwritable_disk_before_querying(
+    monkeypatch: pytest.MonkeyPatch, _mock_cache_disk: AsyncMock,
+) -> None:
+    _mock_cache_disk.return_value = False
+    session = MagicMock(side_effect=AssertionError("disk unavailable"))
+    monkeypatch.setattr(warmup_mod, "async_session_factory", session)
+    result = await warmup_attachment_cache()
+    assert result["collected"] == 0
+    assert result["warmed"] == 0
+    session.assert_not_called()
+
+
 def _fake_session_for_rows(rows):
-    exec_result = MagicMock()
-    exec_result.all.return_value = rows
+    exec_result = MagicMock(close=AsyncMock())
+    exec_result.__aiter__.return_value = iter(rows)
     session = AsyncMock()
-    session.execute = AsyncMock(return_value=exec_result)
+    session.stream = AsyncMock(return_value=exec_result)
     ctx = AsyncMock()
     ctx.__aenter__ = AsyncMock(return_value=session)
     ctx.__aexit__ = AsyncMock(return_value=False)
@@ -124,7 +145,8 @@ async def test_warmup_single_timeout_counted(monkeypatch: pytest.MonkeyPatch) ->
         warmup_mod, "async_session_factory", _fake_session_for_rows(rows)
     )
 
-    async def _maybe_slow(_db, _entity, _record, file_token):
+    async def _maybe_slow(_db, _entity, _record, file_token, *, disk_only):
+        assert disk_only is True
         if file_token == "slow":
             await asyncio.sleep(1)
             return (b"", "image/jpeg", "x")
@@ -135,3 +157,29 @@ async def test_warmup_single_timeout_counted(monkeypatch: pytest.MonkeyPatch) ->
         result = await warmup_attachment_cache()
     assert result["timed_out"] >= 1
     assert result["budget_hit"] is False
+
+
+async def test_warmup_stops_stream_at_unique_target_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def rows():
+        yield "r1", {"附件": [{"file_token": "f1"}, {"file_token": "f1"}]}, "entity"
+        yield "r2", {"附件": [{"file_token": "f2"}]}, "entity"
+        pytest.fail("镜像扫描应在达到附件上限时停止")
+
+    result = MagicMock(close=AsyncMock())
+    result.__aiter__.side_effect = rows
+    session = MagicMock(stream=AsyncMock(return_value=result))
+    ctx = MagicMock(__aenter__=AsyncMock(return_value=session), __aexit__=AsyncMock())
+    monkeypatch.setattr(warmup_mod, "async_session_factory", lambda: ctx)
+    thumb = AsyncMock(side_effect=[None, (b"thumb", "image/jpeg", "a.jpg")])
+    monkeypatch.setattr(warmup_mod, "get_attachment_thumbnail", thumb)
+
+    stats = await warmup_attachment_cache(max_tokens=2)
+
+    assert stats["collected"] == 2
+    assert stats["warmed"] == 1
+    assert stats["skipped"] == 1
+    assert session.stream.call_args.args[0].get_execution_options()["yield_per"] == 128
+    result.close.assert_awaited_once()
+    assert [call.kwargs for call in thumb.await_args_list] == [{"disk_only": True}] * 2

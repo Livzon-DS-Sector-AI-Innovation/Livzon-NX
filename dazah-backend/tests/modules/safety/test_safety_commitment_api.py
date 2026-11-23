@@ -237,7 +237,7 @@ async def test_card_crud(
         f"/api/v1/safety/safety-commitment-cards/{card['id']}",
         json={"content": "浮盘不得落底；人员在岗"},
     )
-    assert updated.status_code == 200
+    assert updated.status_code == 200, updated.text[:300]
     assert updated.json()["data"]["content"] == "浮盘不得落底；人员在岗"
 
     listed = await api_client.get("/api/v1/safety/safety-commitment-cards")

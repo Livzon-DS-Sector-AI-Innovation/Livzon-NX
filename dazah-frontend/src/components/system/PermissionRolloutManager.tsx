@@ -1,5 +1,6 @@
 "use client"
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useCallback, useEffect, useRef, useState } from "react"
 import { App, Button, Card, Modal, Space, Table, Tag, Tooltip, Typography } from "antd"
 import Alert from "@/components/shared/PlatformNotice"
@@ -110,7 +111,7 @@ export function PermissionRolloutManager() {
         ? { ...item, passed: !gaps.length, catalog_gaps: gaps }
         : item))
     } catch (error) {
-      if (mounted.current) message.error(error instanceof Error ? error.message : "接入详情加载失败")
+      if (mounted.current) message.error(getUserErrorMessage(error instanceof Error ? error.message : "接入详情加载失败"))
     } finally {
       busy.current = false
       if (mounted.current) setChecking(false)

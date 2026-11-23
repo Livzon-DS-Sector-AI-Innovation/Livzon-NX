@@ -1,0 +1,27 @@
+@media (width < 40rem) {
+  .impersonationNavigation {
+    min-inline-size: 44px;
+  }
+
+  .impersonationActions {
+    gap: 4px;
+    margin-inline-start: 4px;
+  }
+
+  .impersonationAvatar {
+    margin-inline-start: 0;
+    padding-inline: 0;
+  }
+
+  .impersonationActions :global(.ant-btn) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: 36px;
+    padding-inline: 0;
+  }
+
+  .impersonationActions :global(.ant-btn-icon) + span {
+    display: none;
+  }
+}

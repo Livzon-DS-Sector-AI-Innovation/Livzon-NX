@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { TableEmptyState } from './TableEmptyState'
 import { qualityTokens } from './themeTokens'
 
@@ -130,7 +131,7 @@ export function DeviationTable({ loading = false }: DeviationTableProps) {
           message.success('删除成功')
           queryClient.invalidateQueries({ queryKey: ['quality-deviation'] })
         } catch (error) {
-          message.error((error instanceof Error ? error.message : '') || '删除失败')
+          message.error(getUserErrorMessage((error instanceof Error ? error.message : '') || '删除失败'))
         }
       },
     })
@@ -165,7 +166,7 @@ export function DeviationTable({ loading = false }: DeviationTableProps) {
       URL.revokeObjectURL(url)
       message.success('导出成功')
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '导出失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '导出失败'))
     }
   }, [
     canExport,
@@ -210,7 +211,7 @@ export function DeviationTable({ loading = false }: DeviationTableProps) {
           setSelectedRowKeys([])
           queryClient.invalidateQueries({ queryKey: ['quality-deviation'] })
         } catch (error) {
-          message.error((error instanceof Error ? error.message : '') || '批量删除失败')
+          message.error(getUserErrorMessage((error instanceof Error ? error.message : '') || '批量删除失败'))
         } finally {
           batchLock.current = false
           setBatchDeleting(false)

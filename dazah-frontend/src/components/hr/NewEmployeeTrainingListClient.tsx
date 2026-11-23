@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
@@ -109,7 +110,7 @@ export default function NewEmployeeTrainingListClient() {
       setItems(res.data)
       setTotal(res.total)
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '加载新员工培训列表失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '加载新员工培训列表失败'))
     } finally {
       setLoading(false)
     }
@@ -183,7 +184,7 @@ export default function NewEmployeeTrainingListClient() {
       loadData()
       loadStats()
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '生成培训计划失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '生成培训计划失败'))
     } finally {
       setGeneratingId(null)
     }
@@ -219,7 +220,7 @@ export default function NewEmployeeTrainingListClient() {
         message.success(res.message || '培训计划已生成')
       }
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '操作失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '操作失败'))
     } finally {
       setGeneratingId(null)
       setDraftPositions((prev) => {
@@ -267,7 +268,7 @@ export default function NewEmployeeTrainingListClient() {
       await loadDepartments()
       message.success('已拉取最新新员工名单')
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '拉取新员工失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '拉取新员工失败'))
     } finally {
       setPulling(false)
     }

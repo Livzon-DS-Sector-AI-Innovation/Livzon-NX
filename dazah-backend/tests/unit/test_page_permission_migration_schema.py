@@ -8,6 +8,10 @@ from typing import Any
 import pytest
 import sqlalchemy as sa
 
+from app.platform.identity.models import RolePageGrant, UserPageGrant
+from app.platform.identity.page_policy import get_page_definition
+from app.platform.identity.schemas import PageDataScopeInput
+
 MIGRATION_PATH = (
     Path(__file__).parents[2]
     / "alembic"
@@ -48,3 +52,15 @@ def test_module_rollout_seed_binds_uuid_parameter(
         isinstance(statement._bindparams["id"].type, sa.Uuid)
         for statement in statements
     )
+
+
+def test_retired_operation_scope_is_absent_from_models_and_contract() -> None:
+    for grant in (RolePageGrant, UserPageGrant):
+        assert "operation_departments" not in sa.inspect(grant).local_table.columns
+        assert "_legacy_operation_departments" not in sa.inspect(grant).attrs
+    assert "operation_departments" not in PageDataScopeInput.model_json_schema()[
+        "properties"
+    ]
+    page = get_page_definition("hr:training:annual-plan")
+    assert page is not None
+    assert page.supported_scope_types == ("department_tree", "departments", "all")

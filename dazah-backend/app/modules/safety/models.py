@@ -2861,6 +2861,17 @@ class SafetyFeishuAppSettings(BaseModel):
     commitment_user_ids: Mapped[list[Any] | None] = mapped_column(
         JSON, nullable=True, default=list, comment="安全承诺填报人员 open_id 列表"
     )
+    commitment_signer_open_id: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+        comment="企业安全承诺签署人 open_id（主要负责人，发布后推手写签名）",
+    )
+    commitment_remind_interval_minutes: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+        server_default="30",
+        comment="车间未填报催办间隔（分钟，默认 30）",
+    )
 
 
 class HazardDueNotificationLog(BaseModel):
@@ -4044,8 +4055,7 @@ class SafetyFacilityInspection(BaseModel):
 
     __tablename__ = "safety_facility_inspections"
     __table_args__ = (
-        Index("ix_safety_facility_inspections_facility", "facility_id",
-        "inspected_at"),
+        Index("ix_safety_facility_inspections_facility", "facility_id", "inspected_at"),
         Index("ix_safety_facility_inspections_inspected_at", "inspected_at"),
         {"schema": "safety"},
     )
@@ -5464,8 +5474,7 @@ class SafetyCommitmentReport(BaseModel):
     risk_assessment: Mapped[dict[str, Any] | None] = mapped_column(
         JSONB,
         nullable=True,
-        comment=
-            "AI 风险研判结果（risk_level/summary/key_risks/suggestions/data_basis）",
+        comment="AI 风险研判(risk_level/summary/key_risks/suggestions)",
     )
     status: Mapped[str] = mapped_column(
         String(20),
@@ -5488,6 +5497,11 @@ class SafetyCommitmentReport(BaseModel):
     )
     fill_source: Mapped[str | None] = mapped_column(
         String(20), nullable=True, comment="最近一次填报来源: web/feishu"
+    )
+    workshop_summary: Mapped[list[Any] | None] = mapped_column(
+        JSONB,
+        nullable=True,
+        comment="车间填报明细快照（12 车间各自提交的企业状态全套，汇总生成时写入）",
     )
 
 
@@ -5517,4 +5531,180 @@ class SafetyCommitmentCard(BaseModel):
         default=0,
         server_default="0",
         comment="排序（同类型内升序）",
+    )
+
+
+class GuardianRoster(BaseModel):
+    """作业安全监护人名单（按车间区分，监护人考试合格人员台账）。
+
+    数据口径：以最新一次 Excel 导入为准（导入整表替换）；行级手工
+    增删改在两次导入之间生效。车间为自由文本（同 EmergencyCard.workshop
+    惯例），来源是导入表的「部门/车间」列；不与作业票联动校验。
+    """
+
+    __tablename__ = "guardian_roster"
+    __table_args__ = (
+        Index("ix_guardian_roster_workshop", "workshop"),
+        {"schema": "safety"},
+    )
+
+    person_name: Mapped[str] = mapped_column(
+        String(100), nullable=False, comment="监护人姓名"
+    )
+    workshop: Mapped[str] = mapped_column(
+        String(100), nullable=False, comment="车间/部门（自由文本）"
+    )
+    phone: Mapped[str | None] = mapped_column(
+        String(32), nullable=True, comment="联系电话"
+    )
+    position: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, comment="岗位"
+    )
+    score: Mapped[int | None] = mapped_column(
+        Integer, nullable=True, comment="考试分数"
+    )
+    exam_name: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, comment="考试名称（如监护人考试）"
+    )
+    exam_date: Mapped[date | None] = mapped_column(
+        Date, nullable=True, comment="考试/合格日期"
+    )
+    remark: Mapped[str | None] = mapped_column(
+        String(200), nullable=True, comment="备注"
+    )
+    source_file: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, comment="来源导入文件名"
+    )
+
+
+class SafetyCommitmentWorkshopConfig(BaseModel):
+    """安全承诺车间填报配置（每车间一名填报负责人，飞书推送）。
+
+    车间名单惰性种子为生产口径 12 车间；名称含括号身份（如
+    201-2车间（MC）），括号是车间身份的一部分，禁止剥离。
+    """
+
+    __tablename__ = "safety_commitment_workshop_configs"
+    __table_args__ = (
+        Index(
+            "uq_safety_commitment_ws_config_name",
+            "workshop_name",
+            unique=True,
+            postgresql_where=text("is_deleted = false"),
+        ),
+        {"schema": "safety"},
+    )
+
+    workshop_name: Mapped[str] = mapped_column(
+        String(100), nullable=False, comment="车间名称（含括号身份）"
+    )
+    reporter_open_id: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, comment="车间填报负责人飞书 open_id"
+    )
+    reporter_name: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, comment="车间填报负责人姓名（展示用）"
+    )
+    sort_order: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0", comment="排序"
+    )
+    is_enabled: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=True,
+        server_default="true",
+        comment="是否启用该车间填报",
+    )
+
+
+class SafetyCommitmentWorkshopFill(BaseModel):
+    """每日各车间企业状态填报记录（12 车间各一条，可覆盖重填）。
+
+    fields 与日报 enterprise_status 同构（全套字段，车间视角填写）；
+    全部启用车间填齐后由汇总服务合入当日日报并存 workshop_summary 快照。
+    """
+
+    __tablename__ = "safety_commitment_workshop_fills"
+    __table_args__ = (
+        Index(
+            "uq_safety_commitment_ws_fill",
+            "report_date",
+            "workshop_name",
+            unique=True,
+            postgresql_where=text("is_deleted = false"),
+        ),
+        {"schema": "safety"},
+    )
+
+    report_date: Mapped[date] = mapped_column(
+        Date, nullable=False, comment="报告日期（自然日）"
+    )
+    workshop_name: Mapped[str] = mapped_column(
+        String(100), nullable=False, comment="车间名称"
+    )
+    fields: Mapped[dict[str, Any] | None] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+        server_default="{}",
+        comment="企业状态全套填报数据（与日报 enterprise_status 同构）",
+    )
+    remark: Mapped[str | None] = mapped_column(
+        Text, nullable=True, comment="车间备注"
+    )
+    filled_by_name: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, comment="填报人姓名"
+    )
+    filled_by_open_id: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, comment="填报人飞书 open_id"
+    )
+    filled_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, comment="最近提交时间"
+    )
+    source: Mapped[str | None] = mapped_column(
+        String(20), nullable=True, comment="填报来源: feishu/web"
+    )
+
+
+class SafetyCommitmentSignature(BaseModel):
+    """企业安全承诺公告手写签名存档（每日一条，重签覆盖）。
+
+    image_key 存储复用作业票签名同一对象存储 bucket（safety），key
+    前缀区分业务；签署人从设置页 commitment_signer_open_id 读取。
+    """
+
+    __tablename__ = "safety_commitment_signatures"
+    __table_args__ = (
+        Index(
+            "uq_safety_commitment_signatures_date",
+            "report_date",
+            unique=True,
+            postgresql_where=text("is_deleted = false"),
+        ),
+        {"schema": "safety"},
+    )
+
+    report_date: Mapped[date] = mapped_column(
+        Date, nullable=False, comment="承诺公告日期"
+    )
+    signer_open_id: Mapped[str | None] = mapped_column(
+        String(100), nullable=True, comment="签署人飞书 open_id"
+    )
+    signer_name: Mapped[str] = mapped_column(
+        String(100), nullable=False, default="", server_default="", comment="签署人姓名"
+    )
+    image_key: Mapped[str] = mapped_column(
+        String(500), nullable=False, comment="签名 PNG 存储键"
+    )
+    signed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default="now()",
+        comment="签名时间",
+    )
+    reused: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+        comment="是否复用历史签名（非现场手写）",
     )

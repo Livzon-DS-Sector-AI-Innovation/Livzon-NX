@@ -4,6 +4,7 @@ import { useState } from 'react'
 import {
   ApartmentOutlined,
   SafetyCertificateOutlined,
+  SwapOutlined,
   TeamOutlined,
   UserOutlined,
 } from '@ant-design/icons'
@@ -20,6 +21,8 @@ import {
 } from '@/components/system'
 import SettingsSubnav from './SettingsSubnav'
 import SettingsSegmentedNav from './SettingsSegmentedNav'
+import ImpersonationPanel from './ImpersonationPanel'
+import { IMPERSONATION_SETTINGS_PATH } from '@/lib/impersonation'
 
 export const SYSTEM_PERMISSION_PAGES = [
   {
@@ -30,7 +33,6 @@ export const SYSTEM_PERMISSION_PAGES = [
   {
     href: '/system/user-roles',
     title: '用户角色',
-    description: '为用户分配角色，模块入口随有效页面权限自动生效。',
   },
   {
     href: '/system/dept-roles',
@@ -40,13 +42,18 @@ export const SYSTEM_PERMISSION_PAGES = [
   {
     href: '/system/permission-verification',
     title: '权限接入检查',
-    description: '自动检查模块权限接入完整性，并诊断用户授权与健康问题。',
+    description: '检查各模块的页面、接口和 Livzon 工具是否完整接入权限体系。',
+  },
+  {
+    href: IMPERSONATION_SETTINGS_PATH,
+    title: '模拟登录',
+    description: '切换到指定用户，验收页面和操作权限。',
   },
 ] as const
 
 const permissionSections = [
   { key: 'roles', label: '角色与授权', views: ['/system/roles', '/system/user-roles', '/system/dept-roles'] },
-  { key: 'checks', label: '权限检查', views: ['/system/permission-verification'] },
+  { key: 'checks', label: '权限检查', views: [IMPERSONATION_SETTINGS_PATH, '/system/permission-verification'] },
 ] as const
 
 export interface SystemPermissionsData {
@@ -56,14 +63,14 @@ export interface SystemPermissionsData {
 }
 
 interface PermissionTabContentProps {
-  description: string
+  description?: string
   children: React.ReactNode
 }
 
 function PermissionTabContent({ description, children }: PermissionTabContentProps) {
   return (
     <div className="pt-1">
-      <p className="m-0 mb-4 text-sm text-[var(--color-steel)]">{description}</p>
+      {description && <p className="m-0 mb-4 text-sm text-[var(--color-steel)]">{description}</p>}
       {children}
     </div>
   )
@@ -73,8 +80,10 @@ export default function SystemPermissionsPanel({
   roles,
   departments,
   deptRules,
-}: SystemPermissionsData) {
-  const [activeKey, setActiveKey] = useState<string>('/system/roles')
+  initialView,
+}: SystemPermissionsData & { initialView?: string }) {
+  const [activeKey, setActiveKey] = useState<string>(initialView === 'impersonation'
+    ? IMPERSONATION_SETTINGS_PATH : '/system/roles')
   const activeSection = permissionSections.find((item) => item.views.some((key) => key === activeKey)) ?? permissionSections[0]
 
   return (
@@ -117,7 +126,7 @@ export default function SystemPermissionsPanel({
             label: '用户角色',
             icon: <UserOutlined />,
             children: (
-              <PermissionTabContent description={SYSTEM_PERMISSION_PAGES[1].description}>
+              <PermissionTabContent>
                 <UserRoleManager initialRoles={roles} initialDepartments={departments} />
               </PermissionTabContent>
             ),
@@ -135,6 +144,14 @@ export default function SystemPermissionsPanel({
                 />
               </PermissionTabContent>
             ),
+          },
+          {
+            key: IMPERSONATION_SETTINGS_PATH,
+            label: '模拟登录',
+            icon: <SwapOutlined />,
+            children: <PermissionTabContent description={SYSTEM_PERMISSION_PAGES[4].description}>
+              <ImpersonationPanel roles={roles} />
+            </PermissionTabContent>,
           },
           {
             key: '/system/permission-verification',

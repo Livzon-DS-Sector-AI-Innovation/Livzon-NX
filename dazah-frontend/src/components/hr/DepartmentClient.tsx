@@ -1,9 +1,11 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useState, useCallback, useMemo, useEffect } from 'react'
 import { App } from 'antd'
 import type { Department, OrgTreeNode } from '@/types/hr'
 import { deleteDepartment, fetchDepartmentsAction, fetchDepartmentTreeAction, fetchOrgTreeAction, syncDepartmentsFromFeishuAction, getDepartmentSyncStatus } from '@/actions/hr'
+import { unwrapServerActionResult } from '@/lib/server-action-result'
 import { useSyncPolling } from './useSyncPolling'
 import DepartmentTable from './DepartmentTable'
 import DepartmentDetailDrawer from './DepartmentDetailDrawer'
@@ -72,7 +74,7 @@ export default function DepartmentClient({
       setTotal(res.meta?.total || 0)
       setPagination({ current: p, pageSize: ps })
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '加载失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '加载失败'))
     } finally {
       setLoading(false)
     }
@@ -97,7 +99,7 @@ export default function DepartmentClient({
         setOrgTreeData([])
       }
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '加载失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '加载失败'))
     } finally {
       setLoading(false)
     }
@@ -185,7 +187,7 @@ export default function DepartmentClient({
         setSelectedDept(null)
       }
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '删除失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '删除失败'))
     }
   }, [canDelete, message, loadTableData, loadTreeData, drawerOpen, selectedDept])
 
@@ -197,8 +199,8 @@ export default function DepartmentClient({
 
   // 飞书同步（使用共享轮询 hook）
   const { isSyncing, startSync } = useSyncPolling({
-    syncAction: syncDepartmentsFromFeishuAction,
-    pollAction: getDepartmentSyncStatus,
+    syncAction: async () => unwrapServerActionResult(await syncDepartmentsFromFeishuAction()),
+    pollAction: async () => unwrapServerActionResult(await getDepartmentSyncStatus()),
     maxPolls: 90,
     interval: 2000,
     onSuccess: (msg, result) => {
@@ -230,14 +232,15 @@ export default function DepartmentClient({
     const autoSync = async () => {
       if (!canSync) return
       try {
-        await syncDepartmentsFromFeishuAction()
+        const result = await syncDepartmentsFromFeishuAction()
+        if (!result.ok) return
         // 最多轮询 3 分钟，超时静默放弃
         for (let i = 0; i < 90; i++) {
           if (cancelled) return
           await wait(2000)
-          const statusRes = await getDepartmentSyncStatus()
+          const statusRes = unwrapServerActionResult(await getDepartmentSyncStatus())
           const state = statusRes.data?.state
-          if (state === 'completed' || state === 'failed') {
+          if (state === 'completed' || state === 'failed' || state === 'interrupted') {
             if (!cancelled) {
               loadTableData()
               loadTreeData()

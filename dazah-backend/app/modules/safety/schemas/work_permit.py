@@ -26,6 +26,7 @@ class PermitPersonInput(BaseModel):
     )
     certificate_no: str | None = Field(default=None, max_length=100)
     certificate_category: str | None = Field(default=None, max_length=64)
+    external: bool = Field(default=False, description="外部人员（证书名单外手工录入）")
 
 
 class PermitMeasureInput(BaseModel):
@@ -183,6 +184,16 @@ class WorkPermitAttachmentItem(BaseModel):
     size_bytes: int
 
 
+class WorkPermitSignatureItem(BaseModel):
+    """手写签名行（发起行 node_id 为空；节点行/交底作业人行带对应标识）。"""
+
+    sign_key: str = Field(max_length=64, description="签字行标识")
+    node_id: UUID | None = Field(default=None, description="所属节点（发起行为空）")
+    signer_name: str | None = Field(default=None, max_length=100)
+    signed_at: datetime | None = None
+    image_key: str | None = Field(default=None, max_length=200)
+
+
 class WorkPermitResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -221,6 +232,14 @@ class WorkPermitDetailResponse(WorkPermitResponse):
     gas_analyses: list[GasAnalysisItem] = Field(default_factory=list)
     relations: list[PermitRelationItem] = Field(default_factory=list)
     attachments: list[WorkPermitAttachmentItem] = Field(default_factory=list)
+    signatures: list[WorkPermitSignatureItem] = Field(
+        default_factory=list,
+        description="本轮手写签名行（发起行 + 交底作业人行 + 节点行）",
+    )
+    missing_brief_names: list[str] = Field(
+        default_factory=list,
+        description="尚未完成交底学习签字的作业人姓名（仅 approved 状态非空）",
+    )
     next_gas_due_at: datetime | None = Field(
         default=None,
         description="下次气体复检到期时间（无周期复检要求为 None）",
@@ -267,9 +286,7 @@ class WorkPermitStatsResponse(BaseModel):
     completed: int = 0
     rejected: int = 0
     cancelled: int = 0
-    my_pending_approvals: int = Field(
-        default=0, description="待当前用户审批的节点数"
-    )
+    my_pending_approvals: int = Field(default=0, description="待当前用户审批的节点数")
 
 
 class ApproverConfigItem(BaseModel):
@@ -308,9 +325,7 @@ class WorkPermitMetaResponse(BaseModel):
         description="票种节点目录（key/name/kind/levels），提交审批指派用",
     )
     risk_identification_options: list[str]
-    gas_types: list[str] = Field(
-        default_factory=list, description="需要气体分析的票种"
-    )
+    gas_types: list[str] = Field(default_factory=list, description="需要气体分析的票种")
     gas_cycle_minutes: dict[str, int] = Field(
         default_factory=dict, description="作业期间复检间隔（分钟）"
     )

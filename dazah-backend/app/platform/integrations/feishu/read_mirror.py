@@ -11,7 +11,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import func, select
+import httpx
+from sqlalchemy import Numeric, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppException
@@ -20,6 +21,24 @@ from app.modules.warehouse.feishu_client import (
     WarehouseFeishuClient,
     parse_feishu_root_token,
 )
+
+#: 数值型镜像字段类型（数字/日期/创建与修改时间），排序时按数值比较。
+_RECORD_NUMERIC_FIELD_TYPES = {2, 5, 1001, 1002}
+
+
+def _record_order_expression(
+    record_model: type[Any],
+    field_name: str,
+    field_type: int | None,
+    direction: str,
+) -> Any:
+    """镜像记录 raw_fields 字段的排序表达式（JSONB 取文本，数值型按数值比较）。"""
+    text_expr = record_model.raw_fields[field_name].astext
+    if field_type in _RECORD_NUMERIC_FIELD_TYPES:
+        text_expr = cast(text_expr, Numeric)
+    if direction == "asc":
+        return text_expr.asc().nulls_first()
+    return text_expr.desc().nulls_last()
 
 
 @dataclass(frozen=True)
@@ -358,9 +377,34 @@ class ModuleFeishuReadMirrorService:
         page: int,
         page_size: int,
         keyword: str | None,
+        sort_field: str | None = None,
+        sort_direction: str = "desc",
     ) -> dict[str, Any]:
         binding, resource = await self._bound_resource(page_key, binding_id)
         fields = await self._fields(resource.id)
+        order_by: tuple[Any, ...] = (self.models.record.record_id.asc(),)
+        if sort_field:
+            # 前端排序控件传 field_id，这里同时兼容字段名（raw_fields 的键）
+            meta = next(
+                (
+                    f
+                    for f in fields
+                    if f.field_name == sort_field or f.field_id == sort_field
+                ),
+                None,
+            )
+            if meta is None:
+                raise AppException(message="排序字段不属于该数据表", status_code=404)
+            try:
+                field_type: int | None = int(meta.field_type)
+            except (TypeError, ValueError):
+                field_type = None
+            order_by = (
+                _record_order_expression(
+                    self.models.record, meta.field_name, field_type, sort_direction
+                ),
+                self.models.record.record_id.asc(),
+            )
         if resource.active_mirror_version is None:
             records: list[Any] = []
             total = 0
@@ -383,7 +427,7 @@ class ModuleFeishuReadMirrorService:
             result = await self.session.execute(
                 select(self.models.record)
                 .where(*conditions)
-                .order_by(self.models.record.record_id.asc())
+                .order_by(*order_by)
                 .offset((page - 1) * page_size)
                 .limit(page_size)
             )
@@ -442,8 +486,18 @@ class ModuleFeishuReadMirrorService:
         value = record.raw_fields.get(field.field_name)
         if not self._contains_attachment_token(value, file_token):
             raise AppException(message="附件不属于该记录", status_code=404)
-        result = await self._client(resource.app_token).download_media(file_token)
-        return result
+        client = self._client(resource.app_token)
+        try:
+            return await client.download_media(file_token)
+        except httpx.HTTPStatusError as exc:
+            # 应用无云盘下载权限时（Base 附件常见），medias/download 返回无体 400；
+            # 改用记录自带的 tmp_url 换签名直链，权限判定走 bitable，与读记录一致。
+            if exc.response.status_code not in (400, 403):
+                raise
+            tmp_url = self._attachment_tmp_url(value, file_token)
+            if tmp_url is None:
+                raise
+            return await client.download_media_via_tmp_url(tmp_url)
 
     async def _binding_payload(self, binding: Any, resource: Any) -> dict[str, Any]:
         field_count = int(
@@ -665,6 +719,32 @@ class ModuleFeishuReadMirrorService:
                 cls._contains_attachment_token(item, file_token) for item in value
             )
         return False
+
+    @classmethod
+    def _attachment_tmp_url(cls, value: Any, file_token: str) -> str | None:
+        """取与 file_token 匹配附件项的 tmp_url（batch_get_tmp_download_url 串）。"""
+        if isinstance(value, dict):
+            if (
+                value.get("file_token") == file_token
+                or value.get("attachment_token") == file_token
+            ):
+                tmp_url = value.get("tmp_url")
+                if isinstance(tmp_url, str) and tmp_url.startswith(
+                    "https://open.feishu.cn/open-apis/"
+                ):
+                    return tmp_url
+                return None
+            for item in value.values():
+                found = cls._attachment_tmp_url(item, file_token)
+                if found:
+                    return found
+            return None
+        if isinstance(value, list):
+            for item in value:
+                found = cls._attachment_tmp_url(item, file_token)
+                if found:
+                    return found
+        return None
 
     @staticmethod
     def _field_payload(item: Any) -> dict[str, Any]:

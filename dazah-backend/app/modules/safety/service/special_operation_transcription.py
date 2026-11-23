@@ -22,6 +22,7 @@ from app.modules.safety.models import (
 logger = logging.getLogger(__name__)
 
 SOURCE_PAGE_KEY = "safety:ops-safety:special-danger-work"
+_TRANSCRIPTION_BATCH_SIZE = 300
 
 TYPE_MAP = {
     "动火作业": "hot_work",
@@ -157,66 +158,69 @@ async def sync_special_operation_ledger(db: AsyncSession) -> dict[str, int]:
         SpecialOperationReportService,
     )
 
-    mirror_rows = (
-        (
-            await db.execute(
-                select(SafetyPageTableMirrorRecord).where(
-                    SafetyPageTableMirrorRecord.page_key == SOURCE_PAGE_KEY,
-                    SafetyPageTableMirrorRecord.is_deleted.is_(False),
-                )
-            )
-        )
-        .scalars()
-        .all()
+    mirror = SafetyPageTableMirrorRecord
+    statement = (
+        select(mirror.record_id, mirror.fields)
+        .where(mirror.page_key == SOURCE_PAGE_KEY, mirror.is_deleted.is_(False))
+        .order_by(mirror.id)
+        .execution_options(yield_per=_TRANSCRIPTION_BATCH_SIZE)
     )
-    existing = {
-        row.report_no: row
-        for row in (
-            (
-                await db.execute(
-                    select(SpecialOperationReport).where(
-                        SpecialOperationReport.is_deleted.is_(False)
-                    )
+    scanned = created = updated = skipped = unchanged = 0
+    mirror_rows = await db.stream(statement)
+    try:
+        async for batch in mirror_rows.partitions():
+            scanned += len(batch)
+            records: list[tuple[str, dict[str, Any]]] = []
+            for record_id, fields in batch:
+                fields = fields if isinstance(fields, dict) else {}
+                if _text(fields.get("申请状态")) == "已删除":
+                    skipped += 1
+                    continue
+                values = _build_values(fields)
+                if values is None:
+                    skipped += 1
+                    continue
+                records.append((_report_no(fields, record_id), values))
+            if not records:
+                continue
+
+            existing_rows = await db.scalars(
+                select(SpecialOperationReport).where(
+                    SpecialOperationReport.is_deleted.is_(False),
+                    SpecialOperationReport.report_no.in_(
+                        {number for number, _ in records}
+                    ),
                 )
             )
-            .scalars()
-            .all()
-        )
-    }
-
-    created = updated = skipped = unchanged = 0
-    for mirror in mirror_rows:
-        fields = mirror.fields if isinstance(mirror.fields, dict) else {}
-        if _text(fields.get("申请状态")) == "已删除":
-            skipped += 1
-            continue
-        values = _build_values(fields)
-        if values is None:
-            skipped += 1
-            continue
-
-        report_no = _report_no(fields, mirror.record_id)
-        current = existing.get(report_no)
-        if current is None:
-            db.add(SpecialOperationReport(report_no=report_no, **values))
-            created += 1
-            continue
-
-        changed = False
-        for key, value in values.items():
-            if getattr(current, key) != value:
-                setattr(current, key, value)
-                changed = True
-        if changed:
-            updated += 1
-        else:
-            unchanged += 1
+            existing = {row.report_no: row for row in existing_rows}
+            for report_no, values in records:
+                current = existing.get(report_no)
+                if current is None:
+                    current = SpecialOperationReport(report_no=report_no, **values)
+                    db.add(current)
+                    existing[report_no] = current
+                    created += 1
+                    continue
+                changes = {
+                    key: value
+                    for key, value in values.items()
+                    if getattr(current, key) != value
+                }
+                if changes:
+                    for key, value in changes.items():
+                        setattr(current, key, value)
+                    updated += 1
+                else:
+                    unchanged += 1
+            await db.flush()
+    finally:
+        await mirror_rows.close()
 
     await db.commit()
 
     recalc = await SpecialOperationReportService(db).recalculate_critical_flags()
     result = {
-        "mirror": len(mirror_rows),
+        "mirror": scanned,
         "created": created,
         "updated": updated,
         "unchanged": unchanged,

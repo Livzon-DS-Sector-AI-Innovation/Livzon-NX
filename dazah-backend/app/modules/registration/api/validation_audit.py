@@ -1,6 +1,6 @@
 """Validation Audit API endpoints."""
 
-import logging
+from pathlib import Path
 from typing import Any
 from uuid import UUID
 
@@ -11,9 +11,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.exceptions import AppException
+from app.core.llm import (
+    LLMConfigError,
+    LLMOutputError,
+    LLMProviderError,
+    LLMRateLimitError,
+)
 from app.core.response import error_response, success_response
 from app.core.upload_security import MAX_UPLOAD_FILES, read_upload_secure
 from app.modules.registration.schemas.validation_audit import (
+    FileType,
+    ValidationAuditErrorCode,
+    ValidationAuditErrorResponse,
     ValidationAuditFileListItem,
     ValidationAuditIssueResponse,
     ValidationAuditReportResponse,
@@ -21,13 +30,21 @@ from app.modules.registration.schemas.validation_audit import (
     ValidationAuditTaskListItem,
     ValidationAuditTaskResponse,
     ValidationAuditTaskUpdate,
+    ValidationAuditUploadFailure,
+    ValidationAuditUploadSuccess,
 )
 from app.modules.registration.service.validation_audit import ValidationAuditService
 from app.platform.identity.deps import RequiredUser
-
-logger = logging.getLogger(__name__)
+from app.shared.schemas import ApiResponseEnvelope
 
 router = APIRouter()
+
+
+def _audit_error_response(*codes: ValidationAuditErrorCode) -> dict[str, Any]:
+    return {
+        "model": ValidationAuditErrorResponse,
+        "description": f"可能的业务错误码：{', '.join(codes)}",
+    }
 
 
 # ── 任务管理 ──────────────────────────────────────────────
@@ -122,11 +139,18 @@ async def delete_task(
 # ── 文件管理 ──────────────────────────────────────────────
 
 
-@router.post("/tasks/{task_id}/files", response_model=dict, summary="上传文件")
+@router.post(
+    "/tasks/{task_id}/files",
+    response_model=ApiResponseEnvelope[
+        list[ValidationAuditUploadSuccess | ValidationAuditUploadFailure]
+    ],
+    summary="上传文件",
+    responses={400: _audit_error_response(ValidationAuditErrorCode.FILE_LIMIT)},
+)
 async def upload_files(
     task_id: UUID,
     files: list[UploadFile] = File(...),
-    file_type: str = Form(...),
+    file_type: FileType = Form(...),
     db: AsyncSession = Depends(get_db),
 ) -> Any:
     """上传审核文件。file_type: protocol / report / attachment"""
@@ -136,37 +160,46 @@ async def upload_files(
         return error_response(message="任务不存在", status_code=404)
     if len(files) > MAX_UPLOAD_FILES:
         return error_response(
-            message=f"单次最多上传 {MAX_UPLOAD_FILES} 个文件", status_code=400
+            message=f"单次最多上传 {MAX_UPLOAD_FILES} 个文件",
+            status_code=400,
+            detail={"error_code": ValidationAuditErrorCode.FILE_LIMIT.value},
         )
 
-    results = []
+    results: list[ValidationAuditUploadSuccess | ValidationAuditUploadFailure] = []
+    allowed_extensions = {".docx", ".pdf"}
+    max_bytes = get_settings().MAX_UPLOAD_SIZE_MB * 1024 * 1024
     for upload_file in files:
+        filename = upload_file.filename or "未命名文件"
         try:
+            if Path(filename).suffix.lower() not in allowed_extensions:
+                raise AppException(status_code=415, message="文件格式不受支持")
             filename, content = await read_upload_secure(
                 upload_file,
-                max_bytes=get_settings().MAX_UPLOAD_SIZE_MB * 1024 * 1024,
-                allowed_extensions={".docx", ".pdf"},
+                max_bytes=max_bytes,
+                allowed_extensions=allowed_extensions,
                 what="验证审核文件",
             )
-            saved = await service.save_uploaded_file(task, filename, content, file_type)
+        except AppException as exc:
             results.append(
-                {
-                    "file_id": str(saved.id),
-                    "filename": saved.original_filename,
-                    "file_size": saved.file_size,
-                    "status": "success",
-                }
+                ValidationAuditUploadFailure(
+                    status="failed",
+                    filename=filename,
+                    status_code=exc.status_code,
+                    error=exc.message,
+                )
             )
-        except Exception as e:
-            filename = upload_file.filename or "unknown"
-            logger.exception("文件上传失败: %s", filename)
-            results.append(
-                {
-                    "filename": filename,
-                    "status": "failed",
-                    "error": str(e),
-                }
+            continue
+        saved = await service.save_uploaded_file(
+            task, filename, content, file_type.value
+        )
+        results.append(
+            ValidationAuditUploadSuccess(
+                status="success",
+                file_id=saved.id,
+                filename=saved.original_filename,
+                file_size=saved.file_size,
             )
+        )
 
     return success_response(data=results, message="上传完成")
 
@@ -190,7 +223,15 @@ async def list_files(
 # ── 解析与审核 ────────────────────────────────────────────
 
 
-@router.post("/tasks/{task_id}/parse", response_model=dict, summary="解析文件")
+@router.post(
+    "/tasks/{task_id}/parse",
+    response_model=dict,
+    summary="解析文件",
+    responses={
+        409: _audit_error_response(ValidationAuditErrorCode.NO_FILES),
+        422: _audit_error_response(ValidationAuditErrorCode.FILE_UNREADABLE),
+    },
+)
 async def parse_files(
     task_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -208,12 +249,27 @@ async def parse_files(
             data=ValidationAuditTaskResponse.model_validate(refreshed_task),
             message="文件解析完成",
         )
-    except AppException as e:
-        await service.mark_failed(task)
-        raise e
+    except AppException as exc:
+        if exc.status_code != 409:
+            await service.mark_failed(task)
+        raise
 
 
-@router.post("/tasks/{task_id}/audit", response_model=dict, summary="执行审核")
+@router.post(
+    "/tasks/{task_id}/audit",
+    response_model=dict,
+    summary="执行审核",
+    responses={
+        409: _audit_error_response(
+            ValidationAuditErrorCode.NO_FILES,
+            ValidationAuditErrorCode.NO_PARSED_FILES,
+            ValidationAuditErrorCode.CROSS_FILES_REQUIRED,
+        ),
+        429: {"description": "审核服务限流"},
+        502: {"description": "审核服务返回异常"},
+        503: {"description": "审核服务暂时不可用"},
+    },
+)
 async def run_audit(
     task_id: UUID,
     db: AsyncSession = Depends(get_db),
@@ -234,10 +290,20 @@ async def run_audit(
             data=ValidationAuditTaskResponse.model_validate(refreshed_task),
             message="审核完成",
         )
-    except AppException:
+    except LLMRateLimitError as exc:
+        await service.mark_failed(task)
+        raise AppException(status_code=429, message="审核服务请求过于频繁") from exc
+    except LLMOutputError as exc:
+        await service.mark_failed(task)
+        raise AppException(status_code=502, message="审核服务返回异常") from exc
+    except (LLMConfigError, LLMProviderError) as exc:
+        await service.mark_failed(task)
+        raise AppException(status_code=503, message="审核服务暂时不可用") from exc
+    except AppException as exc:
         # 保存问题/生成报告任一环节失败：任务标记失败，
         # 避免停留 COMPLETED 却没有报告，重试也不会重复插入问题。
-        await service.mark_failed(task)
+        if exc.status_code != 409:
+            await service.mark_failed(task)
         raise
 
 

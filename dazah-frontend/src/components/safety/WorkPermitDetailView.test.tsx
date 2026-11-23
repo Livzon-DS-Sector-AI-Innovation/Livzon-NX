@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   addWorkPermitRelation: vi.fn(),
   getApproverConfigs: vi.fn(),
   getWorkPermits: vi.fn(),
+  reassignWorkPermitNode: vi.fn(),
   canOperate: true,
   canAccess: true,
   message: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
@@ -35,6 +36,7 @@ vi.mock('@/actions/safety', () => ({
   addWorkPermitRelation: mocks.addWorkPermitRelation,
   getApproverConfigs: mocks.getApproverConfigs,
   getWorkPermits: mocks.getWorkPermits,
+  reassignWorkPermitNode: mocks.reassignWorkPermitNode,
 }))
 
 vi.mock('@/hooks/usePagePermissions', () => ({
@@ -188,9 +190,9 @@ function buttons(text: string) {
 beforeEach(() => {
   mocks.getWorkPermitMeta.mockResolvedValue({ code: 200, data: META })
   mocks.getWorkPermitDetail.mockResolvedValue({ code: 200, data: DETAIL })
-  mocks.approveWorkPermitNode.mockResolvedValue({ code: 200, data: null })
-  mocks.rejectWorkPermitNode.mockResolvedValue({ code: 200, data: null })
-  mocks.submitWorkPermit.mockResolvedValue({ code: 200, data: { warnings: [] } })
+  mocks.approveWorkPermitNode.mockResolvedValue({ ok: true, data: null })
+  mocks.rejectWorkPermitNode.mockResolvedValue({ ok: true, data: null })
+  mocks.submitWorkPermit.mockResolvedValue({ ok: true, data: { warnings: [] } })
   mocks.cancelWorkPermit.mockResolvedValue({ code: 200, data: null })
   mocks.getApproverConfigs.mockResolvedValue({
     code: 200,
@@ -274,16 +276,32 @@ describe('作业票详情视图', () => {
   })
 
   it('同意失败提示错误', async () => {
-    mocks.approveWorkPermitNode.mockResolvedValue({ code: 500, message: '无权限' })
+    const message = '没有执行此操作的权限，请联系管理员'
+    mocks.approveWorkPermitNode.mockResolvedValue({ ok: false, message })
     await renderDetail()
     await act(async () => {
       buttons('同意')[0].click()
     })
     await flush()
-    expect(mocks.message.error).toHaveBeenCalledWith('无权限')
+    expect(mocks.message.error).toHaveBeenCalledWith(message)
+    expect(mocks.getWorkPermitDetail).not.toHaveBeenCalled()
   })
 
-  it('驳回需填写意见，确认后调用驳回接口', async () => {
+  it('同意已完成但详情未刷新时单独提示刷新', async () => {
+    mocks.getWorkPermitDetail.mockResolvedValue({ code: 503, message: 'upstream error' })
+    await renderDetail()
+    await act(async () => {
+      buttons('同意')[0].click()
+    })
+    await flush()
+    expect(mocks.message.success).toHaveBeenCalledWith('已签批「车间审批」')
+    expect(mocks.message.warning).toHaveBeenCalledWith('操作已完成，详情未能刷新，请手动刷新页面')
+    expect(mocks.message.error).not.toHaveBeenCalled()
+  })
+
+  it.each([true, false])('驳回需填写意见，提交成功状态为 %s', async (ok) => {
+    const errorMessage = '数据已发生变化，请刷新后重试'
+    if (!ok) mocks.rejectWorkPermitNode.mockResolvedValue({ ok: false, message: errorMessage })
     await renderDetail()
     await act(async () => {
       buttons('驳回')[0].click()
@@ -318,7 +336,14 @@ describe('作业票详情视图', () => {
       'n1',
       '安全措施不足',
     )
-    expect(mocks.message.success).toHaveBeenCalledWith('已驳回')
+    if (ok) {
+      expect(mocks.message.success).toHaveBeenCalledWith('已驳回')
+    } else {
+      expect(mocks.message.error).toHaveBeenCalledWith(errorMessage)
+      expect(textarea?.value).toBe('安全措施不足')
+      expect(buttons('确认驳回')).toHaveLength(1)
+      expect(mocks.getWorkPermitDetail).not.toHaveBeenCalled()
+    }
   })
 
   it('草稿票作废需 Popconfirm 确认', async () => {
@@ -405,7 +430,8 @@ describe('作业票详情视图：气体 / 提交 / 关联', () => {
     await flush(30)
   }
 
-  it('草稿提交审批：选派节点审批人后提交', async () => {
+  it.each([true, false])('草稿选派审批人，提交成功状态为 %s', async (ok) => {
+    if (!ok) mocks.submitWorkPermit.mockRejectedValue(new Error('Minified React error #441'))
     await renderDetail({ status: 'draft', approval_round: 0 })
     await act(async () => {
       buttons('提交审批')[0].click()
@@ -431,8 +457,15 @@ describe('作业票详情视图：气体 / 提交 / 关联', () => {
     expect(mocks.submitWorkPermit).toHaveBeenCalledWith('p1', [
       { node_key: 'apply', approver_user_id: 'ou_1' },
     ])
-    expect(mocks.message.success).toHaveBeenCalledWith('已提交审批')
-    expect(mocks.getWorkPermitDetail).toHaveBeenCalledWith('p1')
+    if (ok) {
+      expect(mocks.message.success).toHaveBeenCalledWith('已提交审批')
+      expect(mocks.getWorkPermitDetail).toHaveBeenCalledWith('p1')
+    } else {
+      expect(mocks.message.error).toHaveBeenCalledWith('暂未确认作业票提交结果，请先查看业务记录后再决定是否重试')
+      expect(document.body.textContent).toContain('提交审批（第 1 轮，逐级签批）')
+      expect(submit[submit.length - 1].disabled).toBe(false)
+      expect(mocks.getWorkPermitDetail).not.toHaveBeenCalled()
+    }
   })
 
   it('添加关联作业票：选择目标后关联', async () => {
@@ -511,5 +544,129 @@ describe('作业票详情视图：气体 / 提交 / 关联', () => {
       }),
     )
     expect(mocks.message.success).toHaveBeenCalledWith('复检记录已录入')
+  })
+})
+
+
+describe('作业票详情：签字记录 / 交底门禁 / 改派', () => {
+  let localRoot: Root | undefined
+  let fetchSpy: ReturnType<typeof vi.fn> | undefined
+
+  beforeEach(() => {
+    fetchSpy = vi.fn(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            data: {
+              items: [{ id: 'u9', name: '王审批', department: '安全科' }],
+            },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      ),
+    )
+    vi.stubGlobal('fetch', fetchSpy)
+    mocks.reassignWorkPermitNode.mockResolvedValue({ code: 200, data: null })
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    if (localRoot) {
+      // 外层 afterEach 兜底 unmount，这里只清引用
+      localRoot = undefined
+    }
+  })
+
+  it('签字记录卡渲染发起行与交底作业人（✔/⏳ 同口径）', async () => {
+    await renderDetail({
+      signatures: [
+        {
+          sign_key: 'initiator',
+          node_id: null,
+          signer_name: '张三',
+          signed_at: '2026-11-13T09:30:00Z',
+          image_key: 'k1',
+        },
+        {
+          sign_key: 'brief_worker_0',
+          node_id: null,
+          signer_name: '李四',
+          signed_at: '2026-11-13T10:00:00Z',
+          image_key: 'k2',
+        },
+      ],
+    })
+    expect(document.body.textContent).toContain('签字记录（手写签名')
+    expect(document.body.textContent).toContain('发起签字行')
+    expect(document.body.textContent).toContain('发起人（作业负责人）')
+    expect(document.body.textContent).toContain('张三')
+    expect(document.body.textContent).toContain('安全交底人')
+    expect(document.body.textContent).toContain('（待签）')
+    expect(document.body.textContent).toContain('交底作业人')
+    expect(document.body.textContent).toContain('李四')
+  })
+
+  it('approved 且交底缺签时警告并禁用开工按钮', async () => {
+    await renderDetail({ status: 'approved', missing_brief_names: ['李四'] })
+    expect(document.body.textContent).toContain('尚未完成交底学习签字')
+    expect(document.body.textContent).toContain('李四')
+    const verifyButton = buttons('作业前验票（开工）')[0]
+    expect(verifyButton).toBeTruthy()
+    expect(verifyButton!.disabled).toBe(true)
+    await act(async () => {
+      verifyButton!.click()
+    })
+    await flush(30)
+    expect(mocks.verifyWorkPermit).not.toHaveBeenCalled()
+  })
+
+  it('approved 且交底签齐时开工按钮可用', async () => {
+    await renderDetail({ status: 'approved', missing_brief_names: [] })
+    const verifyButton = buttons('作业前验票（开工）')[0]
+    expect(verifyButton).toBeTruthy()
+    expect(verifyButton!.disabled).toBe(false)
+  })
+
+  it('未签字节点提供改派入口并完成改派调用', async () => {
+    await renderDetail()
+    const reassignButton = buttons('改派')[0]
+    expect(reassignButton).toBeTruthy()
+    await act(async () => {
+      reassignButton!.click()
+    })
+    await flush(60)
+    expect(document.body.textContent).toContain('改派「车间审批」')
+    // 打开人员下拉并选择（同提交弹窗模式：input.ant-select-input + item-option）
+    const modalSelect = document.body.querySelector<HTMLElement>(
+      '.ant-modal input.ant-select-input',
+    )
+    expect(modalSelect, '改派弹窗人员下拉应存在').toBeTruthy()
+    await act(async () => {
+      modalSelect!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    })
+    await flush(60)
+    const option = document.body.querySelector<HTMLElement>(
+      '.ant-select-item-option',
+    )
+    expect(option, '人员选项应出现').toBeTruthy()
+    await act(async () => {
+      option!.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+      option!.click()
+    })
+    await flush(30)
+    const confirm = Array.from(
+      document.body.querySelectorAll<HTMLButtonElement>('.ant-modal button'),
+    ).find((b) => b.textContent?.replace(/\s/g, '') === '确认改派')
+    expect(confirm, '确认改派按钮应存在').toBeTruthy()
+    await act(async () => {
+      confirm!.click()
+    })
+    await flush(60)
+    expect(mocks.reassignWorkPermitNode).toHaveBeenCalledWith(
+      'p1',
+      'n1',
+      'u9',
+    )
+    expect(mocks.message.success).toHaveBeenCalledWith('已改派「车间审批」')
   })
 })

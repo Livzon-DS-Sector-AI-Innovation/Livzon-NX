@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import {
   CloudUploadOutlined,
   FileSearchOutlined,
@@ -233,7 +234,7 @@ export function OosOotManagementPage() {
         type="error"
         showIcon
         title="OOS/OOT 工作台加载失败"
-        description={(error instanceof Error ? error.message : '') ?? '请稍后重试'}
+        description={getUserErrorMessage((error instanceof Error ? error.message : '') ?? '请稍后重试', '请稍后重试')}
         action={<Button onClick={() => void refreshRecords()}>重试</Button>}
       />
     )
@@ -295,7 +296,7 @@ export function OosOotManagementPage() {
       />
 
       <Drawer title="新增 OOS/OOT 记录" size={560} open={recordDrawerOpen} onClose={() => setRecordDrawerOpen(false)} destroyOnHidden>
-        <Form<RecordCreateInput> form={recordForm} layout="vertical" initialValues={{ record_type: 'OOS' }} onFinish={(values) => { startTransition(async () => { try { await createOosOotRecord(values); message.success('OOS/OOT 记录已创建'); recordForm.resetFields(); setRecordDrawerOpen(false); await refreshRecords() } catch (error) { message.error(error instanceof Error ? error.message : '创建失败') } }) }}>
+        <Form<RecordCreateInput> form={recordForm} layout="vertical" initialValues={{ record_type: 'OOS' }} onFinish={(values) => { startTransition(async () => { try { await createOosOotRecord(values); message.success('OOS/OOT 记录已创建'); recordForm.resetFields(); setRecordDrawerOpen(false); await refreshRecords() } catch (error) { message.error(getUserErrorMessage(error instanceof Error ? error.message : '创建失败')) } }) }}>
           <Row gutter={16}><Col span={12}><Form.Item name="record_type" label="记录类型" rules={[{ required: true }]}><Select options={[{ value: 'OOS', label: 'OOS（超标）' }, { value: 'OOT', label: 'OOT（超趋势）' }]} /></Form.Item></Col><Col span={12}><Form.Item name="record_code" label="记录编号" rules={[{ required: true }]}><Input placeholder="例如 OOS-202607-001" /></Form.Item></Col></Row>
           <Form.Item name="title" label="事件标题" rules={[{ required: true }]}><Input /></Form.Item>
           <Row gutter={16}><Col span={12}><Form.Item name="product_name" label="产品名称"><Input /></Form.Item></Col><Col span={12}><Form.Item name="batch_number" label="批号"><Input /></Form.Item></Col></Row>
@@ -308,20 +309,20 @@ export function OosOotManagementPage() {
       </Drawer>
 
       <Drawer title="新增 OOT 限度产品" size={480} open={productDrawerOpen} onClose={() => setProductDrawerOpen(false)} destroyOnHidden>
-        <Form<ProductCreateInput> form={productForm} layout="vertical" initialValues={{ is_active: true }} onFinish={(values) => { startTransition(async () => { try { const product = await createOotLimitProduct(values); message.success('OOT 限度产品已创建'); productForm.resetFields(); setProductDrawerOpen(false); setSelectedProductId(product.id); await refreshProducts() } catch (error) { message.error(error instanceof Error ? error.message : '创建失败') } }) }}>
+        <Form<ProductCreateInput> form={productForm} layout="vertical" initialValues={{ is_active: true }} onFinish={(values) => { startTransition(async () => { try { const product = await createOotLimitProduct(values); message.success('OOT 限度产品已创建'); productForm.resetFields(); setProductDrawerOpen(false); setSelectedProductId(product.id); await refreshProducts() } catch (error) { message.error(getUserErrorMessage(error instanceof Error ? error.message : '创建失败')) } }) }}>
           <Form.Item name="product_code" label="产品编码" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="product_name" label="产品名称" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="document_title" label="标准文件标题" rules={[{ required: true }]}><Input /></Form.Item><Row gutter={16}><Col span={12}><Form.Item name="document_year" label="年份"><Input type="number" /></Form.Item></Col><Col span={12}><Form.Item name="version_label" label="版本"><Input /></Form.Item></Col></Row><Form.Item name="remark" label="备注"><Input.TextArea rows={2} /></Form.Item><Button type="primary" htmlType="submit" loading={isPending}>创建产品</Button>
         </Form>
       </Drawer>
 
       <Drawer title="新增 OOT 限度项目" size={480} open={itemDrawerOpen} onClose={() => setItemDrawerOpen(false)} destroyOnHidden>
-        <Form<ItemCreateInput> form={itemForm} layout="vertical" initialValues={{ display_order: (items.at(-1)?.display_order ?? 0) + 1 }} onFinish={(values) => { if (!currentProductId) return; startTransition(async () => { try { await createOotLimitItem(currentProductId, values); message.success('OOT 限度项目已创建'); itemForm.resetFields(); setItemDrawerOpen(false); await refreshItems() } catch (error) { message.error(error instanceof Error ? error.message : '创建失败') } }) }}>
+        <Form<ItemCreateInput> form={itemForm} layout="vertical" initialValues={{ display_order: (items.at(-1)?.display_order ?? 0) + 1 }} onFinish={(values) => { if (!currentProductId) return; startTransition(async () => { try { await createOotLimitItem(currentProductId, values); message.success('OOT 限度项目已创建'); itemForm.resetFields(); setItemDrawerOpen(false); await refreshItems() } catch (error) { message.error(getUserErrorMessage(error instanceof Error ? error.message : '创建失败')) } }) }}>
           <Row gutter={16}><Col span={12}><Form.Item name="display_order" label="显示顺序" rules={[{ required: true }]}><Input type="number" /></Form.Item></Col><Col span={12}><Form.Item name="item_group" label="项目分组"><Input /></Form.Item></Col></Row><Form.Item name="item_name" label="项目名称" rules={[{ required: true }]}><Input /></Form.Item><Form.Item name="specification" label="标准规定"><Input.TextArea rows={2} /></Form.Item><Form.Item name="oot_limit" label="OOT 限度" rules={[{ required: true }]}><Input.TextArea rows={2} /></Form.Item><Form.Item name="remark" label="备注"><Input.TextArea rows={2} /></Form.Item><Button type="primary" htmlType="submit" loading={isPending}>创建项目</Button>
         </Form>
       </Drawer>
 
       <Modal title={`关闭 ${closingRecord?.record_code ?? ''}`} open={Boolean(closingRecord)} onCancel={() => setClosingRecord(null)} footer={null} destroyOnHidden>
         <Typography.Paragraph type="secondary">关闭是受控业务动作，必须记录调查结论。</Typography.Paragraph>
-        <Form<RecordCloseInput> form={closeForm} layout="vertical" onFinish={(values) => { if (!closingRecord) return; startTransition(async () => { try { await closeOosOotRecord(closingRecord.id, values); message.success('记录已关闭'); closeForm.resetFields(); setClosingRecord(null); await refreshRecords() } catch (error) { message.error(error instanceof Error ? error.message : '关闭失败') } }) }}>
+        <Form<RecordCloseInput> form={closeForm} layout="vertical" onFinish={(values) => { if (!closingRecord) return; startTransition(async () => { try { await closeOosOotRecord(closingRecord.id, values); message.success('记录已关闭'); closeForm.resetFields(); setClosingRecord(null); await refreshRecords() } catch (error) { message.error(getUserErrorMessage(error instanceof Error ? error.message : '关闭失败')) } }) }}>
           <Form.Item name="investigation_result" label="调查结论" rules={[{ required: true }]}><Input.TextArea rows={4} /></Form.Item><Form.Item name="corrective_actions" label="纠正预防措施"><Input.TextArea rows={3} /></Form.Item><Button type="primary" danger htmlType="submit" loading={isPending} icon={<SafetyCertificateOutlined />}>确认关闭</Button>
         </Form>
       </Modal>

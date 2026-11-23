@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useCallback, useEffect, useState, type Key } from 'react'
 import { App, Button, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Table, DatePicker } from 'antd'
 import { EditOutlined, DeleteOutlined, FilterOutlined } from '@ant-design/icons'
@@ -110,7 +111,7 @@ export default function EsgTrainingReportClient({ department, dateFrom, dateTo, 
       setTotal(res.meta?.total ?? (res.data?.length || 0))
       setPage(p)
     } catch (e) {
-      message.error('加载失败: ' + ((e instanceof Error ? e.message : '') || '未知错误'))
+      message.error(getUserErrorMessage('加载失败: ' + ((e instanceof Error ? e.message : '') || '未知错误')))
     } finally {
       setLoading(false)
     }
@@ -152,7 +153,7 @@ export default function EsgTrainingReportClient({ department, dateFrom, dateTo, 
           setSelectedRowKeys([])
           loadData(page)
         } catch (e) {
-          message.error((e instanceof Error ? e.message : '') || '批量删除失败')
+          message.error(getUserErrorMessage((e instanceof Error ? e.message : '') || '批量删除失败'))
         }
       },
     })
@@ -219,7 +220,7 @@ export default function EsgTrainingReportClient({ department, dateFrom, dateTo, 
       setEditingRecord(null)
       loadData(page)
     } catch (e) {
-      message.error((e instanceof Error ? e.message : '') || '保存失败')
+      message.error(getUserErrorMessage((e instanceof Error ? e.message : '') || '保存失败'))
     } finally {
       setSaving(false)
     }
@@ -231,7 +232,7 @@ export default function EsgTrainingReportClient({ department, dateFrom, dateTo, 
       message.success('删除成功')
       loadData(page)
     } catch (e) {
-      message.error((e instanceof Error ? e.message : '') || '删除失败')
+      message.error(getUserErrorMessage((e instanceof Error ? e.message : '') || '删除失败'))
     }
   }
 

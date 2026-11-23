@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useEffect, useState } from 'react'
 import { App, Modal, Form, Input, Select, DatePicker, Tabs } from 'antd'
 import dayjs from 'dayjs'
@@ -118,7 +119,7 @@ export default function EmployeeForm({ open, employee, onClose, onSuccess }: Emp
       onSuccess()
       onClose()
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '操作失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '操作失败'))
     }
   }
 

@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useEffect, useState } from 'react'
 import { App, Button, Card, Select, Space, } from 'antd'
 import { FileTextOutlined, PrinterOutlined, DownloadOutlined } from '@ant-design/icons'
@@ -22,7 +23,7 @@ export default function TrainingRecordClient() {
       })
       .catch((err) => {
         console.error('fetchEmployees error:', err)
-        message.error('加载员工列表失败: ' + ((err instanceof Error ? err.message : '') || JSON.stringify(err) || '未知错误'))
+        message.error(getUserErrorMessage('加载员工列表失败: ' + ((err instanceof Error ? err.message : '') || JSON.stringify(err) || '未知错误')))
       })
       .finally(() => {
         setLoading(false)
@@ -41,7 +42,7 @@ export default function TrainingRecordClient() {
       await fetchOnboardingTrainingRecord(selectedEmployee.id, selectedEmployee.name)
       message.success('培训记录已导出')
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '导出失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '导出失败'))
     } finally {
       setDownloading(false)
     }

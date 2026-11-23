@@ -1,14 +1,45 @@
-"""设备模块 API 路由入口 — 瘦身后仅保留台账、巡检、检修、报修、车间与共享配置."""
+"""设备模块 API 路由入口.
 
+瘦身只下线前端页面，后端接口原地保留：台账报修（工单/图片/维修人员/故障代码/
+维修知识）与安全管理模块的设备详情抽屉仍在调用这些接口。
+"""
+
+from app.modules.equipment.api.calibration import (
+    router as calibration_router,
+)
 from app.modules.equipment.api.claim import router as claim_router
 from app.modules.equipment.api.config import router as config_router
+from app.modules.equipment.api.cost import router as cost_router
 from app.modules.equipment.api.equipment import (
     router as equipment_router,
 )
+from app.modules.equipment.api.failure_codes import (
+    router as failure_codes_router,
+)
+from app.modules.equipment.api.health import router as health_router
+from app.modules.equipment.api.images import router as images_router
 from app.modules.equipment.api.inspection_feishu import (
     router as inspection_feishu_router,
 )
+from app.modules.equipment.api.inspection_templates import (
+    router as inspection_templates_router,
+)
+from app.modules.equipment.api.knowledge import router as knowledge_router
+from app.modules.equipment.api.maintainers import router as maintainers_router
+from app.modules.equipment.api.maintenance_plans import (
+    router as maintenance_plans_router,
+)
+from app.modules.equipment.api.personnel import router as personnel_router
+from app.modules.equipment.api.purchase_suggestion import (
+    router as purchase_suggestion_router,
+)
 from app.modules.equipment.api.repair_ledger import router as repair_ledger_router
+from app.modules.equipment.api.spare_parts import (
+    router as spare_parts_router,
+)
+from app.modules.equipment.api.work_orders import (
+    router as work_orders_router,
+)
 from app.modules.equipment.api.workshops import router as workshops_router
 from app.shared.module_api import create_module_router
 from app.shared.module_registry import MODULES_BY_CODE
@@ -18,17 +49,40 @@ router = create_module_router(MODULES_BY_CODE["equipment"])
 # 设备台账路由
 router.include_router(equipment_router)
 
-# 巡检模块（飞书镜像只读）
+# 备件管理路由
+# 备件采购建议路由（方案C）：须先于 spare_parts 注册，
+# 否则 GET /spare-parts/purchase-suggestions 会被 /spare-parts/{id} 拦截
+router.include_router(
+    purchase_suggestion_router,
+    prefix="/spare-parts/purchase-suggestions",
+)
+router.include_router(spare_parts_router, prefix="/spare-parts")
+
+# 维护模块路由
+router.include_router(failure_codes_router, prefix="/maintenance/failure-codes")
+# 维修成本路由（方案C）：先于 work_orders 注册，避免 /cost-report 被 /{id} 拦截
+router.include_router(cost_router, prefix="/maintenance")
+router.include_router(work_orders_router, prefix="/maintenance/work-orders")
+router.include_router(calibration_router, prefix="/maintenance/calibration")
+router.include_router(maintenance_plans_router, prefix="/maintenance/plans")
+router.include_router(
+    inspection_templates_router,
+    prefix="/maintenance/inspection-templates",
+)
+router.include_router(images_router, prefix="/maintenance/work-orders")
+router.include_router(claim_router, prefix="/maintenance/work-orders")
+router.include_router(config_router, prefix="/maintenance/config")
+router.include_router(maintainers_router, prefix="/maintenance/staff")
+router.include_router(personnel_router, prefix="/personnel")
+# 巡检模块路由（飞书镜像只读；本地任务式巡检旧轨 HTTP 已下线）
 router.include_router(inspection_feishu_router, prefix="/inspection")
 
-# 检修台账（飞书镜像只读 + 频次分析 + 同步配置）
+# 设备检修台账路由（飞书维修记录镜像只读 + 频次分析 + 同步配置）
 router.include_router(repair_ledger_router, prefix="/repair")
 
-# 报修卡片操作（接单/完成/验收回调）
-router.include_router(claim_router, prefix="/maintenance/work-orders")
+# 设备健康档案与维修知识案例路由（方案B）
+router.include_router(health_router, prefix="/health")
+router.include_router(knowledge_router, prefix="/repair-knowledge")
 
-# 报修配置（共享）
-router.include_router(config_router, prefix="/maintenance/config")
-
-# 车间注册表（工作台车间数据源）
+# 车间注册表路由（车间管理页与工作台车间数据源）
 router.include_router(workshops_router, prefix="/workshops")

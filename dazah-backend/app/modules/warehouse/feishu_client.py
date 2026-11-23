@@ -279,6 +279,51 @@ class WarehouseFeishuClient:
             response.headers.get("content-disposition"),
         )
 
+    async def download_media_via_tmp_url(
+        self, tmp_url: str
+    ) -> tuple[bytes, str, str | None]:
+        """Base 附件回退通道：记录自带 tmp_url（batch_get_tmp_download_url 查询串）
+        换签名直链后取流。
+
+        应用未开通云盘下载权限时 medias/download 会返回无响应体的 400；
+        本通道权限判定走 bitable（与读记录一致），无需额外云盘 scope。
+        """
+        prefix = "https://open.feishu.cn/open-apis"
+        if not tmp_url.startswith(prefix):
+            raise ValueError("tmp_url 不是飞书开放平台地址")
+        await self._wait_for_shared_rate_slot()
+        token = await self.get_tenant_access_token()
+        response = await _shared_http().get(
+            tmp_url[len(prefix) :],
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=30.0,
+            follow_redirects=True,
+        )
+        response.raise_for_status()
+        entries = (response.json().get("data") or {}).get("tmp_download_urls") or []
+        signed_url = next(
+            (
+                item.get("tmp_download_url")
+                for item in entries
+                if isinstance(item, dict)
+                and isinstance(item.get("tmp_download_url"), str)
+            ),
+            None,
+        )
+        if not signed_url:
+            raise ValueError("飞书未返回附件临时直链")
+        file_response = await _shared_http().get(
+            signed_url,
+            timeout=60.0,
+            follow_redirects=True,
+        )
+        file_response.raise_for_status()
+        return (
+            file_response.content,
+            file_response.headers.get("content-type", "application/octet-stream"),
+            file_response.headers.get("content-disposition"),
+        )
+
     async def subscribe_bitable(self) -> bool:
         await self.request(
             "POST",

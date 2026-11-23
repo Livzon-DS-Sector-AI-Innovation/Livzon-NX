@@ -6,7 +6,8 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }))
-vi.mock('./quality-shared', () => ({
+vi.mock('./quality-shared', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./quality-shared')>()),
   API_BASE_URL: 'http://backend.test',
   actionFetch: mocks.actionFetch,
 }))

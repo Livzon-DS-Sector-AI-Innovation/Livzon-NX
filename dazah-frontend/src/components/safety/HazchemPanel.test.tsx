@@ -451,6 +451,17 @@ describe('HazchemPanel', () => {
     expect(mocks.fetchChemicalMsdsBytes).toHaveBeenCalledWith('c-1', 'f-1', false)
   })
 
+  it('shows a safe list error and keeps existing chemical records when refresh fails', async () => {
+    mocks.getHazardousChemicals.mockRejectedValueOnce(new Error('TypeError: catalog adapter failed'))
+    await renderPanel()
+    const search = container.querySelector<HTMLButtonElement>('button[data-search]')
+    expect(search).not.toBeNull()
+    await act(async () => search?.click())
+    expect(mocks.getHazardousChemicals).toHaveBeenCalled()
+    expect(container.textContent).toContain('加载危化品档案失败')
+    expect(container.textContent).toContain('乙醇')
+  })
+
   it('previews MSDS through object URLs', async () => {
     mocks.fetchChemicalMsdsBytes.mockResolvedValue({
       base64: Buffer.from('pdf').toString('base64'),
@@ -502,6 +513,10 @@ describe('HazchemPanel', () => {
     expect(aiModal).not.toBeNull()
     const ok = aiModal!.querySelector<HTMLButtonElement>('[data-modal-ok]')
     expect(ok).not.toBeNull()
+    mocks.updateHazardousChemical.mockRejectedValueOnce(new Error('TypeError: archive update adapter failed'))
+    await act(async () => ok!.click())
+    expect(mocks.message.error).toHaveBeenLastCalledWith('操作未完成，请稍后重试')
+    expect(container.contains(aiModal)).toBe(true)
     await act(async () => {
       ok!.click()
       await new Promise((resolve) => setTimeout(resolve, 30))
@@ -574,6 +589,10 @@ describe('HazchemPanel', () => {
     const modal = container.querySelector('[data-modal-open="true"]')
     expect(modal).not.toBeNull()
     const ok = modal!.querySelector<HTMLButtonElement>('[data-modal-ok]')
+    mocks.createHazardousChemical.mockRejectedValueOnce(new Error('TypeError: archive write adapter failed'))
+    await act(async () => ok!.click())
+    expect(mocks.message.error).toHaveBeenLastCalledWith('操作未完成，请稍后重试')
+    expect(container.contains(modal)).toBe(true)
     await act(async () => {
       ok!.click()
       await new Promise((resolve) => setTimeout(resolve, 30))
@@ -615,6 +634,27 @@ describe('HazchemPanel', () => {
       await new Promise((resolve) => setTimeout(resolve, 30))
     })
     expect(mocks.message.error).toHaveBeenCalledWith('附件保存失败')
+  })
+
+  it('文件请求异常时隐藏技术信息并保留附件管理窗口', async () => {
+    const failure = new Error('TypeError: internal attachment adapter')
+    mocks.uploadChemicalMsdsFile.mockRejectedValueOnce(failure)
+    mocks.fetchChemicalMsdsBytes.mockRejectedValue(failure)
+    await renderPanel()
+    const modal = await openMsdsManager()
+    const upload = modal.querySelector<HTMLButtonElement>('[data-upload-trigger]')
+    expect(upload).not.toBeNull()
+    await act(async () => upload?.click())
+    expect(mocks.message.error).toHaveBeenCalledWith('操作未完成，请稍后重试')
+
+    const preview = Array.from(modal.querySelectorAll('button')).find(button => button.textContent === '预览')
+    expect(preview).toBeDefined()
+    await act(async () => preview?.click())
+    expect(mocks.fetchChemicalMsdsBytes).toHaveBeenCalledWith('c-1', 'f-1', true)
+    expect(mocks.message.error).toHaveBeenCalledTimes(2)
+    expect(mocks.message.error).toHaveBeenLastCalledWith('操作未完成，请稍后重试')
+    expect(container.contains(modal)).toBe(true)
+    expect(container.querySelector('[data-preview-modal]')).toBeNull()
   })
 
   it('MSDS 下载失败提示错误', async () => {

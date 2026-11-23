@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useMemo, useState, useTransition } from 'react'
 import { App, Button, Card, Form, Input, Modal, Popconfirm, Space, Table, Typography } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
@@ -53,7 +54,7 @@ export default function InspectionContactsPage({ contacts }: InspectionContactsP
 
   function handleDelete() {
     if (!selected) { message.warning('请先选择一条记录'); return }
-    startTransition(async () => { try { await deleteInspectionContact(selected.id); message.success('已删除'); setSelectedId(null); router.refresh() } catch (e) { message.error(e instanceof Error ? e.message : '删除失败') } })
+    startTransition(async () => { try { await deleteInspectionContact(selected.id); message.success('已删除'); setSelectedId(null); router.refresh() } catch (e) { message.error(getUserErrorMessage(e instanceof Error ? e.message : '删除失败')) } })
   }
 
   async function handleSubmit(values: InspectionContactCreate) {
@@ -62,7 +63,7 @@ export default function InspectionContactsPage({ contacts }: InspectionContactsP
         if (mode === 'edit' && editing) { await updateInspectionContact(editing.id, values as InspectionContactUpdate); message.success('已更新') }
         else { await createInspectionContact(values); message.success('已新增') }
         setModalOpen(false); form.resetFields(); router.refresh()
-      } catch (e) { message.error(e instanceof Error ? e.message : '保存失败') }
+      } catch (e) { message.error(getUserErrorMessage(e instanceof Error ? e.message : '保存失败')) }
     })
   }
 

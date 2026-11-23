@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useState, useCallback, useEffect } from 'react'
 import { Table, Input, Button, Space, App, Card, Modal, Form, Upload } from 'antd'
 import { UploadOutlined, DownloadOutlined, DeleteOutlined } from '@ant-design/icons'
@@ -41,7 +42,7 @@ export default function SupplementaryReplyClient({
       setReplies(res.data)
       setTotal(res.meta?.total || 0)
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '加载数据失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '加载数据失败'))
     } finally {
       setLoading(false)
     }
@@ -93,7 +94,7 @@ export default function SupplementaryReplyClient({
         message.error(result.message)
       }
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '生成失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '生成失败'))
     } finally {
       setGenerating(false)
     }
@@ -105,7 +106,7 @@ export default function SupplementaryReplyClient({
       message.success('删除成功')
       loadData()
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '删除失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '删除失败'))
     }
   }
 

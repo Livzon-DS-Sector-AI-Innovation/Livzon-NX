@@ -29,6 +29,14 @@ def test_backend_browser_cache_is_copied_into_the_runtime_image() -> None:
     assert "ENV PLAYWRIGHT_BROWSERS_PATH" not in backend
 
 
+def test_backend_development_precompiles_dependencies_before_copying_app() -> None:
+    dockerfile = (ROOT / "Dockerfile.dev").read_text(encoding="utf-8")
+    backend = dockerfile.split(" AS backend", 1)[1].split("\nFROM ", 1)[0]
+    dependency_layers, _, _ = backend.partition("COPY --chown=app:app dazah-backend/")
+    assert "uv sync --frozen --group dev --compile-bytecode" in dependency_layers
+    assert "PYTHONDONTWRITEBYTECODE=1" in backend
+
+
 def test_docker_frontend_uses_turbopack_development_command() -> None:
     dockerfile = (ROOT / "Dockerfile.dev").read_text(encoding="utf-8")
 

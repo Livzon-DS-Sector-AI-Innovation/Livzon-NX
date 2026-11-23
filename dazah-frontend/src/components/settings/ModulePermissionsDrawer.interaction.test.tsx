@@ -275,6 +275,7 @@ it.each([true, false])('ignores a previous user save result (success=%s)', async
   await act(async () => { save = confirmation.onOk() })
   expect(button('可查看').disabled).toBe(true)
   expect(document.querySelector<HTMLInputElement>('input[placeholder="填写授权调整原因"]')!.disabled).toBe(true)
+  expect(document.querySelector<HTMLButtonElement>('button[aria-label="快捷授权调整原因"]')?.disabled).toBe(true)
   await act(async () => { void confirmation.onOk() })
   expect(mocks.replace).toHaveBeenCalledTimes(1)
   await show('B')
@@ -321,14 +322,28 @@ it('ignores a late load from a previous user', async () => {
   expect(document.body.textContent).not.toContain('员工档案A')
 })
 
-it('accepts the current save and refreshes the authoritative version', async () => {
+it('saves a selected reason and refreshes the authoritative version', async () => {
   mocks.get.mockResolvedValue(result('A'))
   mocks.replace.mockResolvedValue({ ok: true, data: { ...result('A'), grant_version: 4 } })
   await show('A')
-  const confirmation = await preview()
-  await act(async () => { await confirmation.onOk() })
+  const footer = document.querySelector('.ant-drawer-footer')!
+  const input = footer.querySelector<HTMLInputElement>('input[placeholder="填写授权调整原因"]')!
+  const shortcuts = footer.querySelector<HTMLButtonElement>('button[aria-label="快捷授权调整原因"]')!
+  expect(input.maxLength).toBe(20)
+  expect(footer.textContent).toContain('0 / 20')
+  await act(async () => shortcuts.click())
+  const options = [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+  expect(options.map((item) => item.textContent)).toEqual(['临时工作授权', '个别数据范围调整', '恢复角色基线'])
+  await act(async () => options[0].click())
+  expect(input.value).toBe('临时工作授权')
+  expect(mocks.confirm).not.toHaveBeenCalled()
+
+  await act(async () => button('可查看').click())
+  await act(async () => mocks.confirm.mock.lastCall![0].onOk())
+  await act(async () => button('预览并保存授权').click())
+  await act(async () => mocks.confirm.mock.lastCall![0].onOk())
   expect(mocks.replace).toHaveBeenCalledWith('A', expect.objectContaining({
-    expected_grant_version: 3, reason: '职责调整',
+    expected_grant_version: 3, reason: '临时工作授权',
     grants: [expect.objectContaining({ mode: 'custom', permissions: ['access', 'query'] })],
   }))
   expect(document.body.textContent).toContain('授权版本 4')

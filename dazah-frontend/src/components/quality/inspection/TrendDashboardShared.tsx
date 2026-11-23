@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { qualityTokens } from '../themeTokens'
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
@@ -270,7 +271,7 @@ export function TrendAiPanel({
       await onReanalyze(chart.metric_key)
     } catch (error) {
       setReanalyzeError(
-        `重新分析失败：${error instanceof Error ? error.message : '未知错误'}，请稍后重试`
+        `重新分析失败：${getUserErrorMessage(error instanceof Error ? error.message : '未知错误', '未知错误')}，请稍后重试`
       )
     } finally {
       setReanalyzing(false)

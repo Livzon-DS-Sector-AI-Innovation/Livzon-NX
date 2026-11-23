@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import type { Dayjs } from 'dayjs'
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -71,7 +72,7 @@ export function CreateDeviation() {
       message.success('台账已创建')
       router.push('/quality/deviations/ledger')
     } catch (error) {
-      message.error((error instanceof Error ? error.message : '') || '创建失败')
+      message.error(getUserErrorMessage((error instanceof Error ? error.message : '') || '创建失败'))
     } finally {
       submitLock.current = false
       setSubmitting(false)

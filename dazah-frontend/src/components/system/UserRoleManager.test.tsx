@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { ConfigProvider } from 'antd'
 import type { AdminUserItem, RoleItem } from '@/lib/api/client/admin'
 import { getAntdTheme } from '@/lib/antd-theme'
+import { SEARCH_DELAY_MS } from '@/hooks/useSearchFilter'
 
 const mocks = vi.hoisted(() => ({
   fetchUsers: vi.fn(), fetchScopes: vi.fn(), assign: vi.fn(), deleteScope: vi.fn(),
@@ -19,9 +20,6 @@ vi.mock('@/actions/admin', () => ({
   assignUserRoles: mocks.assign,
   deleteDataScope: mocks.deleteScope,
   saveUserDataScope: mocks.saveScope,
-}))
-vi.mock('./UserModuleAccessDrawer', () => ({
-  default: ({ open }: { open: boolean }) => open ? <div>模块访问抽屉</div> : null,
 }))
 vi.mock('antd', async (importOriginal) => {
   const actual = await importOriginal<typeof import('antd')>()
@@ -58,13 +56,14 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount())
   host.remove()
+  vi.useRealTimers()
   vi.unstubAllGlobals()
 })
 
-async function renderManager(appearance: 'light' | 'dark' = 'light') {
+async function renderManager(appearance: 'light' | 'dark' = 'light', initialRoles = roles) {
   await act(async () => {
     root.render(createElement(ConfigProvider, { theme: getAntdTheme(appearance) },
-      createElement(UserRoleManager, { initialRoles: roles, initialDepartments: [] })))
+      createElement(UserRoleManager, { initialRoles, initialDepartments: [] })))
     await Promise.resolve()
   })
 }
@@ -81,10 +80,28 @@ function roleCheckbox(label: string) {
   return container!.querySelector<HTMLInputElement>('input[type="checkbox"]')!
 }
 
-async function setInputValue(element: HTMLInputElement | HTMLTextAreaElement, value: string) {
+async function selectDepartmentScope(value: 'all' | 'departments') {
+  const trigger = footerPanelButton('部门数据范围')
+  if (trigger.getAttribute('aria-expanded') === 'false') await act(async () => trigger.click())
+  await act(async () => document.querySelector<HTMLInputElement>(`input[type="radio"][value="${value}"]`)!.click())
+}
+
+function footerPanelButton(label: string) {
+  const trigger = [...document.querySelectorAll<HTMLButtonElement>('.ant-drawer-footer button[aria-expanded]')]
+    .find((button) => button.textContent?.startsWith(label))
+  expect(trigger, label).toBeTruthy()
+  return trigger!
+}
+
+async function openReason() {
+  const trigger = footerPanelButton('授权调整原因')
+  if (trigger.getAttribute('aria-expanded') === 'false') await act(async () => trigger.click())
+  return document.querySelector<HTMLInputElement>('#role-assignment-reason')!
+}
+
+async function setInputValue(element: HTMLInputElement, value: string) {
   await act(async () => {
-    const prototype = element instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype
-    Object.getOwnPropertyDescriptor(prototype, 'value')!.set!.call(element, value)
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(element, value)
     element.dispatchEvent(new Event('input', { bubbles: true }))
   })
 }
@@ -92,10 +109,11 @@ async function setInputValue(element: HTMLInputElement | HTMLTextAreaElement, va
 async function searchUsers(keyword: string) {
   const input = host.querySelector<HTMLInputElement>('input[placeholder^="按姓名"]')!
   await setInputValue(input, keyword)
-  await act(async () => host.querySelector<HTMLButtonElement>('.ant-input-search-btn')!.click())
+  await act(async () => { await vi.advanceTimersByTimeAsync(SEARCH_DELAY_MS) })
 }
 
 it.each(['light', 'dark'] as const)('searches the full directory and resets pagination in %s mode', async (appearance) => {
+  vi.useFakeTimers()
   const match = { ...user, id: 'user-501', name: '后页用户', email: 'account@example.test' }
   mocks.fetchUsers.mockResolvedValueOnce({ items: [user], total: 501 })
     .mockResolvedValueOnce({ items: [{ ...user, name: '第二页用户' }], total: 501 })
@@ -106,17 +124,25 @@ it.each(['light', 'dark'] as const)('searches the full directory and resets pagi
   expect(mocks.fetchUsers).toHaveBeenLastCalledWith({ keyword: '', offset: 20, limit: 20 })
   expect(host.textContent).toContain('第二页用户')
 
+  const input = host.querySelector<HTMLInputElement>('input[aria-label="搜索用户"]')!
+  await setInputValue(input, 'ACC')
+  await act(async () => { await vi.advanceTimersByTimeAsync(SEARCH_DELAY_MS - 1) })
+  expect(mocks.fetchUsers).toHaveBeenCalledTimes(2)
+  expect(host.textContent).toContain('正在查询用户…')
   await searchUsers('  ACCOUNT@example.test  ')
+  expect(mocks.fetchUsers).toHaveBeenCalledTimes(3)
   expect(mocks.fetchUsers).toHaveBeenLastCalledWith({ keyword: 'ACCOUNT@example.test', offset: 0, limit: 20 })
   expect(host.textContent).toContain(match.name)
   expect(host.textContent).not.toContain('第二页用户')
 
   await act(async () => host.querySelector<HTMLElement>('.ant-input-clear-icon')!.click())
+  await act(async () => { await vi.advanceTimersByTimeAsync(0) })
   expect(mocks.fetchUsers).toHaveBeenLastCalledWith({ keyword: '', offset: 0, limit: 20 })
   expect(host.textContent).toContain(user.name)
 })
 
 it('ignores stale requests and lets the latest failed search be retried', async () => {
+  vi.useFakeTimers()
   let finishOldSearch: (result: { items: AdminUserItem[]; total: number }) => void = () => {}
   await renderManager()
   mocks.fetchUsers.mockImplementationOnce(() => new Promise((resolve) => { finishOldSearch = resolve }))
@@ -152,6 +178,32 @@ it('distinguishes assigned role levels from gray unassigned tags', async () => {
   expect(tags[3].className).not.toMatch(/ant-tag-(purple|blue|green|gold)/)
 })
 
+it.each(['light', 'dark'] as const)('shows the first role tag and reveals the remaining roles on hover in %s mode', async (appearance) => {
+  const projectRoles = [
+    ...roles.slice(0, 2),
+    { ...roles[0], id: 'role-c', code: 'product_qa', name: '产品QA' },
+    { ...roles[0], id: 'role-d', code: 'change_qa', name: '变更QA' },
+  ]
+  mocks.fetchUsers.mockResolvedValue({ items: [
+    { ...user, id: 'overflow', roles: projectRoles },
+    { ...user, id: 'at-limit', roles: projectRoles.slice(0, 1) },
+  ], total: 2 })
+  await renderManager(appearance)
+
+  for (const id of ['overflow', 'at-limit']) {
+    const row = host.querySelector(`tr[data-row-key="${id}"]`)
+    expect([...row?.querySelectorAll('.ant-tag') ?? []].map((tag) => tag.textContent)).toEqual(['物料QA'])
+  }
+  expect(host.querySelector('tr[data-row-key="at-limit"]')?.textContent).not.toContain('更多')
+  const trigger = button('更多（3）')
+  expect(document.body.textContent).not.toContain('产品QA')
+  await act(async () => {
+    trigger.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }))
+    await new Promise((resolve) => setTimeout(resolve, 150))
+  })
+  expect(document.querySelector('[role="tooltip"]')?.textContent).toBe('体系QA、产品QA、变更QA')
+})
+
 it('opens assignment in a right drawer and cancels without saving', async () => {
   await renderManager()
   await act(async () => button('分配角色').click())
@@ -166,13 +218,14 @@ it('opens assignment in a right drawer and cancels without saving', async () => 
   expect(mocks.saveScope).not.toHaveBeenCalled()
 })
 
-it('offers role assignment and read-only effective permissions with automatic module access', async () => {
+it('offers role assignment as the only row action and keeps the permissions preview', async () => {
   await renderManager()
-  expect(host.textContent).toContain('只需分配角色；模块入口随有效页面访问权限自动生效')
   const actions = [...host.querySelectorAll('.ant-table-tbody button')].map((item) => item.textContent?.trim())
-  expect(actions).toEqual(['分配角色', '有效权限'])
+  expect(actions).toEqual(['分配角色'])
   await act(async () => button('分配角色').click())
-  expect(document.querySelector('.ant-drawer-body')?.textContent).toContain('模块入口随有效页面访问权限自动生效')
+  const drawer = document.querySelector('.ant-drawer-body')!
+  expect(drawer.textContent).not.toContain('模块入口随有效页面访问权限自动生效')
+  expect(drawer.textContent).not.toContain('了解访问规则')
   await act(async () => button('预览权限').click())
   await act(async () => root.render(mocks.info.mock.lastCall![0].content))
   expect(host.textContent).toContain('模块入口随有效页面访问权限自动开通或关闭')
@@ -195,12 +248,12 @@ it.each(['roles', 'reason'])('confirms before discarding unsaved %s on an outsid
   await renderManager()
   await act(async () => button('分配角色').click())
   if (change === 'roles') await act(async () => roleCheckbox('体系QA').click())
-  else await setInputValue(document.querySelector<HTMLTextAreaElement>('[aria-label="角色授权调整原因"]')!, '调整职责')
+  else await setInputValue(await openReason(), '调整职责')
   await act(async () => document.querySelector<HTMLElement>('.ant-drawer-mask')!.click())
   expect(mocks.confirm.mock.lastCall![0].title).toContain('放弃未保存')
   expect(document.querySelector('.ant-drawer-open')).toBeTruthy()
   if (change === 'roles') expect(roleCheckbox('体系QA').checked).toBe(true)
-  else expect(document.querySelector<HTMLTextAreaElement>('[aria-label="角色授权调整原因"]')!.value).toBe('调整职责')
+  else expect(document.querySelector<HTMLInputElement>('[aria-label="角色授权调整原因"]')!.value).toBe('调整职责')
   await act(async () => mocks.confirm.mock.lastCall![0].onOk())
   expect(document.querySelector('.ant-drawer-open')).toBeNull()
   expect(mocks.assign).not.toHaveBeenCalled()
@@ -213,7 +266,7 @@ it('blocks outside clicks while saving and restores closing after a failed save'
   await renderManager()
   await act(async () => button('分配角色').click())
   await act(async () => roleCheckbox('体系QA').click())
-  await setInputValue(document.querySelector<HTMLTextAreaElement>('[aria-label="角色授权调整原因"]')!, '调整职责')
+  await setInputValue(await openReason(), '调整职责')
   await act(async () => button('保存').click())
   let pendingSave: Promise<void> | undefined
   await act(async () => { pendingSave = mocks.confirm.mock.lastCall![0].onOk() })
@@ -246,17 +299,13 @@ it('removes a selected tag, keeps selection across searches, and explains empty 
   expect(roleCheckbox('体系QA').checked).toBe(true)
 })
 
-it('opens rules and a read-only preview without requiring changes or an audit reason', async () => {
-  await renderManager()
-  await act(async () => button('分配角色').click())
-  await act(async () => button('了解访问规则').click())
-  const rules = mocks.info.mock.lastCall![0] as { title: string; content: React.ReactNode }
-  expect(rules.title).toBe('角色与数据范围规则')
-  await act(async () => root.render(rules.content))
-  expect(host.textContent).toContain('用户页面覆盖优先')
-  expect(host.textContent).toContain('撤销最后一个可访问页面后，入口自动关闭')
-  expect(host.textContent).toContain('系统管理员默认拥有全部模块访问权限')
-  expect(host.textContent).toContain('尚未接入页面级数据范围')
+it.each(['light', 'dark'] as const)('omits the role assignment banner and its rules link in %s mode', async (appearance) => {
+  await renderManager(appearance)
+  expect(host.textContent).not.toContain('为角色配置页面权限后，只需分配角色')
+  expect(host.textContent).not.toContain('了解访问规则')
+})
+
+it('opens a read-only preview without requiring changes or an audit reason', async () => {
   await renderManager()
   await act(async () => button('分配角色').click())
   await act(async () => button('预览权限').click())
@@ -276,20 +325,50 @@ it('requires a reason and validates specified departments before confirming a sa
   await act(async () => roleCheckbox('体系QA').click())
   await act(async () => button('保存').click())
   expect(mocks.message.warning).toHaveBeenCalledWith('请填写本次授权调整原因')
-  await setInputValue(document.querySelector<HTMLTextAreaElement>('[aria-label="角色授权调整原因"]')!, '调整查看范围')
-  const departmentOption = document.querySelector<HTMLInputElement>('input[type="radio"][value="departments"]')!
-  await act(async () => departmentOption.click())
+  expect(footerPanelButton('授权调整原因').getAttribute('aria-expanded')).toBe('true')
+  await setInputValue(await openReason(), '调整查看范围')
+  await selectDepartmentScope('departments')
   await act(async () => button('保存').click())
   expect(mocks.message.warning).toHaveBeenCalledWith('指定部门范围至少选择一个部门')
   expect(mocks.confirm).not.toHaveBeenCalled()
   expect(mocks.assign).not.toHaveBeenCalled()
 })
 
+it.each(['light', 'dark'] as const)('fills the reason from three presets and saves it in %s mode', async (appearance) => {
+  await renderManager(appearance)
+  await act(async () => button('分配角色').click())
+  const reason = await openReason()
+  expect(reason.value).toBe('')
+  expect(reason.maxLength).toBe(20)
+  expect(reason.closest('section')?.textContent).toContain('0 / 20')
+
+  const presets = ['岗位职责调整', '临时工作授权', '权限回收']
+  const trigger = footerPanelButton('授权调整原因')
+  expect(document.querySelectorAll('[aria-label="预设授权调整原因"] button')).toHaveLength(3)
+  for (const preset of presets) {
+    await openReason()
+    await act(async () => button(preset).click())
+    expect(trigger.getAttribute('aria-expanded')).toBe('false')
+    expect(trigger.textContent).toContain(preset)
+  }
+  expect(button('保存').disabled).toBe(true)
+  expect(mocks.assign).not.toHaveBeenCalled()
+
+  await act(async () => roleCheckbox('物料QA').click())
+  await act(async () => button('保存').click())
+  await act(async () => mocks.confirm.mock.lastCall![0].onOk())
+  expect(mocks.assign).toHaveBeenCalledWith('user-1', [], { expectedGrantVersion: 7, reason: '权限回收' })
+  expect(document.querySelector('.ant-drawer-open')).toBeNull()
+})
+
 it('saves the segmented department scope with the existing role assignment contract', async () => {
   await renderManager()
   await act(async () => button('分配角色').click())
-  await act(async () => document.querySelector<HTMLInputElement>('input[type="radio"][value="all"]')!.click())
-  await setInputValue(document.querySelector<HTMLTextAreaElement>('[aria-label="角色授权调整原因"]')!, '覆盖全部部门')
+  await selectDepartmentScope('all')
+  const scopeButton = footerPanelButton('部门数据范围')
+  expect(scopeButton.getAttribute('aria-expanded')).toBe('false')
+  expect(scopeButton.textContent).toContain('全部部门')
+  await setInputValue(await openReason(), '覆盖全部部门')
   await act(async () => button('保存').click())
   await act(async () => mocks.confirm.mock.lastCall![0].onOk())
   expect(mocks.saveScope).toHaveBeenCalledWith('user-1', 'all', [])
@@ -301,14 +380,22 @@ it('preserves input after a failed save and allows retrying', async () => {
   await renderManager()
   await act(async () => button('分配角色').click())
   await act(async () => roleCheckbox('体系QA').click())
-  await setInputValue(document.querySelector<HTMLTextAreaElement>('[aria-label="角色授权调整原因"]')!, '增加体系职责')
+  await openReason()
+  await act(async () => button('岗位职责调整').click())
+  await setInputValue(await openReason(), '岗位职责调整：增加体系职责')
   await act(async () => button('保存').click())
   await act(async () => mocks.confirm.mock.lastCall![0].onOk())
   expect(mocks.message.error).toHaveBeenCalledWith('授权版本已变化，请刷新后重试')
   expect(roleCheckbox('体系QA').checked).toBe(true)
-  expect(document.querySelector<HTMLTextAreaElement>('[aria-label="角色授权调整原因"]')!.value).toBe('增加体系职责')
+  expect((await openReason()).value).toBe('岗位职责调整：增加体系职责')
   expect(button('保存').disabled).toBe(false)
   expect(mocks.saveScope).not.toHaveBeenCalled()
+  await act(async () => button('保存').click())
+  await act(async () => mocks.confirm.mock.lastCall![0].onOk())
+  expect(mocks.assign).toHaveBeenLastCalledWith('user-1', ['role-a', 'role-b'], {
+    expectedGrantVersion: 7, reason: '岗位职责调整：增加体系职责',
+  })
+  expect(document.querySelector('.ant-drawer-open')).toBeNull()
 })
 
 it('retries only the failed scope after roles have already been saved', async () => {
@@ -316,8 +403,8 @@ it('retries only the failed scope after roles have already been saved', async ()
   await renderManager()
   await act(async () => button('分配角色').click())
   await act(async () => roleCheckbox('体系QA').click())
-  await act(async () => document.querySelector<HTMLInputElement>('input[type="radio"][value="all"]')!.click())
-  await setInputValue(document.querySelector<HTMLTextAreaElement>('[aria-label="角色授权调整原因"]')!, '调整职责范围')
+  await selectDepartmentScope('all')
+  await setInputValue(await openReason(), '调整职责范围')
   await act(async () => button('保存').click())
   await act(async () => mocks.confirm.mock.lastCall![0].onOk())
   expect(mocks.message.error).toHaveBeenCalledWith('角色已保存，部门数据范围保存失败：权限服务暂时不可用，请稍后重试')
@@ -335,8 +422,8 @@ it('uses the returned grant version when roles change again after a scope failur
   await renderManager()
   await act(async () => button('分配角色').click())
   await act(async () => roleCheckbox('体系QA').click())
-  await act(async () => document.querySelector<HTMLInputElement>('input[type="radio"][value="all"]')!.click())
-  await setInputValue(document.querySelector<HTMLTextAreaElement>('[aria-label="角色授权调整原因"]')!, '调整职责范围')
+  await selectDepartmentScope('all')
+  await setInputValue(await openReason(), '调整职责范围')
   await act(async () => button('保存').click())
   await act(async () => mocks.confirm.mock.lastCall![0].onOk())
   await act(async () => roleCheckbox('体系QA').click())
@@ -347,22 +434,23 @@ it('uses the returned grant version when roles change again after a scope failur
   })
 })
 
-it('previews added roles and submits a versioned full replacement with a reason', async () => {
-  await renderManager()
+it.each(['light', 'dark'] as const)('confirms added roles without an access rules banner in %s mode', async (appearance) => {
+  vi.useFakeTimers()
+  await renderManager(appearance)
   await searchUsers('QA部')
   mocks.fetchUsers.mockClear()
   await act(async () => button('分配角色').click())
-  expect(document.body.textContent).toContain('模块入口随有效页面访问权限自动生效')
   expect(document.querySelector('[role="dialog"]')?.textContent).toContain('分配角色 · QA部公用账号')
   await act(async () => roleCheckbox('体系QA').click())
   expect(document.body.textContent).toContain('新增 1')
-  const reason = document.querySelector<HTMLTextAreaElement>('[aria-label="角色授权调整原因"]')!
+  const reason = await openReason()
   await act(async () => {
-    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(reason, '增加体系文件维护职责')
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(reason, '增加体系文件维护职责')
     reason.dispatchEvent(new Event('input', { bubbles: true }))
   })
   await act(async () => button('保存').click())
-  const confirmation = mocks.confirm.mock.lastCall![0] as { onOk: () => Promise<void> }
+  const confirmation = mocks.confirm.mock.lastCall![0] as { content: React.ReactNode; onOk: () => Promise<void> }
+  expect(mocks.assign).not.toHaveBeenCalled()
   await act(async () => confirmation.onOk())
   expect(mocks.assign).toHaveBeenCalledWith('user-1', ['role-a', 'role-b'], {
     expectedGrantVersion: 7,
@@ -371,23 +459,125 @@ it('previews added roles and submits a versioned full replacement with a reason'
   expect(mocks.fetchUsers).toHaveBeenCalledExactlyOnceWith({ keyword: 'QA部', offset: 0, limit: 20 })
   expect(mocks.saveScope).not.toHaveBeenCalled()
   expect(mocks.deleteScope).not.toHaveBeenCalled()
+
+  await act(async () => root.render(createElement(ConfigProvider, { theme: getAntdTheme(appearance) }, confirmation.content)))
+  expect(host.textContent).toContain('新增角色：体系QA')
+  expect(host.textContent).toContain('调整原因：增加体系文件维护职责')
+  expect(host.textContent).not.toContain('多个角色的页面权限合并生效')
+  expect(host.textContent).not.toContain('了解访问规则')
 })
 
-it('keeps system administrator exclusive', async () => {
+it.each(['系统管理员', '普通管理员'])('requires confirmation before replacing six selected roles with %s', async (administrator) => {
+  const extraRoles = Array.from({ length: 6 }, (_, index) => ({
+    id: `extra-${index + 1}`, name: `自定义角色 ${index + 1}`, code: `extra_${index + 1}`,
+    is_system: false, permissions: [],
+  }))
+  await renderManager('dark', [...roles, ...extraRoles])
+  await act(async () => button('分配角色').click())
+  const selected = document.querySelector('[aria-label="已选择的角色"]')!
+  for (const role of extraRoles.slice(0, 5)) await act(async () => roleCheckbox(role.name).click())
+  expect(selected.textContent).toContain('已选择 6 个角色')
+
+  await act(async () => roleCheckbox(administrator).click())
+  const confirmation = mocks.confirm.mock.lastCall![0]
+  expect(confirmation.title).toBe(`切换为「${administrator}」？`)
+  expect(confirmation.cancelText).toBe('保留当前选择')
+  expect(selected.textContent).toContain('已选择 6 个角色')
+  expect(roleCheckbox(administrator).checked).toBe(false)
+  expect(roleCheckbox('物料QA').checked).toBe(true)
+
+  await act(async () => confirmation.onOk())
+  expect(selected.textContent).toContain('已选择 1 个角色')
+  expect(roleCheckbox(administrator).checked).toBe(true)
+  expect(roleCheckbox('物料QA').checked).toBe(false)
+  expect(mocks.assign).not.toHaveBeenCalled()
+})
+
+it('keeps all seven compatible roles selected and submits their IDs', async () => {
+  const extraRoles = Array.from({ length: 6 }, (_, index) => ({
+    id: `extra-${index + 1}`, name: `自定义角色 ${index + 1}`, code: `extra_${index + 1}`,
+    is_system: false, permissions: [],
+  }))
+  await renderManager('light', [...roles, ...extraRoles])
+  await act(async () => button('分配角色').click())
+  for (const role of extraRoles) await act(async () => roleCheckbox(role.name).click())
+  expect(document.querySelector('[aria-label="已选择的角色"]')?.textContent).toContain('已选择 7 个角色')
+  expect(roleCheckbox('物料QA').checked).toBe(true)
+  expect(mocks.confirm).not.toHaveBeenCalled()
+  await openReason()
+  await act(async () => button('岗位职责调整').click())
+  await act(async () => button('保存').click())
+  await act(async () => mocks.confirm.mock.lastCall![0].onOk())
+  expect(mocks.assign).toHaveBeenCalledWith('user-1', ['role-a', ...extraRoles.map((role) => role.id)],
+    { expectedGrantVersion: 7, reason: '岗位职责调整' })
+})
+
+it('lists administrators first and clears all selected roles across the current search', async () => {
+  await renderManager('light', [roles[0], roles[3], roles[1], roles[2]])
+  await act(async () => button('分配角色').click())
+  const available = document.querySelector('[aria-label="添加角色"]')!
+  expect([...available.querySelectorAll('label strong')].map((name) => name.textContent))
+    .toEqual(['系统管理员', '普通管理员', '物料QA', '体系QA'])
+
+  await act(async () => roleCheckbox('体系QA').click())
+  const search = available.querySelector<HTMLInputElement>('[aria-label="搜索可分配角色"]')!
+  await setInputValue(search, 'system_qa')
+  await act(async () => button('取消全部选择').click())
+  expect(document.querySelector('[aria-label="已选择的角色"]')?.textContent).toContain('已选择 0 个角色')
+  expect(roleCheckbox('体系QA').checked).toBe(false)
+  expect(button('取消全部选择').disabled).toBe(true)
+  expect(mocks.assign).not.toHaveBeenCalled()
+
+  await setInputValue(search, '')
+  expect(roleCheckbox('物料QA').checked).toBe(false)
+  await openReason()
+  await act(async () => button('权限回收').click())
+  await act(async () => button('保存').click())
+  await act(async () => mocks.confirm.mock.lastCall![0].onOk())
+  expect(mocks.assign).toHaveBeenCalledWith('user-1', [], { expectedGrantVersion: 7, reason: '权限回收' })
+})
+
+it.each(['light', 'dark'] as const)('restores the opening roles after clearing a filtered selection in %s mode', async (appearance) => {
+  await renderManager(appearance)
+  await act(async () => button('分配角色').click())
+  const restore = button('恢复原有选择')
+  expect(restore.disabled).toBe(true)
+  await act(async () => roleCheckbox('体系QA').click())
+  const search = document.querySelector<HTMLInputElement>('[aria-label="搜索可分配角色"]')!
+  await setInputValue(search, 'system_qa')
+  await act(async () => button('取消全部选择').click())
+  await act(async () => restore.click())
+  expect(document.querySelector('[aria-label="已选择的角色"]')?.textContent).toContain('已选择 1 个角色')
+  expect(search.value).toBe('system_qa')
+  expect(roleCheckbox('体系QA').checked).toBe(false)
+  expect(restore.disabled).toBe(true)
+  expect(button('保存').disabled).toBe(true)
+  await setInputValue(search, '')
+  expect(roleCheckbox('物料QA').checked).toBe(true)
+  expect(mocks.assign).not.toHaveBeenCalled()
+})
+
+it('keeps system administrator exclusive when switching back to a regular role', async () => {
   await renderManager()
   await act(async () => button('分配角色').click())
   await act(async () => roleCheckbox('系统管理员').click())
+  await act(async () => mocks.confirm.mock.lastCall![0].onOk())
   expect(roleCheckbox('系统管理员').checked).toBe(true)
   expect(roleCheckbox('物料QA').checked).toBe(false)
-  expect(document.body.textContent).toContain('已自动取消其他普通角色')
-  expect(document.querySelector('.ant-drawer-body')?.textContent).toContain('系统管理员默认拥有全部模块访问权限，无需单独开通')
+  expect(document.body.textContent).toContain('保存后将授予全部系统权限')
   expect([...document.querySelectorAll('button')].some((item) => item.textContent?.includes('查看页面权限'))).toBe(false)
+  await act(async () => roleCheckbox('物料QA').click())
+  expect(roleCheckbox('系统管理员').checked).toBe(true)
+  await act(async () => mocks.confirm.mock.lastCall![0].onOk())
+  expect(roleCheckbox('系统管理员').checked).toBe(false)
+  expect(roleCheckbox('物料QA').checked).toBe(true)
 })
 
 it('keeps ordinary administrator exclusive and explains the settings limit', async () => {
   await renderManager()
   await act(async () => button('分配角色').click())
   await act(async () => roleCheckbox('普通管理员').click())
+  await act(async () => mocks.confirm.mock.lastCall![0].onOk())
   expect(roleCheckbox('普通管理员').checked).toBe(true)
   expect(roleCheckbox('物料QA').checked).toBe(false)
   expect(document.body.textContent).toContain('不能进入系统设置')

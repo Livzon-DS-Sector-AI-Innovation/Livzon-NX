@@ -2,6 +2,9 @@
 
 import { getServerApiBaseUrl } from '@/lib/server-api'
 import { revalidatePath } from 'next/cache'
+import { getAuthHeaders } from '@/lib/auth'
+import { requireActionResponse, serverActionResult } from '@/lib/server-action-result'
+import { uncertainWriteMessage } from '@/lib/user-error'
 import { ResearchProjectCreate, ResearchProjectUpdate } from '@/types/rd'
 
 const API_BASE_URL = getServerApiBaseUrl()
@@ -81,36 +84,32 @@ export async function startPilotWorkflow(workflowId: string) {
 }
 
 export async function approvePilotWorkflowStep(workflowId: string) {
-  const result = await actionFetch(`${API_BASE_URL}/api/v1/research/pilot/workflow/${workflowId}/approve`, {
-    method: 'POST',
-  })
-  revalidatePath(`/rd/pilot-workflow/${workflowId}`)
-  revalidatePath('/rd/pilot-workflow')
-  return result
+  return pilotWorkflowWrite('approve', '中试步骤确认', workflowId)
+}
+
+function pilotWorkflowWrite(operation: 'approve' | 'upload', label: string, workflowId: string, formData?: FormData) {
+  return serverActionResult(`research.pilotWorkflow.${operation}`, async (): Promise<unknown> => {
+    const id = encodeURIComponent(workflowId)
+    const headers = { ...await getAuthHeaders() }
+    if (formData) delete headers['Content-Type']
+    const response = await fetch(`${API_BASE_URL}/api/v1/research/pilot/workflow/${id}/${operation}`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    })
+    await requireActionResponse(response)
+    const payload = await response.json()
+    revalidatePath(`/rd/pilot-workflow/${id}`)
+    if (operation === 'approve') revalidatePath('/rd/pilot-workflow')
+    return payload.data
+  }, uncertainWriteMessage(label))
 }
 
 export async function uploadPilotWorkflowDocument(workflowId: string, file: File) {
   const formData = new FormData()
   formData.append('file', file)
 
-  const response = await fetch(`${API_BASE_URL}/api/v1/research/pilot/workflow/${workflowId}/upload`, {
-    method: 'POST',
-    body: formData,
-  })
-
-  if (!response.ok) {
-    const errorBody = await response.text().catch(() => '')
-    let errorMessage = `上传失败: ${response.status} ${response.statusText}`
-    try {
-      const errorJson = JSON.parse(errorBody)
-      if (errorJson.message) errorMessage = errorJson.message
-    } catch {}
-    throw new Error(errorMessage)
-  }
-
-  const result = await response.json()
-  revalidatePath(`/rd/pilot-workflow/${workflowId}`)
-  return result.data
+  return pilotWorkflowWrite('upload', '中试文档上传', workflowId, formData)
 }
 
 export async function deletePilotWorkflow(workflowId: string) {

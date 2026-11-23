@@ -47,11 +47,11 @@ class SeedCulture(BaseModel):
     calcium_carbonate_batch: Mapped[str | None] = mapped_column(
         String(128), nullable=True, comment="物料F/批号"
     )
-    prepare_operator: Mapped[list[dict[str, Any]] | None] = mapped_column(
-        JSONB, nullable=True, comment="配制操作人/复核人（飞书成员：open_id/姓名/头像）"
+    prepare_operator: Mapped[list[dict[str, Any]] | str | None] = mapped_column(
+        "prepare_operator_people", JSONB(none_as_null=True), nullable=True
     )
-    sterilization_operator: Mapped[list[dict[str, Any]] | None] = mapped_column(
-        JSONB, nullable=True, comment="种子消毒人员（飞书成员：open_id/姓名/头像）"
+    sterilization_operator: Mapped[list[dict[str, Any]] | str | None] = mapped_column(
+        "sterilization_operator_people", JSONB(none_as_null=True), nullable=True
     )
     ph_before_adjust: Mapped[float | None] = mapped_column(
         Float, nullable=True, comment="调前PH"
@@ -74,8 +74,8 @@ class SeedCulture(BaseModel):
     strain_tube_no: Mapped[str | None] = mapped_column(
         String(64), nullable=True, comment="冻管菌号"
     )
-    shaker_setup_operator: Mapped[list[dict[str, Any]] | None] = mapped_column(
-        JSONB, nullable=True, comment="上摇床摆东西人员（飞书成员：open_id/姓名/头像）"
+    shaker_setup_operator: Mapped[list[dict[str, Any]] | str | None] = mapped_column(
+        "shaker_setup_operator_people", JSONB(none_as_null=True), nullable=True
     )
     shaker_no: Mapped[str | None] = mapped_column(
         String(64), nullable=True, comment="摇床编号"
@@ -83,8 +83,8 @@ class SeedCulture(BaseModel):
     shaker_start_date: Mapped[date | None] = mapped_column(
         Date, nullable=True, comment="上摇床日期"
     )
-    inoculation_operator: Mapped[list[dict[str, Any]] | None] = mapped_column(
-        JSONB, nullable=True, comment="接种人员/复核人（飞书成员：open_id/姓名/头像）"
+    inoculation_operator: Mapped[list[dict[str, Any]] | str | None] = mapped_column(
+        "inoculation_operator_people", JSONB(none_as_null=True), nullable=True
     )
     tool_no: Mapped[str | None] = mapped_column(
         String(64), nullable=True, comment="用具编号"
@@ -113,17 +113,21 @@ class SeedCulture(BaseModel):
     merge_amino_nitrogen: Mapped[float | None] = mapped_column(
         Float, nullable=True, comment="并瓶氨基氮"
     )
-    tank_setup_operator: Mapped[list[dict[str, Any]] | None] = mapped_column(
-        JSONB, nullable=True, comment="进罐摆东西人员（飞书成员：open_id/姓名/头像）"
+    tank_setup_operator: Mapped[list[dict[str, Any]] | str | None] = mapped_column(
+        "tank_setup_operator_people", JSONB(none_as_null=True), nullable=True
     )
     cylinder_no: Mapped[str | None] = mapped_column(
         String(64), nullable=True, comment="钢瓶编号"
     )
-    merge_operator: Mapped[list[dict[str, Any]] | None] = mapped_column(
-        JSONB, nullable=True, comment="并瓶操作人/复核人（飞书成员：open_id/姓名/头像）"
+    merge_operator: Mapped[list[dict[str, Any]] | str | None] = mapped_column(
+        "merge_operator_people", JSONB(none_as_null=True), nullable=True
     )
-    workshop_inoculation_operator: Mapped[list[dict[str, Any]] | None] = mapped_column(
-        JSONB, nullable=True, comment="车间接种人员（飞书成员：open_id/姓名/头像）"
+    workshop_inoculation_operator: Mapped[list[dict[str, Any]] | str | None] = (
+        mapped_column(
+            "workshop_inoculation_operator_people",
+            JSONB(none_as_null=True),
+            nullable=True,
+        )
     )
     tank_remarks: Mapped[str | None] = mapped_column(
         String(256), nullable=True, comment="备注（罐号）"

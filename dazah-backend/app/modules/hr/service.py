@@ -34,6 +34,7 @@ from app.modules.hr.attachment_parser import (
     parse_sections,
     strip_punct,
 )
+from app.modules.hr.error_contract import HrBusinessError, HrBusinessErrorCode
 from app.modules.hr.feishu import FeishuBitableSync
 from app.modules.hr.feishu.departure_datasource import DepartureBitableDataSource
 from app.modules.hr.feishu.employee_datasource import (
@@ -3117,9 +3118,20 @@ class PositionTransferRecordService:
         飞书有的记录 → upsert 到本地；
         飞书没有但本地有的记录 → 本地软删除。
         """
-        pair = await self._get_position_bitable()
+        try:
+            pair = await self._get_position_bitable()
+        except HrFeishuNotConfigured as exc:
+            raise HrBusinessError(
+                503,
+                "岗位调动飞书设置未配置",
+                HrBusinessErrorCode.HR_POSITION_TRANSFER_FEISHU_NOT_CONFIGURED,
+            ) from exc
         if not pair:
-            raise AppException(status_code=503, message="岗位调动飞书设置未配置")
+            raise HrBusinessError(
+                503,
+                "岗位调动飞书设置未配置",
+                HrBusinessErrorCode.HR_POSITION_TRANSFER_FEISHU_NOT_CONFIGURED,
+            )
         client, table_id = pair
 
         raw_records = await client.search_records(table_id, page_size=500)
@@ -3278,7 +3290,7 @@ class PositionTransferRecordService:
 
         lock_key = f"hr:position_transfer:submit_lock:{record_id}"
         if await cache_get(lock_key):
-            raise AppException(message="正在提交中，请勿重复操作")
+            raise AppException(status_code=423, message="正在提交中，请勿重复操作")
         await cache_set(lock_key, "1", ex=30)  # 30秒锁
 
         try:
@@ -3307,7 +3319,11 @@ class PositionTransferRecordService:
         if not record:
             raise NotFoundException("岗位调动记录", str(record_id))
         if record.approval_status != "草稿":
-            raise AppException(message="只有草稿状态的记录才能提交审批")
+            raise HrBusinessError(
+                409,
+                "只有草稿状态的记录才能提交审批",
+                HrBusinessErrorCode.HR_POSITION_TRANSFER_NOT_DRAFT,
+            )
 
         is_supervisor = request.is_supervisor_level
         custom_approvers = getattr(request, "custom_approvers", None) or {}
@@ -3429,7 +3445,7 @@ class PositionTransferRecordService:
 
         lock_key = f"hr:position_transfer:approve_lock:{record_id}"
         if await cache_get(lock_key):
-            raise AppException(message="正在处理中，请勿重复操作")
+            raise AppException(status_code=423, message="正在处理中，请勿重复操作")
         await cache_set(lock_key, "1", ex=30)
         try:
             return await self._do_approve_current_node(record_id, request)
@@ -3454,7 +3470,11 @@ class PositionTransferRecordService:
         if not record:
             raise NotFoundException("岗位调动记录", str(record_id))
         if not record.approval_flow:
-            raise AppException(message="该记录未提交审批流程")
+            raise HrBusinessError(
+                409,
+                "该记录未提交审批流程",
+                HrBusinessErrorCode.HR_POSITION_TRANSFER_NOT_SUBMITTED,
+            )
 
         # 深拷贝后再修改，避免 in-place 修改导致 SQLAlchemy JSONB 变更检测失败
         flow = copy.deepcopy(record.approval_flow)
@@ -3462,7 +3482,11 @@ class PositionTransferRecordService:
         steps = flow.get("steps", [])
 
         if current >= len(steps):
-            raise AppException(message="所有节点已审批完毕")
+            raise HrBusinessError(
+                409,
+                "所有节点已审批完毕",
+                HrBusinessErrorCode.HR_POSITION_TRANSFER_APPROVAL_COMPLETED,
+            )
 
         # 标记当前节点为已通过
         step = steps[current]
@@ -3512,7 +3536,11 @@ class PositionTransferRecordService:
         if not record:
             raise NotFoundException("岗位调动记录", str(record_id))
         if not record.approval_flow:
-            raise AppException(message="该记录未提交审批流程")
+            raise HrBusinessError(
+                409,
+                "该记录未提交审批流程",
+                HrBusinessErrorCode.HR_POSITION_TRANSFER_NOT_SUBMITTED,
+            )
 
         # 深拷贝后再修改
         flow = copy.deepcopy(record.approval_flow)
@@ -3520,7 +3548,11 @@ class PositionTransferRecordService:
         steps = flow.get("steps", [])
 
         if current >= len(steps):
-            raise AppException(message="所有节点已审批完毕")
+            raise HrBusinessError(
+                409,
+                "所有节点已审批完毕",
+                HrBusinessErrorCode.HR_POSITION_TRANSFER_APPROVAL_COMPLETED,
+            )
 
         step = steps[current]
         step["status"] = "rejected"
@@ -6026,18 +6058,21 @@ class AnnualTrainingPlanService:
         plan_level = plan_level or "公司级"
         department = department or ("公司" if plan_level == "公司级" else None)
         if department is None:
-            raise AppException(
-                status_code=400, message="无法从文档中识别部门，请手动指定部门"
+            raise HrBusinessError(
+                400,
+                "无法从文档中识别部门，请手动指定部门",
+                HrBusinessErrorCode.HR_ANNUAL_PLAN_DEPARTMENT_MISSING,
             )
 
         items_data, plan_remarks = _parse_plan_items_from_doc(doc)
         if not items_data:
-            raise AppException(
-                status_code=400,
-                message=(
+            raise HrBusinessError(
+                400,
+                (
                     "文档中未找到有效的培训计划数据，请确保使用 APP1/APP2 格式的 Word"
                     " 文档"
                 ),
+                HrBusinessErrorCode.HR_ANNUAL_PLAN_ITEMS_MISSING,
             )
 
         # 查找或创建计划

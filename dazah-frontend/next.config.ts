@@ -1,4 +1,6 @@
 import type { NextConfig } from 'next';
+import { moduleMenus } from './src/lib/menu-config';
+import { MENU_PAGE_UNAVAILABLE, PAGE_ACCESS_NOTICE_HEADER, PAGE_ACCESS_NOTICE_PATH, PAGE_NOT_FOUND, QUERY_PERMISSION_REQUIRED } from './src/lib/page-access-notice';
 
 const singleHostBuild = process.env.DAZAH_SINGLE_HOST_BUILD === '1';
 const isDev = process.env.NODE_ENV === 'development';
@@ -81,6 +83,25 @@ const nextConfig: NextConfig = {
         headers: securityHeaders,
       },
     ];
+  },
+
+  async rewrites() {
+    const moduleKeys = moduleMenus.map(({ key }) => key).join('|');
+    const noticeRewrite = {
+      source: `/:moduleKey(${moduleKeys})/:originalPath*`,
+      destination: `${PAGE_ACCESS_NOTICE_PATH}/:moduleKey/:originalPath*`,
+    };
+    return {
+      beforeFiles: [{
+        ...noticeRewrite,
+        has: [{ type: 'header', key: PAGE_ACCESS_NOTICE_HEADER.toLowerCase(), value: QUERY_PERMISSION_REQUIRED }],
+      }],
+      afterFiles: [],
+      fallback: [{
+        ...noticeRewrite,
+        has: [{ type: 'header', key: PAGE_ACCESS_NOTICE_HEADER.toLowerCase(), value: `(?:${MENU_PAGE_UNAVAILABLE}|${PAGE_NOT_FOUND})` }],
+      }],
+    };
   },
 
   experimental: {

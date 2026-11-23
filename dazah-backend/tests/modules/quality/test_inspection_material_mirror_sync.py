@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -440,7 +441,9 @@ async def test_fetch_incremental_paginates_and_early_stops(
             self.calls += 1
             if self.calls == 1:
                 return {"items": page1, "has_more": True, "page_token": "p2"}
-            return {"items": page2, "has_more": False}
+            if self.calls == 2:
+                return {"items": page2, "has_more": True, "page_token": "p3"}
+            pytest.fail("整页无变更后应结束批号搜索")
 
     class _PagedClient:
         def __init__(self, *, app_token, app_id, app_secret):
@@ -496,6 +499,23 @@ async def test_sync_unknown_entity_rejected(db_session: AsyncSession) -> None:
         await mirror.sync_material_page(db_session, "qc_solid_not_exist")
 
 
+async def test_incremental_sync_looks_up_only_remote_page_batches(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rows = [{"record_id": "recA", "fields": {"批号": "  M-1  ", "生产厂家": "A"}}]
+    _install_feishu_mocks(monkeypatch, rows, _fields())
+    await mirror.sync_material_page(db_session, ENTITY, incremental=False)
+
+    full_read = AsyncMock(side_effect=AssertionError("unbounded snapshot read"))
+    monkeypatch.setattr(repo, "list_rows", full_read)
+    changed = [{"record_id": "recA", "fields": {"批号": "M-1", "生产厂家": "B"}}]
+    _install_feishu_mocks(monkeypatch, changed, _fields())
+    result = await mirror.sync_material_page(db_session, ENTITY)
+    assert result["synced"] == 1
+    full_read.assert_not_awaited()
+
+
 async def test_list_filters_placeholder_rows(
     db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -528,3 +548,30 @@ async def test_get_material_mirror_fields_empty_before_sync(
     assert fields == []
     snapshot = await repo.get_snapshot(db_session, ENTITY)
     assert snapshot is None
+
+
+async def test_material_mirror_counts_only_matching_visible_rows_before_paging(
+    db_session, monkeypatch
+):
+    records = [
+        {"record_id": "old", "fields": {"批号": "B01", "生产厂家": "厂家_100%"}},
+        {"record_id": "new", "fields": {"批号": "B02", "生产厂家": "厂家_100%"}},
+        {"record_id": "wildcard", "fields": {"批号": "B03", "生产厂家": "厂家A100B"}},
+        {"record_id": "blank", "fields": {"批号": "\u3000", "生产厂家": " "}},
+    ]
+    _install_feishu_mocks(monkeypatch, _records(records), _fields())
+    await mirror.sync_material_page(db_session, ENTITY, incremental=False)
+    first = await mirror.list_material_mirror(
+        db_session, ENTITY, keyword="_100%", page_size=1
+    )
+    second = await mirror.list_material_mirror(
+        db_session, ENTITY, filters={"生产厂家": "厂家_100%"}, page=2, page_size=1
+    )
+    assert first["total"] == second["total"] == 2
+    assert [item["record_id"] for item in first["items"]] == ["new"]
+    assert [item["record_id"] for item in second["items"]] == ["old"]
+    all_visible = await mirror.list_material_mirror(
+        db_session, ENTITY, page=3, page_size=2
+    )
+    assert all_visible["total"] == 3
+    assert all_visible["items"] == []

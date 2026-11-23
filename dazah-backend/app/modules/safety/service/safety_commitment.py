@@ -28,7 +28,6 @@ from app.modules.safety.schemas.safety_commitment import (
     SafetyCommitmentCardUpdateRequest,
     SafetyCommitmentUpdateRequest,
 )
-from app.modules.safety.service import safety_commitment_risk
 from app.platform.audit.service import record_audit_log
 
 logger = logging.getLogger(__name__)
@@ -51,6 +50,7 @@ def _as_date(value: date | str) -> date:
         return date.fromisoformat(str(value).strip())
     except ValueError as exc:
         raise AppException(message=f"日期格式无效：{value}") from exc
+
 
 DEFAULT_COMMITMENT_TEMPLATE = """今日本公司郑重向全体员工作出安全承诺：
 一、当日所有生产装置、罐区、仓库均处于安全运行状态，各类安全风险得到有效管控；
@@ -106,13 +106,14 @@ def _to_item(report: SafetyCommitmentReport) -> dict[str, Any]:
         "report_date": report.report_date,
         "enterprise_status": dict(report.enterprise_status or {}),
         "commitment_text": report.commitment_text,
-            "risk_assessment": (
+        "risk_assessment": (
             dict(report.risk_assessment) if report.risk_assessment else None
         ),
         "status": report.status,
         "publisher_name": report.publisher_name,
         "published_at": report.published_at,
         "fill_source": report.fill_source,
+        "workshop_summary": list(report.workshop_summary or []) or None,
         "created_at": report.created_at,
         "updated_at": report.updated_at,
     }
@@ -197,11 +198,8 @@ async def get_or_create_report(
     db.add(report)
     await db.flush()
 
-    # 首次创建时自动生成一次 AI 研判；失败不影响日报创建
-    try:
-        await safety_commitment_risk.generate_risk_assessment(db, report)
-    except Exception:
-        logger.exception("安全承诺日报自动 AI 研判失败 date=%s", report_date)
+    # AI 研判不再在创建时自动生成（数据不全时无意义），改由车间汇总
+    # 完成时自动生成一次；网页端保留手动「重新研判」。
     await _audit(db, "create", resource_id=report.id, user_id=user_id)
     await db.commit()
     await db.refresh(report)

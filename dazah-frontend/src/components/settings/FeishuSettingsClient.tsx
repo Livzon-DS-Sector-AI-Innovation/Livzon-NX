@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useCallback, useEffect, useState } from 'react'
 import {
   ApiOutlined,
@@ -572,7 +573,7 @@ function IdentityAdmission({ tenantId, appId }: { tenantId: string; appId: strin
           else message.success(result.message)
           await load()
         } catch (error) {
-          message.error(error instanceof Error ? error.message : '飞书通讯录同步失败')
+          message.error(getUserErrorMessage(error instanceof Error ? error.message : '飞书通讯录同步失败'))
           throw error
         } finally {
           setSyncing(false)
@@ -1036,7 +1037,7 @@ function TraceDelivery({
                   downloadTextFile(exported.filename, exported.content)
                   message.success('已导出脱敏链路诊断文件')
                 } catch (error) {
-                  message.error(error instanceof Error ? error.message : '调用链路导出失败')
+                  message.error(getUserErrorMessage(error instanceof Error ? error.message : '调用链路导出失败'))
                 }
               }}
             >
@@ -1106,7 +1107,7 @@ export default function FeishuSettingsClient() {
       const result = await getAgentTrace(normalizedTraceId)
       setTraceQuery({ traceId: normalizedTraceId, result })
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '调用链路查询失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '调用链路查询失败'))
     }
   }, [message])
 

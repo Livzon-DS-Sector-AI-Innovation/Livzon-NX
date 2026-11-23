@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import { App, Button, Input, InputNumber, Space, Spin, Tag } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
@@ -305,7 +306,7 @@ export default function AiWrittenExamClient({ sessionData, initialPayload, activ
         message.success(`已生成 ${total} 道题目`)
       }
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || 'AI 出题失败，请重试')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || 'AI 出题失败，请重试'))
     } finally {
       setGenerating(false)
       setGeneratingProgress('')
@@ -383,7 +384,7 @@ export default function AiWrittenExamClient({ sessionData, initialPayload, activ
       for (const e of entries) downloadBytes(e.bytes, e.name)
       message.success('试卷与答案导出成功（zip 内含两份 Word：试卷卷 + 答案卷）')
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '导出失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '导出失败'))
     } finally {
       setExporting(false)
     }

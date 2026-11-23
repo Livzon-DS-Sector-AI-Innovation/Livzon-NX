@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useState } from 'react'
 import { App, Modal, Spin, Table, Typography } from 'antd'
 import * as XLSX from 'xlsx'
@@ -109,7 +110,7 @@ export default function OnboardingAttachmentPreviewModal({ open, fileName, blob,
       }
     } catch (e) {
       console.error('附件预览渲染失败:', e)
-      message.error(e?.message || '预览失败')
+      message.error(getUserErrorMessage(e?.message || '预览失败'))
       setPreviewType('other')
     } finally {
       setLoading(false)

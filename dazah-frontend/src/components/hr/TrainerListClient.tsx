@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useEffect, useState } from 'react'
 import {
   Table, Button, Space, Modal, Form, Input, DatePicker, Select,
@@ -121,7 +122,7 @@ export default function TrainerListClient() {
         .catch((e) => console.error('刷新部门列表失败', e))
     } catch (error) {
       // 透传真实失败原因（如 403 权限、422 校验），不再笼统提示
-      message.error((error instanceof Error ? error.message : '') || '操作失败')
+      message.error(getUserErrorMessage((error instanceof Error ? error.message : '') || '操作失败'))
     }
   }
 
@@ -147,7 +148,7 @@ export default function TrainerListClient() {
         .then(setDepartments)
         .catch((e) => console.error('刷新部门列表失败', e))
     } catch (error) {
-      message.error((error instanceof Error ? error.message : '') || '导入失败')
+      message.error(getUserErrorMessage((error instanceof Error ? error.message : '') || '导入失败'))
     } finally {
       setImporting(false)
     }

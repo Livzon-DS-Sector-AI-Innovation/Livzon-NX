@@ -12,6 +12,8 @@ import {
 } from '@ant-design/icons'
 import { useRouter } from 'next/navigation'
 import { getSafeListReturnHref } from '@/lib/list-url-state'
+import { getActionErrorMessage, unwrapServerActionResult } from '@/lib/server-action-result'
+import { summarizeUpload } from './upload-feedback'
 import type {
   ValidationAuditTask, ValidationAuditFileListItem, ValidationAuditIssue,
   ValidationAuditReport, IssueType,
@@ -128,14 +130,14 @@ export default function ValidationAuditDetailClient({
 
     setUploading(true)
     try {
-      const result = await uploadValidationAuditFiles(task.id, formData)
-      if (result.success) {
-        message.success('文件上传成功')
-        setUploadFileList([])
-        await refreshData()
-      } else {
-        message.error(result.message)
-      }
+      const items = unwrapServerActionResult(await uploadValidationAuditFiles(task.id, formData))
+      const summary = summarizeUpload(items)
+      if (summary.failedIndexes.size) message.warning(summary.message)
+      else message.success(summary.message)
+      setUploadFileList(uploadFileList.filter((_, index) => summary.failedIndexes.has(index)))
+      if (summary.succeeded > 0) await refreshData()
+    } catch (error) {
+      message.error(getActionErrorMessage(error, '审核文件上传'))
     } finally {
       setUploading(false)
     }
@@ -145,13 +147,11 @@ export default function ValidationAuditDetailClient({
   const handleParse = async () => {
     setParsing(true)
     try {
-      const result = await parseValidationAuditFiles(task.id)
-      if (result.success) {
-        message.success('文件解析完成')
-        await refreshData()
-      } else {
-        message.error(result.message)
-      }
+      unwrapServerActionResult(await parseValidationAuditFiles(task.id))
+      message.success('文件解析完成')
+      await refreshData()
+    } catch (error) {
+      message.error(getActionErrorMessage(error, '审核文件解析'))
     } finally {
       setParsing(false)
     }
@@ -160,13 +160,11 @@ export default function ValidationAuditDetailClient({
   const handleAudit = async () => {
     setAuditing(true)
     try {
-      const result = await runValidationAudit(task.id)
-      if (result.success) {
-        message.success('审核完成')
-        await refreshData()
-      } else {
-        message.error(result.message)
-      }
+      unwrapServerActionResult(await runValidationAudit(task.id))
+      message.success('审核完成')
+      await refreshData()
+    } catch (error) {
+      message.error(getActionErrorMessage(error, '验证审核执行'))
     } finally {
       setAuditing(false)
     }

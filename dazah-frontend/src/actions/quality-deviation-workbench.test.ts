@@ -60,6 +60,7 @@ describe('quality deviation workbench server actions', () => {
       1,
       'http://backend.test/api/v1/quality/historical-deviations/record-1/attachments',
       expect.objectContaining({ method: 'POST' }),
+      {},
     )
     expect(mocks.actionFetch).toHaveBeenNthCalledWith(
       2,
@@ -92,6 +93,7 @@ describe('quality deviation workbench server actions', () => {
       2,
       'http://backend.test/api/v1/quality/deviation-workbench/attachments',
       expect.objectContaining({ method: 'POST' }),
+      {},
     )
     expect(mocks.actionFetch).toHaveBeenNthCalledWith(
       3,
@@ -137,10 +139,11 @@ describe('quality deviation workbench server actions', () => {
     formData.append('files', new File(['x'], 'a.docx'))
 
     const result = await batchImportHistoricalDeviations(formData)
-    expect(result?.total).toBe(2)
+    expect(result).toMatchObject({ ok: true, data: { total: 2 } })
     expect(mocks.actionFetch).toHaveBeenCalledWith(
       'http://backend.test/api/v1/quality/historical-deviations/batch-import',
       expect.objectContaining({ method: 'POST', body: formData }),
+      expect.objectContaining({ 400: expect.any(Object) }),
     )
     expect(mocks.revalidatePath).toHaveBeenCalledWith(
       '/quality/deviations/history',

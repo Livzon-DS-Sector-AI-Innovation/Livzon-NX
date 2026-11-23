@@ -19,7 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
-from app.core.redis import cache_set
+from app.core.redis import cache_get, cache_set
 from app.modules.safety.models import (
     SafetyFeishuAppSettings,
     WorkPermit,
@@ -420,6 +420,9 @@ async def push_approval_card_for_next_node(
                 message_id,
                 ex=7 * 86400,
             )
+        # 批准后交底：作业人学习签字卡 + 外部作业人转发链接卡
+        if permit.status == PERMIT_STATUS_APPROVED:
+            await push_brief_cards(db, permit)
     except Exception:
         logger.exception(
             "审批卡推送失败: permit=%s",
@@ -465,6 +468,318 @@ async def refresh_or_push_approval_card(
         )
 
 
+# ── 批准后交底：作业人学习签字（brief_worker_{i} 签字行） ──
+
+_BRIEF_TOKEN_TTL_SECONDS = 7 * 24 * 3600  # 转发链接场景，给足有效期
+
+
+async def _brief_signed_keys(db: AsyncSession, permit: WorkPermit) -> set[str]:
+    from app.modules.safety.service.work_permit_templates import (
+        brief_sign_key,
+        brief_worker_entries,
+    )
+
+    entries = brief_worker_entries(permit.persons)
+    if not entries:
+        return set()
+    keys = [brief_sign_key(i) for i, _ in entries]
+    from app.modules.safety.models import WorkPermitSignature
+
+    rows = await db.execute(
+        select(WorkPermitSignature.sign_key).where(
+            WorkPermitSignature.permit_id == permit.id,
+            WorkPermitSignature.round == permit.approval_round,
+            WorkPermitSignature.sign_key.in_(keys),
+            WorkPermitSignature.is_deleted.is_(False),
+        )
+    )
+    return set(rows.scalars().all())
+
+
+def _brief_sign_url(permit: WorkPermit, sign_key: str, name: str) -> str:
+    from app.modules.safety.service.work_permit_signatures import (
+        build_sign_url,
+        create_sign_token,
+    )
+
+    token = create_sign_token(
+        permit_id=permit.id,
+        round_no=permit.approval_round,
+        sign_key=sign_key,
+        node_id=None,
+        open_id="",
+        signer_name=name,
+        ttl_seconds=_BRIEF_TOKEN_TTL_SECONDS,
+    )
+    return build_sign_url(token)
+
+
+async def _brief_base_elements(
+    db: AsyncSession, permit: WorkPermit
+) -> list[dict[str, Any]]:
+    """交底卡基底：完整票面 + 人员证件核验 + 签字记录。"""
+    base: list[dict[str, Any]] = [_md(_ticket_markdown(permit)), _hr()]
+    try:
+        cert_section = await _persons_cert_section(db, permit, with_images=False)
+        if cert_section:
+            base.extend(cert_section)
+            base.append(_hr())
+    except Exception:
+        logger.exception("交底卡证件明细渲染失败 permit=%s", permit.permit_no)
+    records = await _sign_records_markdown(db, permit)
+    if records:
+        base.extend([_md(records), _hr()])
+    return base
+
+
+async def _brief_forward_entries(
+    db: AsyncSession, permit: WorkPermit, pending: list[tuple[int, dict[str, Any]]]
+) -> list[tuple[int, dict[str, Any]]]:
+    """待签作业人中收不到直推卡的人（无账号 / 账号未绑飞书）。"""
+    forward: list[tuple[int, dict[str, Any]]] = []
+    for index, person in pending:
+        union_id = None
+        if person.get("user_id"):
+            union_id = await _recipient_union_id(db, UUID(str(person["user_id"])))
+        if not union_id:
+            forward.append((index, person))
+    return forward
+
+
+def _brief_external_elements(
+    permit: WorkPermit,
+    signed_keys: set[str],
+    forward: list[tuple[int, dict[str, Any]]],
+) -> list[dict[str, Any]]:
+    """外部作业人转发卡：进度 + 缺签人员签名链接按钮（申请人转发手机签）。"""
+    from app.modules.safety.service.work_permit_templates import (
+        brief_sign_key,
+        brief_worker_entries,
+    )
+
+    entries = brief_worker_entries(permit.persons)
+    progress = []
+    for index, person in entries:
+        mark = "✔" if brief_sign_key(index) in signed_keys else "⏳"
+        progress.append(f"{mark} {person.get('name') or '—'}")
+    elements: list[dict[str, Any]] = [
+        _md(
+            "🔔 **本票已批准。**以下作业人收不到飞书卡片，请把对应**签名链接**发给"
+            "本人手机打开，学习票面后手写签名确认交底（链接无需登录，7 天内有效）。"
+        ),
+        _md("交底进度：" + "｜".join(progress)),
+        _hr(),
+    ]
+    for index, person in forward:
+        name = str(person.get("name") or f"作业人{index + 1}")
+        elements.append(
+            {
+                "tag": "button",
+                "text": {"tag": "plain_text", "content": f"🖊 {name}（签名链接）"},
+                "type": "default",
+                "url": _brief_sign_url(permit, brief_sign_key(index), name),
+            }
+        )
+    return elements
+
+
+def _brief_cache_key(kind: str, union_id: str, permit: WorkPermit) -> str:
+    return f"wp_brief_{kind}:{union_id}:{permit.id}:{permit.approval_round}"
+
+
+async def push_brief_cards(db: AsyncSession, permit: WorkPermit) -> None:
+    """批准后交底：作业人直推学习签字卡；收不到卡的汇总给申请人转发链接。"""
+    try:
+        from app.modules.safety.feishu.notification import update_card
+        from app.modules.safety.service.work_permit_templates import (
+            brief_sign_key,
+            brief_worker_entries,
+        )
+
+        entries = brief_worker_entries(permit.persons)
+        if not entries:
+            return
+        signed_keys = await _brief_signed_keys(db, permit)
+        pending = [
+            (index, person)
+            for index, person in entries
+            if brief_sign_key(index) not in signed_keys
+        ]
+        if not pending:
+            return
+        base = await _brief_base_elements(db, permit)
+        forward: list[tuple[int, dict[str, Any]]] = []
+        for index, person in pending:
+            union_id = None
+            if person.get("user_id"):
+                union_id = await _recipient_union_id(db, UUID(str(person["user_id"])))
+            if not union_id:
+                forward.append((index, person))
+                continue
+            cache_key = _brief_cache_key("card", union_id, permit)
+            cached = await cache_get(cache_key)
+            if cached:
+                continue  # 已推过，等待签名落地 PATCH
+            name = str(person.get("name") or "")
+            elements = list(base)
+            elements.append(
+                _md(
+                    "🔔 **本票已批准。**请学习以上完整票面（含风险辨识与安全措施），"
+                    "学习完成后手写签名确认交底。"
+                )
+            )
+            elements.append(_hr())
+            elements.append(
+                {
+                    "tag": "button",
+                    "text": {"tag": "plain_text", "content": "🖊 手写签名（交底确认）"},
+                    "type": "primary",
+                    "url": _brief_sign_url(permit, brief_sign_key(index), name),
+                }
+            )
+            message_id = await send_raw_card_by_union_id(
+                union_id,
+                _card_for(
+                    elements,
+                    template="orange",
+                    title=f"作业票交底学习 · {permit.permit_no}",
+                ),
+            )
+            if message_id:
+                await cache_set(cache_key, message_id, ex=7 * 86400)
+        if not forward:
+            return
+        creator_union = (
+            await _recipient_union_id(db, permit.created_by)
+            if permit.created_by
+            else None
+        )
+        if not creator_union:
+            logger.info(
+                "申请人未绑定飞书，外部作业人转发卡无法推送 permit=%s",
+                permit.permit_no,
+            )
+            return
+        ext_key = _brief_cache_key("ext", creator_union, permit)
+        cached_ext = await cache_get(ext_key)
+        card = _card_for(
+            await _brief_forward_card_elements(db, permit, signed_keys, forward),
+            template="orange",
+            title=f"作业票交底 · 外部作业人签名转发（{permit.permit_no}）",
+        )
+        if cached_ext:
+            await update_card(cached_ext, card)
+        else:
+            message_id = await send_raw_card_by_union_id(creator_union, card)
+            if message_id:
+                await cache_set(ext_key, message_id, ex=7 * 86400)
+    except Exception:
+        logger.exception("交底卡推送失败 permit=%s", permit.permit_no)
+
+
+async def _brief_forward_card_elements(
+    db: AsyncSession,
+    permit: WorkPermit,
+    signed_keys: set[str],
+    forward: list[tuple[int, dict[str, Any]]],
+) -> list[dict[str, Any]]:
+    """转发卡内容：基底票面 + 进度/链接区（PATCH 刷新时票面同样保留）。"""
+    base = await _brief_base_elements(db, permit)
+    return [*base, *_brief_external_elements(permit, signed_keys, forward)]
+
+
+async def on_brief_signature_landed(
+    db: AsyncSession, permit_id: UUID, sign_key: str
+) -> None:
+    """交底作业人签名落地：PATCH 本人卡→已完成；刷新申请人转发卡；全齐通知。"""
+    try:
+        from app.modules.safety.feishu.notification import update_card
+        from app.modules.safety.service.work_permit_templates import (
+            brief_sign_key,
+            brief_worker_entries,
+        )
+
+        permit = await _resolve_permit(db, permit_id)
+        if permit is None:
+            return
+        entries = brief_worker_entries(permit.persons)
+        suffix = sign_key.rsplit("_", 1)[-1]
+        index = int(suffix) if suffix.isdigit() else -1
+        person = next((p for i, p in entries if i == index), None)
+        name = str(person.get("name") or "作业人") if person else "作业人"
+        # 1) 本人交底卡 → 已完成
+        if person and person.get("user_id"):
+            union_id = await _recipient_union_id(db, UUID(str(person["user_id"])))
+            cached = (
+                await cache_get(_brief_cache_key("card", union_id, permit))
+                if union_id
+                else None
+            )
+            if cached:
+                await update_card(
+                    cached,
+                    _card_for(
+                        [
+                            _md(f"✔ **学习签字完成**（{name}）"),
+                            _hr(),
+                            _md(
+                                "本票交底签名已记录。全部作业人签完后，"
+                                "验票人方可确认开工。"
+                            ),
+                        ],
+                        template="green",
+                        title=f"作业票交底 · 已完成（{permit.permit_no}）",
+                    ),
+                )
+        # 2) 申请人转发卡刷新 / 全部完成通知
+        signed_keys = await _brief_signed_keys(db, permit)
+        missing = [(i, p) for i, p in entries if brief_sign_key(i) not in signed_keys]
+        creator_union = (
+            await _recipient_union_id(db, permit.created_by)
+            if permit.created_by
+            else None
+        )
+        if not creator_union:
+            return
+        ext_key = _brief_cache_key("ext", creator_union, permit)
+        cached_ext = await cache_get(ext_key)
+        if missing:
+            if not cached_ext:
+                return
+            forward = await _brief_forward_entries(db, permit, missing)
+            await update_card(
+                cached_ext,
+                _card_for(
+                    await _brief_forward_card_elements(
+                        db, permit, signed_keys, forward
+                    ),
+                    template="orange",
+                    title=f"作业票交底 · 外部作业人签名转发（{permit.permit_no}）",
+                ),
+            )
+            return
+        done_card = _card_for(
+            [
+                _md("✔ **交底签字全部完成**"),
+                _hr(),
+                _md(
+                    f"{permit.permit_no} 全部作业人已完成交底学习签字，"
+                    "验票人可进行确认开工。"
+                ),
+            ],
+            template="green",
+            title=f"交底签字完成 · {permit.permit_no}",
+        )
+        if cached_ext:
+            await update_card(cached_ext, done_card)
+        else:
+            await send_raw_card_by_union_id(creator_union, done_card)
+    except Exception:
+        logger.exception(
+            "交底签名落地处理失败 permit=%s sign_key=%s", permit_id, sign_key
+        )
+
+
 async def _resolve_permit(
     db: AsyncSession, permit_or_id: UUID | WorkPermit
 ) -> WorkPermit | None:
@@ -485,6 +800,14 @@ async def _next_stage_elements(
     from app.modules.safety.service.work_permit_card_forms import _hr, _md
 
     base: list[dict[str, Any]] = [_md(_ticket_markdown(permit)), _hr()]
+    # 人员证件核验明细 + 证件影像（审批人直接在卡上核对），失败降级不影响审批
+    try:
+        cert_section = await _persons_cert_section(db, permit, with_images=True)
+        if cert_section:
+            base.extend(cert_section)
+            base.append(_hr())
+    except Exception:
+        logger.exception("人员证件明细渲染失败 permit=%s", permit.permit_no)
     records = await _sign_records_markdown(db, permit)
     if records:
         base.extend([_md(records), _hr()])
@@ -625,7 +948,9 @@ async def _next_stage_elements(
     if permit.status == PERMIT_STATUS_COMPLETED:
         if permit.created_by is None:
             return None, [], ""
-        download_url = await _download_url(permit.id)
+        # 手机可达优先：完工即生成 PDF 并中转上传到公网网关（180），
+        # 手机直接下载；网关未配置/生成上传失败时回退本环境链接（电脑端）
+        download_url = await _relay_or_local_pdf_url(db, permit)
         if not download_url:
             return None, [], ""
         elements = list(base)
@@ -644,6 +969,50 @@ async def _next_stage_elements(
         )
 
     return None, [], ""
+
+
+async def _relay_or_local_pdf_url(db: AsyncSession, permit: WorkPermit) -> str | None:
+    """完工 PDF 下载地址：配置公网网关时生成并中转上传，返回公网链接；
+    未配置或生成/上传失败时回退本环境链接（电脑端下载）。"""
+    settings = get_settings()
+    gateway = (settings.SIGN_RELAY_GATEWAY_BASE or "").rstrip("/")
+    relay_key = settings.SIGN_RELAY_KEY or ""
+    local_url = await _download_url(permit.id)
+    if not gateway or not relay_key:
+        return local_url
+    try:
+        from app.modules.safety.service.work_permit_pdf import render_permit_pdf
+
+        pdf_bytes = await render_permit_pdf(db, permit.id)
+        if not pdf_bytes:
+            return local_url
+        import secrets
+
+        import httpx
+
+        pdf_key = f"{permit.permit_no}-{secrets.token_urlsafe(16)}"
+        async with httpx.AsyncClient(timeout=60) as http:
+            resp = await http.post(
+                f"{gateway}/api/v1/safety/sign-relay/pdf/{pdf_key}",
+                headers={
+                    "X-Relay-Key": relay_key,
+                    "Content-Type": "application/pdf",
+                },
+                content=pdf_bytes,
+            )
+        if resp.status_code != 200:
+            logger.warning(
+                "完工 PDF 中转上传失败: %s %s",
+                resp.status_code,
+                resp.text[:120],
+            )
+            return local_url
+        return (
+            f"{gateway}/api/v1/safety/sign-relay/pdf/{pdf_key}?name={permit.permit_no}"
+        )
+    except Exception:
+        logger.exception("完工 PDF 中转异常，回退本环境链接")
+        return local_url
 
 
 async def _accept_stage_elements(
@@ -710,13 +1079,41 @@ async def _accept_node(db: AsyncSession, permit: WorkPermit) -> WorkPermitNode |
     return result.scalar_one_or_none()
 
 
-async def _sign_records_markdown(db: AsyncSession, permit: WorkPermit) -> str:
-    """签字记录（逐节点：状态、签字人、时间、是否留手写签名）。
+_INITIATOR_SIGN_LABELS: dict[str, str] = {
+    "initiator": "发起人（作业负责人）",
+    "briefer": "安全交底人",
+    "briefer_receiver": "接受交底人",
+}
 
-    最终卡/审批卡都展示，验收时可核对每一级是谁签的。
+
+async def _sign_records_markdown(db: AsyncSession, permit: WorkPermit) -> str:
+    """签字记录总览：发起签字行 / 审批节点 / 交底作业人 三段。
+
+    最终卡/审批卡都展示，验收时可核对每一级是谁签的、交底是否签齐。
     """
     from app.modules.safety.models import WorkPermitSignature
+    from app.modules.safety.service.work_permit_templates import (
+        INITIATOR_SIGN_KEYS,
+        brief_sign_key,
+        brief_worker_entries,
+    )
 
+    def _when(value: datetime | None) -> str:
+        return value.strftime("%m-%d %H:%M") if value else ""
+
+    sig_rows = (
+        (
+            await db.execute(
+                select(WorkPermitSignature).where(
+                    WorkPermitSignature.permit_id == permit.id,
+                    WorkPermitSignature.round == permit.approval_round,
+                    WorkPermitSignature.is_deleted.is_(False),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
     rows = (
         await db.execute(
             select(WorkPermitNode, User.name)
@@ -729,20 +1126,32 @@ async def _sign_records_markdown(db: AsyncSession, permit: WorkPermit) -> str:
             .order_by(WorkPermitNode.seq)
         )
     ).all()
-    if not rows:
-        return ""
-    sig_node_ids = set(
-        (
-            await db.execute(
-                select(WorkPermitSignature.node_id).where(
-                    WorkPermitSignature.permit_id == permit.id,
-                    WorkPermitSignature.round == permit.approval_round,
-                    WorkPermitSignature.node_id.isnot(None),
-                    WorkPermitSignature.is_deleted.is_(False),
-                )
-            )
-        ).scalars()
-    )
+
+    initiator_sigs = {
+        s.sign_key: s
+        for s in sig_rows
+        if s.node_id is None and s.sign_key in INITIATOR_SIGN_KEYS
+    }
+    brief_sigs = {
+        s.sign_key: s
+        for s in sig_rows
+        if s.node_id is None and s.sign_key.startswith("brief_worker_")
+    }
+    sig_node_ids = {s.node_id for s in sig_rows if s.node_id is not None}
+
+    lines = ["**签字记录**"]
+    # 发起签字行（发起人 / 安全交底人 / 接受交底人）
+    init_parts = []
+    for sign_key in INITIATOR_SIGN_KEYS:
+        sig = initiator_sigs.get(sign_key)
+        label = _INITIATOR_SIGN_LABELS.get(sign_key, sign_key)
+        if sig is not None:
+            who = f" {sig.signer_name}" if sig.signer_name else ""
+            init_parts.append(f"✔ {label}{who} {_when(sig.signed_at)} 🖊")
+        else:
+            init_parts.append(f"⏳ {label}")
+    lines.append("发起行：" + "｜".join(init_parts))
+    # 审批节点
     marks = {
         "approved": "✅",
         "rejected": "❌",
@@ -750,21 +1159,193 @@ async def _sign_records_markdown(db: AsyncSession, permit: WorkPermit) -> str:
         "waiting": "⏸",
         "skipped": "—",
     }
-    lines = ["**签字记录**"]
     for node, acted_name in rows:
         mark = marks.get(node.status, "")
         who = acted_name or ""
         when = node.acted_at.strftime("%m-%d %H:%M") if node.acted_at else ""
-        sig = " 🖊" if node.id in sig_node_ids else ""
-        suffix = f"（{who} {when}{sig}）" if who or when else ""
+        sig_mark = " 🖊" if node.id in sig_node_ids else ""
+        suffix = f"（{who} {when}{sig_mark}）" if who or when else ""
         lines.append(f"{node.seq}. {mark} {node.node_name}{suffix}")
-    return "\n".join(lines)
+    # 交底作业人（批准后学习签字）
+    entries = brief_worker_entries(permit.persons)
+    if entries:
+        brief_parts = []
+        for index, person in entries:
+            sig = brief_sigs.get(brief_sign_key(index))
+            nm = str(person.get("name") or "—")
+            if sig is not None:
+                brief_parts.append(f"✔ {nm} {_when(sig.signed_at)} 🖊")
+            else:
+                brief_parts.append(f"⏳ {nm}")
+        lines.append("交底作业人：" + "｜".join(brief_parts))
+    return "\n".join(lines) if len(lines) > 1 else ""
+
+
+_CERT_IMAGE_MAX = 6  # 审批卡最多嵌入的证件影像张数（防超元素上限）
+
+
+async def _persons_cert_section(
+    db: AsyncSession, permit: WorkPermit, *, with_images: bool
+) -> list[dict[str, Any]]:
+    """人员与证件核验区块：每岗位一行证书明细（类别/证号/有效期/状态），
+    监护人行 🛡 标记；with_images=True 时把证件影像（图片附件）上传飞书
+    并以 img 元素嵌入（整卡最多 _CERT_IMAGE_MAX 张）。"""
+    from datetime import date, timedelta
+
+    from app.modules.safety.models import (
+        SpecialWorkCertificate,
+        SpecialWorkCertificateFile,
+    )
+    from app.modules.safety.service.work_permit_templates import (
+        CERTIFICATE_CATEGORIES,
+        PERSON_ROLE_CERT_CATEGORIES,
+        PERSON_ROLE_LABELS,
+    )
+
+    cat_labels = {c["value"]: c["label"] for c in CERTIFICATE_CATEGORIES}
+    cert_ids: list[str] = []
+    for p in permit.persons or []:
+        cid = str(p.get("certificate_id") or "")
+        if cid:
+            cert_ids.append(cid)
+
+    cert_by_id: dict[str, Any] = {}
+    if cert_ids:
+        uuid_ids: list[UUID] = []
+        for x in cert_ids:
+            try:
+                uuid_ids.append(UUID(x))
+            except ValueError:
+                continue
+        cert_rows = (
+            (
+                await db.execute(
+                    select(SpecialWorkCertificate).where(
+                        SpecialWorkCertificate.id.in_(uuid_ids),
+                        SpecialWorkCertificate.is_deleted.is_(False),
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        cert_by_id = {str(r.id): r for r in cert_rows}
+
+    today = date.today()
+    soon = today + timedelta(days=30)
+    rows: list[str] = []
+    img_candidates: list[tuple[str, str]] = []  # (storage_key, 标题)
+
+    def _status_mark(cert: Any) -> str:
+        if cert.status == "revoked":
+            return "❌已吊销"
+        if cert.expiry_date and cert.expiry_date < today:
+            return "❌已过期"
+        if cert.expiry_date and cert.expiry_date <= soon:
+            return f"⚠️{cert.expiry_date:%m-%d}到期"
+        return "✔有效"
+
+    for p in permit.persons or []:
+        role_key = str(p.get("role") or "")
+        role_label = PERSON_ROLE_LABELS.get(role_key, role_key)
+        prefix = "🛡 " if "guardian" in role_key else ""
+        name = str(p.get("name") or "—")
+        cid = str(p.get("certificate_id") or "")
+        cert = cert_by_id.get(cid) if cid else None
+        if cert is not None:
+            cat = cat_labels.get(cert.certificate_category, cert.certificate_category)
+            expiry = (
+                cert.expiry_date.strftime("%Y-%m-%d") if cert.expiry_date else "长期"
+            )
+            mark = _status_mark(cert)
+            rows.append(
+                f"{prefix}{role_label}：{name}｜{cat} {cert.certificate_no or '—'}"
+                f"｜有效至 {expiry} {mark}"
+            )
+            files = (
+                (
+                    await db.execute(
+                        select(SpecialWorkCertificateFile).where(
+                            SpecialWorkCertificateFile.certificate_id == cert.id,
+                            SpecialWorkCertificateFile.is_deleted.is_(False),
+                        )
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            for f in files:
+                ct = (f.content_type or "").lower()
+                if ct.startswith("image/"):
+                    img_candidates.append((f.storage_key, f"{name}·{cat}证件"))
+                    break
+                if ct == "application/pdf":
+                    rows.append(f"　📎 附件：{f.file_name}（PDF 请在平台查看）")
+                    break
+        elif p.get("certificate_no"):
+            rows.append(
+                f"{prefix}{role_label}：{name}｜证件号 {p['certificate_no']}"
+                + ("〔外部人员〕" if p.get("external") else "")
+            )
+        else:
+            needs_cert = role_key in PERSON_ROLE_CERT_CATEGORIES
+            rows.append(
+                f"{prefix}{role_label}：{name}"
+                + ("　⚠️ 未关联证件" if needs_cert else "")
+            )
+
+    if not rows:
+        return []
+    lines: list[str] = ["**人员与证件核验**", *rows]
+
+    elements: list[dict[str, Any]] = [_md("\n".join(lines))]
+
+    if with_images:
+        from app.modules.safety.feishu.notification import (
+            upload_image_bytes_to_feishu,
+        )
+        from app.modules.safety.service.work_permit_files import read_object
+
+        uploaded = 0
+        import asyncio
+
+        for storage_key, title in img_candidates[:_CERT_IMAGE_MAX]:
+            found = await asyncio.to_thread(
+                read_object, "work-certificates", storage_key
+            )
+            if not found:
+                continue
+            data, _ct = found
+            image_key = await upload_image_bytes_to_feishu(
+                data, cache_key=storage_key, filename="certificate.jpg"
+            )
+            if image_key:
+                elements.append(
+                    {
+                        "tag": "img",
+                        "img_key": image_key,
+                        "alt": {"tag": "plain_text", "content": title},
+                    }
+                )
+                uploaded += 1
+    return elements
 
 
 async def _gas_records_markdown(db: AsyncSession, permit: WorkPermit) -> str:
     """作业期间气体检测记录表 + 下次复检时间（超期红字警示）。"""
 
+    from zoneinfo import ZoneInfo
+
     from app.modules.safety.models import WorkPermitGasAnalysis
+
+    bj = ZoneInfo("Asia/Shanghai")
+
+    def _bj(dt_value: datetime) -> datetime:
+        """统一转北京时间（库内 UTC 转 +08:00；naive 视为已是北京并附加时区，
+        保证后续比较恒为 aware）。"""
+        if dt_value.tzinfo is not None:
+            return dt_value.astimezone(bj)
+        return dt_value.replace(tzinfo=bj)
 
     rows = (
         (
@@ -790,9 +1371,10 @@ async def _gas_records_markdown(db: AsyncSession, permit: WorkPermit) -> str:
         items_txt = "；".join(
             f"{it.get('name')}={it.get('value') or '-'}" for it in (r.items or [])
         )
+        shown = _bj(r.sampled_at).strftime("%m-%d %H:%M")
         lines.append(
-            f"{i}. {r.sampled_at:%m-%d %H:%M}{tag} "
-            f"{r.analysis_point or ''}｜{items_txt}｜"
+            f"{i}. {shown}{tag} "
+            f"{r.analysis_point or '—'}｜{items_txt}｜"
             f"分析人 {r.analyst_name or '—'}"
         )
     if not rows:
@@ -802,10 +1384,9 @@ async def _gas_records_markdown(db: AsyncSession, permit: WorkPermit) -> str:
     if cycle:
         base_time = rows[-1].sampled_at if rows else permit.actual_start_time
         if base_time is not None:
-            if base_time.tzinfo is not None:
-                base_time = base_time.replace(tzinfo=None)
-            due = base_time + timedelta(minutes=cycle)
-            if datetime.now() > due:
+            due = _bj(base_time) + timedelta(minutes=cycle)
+            now_local = datetime.now(bj)
+            if now_local > due:
                 lines.append(
                     f"⚠️ **复检已超期**（应不晚于 {due:%m-%d %H:%M}），"
                     "请立即停止作业并复检"
@@ -910,6 +1491,9 @@ async def refresh_active_gas_card(
 async def active_gas_card(db: AsyncSession, permit: WorkPermit) -> dict[str, Any]:
     """作业中"活的气体检测记录卡"（发「复检」列表与推送共用）。"""
     base: list[dict[str, Any]] = [_md(_ticket_markdown(permit)), _hr()]
+    records = await _sign_records_markdown(db, permit)
+    if records:
+        base.extend([_md(records), _hr()])
     base.append(_md(await _gas_records_markdown(db, permit)))
     base.append(_hr())
     base.extend(_gas_form_elements(permit))

@@ -529,49 +529,24 @@ def _row_to_item(row: QualityItemsPageRow, columns: list[str]) -> dict[str, Any]
     return item
 
 
-async def _load_page(
-    db: AsyncSession, page_key: str
-) -> tuple[Any, list[str], list[QualityItemsPageRow], int]:
-    snapshot = await repo.get_snapshot(db, page_key)
-    if snapshot is None:
-        return None, [], [], 0
-    columns = [
-        str(col.get("key")) for col in (snapshot.columns or []) if col.get("key")
-    ]
-    rows, total = await repo.list_rows(db, snapshot.id, limit=None)
-    return snapshot, columns, rows, total
-
-
-async def _inventory_link_index(
-    db: AsyncSession,
-) -> dict[str, dict[str, Any]]:
-    """库存镜像 record_id -> 行，供入出库"物资名"link 回填。"""
-    _, columns, rows, _total = await _load_page(db, PAGE_INVENTORY)
-    index: dict[str, dict[str, Any]] = {}
-    for row in rows:
-        item = _row_to_item(row, columns)
-        index[row.source_record_id] = item
-    return index
-
-
-def _fill_from_inventory(
-    item: dict[str, Any],
-    link_record_ids: list[str],
-    inventory_index: dict[str, dict[str, Any]],
+def _display_item(
+    row: QualityItemsPageRow,
+    columns: list[str],
+    stock: dict[str, Any] | None,
+    stock_columns: set[str],
 ) -> dict[str, Any]:
-    if item.get("物资名称") and item.get("规格型号"):
+    item = _row_to_item(row, columns)
+    item.pop("__link_record_ids", None)
+    if stock is None:
         return item
-    if not link_record_ids:
-        return item
-    inv = inventory_index.get(link_record_ids[0])
-    if not inv:
-        return item
+    visible_stock = {key: stock.get(key) for key in stock_columns}
     if not item.get("物资名称"):
-        item["物资名称"] = inv.get("物资名称") or inv.get("物资名（规格）")
-    if not item.get("规格型号"):
-        item["规格型号"] = inv.get("规格型号")
-    if not item.get("当前库存"):
-        item["当前库存"] = inv.get("当前库存")
+        item["物资名称"] = visible_stock.get("物资名称") or visible_stock.get(
+            "物资名（规格）"
+        )
+    for key in ("规格型号", "当前库存"):
+        if not item.get(key):
+            item[key] = visible_stock.get(key)
     return item
 
 
@@ -588,58 +563,47 @@ async def list_items_mirror(
 
     无镜像行时返回 configured=False 空页（降级由路由层处理）。
     """
-    snapshot, columns, rows, total = await _load_page(db, page_key)
+    snapshot = await repo.get_snapshot(db, page_key)
     if snapshot is None:
-        return {"items": [], "total": 0, "page": page, "page_size": page_size,
-                "configured": False, "fields": [], "last_sync_time": None}
+        return {
+            "items": [],
+            "total": 0,
+            "page": page,
+            "page_size": page_size,
+            "configured": False,
+            "fields": [],
+            "last_sync_time": None,
+        }
 
-    inventory_index = (
-        await _inventory_link_index(db)
+    columns = [str(col["key"]) for col in (snapshot.columns or []) if col.get("key")]
+    inventory = (
+        await repo.get_snapshot(db, PAGE_INVENTORY)
         if page_key in (PAGE_INBOUND, PAGE_OUTBOUND)
-        else {}
+        else None
     )
-
-    items: list[dict[str, Any]] = []
-    for row in rows:
-        item = _row_to_item(row, columns)
-        link_ids = item.pop("__link_record_ids", []) or []
-        if inventory_index:
-            _fill_from_inventory(item, link_ids, inventory_index)
-        else:
-            item.pop("__link_record_ids", None)
-        items.append(item)
-
-    if keyword:
-        kw = keyword.lower()
-        kw_fields = _keyword_fields(page_key)
-        items = [
-            it
-            for it in items
-            if any(kw in str(it.get(f) or "").lower() for f in kw_fields)
-        ]
-    if filters:
-        for fk, fv in filters.items():
-            if fv:
-                items = [it for it in items if str(it.get(fk) or "") == fv]
-
-    # 入库/出库按业务日期倒序（日期已格式化为 YYYY-MM-DD，字符串倒序即时间倒序；
-    # 无日期的行排在最后），保证最新记录在前
-    date_field = ITEMS_DATE_SORT_FIELDS.get(page_key)
-    if date_field:
-        items.sort(key=lambda it: str(it.get(date_field) or ""), reverse=True)
-
-    total = len(items)
-    start = (page - 1) * page_size
-    page_items = items[start : start + page_size]
-
-    display_fields = list(columns)
-    if page_key in (PAGE_INBOUND, PAGE_OUTBOUND):
-        derived = ["物资名称", "规格型号", "当前库存"]
-        for key in derived:
-            if key not in display_fields and any(
-                it.get(key) not in (None, "") for it in items
-            ):
-                display_fields.append(key)
+    stock_columns = (
+        {str(col["key"]) for col in (inventory.columns or []) if col.get("key")}
+        if inventory is not None
+        else set()
+    )
+    rows, total, derived = await repo.list_business_page(
+        db,
+        snapshot.id,
+        columns=columns,
+        keyword_fields=_keyword_fields(page_key),
+        keyword=keyword,
+        filters=filters,
+        sort_field=ITEMS_DATE_SORT_FIELDS.get(page_key),
+        offset=(page - 1) * page_size,
+        limit=page_size,
+        inventory_snapshot=inventory,
+    )
+    page_items = [
+        _display_item(row, columns, stock, stock_columns) for row, stock in rows
+    ]
+    display_fields = columns + [
+        key for key in repo.ITEM_INVENTORY_FIELDS if key in derived
+    ]
 
     return {
         "items": page_items,
@@ -671,11 +635,13 @@ async def list_distinct_column_values(
     db: AsyncSession, page_key: str, column_key: str
 ) -> list[str]:
     """镜像某列去重值（供库存台账动态筛选项/分类）。"""
-    _snapshot, _columns, rows, _total = await _load_page(db, page_key)
+    snapshot = await repo.get_snapshot(db, page_key)
+    if snapshot is None:
+        return []
+    cells = await repo.list_distinct_cells(db, snapshot.id, column_key)
     values: list[str] = []
     seen: set[str] = set()
-    for row in rows:
-        raw = (row.cells or {}).get(column_key)
+    for raw in cells:
         value = str(raw).strip() if raw not in (None, "") else ""
         if value and value not in seen:
             seen.add(value)

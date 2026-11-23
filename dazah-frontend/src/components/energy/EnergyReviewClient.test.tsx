@@ -53,3 +53,31 @@ it('lists current reviews and clears a field with an audited empty period set', 
     reason: '确认完成',
   })
 })
+
+it('keeps the review and its draft after save and clear requests fail', async () => {
+  const host = document.createElement('div')
+  document.body.append(host)
+  root = createRoot(host)
+  await act(async () => root?.render(<App><EnergyReviewClient /></App>))
+  const button = (text: string) => [...host.querySelectorAll('button')]
+    .find(node => node.textContent?.replace(/\s/g, '') === text)
+  const savedReview = state.reviews[0]
+  vi.mocked(saveUsageReviews).mockRejectedValueOnce(new Error('TypeError: review save adapter failed'))
+  await act(async () => button('编辑')!.click())
+  await act(async () => button('保存待确认区间')!.click())
+  expect(saveUsageReviews).toHaveBeenCalledWith({
+    reviews: [{ dataset: savedReview.dataset, column: savedReview.column, periods: savedReview.periods }],
+    reason: 'Web 复核',
+  })
+  expect(host.textContent).toContain('待确认区间未保存')
+  expect(host.querySelector<HTMLInputElement>('#energy-review-reason')?.value).toBe('底码跳变')
+
+  vi.mocked(saveUsageReviews).mockRejectedValueOnce(new Error('TypeError: review clear adapter failed'))
+  await act(async () => button('清除')!.click())
+  expect(saveUsageReviews).toHaveBeenLastCalledWith({
+    reviews: [{ dataset: savedReview.dataset, column: savedReview.column, periods: [] }],
+    reason: '确认完成',
+  })
+  expect(host.textContent).toContain('待确认标记未清除')
+  expect(host.querySelector('tbody')?.textContent).toContain('底码跳变')
+})

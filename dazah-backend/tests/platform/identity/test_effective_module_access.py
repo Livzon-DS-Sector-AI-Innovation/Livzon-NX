@@ -8,7 +8,7 @@ from httpx import ASGITransport, AsyncClient
 
 from app.core.config import get_settings
 from app.core.database import get_db
-from app.platform.identity import api, deps, rbac, rbac_api
+from app.platform.identity import api, deps, rbac
 from app.platform.identity.page_permission_repository import PagePermissionRepository
 from app.platform.identity.page_permissions import (
     PagePermissionService,
@@ -66,9 +66,6 @@ def authorization(monkeypatch):
     monkeypatch.setattr(
         PagePermissionService, "is_super_admin", AsyncMock(return_value=False)
     )
-    monkeypatch.setattr(
-        rbac_api, "_get_target_user_or_404", AsyncMock(return_value=user)
-    )
     legacy = AsyncMock(
         side_effect=AssertionError("Legacy module grants are not access facts")
     )
@@ -121,13 +118,11 @@ async def test_modules_follow_roles_overrides_and_retired_pages(authorization):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("mode", ["roles", "all"])
-async def test_me_business_api_and_simulator_use_effective_pages(authorization, mode):
+async def test_me_and_business_api_use_effective_pages(authorization, mode):
     user, roles, grants, overrides, active_keys, legacy = authorization
     application = FastAPI()
     application.include_router(api.user_router, prefix="/api/v1/identity")
-    application.include_router(rbac_api.rbac_router, prefix="/api/v1/identity")
     application.dependency_overrides[deps.get_current_user] = lambda: user
-    application.dependency_overrides[rbac_api.require_identity_admin] = lambda: user
     application.dependency_overrides[get_db] = lambda: None
     application.dependency_overrides[get_settings] = lambda: SimpleNamespace(
         effective_module_access_mode=mode,
@@ -149,16 +144,6 @@ async def test_me_business_api_and_simulator_use_effective_pages(authorization, 
         assert (
             await client.get("/api/v1/hr/employees", headers=headers)
         ).status_code == 200
-        simulation = await client.post(
-            "/api/v1/identity/admin/page-permissions/simulate",
-            json={
-                "user_id": str(user.id),
-                "page_key": PAGE,
-                "permission": "query",
-            },
-        )
-        assert simulation.status_code == 200
-        assert simulation.json()["data"]["allowed"] is True
         roles.clear()
         assert (await client.get("/api/v1/identity/me")).json()["data"][
             "module_codes"
@@ -166,14 +151,4 @@ async def test_me_business_api_and_simulator_use_effective_pages(authorization, 
         assert (
             await client.get("/api/v1/hr/employees", headers=headers)
         ).status_code == 403
-        simulation = await client.post(
-            "/api/v1/identity/admin/page-permissions/simulate",
-            json={
-                "user_id": str(user.id),
-                "page_key": PAGE,
-                "permission": "query",
-            },
-        )
-        assert simulation.status_code == 200
-        assert simulation.json()["data"]["allowed"] is False
     legacy.assert_not_awaited()

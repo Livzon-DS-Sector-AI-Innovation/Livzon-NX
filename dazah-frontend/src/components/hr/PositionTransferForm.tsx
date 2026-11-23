@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useEffect, useState, useCallback } from 'react'
 import { App, Modal, Form, Input, DatePicker, Card, Select } from 'antd'
 import dayjs from 'dayjs'
@@ -115,7 +116,7 @@ export default function PositionTransferForm({
       onClose()
     } catch (err) {
       if ((typeof err === 'object' && err !== null && 'errorFields' in err)) return
-      message.error((err instanceof Error ? err.message : '') || '操作失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '操作失败'))
     } finally {
       setLoading(false)
     }

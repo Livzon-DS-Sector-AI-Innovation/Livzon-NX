@@ -46,6 +46,7 @@ const settingsGroups = [
 interface SettingsAdminClientProps {
   activeTab: string
   systemPermissions: SystemPermissionsData | null
+  permissionView?: string
 }
 
 function SettingsSimplePage({ title, description, icon, children }: { title: string; description: string; icon: ReactNode; children: ReactNode }) {
@@ -65,7 +66,7 @@ function SettingsSimplePage({ title, description, icon, children }: { title: str
   )
 }
 
-export default function SettingsAdminClient({ activeTab, systemPermissions }: SettingsAdminClientProps) {
+export default function SettingsAdminClient({ activeTab, systemPermissions, permissionView }: SettingsAdminClientProps) {
   const selectedTab = settingsGroups.some((group) => group.items.some((item) => item.key === activeTab))
     ? activeTab
     : 'users'
@@ -104,7 +105,7 @@ export default function SettingsAdminClient({ activeTab, systemPermissions }: Se
       <section aria-label="设置内容" className="min-w-0 flex-1 bg-[var(--color-surface-soft)] p-4 sm:p-5">
         {selectedTab === 'users' && <SettingsSimplePage title="用户管理" description="管理本地账号与飞书用户的平台角色。" icon={<UserOutlined />}><UserManagementClient /></SettingsSimplePage>}
         {selectedTab === 'permissions' && (systemPermissions
-          ? <SystemPermissionsPanel {...systemPermissions} />
+          ? <SystemPermissionsPanel key={permissionView} {...systemPermissions} initialView={permissionView} />
           : <p role="status" className="text-sm text-[var(--color-steel)]">正在加载权限设置…</p>)}
         {selectedTab === 'audit' && <AuditLogClient />}
         {selectedTab === 'llm' && <SettingsSimplePage title="LLM 模型配置" description="维护业务模块使用的模型连接与激活状态。" icon={<CodeSandboxOutlined />}><LLMConfigClient embedded /></SettingsSimplePage>}

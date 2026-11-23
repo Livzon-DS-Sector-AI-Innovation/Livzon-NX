@@ -231,8 +231,11 @@ def test_load_workbook_rejects_missing_unexpected_and_bad_headers(
     missing = tmp_path / "missing.xlsx"
     workbook = Workbook()
     workbook.save(missing)
-    with pytest.raises(AppException, match="缺少子表"):
+    with pytest.raises(
+        AppException, match="REGISTRATION_WORKBOOK_TEMPLATE_MISMATCH"
+    ) as error:
         progress._load_versions_from_workbook_path(missing)
+    assert "缺少子表" in error.value.message
 
     unexpected = tmp_path / "unexpected.xlsx"
     _save_full_workbook(unexpected)
@@ -240,16 +243,22 @@ def test_load_workbook_rejects_missing_unexpected_and_bad_headers(
     worksheet = workbook.active
     worksheet.title = "额外表"
     workbook.save(tmp_path / "only-extra.xlsx")
-    with pytest.raises(AppException, match="缺少子表"):
+    with pytest.raises(
+        AppException, match="REGISTRATION_WORKBOOK_TEMPLATE_MISMATCH"
+    ) as error:
         progress._load_versions_from_workbook_path(tmp_path / "only-extra.xlsx")
+    assert "缺少子表" in error.value.message
 
     from openpyxl import load_workbook
 
     workbook = load_workbook(unexpected)
     workbook.create_sheet("额外表")
     workbook.save(unexpected)
-    with pytest.raises(AppException, match="未定义子表"):
+    with pytest.raises(
+        AppException, match="REGISTRATION_WORKBOOK_TEMPLATE_MISMATCH"
+    ) as error:
         progress._load_versions_from_workbook_path(unexpected)
+    assert "未定义子表" in error.value.message
 
     bad_header = tmp_path / "bad-header.xlsx"
     _save_full_workbook(bad_header)
@@ -257,8 +266,11 @@ def test_load_workbook_rejects_missing_unexpected_and_bad_headers(
     first_template = progress.DECLARATION_PROGRESS_SHEET_TEMPLATES[0]
     workbook[first_template.worksheet_title].cell(4, 1, "错误")
     workbook.save(bad_header)
-    with pytest.raises(AppException, match="表头不匹配"):
+    with pytest.raises(
+        AppException, match="REGISTRATION_WORKBOOK_TEMPLATE_MISMATCH"
+    ) as error:
         progress._load_versions_from_workbook_path(bad_header)
+    assert "表头不匹配" in error.value.message
 
 
 def test_load_worksheet_without_subrecords_creates_independent_records() -> None:

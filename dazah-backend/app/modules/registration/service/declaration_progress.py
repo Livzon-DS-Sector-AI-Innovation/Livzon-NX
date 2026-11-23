@@ -48,6 +48,13 @@ from app.modules.registration.schemas.declaration_progress import (
     DeclarationProgressWorkbookImportResult,
     DeclarationProgressWorkbookOverview,
 )
+from app.modules.registration.service.workbook_validation import (
+    load_registration_workbook,
+)
+from app.modules.registration.workbook_error_contract import (
+    RegistrationWorkbookErrorCode,
+    workbook_validation_error,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -621,7 +628,7 @@ def _load_versions_from_workbook_path(
         definition.worksheet_title: definition for definition in definitions
     }
 
-    workbook = load_workbook(workbook_path, data_only=False)
+    workbook = load_registration_workbook(workbook_path, data_only=False)
     try:
         missing_sheet_titles = [
             definition.worksheet_title
@@ -629,8 +636,9 @@ def _load_versions_from_workbook_path(
             if definition.worksheet_title not in workbook.sheetnames
         ]
         if missing_sheet_titles:
-            raise AppException(
-                message=f"导入失败：缺少子表《{missing_sheet_titles[0]}》"
+            raise workbook_validation_error(
+                RegistrationWorkbookErrorCode.TEMPLATE_MISMATCH,
+                f"导入失败：缺少子表《{missing_sheet_titles[0]}》",
             )
 
         unexpected_sheet_titles = [
@@ -640,8 +648,9 @@ def _load_versions_from_workbook_path(
             and worksheet.title not in definition_map
         ]
         if unexpected_sheet_titles:
-            raise AppException(
-                message=f"导入失败：存在未定义子表《{unexpected_sheet_titles[0]}》"
+            raise workbook_validation_error(
+                RegistrationWorkbookErrorCode.TEMPLATE_MISMATCH,
+                f"导入失败：存在未定义子表《{unexpected_sheet_titles[0]}》",
             )
 
         for template in DECLARATION_PROGRESS_SHEET_TEMPLATES:
@@ -653,8 +662,9 @@ def _load_versions_from_workbook_path(
                 for column_index in range(1, len(template.column_labels) + 1)
             ]
             if not _header_matches(actual_headers, template):
-                raise AppException(
-                    message=f"导入失败：子表《{template.sheet_name}》表头不匹配"
+                raise workbook_validation_error(
+                    RegistrationWorkbookErrorCode.TEMPLATE_MISMATCH,
+                    f"导入失败：子表《{template.sheet_name}》表头不匹配",
                 )
 
         versions: list[RegistrationDeclarationProgressWorkbookVersion] = []
@@ -1121,16 +1131,15 @@ class DeclarationProgressWorkbookService:
 
             temp_dir = Path(tempfile.mkdtemp(prefix="declaration-progress-import-"))
             import_path = temp_dir / (filename or DECLARATION_PROGRESS_WORKBOOK_NAME)
-            import_path.write_bytes(content)
-
             try:
-                await self.ensure_seeded()
+                import_path.write_bytes(content)
                 versions = await asyncio.to_thread(
                     _load_versions_from_workbook_path, import_path
                 )
             finally:
                 shutil.rmtree(temp_dir, ignore_errors=True)
 
+            await self.ensure_seeded()
             try:
                 await self.repository.replace_all_versions(versions)
                 await self.session.commit()

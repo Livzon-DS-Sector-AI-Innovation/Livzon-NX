@@ -57,7 +57,6 @@ from app.platform.identity.models import User
 logger = logging.getLogger(__name__)
 
 FORM_TTL_SECONDS = 1800
-INITIATOR_SIGN_KEYS = ("initiator", "briefer", "briefer_receiver")
 
 _INTENT_KEYWORDS: tuple[tuple[str, str], ...] = (
     ("动火", "hot_work"),
@@ -504,64 +503,142 @@ class ChatFlowService:
             permit_type, 2, values, self.open_id, person_role_idx=idx - 1
         )
 
+    async def _ext_rows_adjust(
+        self, permit_type: str, idx: int, delta: int
+    ) -> dict[str, Any]:
+        """multi 角色外部人员行数 ±1（1 行下限），重渲染本岗位卡。"""
+        state = await self._load_state(permit_type)
+        if state is None:
+            raise AppException(status_code=410, message="表单已过期，请重新发起")
+        template = get_template(permit_type)
+        roles = list(template.person_roles)
+        idx = max(0, min(int(idx), len(roles) - 1))
+        role_key = str(roles[idx]["role"])
+        values = state.setdefault("values", {})
+        key = f"ext_rows_{role_key}"
+        current = max(1, int(values.get(key) or 1))
+        values[key] = max(1, current + delta)
+        state["step"] = 2
+        values["person_role_idx"] = idx
+        await self._save_state(state)
+        return build_step_card(
+            permit_type, 2, values, self.open_id, person_role_idx=idx
+        )
+
+    async def ext_add(self, permit_type: str, idx: int) -> dict[str, Any]:
+        return await self._ext_rows_adjust(permit_type, idx, +1)
+
+    async def ext_del(self, permit_type: str, idx: int) -> dict[str, Any]:
+        return await self._ext_rows_adjust(permit_type, idx, -1)
+
+    async def _person_from_cert_id(
+        self, role_key: str, picked_text: str
+    ) -> dict[str, Any]:
+        """证书名单选人（value=证件记录 id，选人即选证）；非法 id 姓名兜底。"""
+        import uuid as uuid_module
+
+        from app.modules.safety.models import SpecialWorkCertificate
+
+        try:
+            cert_id = uuid_module.UUID(picked_text)
+        except ValueError:
+            cert_id = None
+        cert = None
+        if cert_id is not None:
+            cert = (
+                await self.db.execute(
+                    select(SpecialWorkCertificate).where(
+                        SpecialWorkCertificate.id == cert_id,
+                        SpecialWorkCertificate.is_deleted.is_(False),
+                    )
+                )
+            ).scalar_one_or_none()
+        if cert is not None:
+            entry: dict[str, Any] = {
+                "role": role_key,
+                "name": cert.person_name,
+                "certificate_id": str(cert.id),
+                "certificate_no": cert.certificate_no or "",
+                "certificate_category": cert.certificate_category,
+                "certificate_expiry": (
+                    cert.expiry_date.isoformat() if cert.expiry_date else ""
+                ),
+                "certificate_status": cert.status,
+            }
+            if cert.identity_user_id:
+                entry["user_id"] = str(cert.identity_user_id)
+            return entry
+        return {"role": role_key, "name": picked_text}
+
     async def _merge_persons(
         self,
         permit_type: str,
         values: dict[str, Any],
         form_value: dict[str, Any],
     ) -> None:
-        """第②步人员合并：证书名单选人（选人即选证）+ 外部人员手工录入。"""
-        import uuid as uuid_module
+        """第②步人员合并：证书名单选人（选人即选证）+ 外部人员手工录入。
 
-        from app.modules.safety.models import SpecialWorkCertificate
-
+        multi 角色（作业人/吊装作业人/司索人）支持多选 + 多行外部人员，
+        同角色产生多条 person 记录；其余角色维持一条。
+        """
         template = get_template(permit_type)
-        existing_map = {str(p.get("role")): p for p in (values.get("persons") or [])}
+        existing_by_role: dict[str, list[dict[str, Any]]] = {}
+        for p in values.get("persons") or []:
+            existing_by_role.setdefault(str(p.get("role")), []).append(p)
         persons: list[dict[str, Any]] = []
         for role in template.person_roles:
             role_key = str(role["role"])
+            is_multi = bool(role.get("multi"))
+            prev_entries = existing_by_role.get(role_key) or []
+            prev = prev_entries[0] if prev_entries else {}
             picked = form_value.get(f"person__{role_key}")
+            empty_hint = "（证书名单为空，请填下方外部人员）"
+            picked_ids: list[str] = []
             if isinstance(picked, (list, tuple)):
-                picked = picked[0] if picked else ""
-            picked_text = str(picked or "").strip()
+                picked_ids = [
+                    str(v or "").strip() for v in picked if str(v or "").strip()
+                ]
+            else:
+                text = str(picked or "").strip()
+                if text:
+                    picked_ids = [text]
+            picked_ids = [x for x in picked_ids if x != empty_hint]
+
+            if is_multi:
+                # 多选角色：多行外部人员（person_ext_{name,cert}__{role}__{i}）；
+                # multi_select 回传的是完整选中集，有提交内容即整体替换
+                ext_rows = max(1, int(values.get(f"ext_rows_{role_key}") or 1))
+                ext_entries: list[dict[str, Any]] = []
+                for i in range(ext_rows):
+                    ext_name = _optional(
+                        form_value.get(f"person_ext_name__{role_key}__{i}")
+                    )
+                    if not ext_name:
+                        continue
+                    entry = {
+                        "role": role_key,
+                        "name": ext_name,
+                        "external": "true",
+                    }
+                    ext_cert = _optional(
+                        form_value.get(f"person_ext_cert__{role_key}__{i}")
+                    )
+                    if ext_cert:
+                        entry["certificate_no"] = ext_cert
+                    ext_entries.append(entry)
+                if picked_ids or ext_entries:
+                    for pid in picked_ids:
+                        persons.append(await self._person_from_cert_id(role_key, pid))
+                    persons.extend(ext_entries)
+                else:
+                    persons.extend(prev_entries)
+                continue
+
+            picked_text = picked_ids[0] if picked_ids else ""
             ext_name = _optional(form_value.get(f"person_ext_name__{role_key}"))
             ext_cert = _optional(form_value.get(f"person_ext_cert__{role_key}"))
-            prev = existing_map.get(role_key) or {}
-            empty_hint = "（证书名单为空，请填下方外部人员）"
-            if picked_text and picked_text != empty_hint:
-                # 证书名单选人：value = 证件记录 id，选人即选证
-                try:
-                    cert_id = uuid_module.UUID(picked_text)
-                except ValueError:
-                    cert_id = None
-                cert = None
-                if cert_id is not None:
-                    cert = (
-                        await self.db.execute(
-                            select(SpecialWorkCertificate).where(
-                                SpecialWorkCertificate.id == cert_id,
-                                SpecialWorkCertificate.is_deleted.is_(False),
-                            )
-                        )
-                    ).scalar_one_or_none()
-                if cert is not None:
-                    entry: dict[str, Any] = {
-                        "role": role_key,
-                        "name": cert.person_name,
-                        "certificate_id": str(cert.id),
-                        "certificate_no": cert.certificate_no or "",
-                        "certificate_category": cert.certificate_category,
-                        "certificate_expiry": (
-                            cert.expiry_date.isoformat() if cert.expiry_date else ""
-                        ),
-                        "certificate_status": cert.status,
-                    }
-                    if cert.identity_user_id:
-                        entry["user_id"] = str(cert.identity_user_id)
-                    persons.append(entry)
-                    continue
-                # 非法 id：按姓名兜底记录，避免整步丢失
-                persons.append({"role": role_key, "name": picked_text})
+            if picked_text:
+                persons.append(await self._person_from_cert_id(role_key, picked_text))
                 continue
             if ext_name:
                 entry = {
@@ -575,7 +652,7 @@ class ChatFlowService:
             elif prev:
                 persons.append(prev)
         values["persons"] = persons
-        # 汇总签字行显示所选人员姓名
+        # 汇总签字行显示所选人员姓名（仅单角色参与签字行，取第一条）
         values["person_sign_names"] = {
             str(p.get("role")): str(p.get("name") or "") for p in persons
         }
@@ -1331,6 +1408,7 @@ def build_create_payload(
             "certificate_id",
             "certificate_no",
             "certificate_category",
+            "external",
         ):
             if person.get(key):
                 entry[key] = person[key]

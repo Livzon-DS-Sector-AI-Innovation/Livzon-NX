@@ -5,8 +5,10 @@ from __future__ import annotations
 import logging
 import re
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -1202,6 +1204,105 @@ async def _ensure_quality_feishu_app_settings_seeded(
     return model
 
 
+RETIRED_QUALITY_FEISHU_ENTITY_CODES = {
+    "qc_solid_ledger",
+    "qc_liquid_ledger",
+    "qc_solid_inspection",
+    "qc_liquid_inspection",
+    "supplier_ledger",
+    # 偏差台账已与飞书多维表格解耦（本地台账页不受影响）
+    "deviation_ledger",
+    # CAPA 台账已本地化，不再读写飞书
+    "capa_ledger",
+    # 部门联系人功能已下线（人员目录统一为共享人员服务）
+    "department_contact",
+}
+
+
+def _entity_setting_defaults(entity_code: str) -> dict[str, Any]:
+    entity_name, entity_group, sort_order = DEFAULT_QUALITY_FEISHU_ENTITY_MAP[
+        entity_code
+    ]
+    app_token, table_id, table_name = _get_entity_prefill(entity_code)
+    push, pull = _get_default_sync_directions(entity_code)
+    return {
+        "entity_code": entity_code,
+        "entity_name": entity_name,
+        "entity_group": entity_group,
+        "sort_order": sort_order,
+        "app_token": app_token,
+        "base_table_id": table_id,
+        "base_table_name": table_name,
+        "feishu_form_url": _get_entity_form_url_prefill(entity_code),
+        "is_enabled": bool(app_token and table_id),
+        "enable_push_to_feishu": push,
+        "enable_pull_from_feishu": pull,
+    }
+
+
+def _apply_entity_setting_defaults(
+    model: QualityFeishuEntitySetting, defaults: dict[str, Any]
+) -> bool:
+    changed = False
+    fixed_fields = ["entity_name", "entity_group", "sort_order"]
+    if model.entity_code in PUSH_ONLY_QUALITY_FEISHU_ENTITIES:
+        fixed_fields.extend(("enable_push_to_feishu", "enable_pull_from_feishu"))
+    for field in fixed_fields:
+        if getattr(model, field) != defaults[field]:
+            setattr(model, field, defaults[field])
+            changed = True
+
+    binding_backfilled = False
+    for field in ("app_token", "base_table_id", "base_table_name", "feishu_form_url"):
+        if defaults[field] and not (getattr(model, field) or "").strip():
+            setattr(model, field, defaults[field])
+            changed = True
+            binding_backfilled = binding_backfilled or field != "feishu_form_url"
+    if (
+        binding_backfilled
+        and not model.is_enabled
+        and (model.app_token or "").strip()
+        and (model.base_table_id or "").strip()
+    ):
+        model.is_enabled = True
+        changed = True
+    return changed
+
+
+async def get_quality_feishu_runtime_entity(
+    db: AsyncSession,
+    entity_code: str,
+    *,
+    ensure_defaults: bool = False,
+) -> QualityFeishuEntitySetting | None:
+    """Read one live binding and optionally initialize that entity's defaults."""
+    stmt = select(QualityFeishuEntitySetting).where(
+        QualityFeishuEntitySetting.entity_code == entity_code
+    )
+    model = (await db.execute(stmt)).scalar_one_or_none()
+    if not ensure_defaults or entity_code not in DEFAULT_QUALITY_FEISHU_ENTITY_MAP:
+        return model
+    if model is not None and model.is_deleted:
+        return model
+
+    defaults = _entity_setting_defaults(entity_code)
+    if model is None:
+        seed = (
+            insert(QualityFeishuEntitySetting)
+            .values(**defaults)
+            .on_conflict_do_nothing(index_elements=["entity_code"])
+            .returning(QualityFeishuEntitySetting)
+        )
+        model = (await db.execute(seed)).scalar_one_or_none()
+        if model is None:
+            # A concurrent writer can create the binding between SELECT and INSERT.
+            return (await db.execute(stmt)).scalar_one_or_none()
+        await db.commit()
+    elif _apply_entity_setting_defaults(model, defaults):
+        await db.commit()
+    return model
+
+
 async def ensure_quality_feishu_entity_settings(
     db: AsyncSession,
 ) -> list[QualityFeishuEntitySetting]:
@@ -1212,98 +1313,33 @@ async def ensure_quality_feishu_entity_settings(
             )
         )
         existing = {item.entity_code: item for item in result.scalars().all()}
-        created = False
+        missing: list[dict[str, Any]] = []
         changed = False
-        legacy_entity_codes = {
-            "qc_solid_ledger",
-            "qc_liquid_ledger",
-            "qc_solid_inspection",
-            "qc_liquid_inspection",
-            "supplier_ledger",
-            # 偏差台账已与飞书多维表格解耦（本地台账页不受影响）
-            "deviation_ledger",
-            # CAPA 台账已本地化，不再读写飞书
-            "capa_ledger",
-            # 部门联系人功能已下线（人员目录统一为共享人员服务）
-            "department_contact",
-        }
 
-        for legacy_entity_code in legacy_entity_codes:
+        for legacy_entity_code in RETIRED_QUALITY_FEISHU_ENTITY_CODES:
             legacy_model = existing.get(legacy_entity_code)
             if legacy_model and not legacy_model.is_deleted:
                 legacy_model.is_deleted = True
                 changed = True
 
-        for (
-            entity_code,
-            entity_name,
-            entity_group,
-            sort_order,
-        ) in DEFAULT_QUALITY_FEISHU_ENTITIES:
-            prefill_app_token, prefill_table_id, prefill_table_name = (
-                _get_entity_prefill(entity_code)
-            )
-            if entity_code in existing:
-                model = existing[entity_code]
-                if entity_code in PUSH_ONLY_QUALITY_FEISHU_ENTITIES:
-                    if not model.enable_push_to_feishu:
-                        model.enable_push_to_feishu = True
-                        changed = True
-                    if model.enable_pull_from_feishu:
-                        model.enable_pull_from_feishu = False
-                        changed = True
-                if model.entity_name != entity_name:
-                    model.entity_name = entity_name
-                    changed = True
-                if model.entity_group != entity_group:
-                    model.entity_group = entity_group
-                    changed = True
-                if model.sort_order != sort_order:
-                    model.sort_order = sort_order
-                    changed = True
-                identifiers_backfilled = False
-                if not (model.app_token or "").strip() and prefill_app_token:
-                    model.app_token = prefill_app_token
-                    changed = True
-                    identifiers_backfilled = True
-                if not (model.base_table_id or "").strip() and prefill_table_id:
-                    model.base_table_id = prefill_table_id
-                    changed = True
-                    identifiers_backfilled = True
-                if not (model.base_table_name or "").strip() and prefill_table_name:
-                    model.base_table_name = prefill_table_name
-                    changed = True
-                prefill_form_url = _get_entity_form_url_prefill(entity_code)
-                if not (model.feishu_form_url or "").strip() and prefill_form_url:
-                    model.feishu_form_url = prefill_form_url
-                    changed = True
-                if (
-                    identifiers_backfilled
-                    and not model.is_enabled
-                    and (model.app_token or "").strip()
-                    and (model.base_table_id or "").strip()
-                ):
-                    model.is_enabled = True
-                    changed = True
+        for entity_code in DEFAULT_QUALITY_FEISHU_ENTITY_MAP:
+            defaults = _entity_setting_defaults(entity_code)
+            model = existing.get(entity_code)
+            if model is not None:
+                changed = _apply_entity_setting_defaults(model, defaults) or changed
                 continue
-            item = QualityFeishuEntitySetting(
-                entity_code=entity_code,
-                entity_name=entity_name,
-                entity_group=entity_group,
-                sort_order=sort_order,
-                app_token=prefill_app_token,
-                base_table_name=prefill_table_name,
-                base_table_id=prefill_table_id,
-                feishu_form_url=_get_entity_form_url_prefill(entity_code),
-                is_enabled=bool(prefill_app_token and prefill_table_id),
-                enable_push_to_feishu=_get_default_sync_directions(entity_code)[0],
-                enable_pull_from_feishu=_get_default_sync_directions(entity_code)[1],
+            missing.append(defaults)
+        if not (missing or changed):
+            return sorted(
+                existing.values(), key=lambda row: (row.sort_order, row.created_at)
             )
-            db.add(item)
-            created = True
-            existing[entity_code] = item
-        if created or changed:
-            await db.commit()
+        if missing:
+            await db.execute(
+                insert(QualityFeishuEntitySetting)
+                .values(missing)
+                .on_conflict_do_nothing(index_elements=["entity_code"])
+            )
+        await db.commit()
         result = await db.execute(
             select(QualityFeishuEntitySetting)
             .where(QualityFeishuEntitySetting.is_deleted.is_(False))

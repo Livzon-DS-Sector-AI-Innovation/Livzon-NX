@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import {
   ApiOutlined,
   DeleteOutlined,
@@ -137,9 +138,9 @@ export function ModuleFeishuDataSourcePage({
         // 目录拉取失败只提示，不覆盖已回填的凭证表单
         await loadCatalog(nextConfig).catch((catalogError) => {
           message.error(
-            catalogError instanceof Error
+            getUserErrorMessage(catalogError instanceof Error
               ? catalogError.message
-              : '加载飞书目录失败',
+              : '加载飞书目录失败'),
           )
         })
       } else {
@@ -148,7 +149,7 @@ export function ModuleFeishuDataSourcePage({
       }
     } catch (error) {
       configForm.setFieldsValue(EMPTY_CONFIG)
-      message.error(error instanceof Error ? error.message : '加载飞书配置失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '加载飞书配置失败'))
     } finally {
       setLoading(false)
     }
@@ -184,7 +185,7 @@ export function ModuleFeishuDataSourcePage({
       await loadCatalog(saved)
       message.success('应用凭据已保存')
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '保存失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '保存失败'))
     } finally {
       setSaving(false)
     }
@@ -201,7 +202,7 @@ export function ModuleFeishuDataSourcePage({
       if (result.ok === false || failed.length) message.error(failed.map((item) => item.message).join('；') || '连接测试失败')
       else message.success('App ID / Secret 连通性正常')
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '连接测试失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '连接测试失败'))
     } finally {
       setTesting(false)
     }
@@ -218,7 +219,7 @@ export function ModuleFeishuDataSourcePage({
       await loadCatalog(config)
       message.success('数据入口已添加')
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '添加入口失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '添加入口失败'))
     } finally {
       setBusyKey(null)
     }
@@ -235,7 +236,7 @@ export function ModuleFeishuDataSourcePage({
       await loadCatalog(config)
       message.success(action === 'discover' ? '资源发现完成' : '入口已停用')
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '操作失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '操作失败'))
     } finally {
       setBusyKey(null)
     }
@@ -249,7 +250,7 @@ export function ModuleFeishuDataSourcePage({
       await loadCatalog(config)
       message.success('完整镜像同步成功')
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '同步失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '同步失败'))
     } finally {
       setBusyKey(null)
     }
@@ -264,7 +265,7 @@ export function ModuleFeishuDataSourcePage({
       await loadCatalog(config)
       message.success(`已完成 ${selectedResourceIds.length} 个资源的批量同步`)
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '批量同步失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '批量同步失败'))
     } finally {
       setBusyKey(null)
     }
@@ -281,7 +282,7 @@ export function ModuleFeishuDataSourcePage({
         `已删除 ${result.deleted_count} 个资源、${result.snapshot_count} 个快照和 ${result.snapshot_row_count} 行快照数据`,
       )
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '删除资源失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '删除资源失败'))
       throw error
     } finally {
       setBusyKey(null)
@@ -309,7 +310,7 @@ export function ModuleFeishuDataSourcePage({
       else await feishuDataSourceApi.saveBindings(moduleCode, pageKey, bindings)
       message.success('页面映射已发布')
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '发布映射失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '发布映射失败'))
     } finally {
       setBusyKey(null)
     }

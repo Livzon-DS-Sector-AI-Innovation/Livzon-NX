@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any
@@ -29,8 +28,6 @@ from app.platform.identity.schemas import (
     EffectivePageGrantOut,
     PageDataScopeInput,
     PageGrantInput,
-    PagePermissionHealthRemediationRequest,
-    PagePermissionSimulationRequest,
 )
 
 
@@ -141,19 +138,6 @@ class _PageRepo:
     async def list_active_users(self, _db: object) -> list[object]:
         self._called("list_active_users")
         return self.active_users
-
-    async def list_all_role_grants(self, _db: object) -> list[object]:
-        return self.role_grants
-
-    async def list_all_user_grants(self, _db: object) -> list[object]:
-        return self.user_grants
-
-    async def list_roles_by_ids(self, _db: object, **_kwargs: object) -> list[object]:
-        role_ids = set(_kwargs.get("role_ids", []))
-        return [SimpleNamespace(id=role_id, name="人事经办员") for role_id in role_ids]
-
-    async def list_users_by_ids(self, _db: object, **_kwargs: object) -> list[object]:
-        return []
 
     async def department_labels(self, _db: object) -> dict[str, str]:
         return {}
@@ -599,140 +583,38 @@ async def test_legacy_expiry_does_not_stop_user_override(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_health_check_accepts_sensitive_action_without_expiry(
-    monkeypatch,
-) -> None:
-    role_id = uuid4()
-    repo = _PageRepo(
-        role_grants=[
-            SimpleNamespace(
-                role_id=role_id,
-                page_key="hr:employee-management:profile",
-                permissions=["operate"],
-                sensitive_actions=["delete"],
-                sensitive_actions_expires_at=None,
-                scope_type="department_tree",
-                department_ids=[],
-            )
-        ]
-    )
-    monkeypatch.setattr(rbac, "resolve_users_roles", AsyncMock(return_value={}))
-
-    health = await PagePermissionService(repo=repo).permission_health(None)
-
-    assert health.issue_count == 0
-
-
-@pytest.mark.asyncio
-async def test_health_keeps_distinct_overview_visibility_override(monkeypatch):
-    role = SimpleNamespace(id=uuid4(), code="overview", name="概览角色")
-    user = SimpleNamespace(id=uuid4(), role="user", name="用户", grant_version=0)
-    common = dict(
-        page_key="production:overview", permissions=["access", "query"],
-        sensitive_actions=[], scope_type="all", department_ids=[],
-    )
-    repo = _PageRepo(
-        role_grants=[SimpleNamespace(role_id=role.id, visible_sections=None, **common)],
-        user_grants=[
-            SimpleNamespace(user_id=user.id, visible_sections=["MC"], **common)
-        ],
-    )
-    monkeypatch.setattr(repo, "list_users_by_ids", AsyncMock(return_value=[user]))
-    monkeypatch.setattr(
-        rbac, "resolve_users_roles", AsyncMock(return_value={user.id: [role]})
-    )
-    issues = (await PagePermissionService(repo=repo).permission_health(None)).issues
-    assert not any(issue.code == "redundant_user_override" for issue in issues)
-
-
-@pytest.mark.asyncio
-async def test_health_no_longer_requires_separate_module_access(monkeypatch) -> None:
-    user_id = uuid4()
-    grant = SimpleNamespace(
-        user_id=user_id,
-        page_key="hr:employee-management:profile",
-        permissions=["query"],
-        sensitive_actions=[],
-        sensitive_actions_expires_at=None,
-        scope_type="department_tree",
-        department_ids=[],
-    )
-    repo = _PageRepo(user_grants=[grant])
-    user = SimpleNamespace(id=user_id, name="员工", role="user", grant_version=0)
-    monkeypatch.setattr(repo, "list_users_by_ids", AsyncMock(return_value=[user]))
-    monkeypatch.setattr(rbac, "resolve_users_roles", AsyncMock(return_value={}))
-    service = PagePermissionService(repo=repo)
-    monkeypatch.setattr(service, "effective_grants", AsyncMock(return_value=[]))
-    assert not (await service.permission_health(None)).issues
-
-
-@pytest.mark.asyncio
-async def test_health_remediation_removes_a_retired_role_grant(monkeypatch) -> None:
-    from app.platform.identity import rbac_api
-
-    role_id = uuid4()
-    actor = SimpleNamespace(id=uuid4(), role="admin")
-    role = SimpleNamespace(
-        id=role_id, code="quality_operator", grant_version=2, updated_by=None
-    )
-    grant = SimpleNamespace(
-        id=uuid4(),
-        role_id=role_id,
-        page_key="retired:page",
-        permissions=["query"],
-        sensitive_actions=[],
-        sensitive_actions_expires_at=None,
-        scope_type="department_tree",
-        department_ids=[],
-        updated_by=None,
-    )
+async def test_permission_history_preserves_past_health_repairs() -> None:
+    role_id, actor_id, audit_id = uuid4(), uuid4(), uuid4()
     repo = SimpleNamespace(
-        get_role_for_update=AsyncMock(return_value=role),
-        get_role_grant_for_update=AsyncMock(return_value=grant),
-        list_role_grants=AsyncMock(side_effect=[[grant], []]),
-        remove_grant=AsyncMock(),
-    )
-    service = SimpleNamespace(
-        permission_health=AsyncMock(
-            return_value=SimpleNamespace(
-                issues=[
-                    SimpleNamespace(
-                        code="retired_page",
-                        target_type="role",
-                        target_id=role_id,
-                        page_key="retired:page",
-                    )
-                ]
-            )
-        )
-    )
-    monkeypatch.setattr(rbac_api, "PagePermissionRepository", lambda: repo)
-    monkeypatch.setattr(rbac_api, "PagePermissionService", lambda: service)
-    monkeypatch.setattr(
-        rbac_api, "PermissionGrantRepository", lambda: SimpleNamespace()
-    )
-    monkeypatch.setattr(rbac_api, "_assert_not_own_role", AsyncMock())
-    monkeypatch.setattr(rbac_api, "_bump_all_user_grant_versions", AsyncMock())
-    monkeypatch.setattr(rbac_api, "_audit", AsyncMock())
-    monkeypatch.setattr(rbac_api, "publish_permissions_changed_all", AsyncMock())
-    db = AsyncMock()
-
-    response = await rbac_api.remediate_page_permission_health_issue(
-        PagePermissionHealthRemediationRequest(
-            code="retired_page",
-            target_type="role",
-            target_id=role_id,
-            page_key="retired:page",
-            expected_grant_version=2,
-            reason="清理停用页面",
+        list_page_permission_history=AsyncMock(
+            return_value=[
+                SimpleNamespace(
+                    id=audit_id,
+                    user_id=actor_id,
+                    action="remediate_role_page_permissions",
+                    old_value={"grants": []},
+                    new_value={
+                        "grants": [],
+                        "reason": "已移除停用页面授权",
+                        "grant_version": 3,
+                    },
+                    created_at=datetime.now(UTC),
+                ),
+            ],
         ),
-        actor,
-        db,
+        user_labels_by_ids=AsyncMock(return_value={actor_id: "系统管理员"}),
     )
-
-    assert json.loads(response.body)["data"]["grant_version"] == 3
-    repo.remove_grant.assert_awaited_once_with(db, grant)
-    db.commit.assert_awaited_once()
+    history = await PagePermissionService(repo=repo).permission_history(
+        None,
+        resource_type="identity.role_page_permissions",
+        resource_id=role_id,
+        source="health_remediation",
+    )
+    assert len(history) == 1
+    assert history[0].id == audit_id
+    assert history[0].source == "health_remediation"
+    assert history[0].reason == "已移除停用页面授权"
+    assert history[0].grant_version == 3
 
 
 @pytest.mark.asyncio
@@ -928,70 +810,6 @@ async def test_saved_page_grant_opens_module_without_direct_module_access(
         SimpleNamespace(effective_module_access_mode="roles"),
     ) is user
     page_grants.assert_awaited_once()
-
-
-@pytest.mark.asyncio
-async def test_permission_verification_derives_module_access_from_pages(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from app.platform.identity import rbac_api
-
-    user = SimpleNamespace(id=uuid4(), role="user")
-    monkeypatch.setattr(
-        rbac_api,
-        "_get_target_user_or_404",
-        AsyncMock(return_value=user),
-    )
-
-    class _Service:
-        async def effective_grants(
-            self, _db: object, **_kwargs: object
-        ) -> list[object]:
-            return [
-                EffectivePageGrantOut(
-                    page_key="hr:employee-management:profile",
-                    module_code="hr",
-                    permissions=["access", "query"],
-                    sensitive_actions=[],
-                    data_scope=PageDataScopeInput(scope_type="department_tree"),
-                    source="user",
-                )
-            ]
-
-        async def is_super_admin(self, _db: object, **_kwargs: object) -> bool:
-            return False
-
-    monkeypatch.setattr(rbac_api, "PagePermissionService", _Service)
-    monkeypatch.setattr(
-        rbac_api.PermissionGrantRepository,
-        "has_module_view",
-        AsyncMock(return_value=False),
-    )
-    response = await rbac_api.simulate_page_permission(
-        PagePermissionSimulationRequest(
-            user_id=user.id,
-            page_key="hr:employee-management:profile",
-            permission="query",
-        ),
-        SimpleNamespace(role="admin"),
-        Any,  # type: ignore[arg-type]
-        SimpleNamespace(effective_module_access_mode="roles"),
-    )
-    payload = json.loads(response.body)
-
-    assert payload["data"]["allowed"] is True
-    assert "实际接口还需核对" in payload["data"]["reason"]
-    allowed = await rbac_api.simulate_page_permission(
-        PagePermissionSimulationRequest(
-            user_id=user.id,
-            page_key="hr:employee-management:profile",
-            permission="query",
-        ),
-        SimpleNamespace(role="admin"),
-        Any,  # type: ignore[arg-type]
-        SimpleNamespace(effective_module_access_mode="all"),
-    )
-    assert "实际接口还需核对" in json.loads(allowed.body)["data"]["reason"]
 
 
 @pytest.mark.asyncio

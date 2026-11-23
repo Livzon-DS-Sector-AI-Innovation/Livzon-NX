@@ -110,3 +110,12 @@ export function firstAccessibleEquipmentModule(
     ?? EQUIPMENT_MODULES[0].module
   )
 }
+
+/** 当前用户可查询（access + query）的功能模块；无查询权限时页面只呈现访问提示。 */
+export function getQueryableEquipmentTabs(user: EquipmentPermissionUser | null | undefined) {
+  if (user?.role === 'admin') return EQUIPMENT_MODULES
+  const grants = expandedGrants(user)
+  return EQUIPMENT_MODULES.filter(({ key }) => grants.some((grant) =>
+    grant.page_key === key && grant.permissions?.includes('access') && grant.permissions.includes('query'),
+  ))
+}

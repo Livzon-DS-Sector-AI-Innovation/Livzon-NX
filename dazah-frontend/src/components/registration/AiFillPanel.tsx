@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useState, useEffect, useCallback } from 'react'
 import { App, Button, Tag, Select, Input, Space, Badge, Empty, Spin, Card, Modal, Typography } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
@@ -111,7 +112,7 @@ export function AiFillPanel({ chapterId, chapterCode, assets, onAssetsChange, on
         message.warning(result.message)
       }
     } catch (err: unknown) {
-      message.error(err instanceof Error ? err.message : 'AI 提取失败')
+      message.error(getUserErrorMessage(err instanceof Error ? err.message : 'AI 提取失败'))
     } finally {
       setPreviewLoading(false)
     }
@@ -144,7 +145,7 @@ export function AiFillPanel({ chapterId, chapterCode, assets, onAssetsChange, on
         message.warning(result.message || '填充失败')
       }
     } catch (err: unknown) {
-      message.error(err instanceof Error ? err.message : '填充失败')
+      message.error(getUserErrorMessage(err instanceof Error ? err.message : '填充失败'))
     } finally {
       setFilling(false)
     }
@@ -195,7 +196,7 @@ export function AiFillPanel({ chapterId, chapterCode, assets, onAssetsChange, on
       const result = await splitPreview(asset.id, slots)
       setSplitPages(result.pages || [])
     } catch (err: unknown) {
-      message.error(err instanceof Error ? err.message : '页面拆分失败')
+      message.error(getUserErrorMessage(err instanceof Error ? err.message : '页面拆分失败'))
     } finally {
       setSplitLoading(false)
     }
@@ -233,7 +234,7 @@ export function AiFillPanel({ chapterId, chapterCode, assets, onAssetsChange, on
       // Trigger refresh
       onAssetsChange()
     } catch (err: unknown) {
-      message.error(err instanceof Error ? err.message : '插入失败')
+      message.error(getUserErrorMessage(err instanceof Error ? err.message : '插入失败'))
     } finally {
       setSplitInserting(false)
     }

@@ -1,0 +1,78 @@
+@view-transition {
+  navigation: auto;
+}
+
+@property --identity-reveal-radius {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --identity-fan-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 6deg;
+}
+
+html[data-workspace-identity-transition]::view-transition-group(root) {
+  animation: none;
+}
+
+html[data-workspace-identity-transition]::view-transition-old(root),
+html[data-workspace-identity-transition]::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+html[data-workspace-identity-transition]::view-transition-old(root) {
+  z-index: 1;
+}
+
+html[data-workspace-identity-transition]::view-transition-new(root) {
+  --identity-reveal-easing: cubic-bezier(0.38, 0, 0.68, 1);
+  z-index: 2;
+}
+
+html[data-workspace-identity-transition="opening"]::view-transition-new(root) {
+  --identity-reveal-end: calc(1.13 * hypot(50vw, 50vh));
+  /* Feather the square mask's outline while keeping the page contents sharp. */
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-106 -106 212 212'%3E %3Cfilter id='feather'%3E%3CfeGaussianBlur stdDeviation='1'/%3E%3C/filter%3E %3Cpath filter='url(%23feather)' d=' M100.4 -7.4Q100 0 96.4 6.5L92.3 13.8Q88.7 20.2 90 28.1L91.5 36.9Q92.8 44.7 85.4 48.1L77 52Q69.6 55.5 67.1 62.5L64.2 70.4Q61.7 77.4 55 79.7L47.5 82.4Q40.8 84.7 35.1 90L28.8 96Q23.1 101.4 15.7 100.9 L7.4 100.4Q0 100 -6.5 96.4L-13.8 92.3Q-20.2 88.7 -28.1 90L-36.9 91.5Q-44.7 92.8 -48.1 85.4L-52 77Q-55.5 69.6 -62.5 67.1L-70.4 64.2Q-77.4 61.7 -79.7 55L-82.4 47.5Q-84.7 40.8 -90 35.1L-96 28.8Q-101.4 23.1 -100.9 15.7 L-100.4 7.4Q-100 0 -96.4 -6.5L-92.3 -13.8Q-88.7 -20.2 -90 -28.1L-91.5 -36.9Q-92.8 -44.7 -85.4 -48.1L-77 -52Q-69.6 -55.5 -67.1 -62.5L-64.2 -70.4Q-61.7 -77.4 -55 -79.7L-47.5 -82.4Q-40.8 -84.7 -35.1 -90L-28.8 -96Q-23.1 -101.4 -15.7 -100.9 L-7.4 -100.4Q0 -100 6.5 -96.4L13.8 -92.3Q20.2 -88.7 28.1 -90L36.9 -91.5Q44.7 -92.8 48.1 -85.4L52 -77Q55.5 -69.6 62.5 -67.1L70.4 -64.2Q77.4 -61.7 79.7 -55L82.4 -47.5Q84.7 -40.8 90 -35.1L96 -28.8Q101.4 -23.1 100.9 -15.7Z'/%3E%3C/svg%3E")
+    center / calc(2.12 * var(--identity-reveal-radius)) no-repeat;
+  animation: workspace-identity-expand 1120ms var(--identity-reveal-easing) both;
+}
+
+html[data-workspace-identity-transition="restored"]::view-transition-new(root) {
+  --identity-fan-duration: 1240ms;
+  --identity-fan-radial-feather: 74px;
+  --identity-reveal-end: calc(hypot(100vw, 100vh) + var(--identity-fan-radial-feather));
+  --identity-fan-x: var(--workspace-identity-origin-x, 50%);
+  --identity-fan-y: var(--workspace-identity-origin-y, 6%);
+  --identity-fan-sweep: calc(2 * var(--identity-fan-angle));
+  --identity-fan-feather: min(18deg, var(--identity-fan-angle), calc(180deg - var(--identity-fan-angle)));
+  mask-image:
+    radial-gradient(
+      circle at var(--identity-fan-x) var(--identity-fan-y),
+      black max(0px, calc(var(--identity-reveal-radius) - var(--identity-fan-radial-feather))),
+      transparent var(--identity-reveal-radius)
+    ),
+    conic-gradient(
+      from calc(180deg - var(--identity-fan-angle)) at var(--identity-fan-x) var(--identity-fan-y),
+      transparent 0deg,
+      black var(--identity-fan-feather) calc(var(--identity-fan-sweep) - var(--identity-fan-feather)),
+      transparent var(--identity-fan-sweep)
+    );
+  mask-composite: intersect;
+  animation:
+    workspace-identity-expand var(--identity-fan-duration) var(--identity-reveal-easing) both,
+    workspace-identity-fan var(--identity-fan-duration) cubic-bezier(0.45, 0, 0.72, 1) both;
+}
+
+@keyframes workspace-identity-expand {
+  from { --identity-reveal-radius: 0px; }
+  to { --identity-reveal-radius: var(--identity-reveal-end); }
+}
+
+@keyframes workspace-identity-fan {
+  from { --identity-fan-angle: 6deg; }
+  to { --identity-fan-angle: 180deg; }
+}

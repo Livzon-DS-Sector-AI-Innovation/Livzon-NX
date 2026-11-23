@@ -322,14 +322,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     except Exception:
         logger.exception("注册安全模块法规雷达调度任务失败")
 
-    # ── 安全模块页面镜像同步（每 15 分钟） ──
-    try:
-        from app.modules.safety.scheduled import SafetyPageMirrorSyncGenerator
-
-        scheduler_registry.register_generator(SafetyPageMirrorSyncGenerator())
-    except Exception:
-        logger.exception("注册安全模块页面镜像同步调度任务失败")
-
     # ── 安全模块隐患到期提醒（每天 08:00） ──
     try:
         from app.modules.safety.scheduled import SafetyHazardDueReminderGenerator

@@ -1239,16 +1239,28 @@ async def start_pilot_workflow(
     return success_response(message="工作流已启动")
 
 
-@router.post("/pilot/workflow/{workflow_id}/approve", summary="确认工作流步骤")
+@router.post(
+    "/pilot/workflow/{workflow_id}/approve",
+    summary="确认工作流步骤",
+    responses={
+        404: {"description": "工作流不存在"},
+        409: {"description": "没有待确认的步骤，请刷新工作流"},
+    },
+)
 async def approve_pilot_workflow_step(
     workflow_id: str,
     db: AsyncSession = Depends(get_db),
 ) -> JSONResponse:
     from sqlalchemy import select
 
+    try:
+        workflow_uuid = uuid.UUID(workflow_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="工作流不存在") from exc
+
     result = await db.execute(
         select(PilotWorkflow).where(
-            PilotWorkflow.id == workflow_id,
+            PilotWorkflow.id == workflow_uuid,
             PilotWorkflow.is_deleted.is_(False),
         )
     )
@@ -1259,7 +1271,7 @@ async def approve_pilot_workflow_step(
     steps_result = await db.execute(
         select(PilotWorkflowStep)
         .where(
-            PilotWorkflowStep.workflow_id == workflow_id,
+            PilotWorkflowStep.workflow_id == workflow_uuid,
             PilotWorkflowStep.is_deleted.is_(False),
         )
         .order_by(PilotWorkflowStep.step_order)
@@ -1274,7 +1286,7 @@ async def approve_pilot_workflow_step(
             break
 
     if not waiting_step:
-        raise HTTPException(status_code=400, detail="没有待确认的步骤")
+        raise HTTPException(status_code=409, detail="没有待确认的步骤")
 
     now = datetime.now(UTC)
     waiting_step.status = "completed"
@@ -1314,7 +1326,14 @@ async def approve_pilot_workflow_step(
     return success_response(data={"status": result_status, "message": "步骤已确认"})
 
 
-@router.post("/pilot/workflow/{workflow_id}/upload", summary="上传中试文档")
+@router.post(
+    "/pilot/workflow/{workflow_id}/upload",
+    summary="上传中试文档",
+    responses={
+        404: {"description": "工作流不存在"},
+        413: {"description": "中试文档超过大小限制"},
+    },
+)
 async def upload_pilot_workflow_document(
     workflow_id: str,
     file: UploadFile = File(...),

@@ -1,11 +1,13 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { App, Drawer, Form, Input, Select, Button, Space, Upload } from 'antd'
 import { PlusOutlined, BookOutlined } from '@ant-design/icons'
 import type { UploadFile } from 'antd/es/upload'
 import { useEquipmentStore } from '@/stores/equipment'
 import { createWorkOrder, uploadWorkOrderImages } from '@/actions/equipment'
+import { getActionErrorMessage, unwrapServerActionResult } from '@/lib/server-action-result'
 import { CreateWorkOrderInput, FailureCode, Maintainer, KnowledgeCaseHit } from '@/types/equipment'
 import { fetchAllUsersClient, searchKnowledgeCasesClient } from '@/lib/api/equipment-client'
 
@@ -107,21 +109,23 @@ export function RepairDrawer({ equipments, symptoms, onRefresh }: RepairDrawerPr
         return
       }
 
-      if (fileList.length > 0) {
-        const formData = new FormData()
-        fileList.forEach((file) => {
-          if (file.originFileObj) {
-            formData.append('files', file.originFileObj)
-          }
-        })
-        await uploadWorkOrderImages(workOrderId, formData)
+      const formData = new FormData()
+      fileList.forEach((file) => {
+        if (file.originFileObj) formData.append('files', file.originFileObj)
+      })
+      try {
+        if (formData.has('files')) {
+          unwrapServerActionResult(await uploadWorkOrderImages(workOrderId, formData))
+        }
+        message.success('报修工单已提交')
+      } catch (error) {
+        message.warning(`报修工单已提交。图片上传提示：${getActionErrorMessage(error, '工单图片上传')}`)
       }
 
-      message.success('报修工单已提交')
       closeRepairDrawer()
       onRefresh?.()
     } catch (error) {
-      if (error?.message) message.error(error.message)
+      if (error?.message) message.error(getUserErrorMessage(error.message))
     } finally {
       setSubmitting(false)
     }

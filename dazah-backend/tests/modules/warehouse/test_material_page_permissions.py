@@ -128,15 +128,13 @@ async def test_material_list_scopes_rows_count_stats_and_shared_cache(source):
         last_synced_at=datetime.now(UTC),
     )
     instance.repo.get_material_page_snapshot = AsyncMock(return_value=snapshot)
-    instance.repo.list_material_page_rows = AsyncMock(
-        return_value=(
-            [
-                SimpleNamespace(cells=row, source_record_id=row["__record_id"])
-                for row in rows
-            ],
-            2,
-        )
-    )
+    async def batches(snapshot_id, *, sort_date_field, department_names):
+        assert snapshot_id == snapshot.id
+        assert department_names in ({"一车间"}, {"二车间"})
+        for row in rows:
+            yield [(row["__record_id"], row)]
+
+    instance.repo.iter_material_page_rows = batches
     instance._resolve_material_page_source = AsyncMock(
         return_value="local" if source == "local" else "feishu"
     )

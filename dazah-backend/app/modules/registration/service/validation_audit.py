@@ -7,7 +7,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, cast
 from uuid import UUID
+from zipfile import BadZipFile
 
+from docx.opc.exceptions import PackageNotFoundError
+from pypdf.errors import PdfReadError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -43,6 +46,7 @@ from app.modules.registration.schemas.validation_audit import (
     AuditMode,
     AuditResult,
     TaskStatus,
+    ValidationAuditErrorCode,
     ValidationAuditTaskCreate,
     ValidationAuditTaskUpdate,
 )
@@ -153,6 +157,12 @@ class ValidationAuditService:
     async def parse_files(self, task: ValidationAuditTask) -> None:
         """解析任务下所有待解析文件"""
         files = await self.file_repo.list_by_task_id(task.id)
+        if not files:
+            raise AppException(
+                status_code=409,
+                message="请先上传审核文件",
+                detail={"error_code": ValidationAuditErrorCode.NO_FILES.value},
+            )
         pending_files = [f for f in files if f.parse_status in ("pending", "failed")]
 
         if not pending_files:
@@ -161,26 +171,36 @@ class ValidationAuditService:
         await self.task_repo.update(task, status=TaskStatus.PARSING.value)
 
         for audit_file in pending_files:
+            await self.file_repo.update_parse_result(audit_file, parse_status="parsing")
             try:
-                await self.file_repo.update_parse_result(
-                    audit_file, parse_status="parsing"
-                )
                 text = DocumentParser.extract_text(
                     audit_file.file_path, max_chars=80000
                 )
-                await self.file_repo.update_parse_result(
-                    audit_file, parse_status="completed", parsed_text=text
-                )
-            except Exception as e:
-                logger.exception("文件解析失败: %s", audit_file.original_filename)
+                if not text:
+                    raise ValueError("审核文件没有可解析文本")
+            except (
+                BadZipFile,
+                FileNotFoundError,
+                KeyError,
+                PackageNotFoundError,
+                PdfReadError,
+                SyntaxError,
+                ValueError,
+            ) as exc:
+                logger.warning("审核文件解析失败: %s", audit_file.id)
                 await self.file_repo.update_parse_result(
                     audit_file, parse_status="failed"
                 )
-                await self.task_repo.update(task, status=TaskStatus.FAILED.value)
                 raise AppException(
-                    status_code=400,
-                    message=f"文件解析失败: {audit_file.original_filename}",
-                ) from e
+                    status_code=422,
+                    message="审核文件无法解析",
+                    detail={
+                        "error_code": ValidationAuditErrorCode.FILE_UNREADABLE.value
+                    },
+                ) from exc
+            await self.file_repo.update_parse_result(
+                audit_file, parse_status="completed", parsed_text=text
+            )
 
         await self.task_repo.update(task, status=TaskStatus.UPLOADED.value)
 
@@ -229,35 +249,32 @@ class ValidationAuditService:
     async def run_audit(self, task: ValidationAuditTask) -> AuditResult:
         """执行 AI 审核"""
         files = await self.file_repo.list_by_task_id(task.id)
+        if not files:
+            raise AppException(
+                status_code=409,
+                message="请先上传审核文件",
+                detail={"error_code": ValidationAuditErrorCode.NO_FILES.value},
+            )
         parsed_files = [
             f for f in files if f.parse_status == "completed" and f.parsed_text
         ]
 
         if not parsed_files:
-            raise AppException(status_code=400, message="没有已解析的文件可供审核")
+            raise AppException(
+                status_code=409,
+                message="没有已解析的文件可供审核",
+                detail={"error_code": ValidationAuditErrorCode.NO_PARSED_FILES.value},
+            )
 
         await self.task_repo.update(task, status=TaskStatus.AUDITING.value)
 
-        audit_mode = task.audit_mode
-
-        try:
-            if audit_mode == AuditMode.PROTOCOL.value:
-                result = await self._audit_protocol(task, parsed_files)
-            elif audit_mode == AuditMode.REPORT.value:
-                result = await self._audit_report(task, parsed_files)
-            elif audit_mode == AuditMode.PROTOCOL_REPORT.value:
-                result = await self._audit_cross(task, parsed_files)
-            else:
-                raise AppException(
-                    status_code=400, message=f"未知审核模式: {audit_mode}"
-                )
-
-            return result
-
-        except Exception as e:
-            logger.exception("审核执行失败")
-            await self.task_repo.update(task, status=TaskStatus.FAILED.value)
-            raise AppException(status_code=400, message=f"审核执行失败: {e}") from e
+        if task.audit_mode == AuditMode.PROTOCOL.value:
+            return await self._audit_protocol(task, parsed_files)
+        if task.audit_mode == AuditMode.REPORT.value:
+            return await self._audit_report(task, parsed_files)
+        if task.audit_mode == AuditMode.PROTOCOL_REPORT.value:
+            return await self._audit_cross(task, parsed_files)
+        raise AppException(status_code=400, message="未知审核模式")
 
     async def _audit_protocol(
         self, task: ValidationAuditTask, files: list[ValidationAuditFile]
@@ -313,7 +330,11 @@ class ValidationAuditService:
 
         if not protocol_file or not report_file:
             raise AppException(
-                status_code=400, message="模式 C 需要同时上传方案和报告文件"
+                status_code=409,
+                message="联合审核需要方案和报告文件",
+                detail={
+                    "error_code": ValidationAuditErrorCode.CROSS_FILES_REQUIRED.value
+                },
             )
 
         golden_protocol = await self.build_golden_standard(

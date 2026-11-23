@@ -1,5 +1,6 @@
 "use client"
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import PlatformNotice from '@/components/shared/PlatformNotice'
 
 import { useEffect, useRef, useState } from "react"
@@ -72,7 +73,7 @@ export function DeviationImportDrawer({ isOpen, onClose, onSuccess }: DeviationI
       formData.append("file", file)
       setPreview(unwrapServerActionResult(await previewDeviationImport(formData)))
     } catch (err) {
-      setErrorMsg((err instanceof Error ? err.message : '') || "预览失败")
+      setErrorMsg(getUserErrorMessage((err instanceof Error ? err.message : '') || "预览失败", "预览失败"))
     } finally {
       setPreviewing(false)
     }
@@ -96,7 +97,7 @@ export function DeviationImportDrawer({ isOpen, onClose, onSuccess }: DeviationI
       setSuccessMsg(msg)
       setTimeout(() => { handleClose(); onSuccess() }, 2000)
     } catch (err) {
-      setErrorMsg((err instanceof Error ? err.message : '') || "导入失败")
+      setErrorMsg(getUserErrorMessage((err instanceof Error ? err.message : '') || "导入失败", "导入失败"))
     } finally {
       setImporting(false)
     }

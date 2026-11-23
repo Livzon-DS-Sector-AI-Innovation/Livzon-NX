@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { App, Button, Card, Col, Input, InputNumber, Row, Select, Space, Switch, Tag, Typography } from 'antd'
@@ -82,7 +83,7 @@ export default function RegulationNotificationSettingsCard({
       setSettingSnapshot(result)
       message.success('法规更新推送配置已保存')
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '保存推送配置失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '保存推送配置失败'))
     } finally {
       setSaving(false)
     }
@@ -106,7 +107,7 @@ export default function RegulationNotificationSettingsCard({
         message.warning(result?.detail || '测试消息发送失败')
       }
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '测试消息发送失败')
+      message.error(getUserErrorMessage(error instanceof Error ? error.message : '测试消息发送失败'))
     } finally {
       setTesting(false)
     }

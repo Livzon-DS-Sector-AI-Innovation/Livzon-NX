@@ -14,6 +14,7 @@ from app.core.database import get_db
 from app.platform.audit import middleware
 from app.platform.audit.middleware import AuditMiddleware
 from app.platform.audit.models import AuditLog
+from app.platform.audit.request_policy import request_audit_reason
 from app.platform.audit.service import record_audit_log
 from app.platform.identity.permission_middleware import PermissionMiddleware
 
@@ -36,6 +37,13 @@ class AuditSession:
 
     async def flush(self) -> None:
         return None
+
+
+@pytest.mark.parametrize("operation", ["start", "exit"])
+def test_switch_lifecycle_is_classified_as_authentication(operation: str) -> None:
+    path = f"/api/v1/identity/auth/impersonation/{operation}"
+    assert request_audit_reason("POST", path, 200) == "authentication"
+    assert request_audit_reason("POST", path, 403) == "security"
 
 
 @pytest.fixture
@@ -96,7 +104,6 @@ async def _request(
         ("GET", "/api/v1/quality/items/{item_id}/attachments/{file_token}/thumbnail"),
         ("POST", "/api/v1/warehouse/analytics/query"),
         ("POST", "/api/v1/identity/admin/permission-simulate"),
-        ("POST", "/api/v1/identity/admin/page-permissions/simulate"),
     ],
 )
 async def test_ordinary_reads_do_not_open_an_audit_session(

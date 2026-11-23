@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useEffect, useMemo, useState } from 'react'
 import { App, Modal, Select, Input, Button, Space, Spin, Tag, Popconfirm, Table } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
@@ -322,7 +323,7 @@ export default function TrainingPersonnelConfigModal({ open, level, scopeDept, o
       }
       message.success(`配置「${cfg.config_name}」已删除`)
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '删除失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '删除失败'))
     }
   }
 
@@ -364,7 +365,7 @@ export default function TrainingPersonnelConfigModal({ open, level, scopeDept, o
       setEditPersonnel([])
       setEditorVisible(false)
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '保存失败')
+      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '保存失败'))
     } finally {
       setSaving(false)
     }

@@ -1,5 +1,6 @@
 'use client'
 
+import { getUserErrorMessage } from '@/lib/user-error'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Form, Input, InputNumber, Select, Button, Card, Space, App } from 'antd'
@@ -29,7 +30,7 @@ export function CreatePilotWorkflowForm() {
       message.success('工作流创建成功')
       router.push(`/rd/pilot-workflow/${workflow.id}`)
     } catch (err) {
-      message.error('创建失败: ' + (err instanceof Error ? err.message : '未知错误'))
+      message.error(getUserErrorMessage('创建失败: ' + (err instanceof Error ? err.message : '未知错误')))
     } finally {
       setLoading(false)
     }

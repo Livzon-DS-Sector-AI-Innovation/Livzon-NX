@@ -89,6 +89,33 @@ async def test_failed_job_keeps_exception_message_when_present(fake_cache):
     job_id = await jobs.submit_job(_boom, task_id="test:boom-message")
     status = await _wait_terminal(job_id)
     assert status["progress"] == "失败: 飞书连接超时"
+    assert "detail" not in status
+
+
+async def test_job_stores_public_error_detail_only_for_known_failures(fake_cache):
+    from app.modules.hr.feishu_settings_service import (
+        HrFeishuNotConfigured,
+        feishu_contact_job_error_detail,
+    )
+
+    async def fail(error: Exception) -> None:
+        raise error
+
+    for error, detail in [
+        (
+            HrFeishuNotConfigured("改写后的后端诊断"),
+            {"error_code": "HR_FEISHU_CONTACT_NOT_CONFIGURED"},
+        ),
+        (RuntimeError("内部请求详情"), None),
+    ]:
+        job_id = await jobs.submit_job(
+            fail,
+            public_error_detail=feishu_contact_job_error_detail,
+            error=error,
+        )
+        status = await _wait_terminal(job_id)
+        assert status["state"] == "failed"
+        assert status.get("detail") == detail
 
 
 async def test_completed_job_reports_result(fake_cache):

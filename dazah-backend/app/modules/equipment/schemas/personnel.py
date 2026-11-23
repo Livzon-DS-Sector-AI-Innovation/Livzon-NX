@@ -2,7 +2,7 @@
 
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -41,6 +41,19 @@ class RoleResponse(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+ROLE_CODE_EXISTS = "EQUIPMENT_ROLE_CODE_EXISTS"
+
+
+class EquipmentRoleConflictDetail(BaseModel):
+    error_code: Literal["EQUIPMENT_ROLE_CODE_EXISTS"]
+
+
+class EquipmentRoleConflictResponse(BaseModel):
+    code: int
+    message: str
+    detail: EquipmentRoleConflictDetail | str | None = None
 
 
 # ── 人员 Schema ──

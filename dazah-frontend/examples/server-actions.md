@@ -39,3 +39,5 @@ async function forwardValidatedBatch(data: BatchCreate) {
 `serverApiUrl('/production/batches')` 对应 `/api/v1/production/batches`。
 上传、流式返回或需要特定错误映射的操作，按所属模块现有服务端入口实现，
 不要把普通写请求直接放在 Client Component 中。
+
+交互写入口使用 `serverActionResult` 返回可序列化结果。`requireActionResponse` 根据 HTTP 状态生成平台提示，业务只提供需要精确说明的已知原因及对应文案。网络中断或写入结果未知时，提示先核对业务记录。客户端用 `unwrapServerActionResult` 和 `getActionErrorMessage` 消费结果，其他读取或页面失败反馈使用 `getUserErrorMessage`。批量返回有逐条结果时，保留后端提供的数量和失败项，重试范围由业务流程确定。

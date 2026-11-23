@@ -16,6 +16,18 @@
         }
       }
     },
+    "admin:scrap-materials": {
+      "status": "active",
+      "module_code": "administration",
+      "route_path": "/admin/scrap-materials",
+      "actions": {}
+    },
+    "admin:seals": {
+      "status": "active",
+      "module_code": "administration",
+      "route_path": "/admin/seals",
+      "actions": {}
+    },
     "admin:tobacco-gift:dashboard": {
       "status": "active",
       "module_code": "administration",
@@ -5409,6 +5421,17 @@
       "status": "active",
       "module_code": "safety",
       "route_path": "/safety/work-certificates",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        }
+      }
+    },
+    "safety:ops-safety:guardian-roster": {
+      "status": "active",
+      "module_code": "safety",
+      "route_path": "/safety/guardian-roster",
       "actions": {
         "delete": {
           "status": "active",

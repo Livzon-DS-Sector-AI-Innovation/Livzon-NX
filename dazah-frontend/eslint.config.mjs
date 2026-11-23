@@ -1,10 +1,17 @@
 import nextCoreWebVitals from "eslint-config-next/core-web-vitals";
 import nextTypescript from "eslint-config-next/typescript";
+import userFeedback from "./scripts/eslint-user-feedback.mjs";
 
 const eslintConfig = [
   { ignores: [".pytest_cache/**"] },
   ...nextCoreWebVitals,
   ...nextTypescript,
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: ["**/*.test.{ts,tsx}", "**/generated/**"],
+    plugins: { dazah: { rules: { "user-feedback": userFeedback } } },
+    rules: { "dazah/user-feedback": "error" },
+  },
   {
     rules: {
       "no-console": ["error", { allow: ["warn", "error"] }],

@@ -52,6 +52,13 @@ from app.modules.registration.schemas.certificate import (
     CertificateWorkbookOverview,
     CertificateWorkbookSheet,
 )
+from app.modules.registration.service.workbook_validation import (
+    load_registration_workbook,
+)
+from app.modules.registration.workbook_error_contract import (
+    RegistrationWorkbookErrorCode,
+    workbook_validation_error,
+)
 from app.platform.identity.public_api import resolve_feishu_notification_recipient
 from app.platform.integrations.feishu.notification import send_user_card
 
@@ -543,7 +550,10 @@ def _parse_sheet_entries(
         for index in range(1, len(expected_headers) + 1)
     ]
     if header_row != expected_headers:
-        raise AppException(message=f"子表《{worksheet.title}》表头不匹配")
+        raise workbook_validation_error(
+            RegistrationWorkbookErrorCode.TEMPLATE_MISMATCH,
+            f"子表《{worksheet.title}》表头不匹配",
+        )
 
     sheet_key = str(sheet_meta["key"])
     sheet_name = str(sheet_meta["name"])
@@ -579,8 +589,9 @@ def _parse_sheet_entries(
             source_sequence=sequence,
         )
         if not payload["certificate_name"]:
-            raise AppException(
-                message=f"子表《{sheet_name}》第 {row_index} 行证照名称为空"
+            raise workbook_validation_error(
+                RegistrationWorkbookErrorCode.CERTIFICATE_NAME_REQUIRED,
+                f"子表《{sheet_name}》第 {row_index} 行证照名称为空",
             )
         entries.append(RegistrationCertificateEntry(**payload))
 
@@ -741,13 +752,16 @@ def _fill_certificate_sheet(
 def _load_entries_from_workbook_bytes(
     content: bytes,
 ) -> list[RegistrationCertificateEntry]:
-    workbook = load_workbook(filename=BytesIO(content), data_only=True)
+    workbook = load_registration_workbook(BytesIO(content), data_only=True)
     try:
         entries: list[RegistrationCertificateEntry] = []
         for sheet_meta in CERTIFICATE_SHEET_CONFIG:
             sheet_name = str(sheet_meta["name"])
             if sheet_name not in workbook.sheetnames:
-                raise AppException(message=f"导入失败：缺少子表《{sheet_name}》")
+                raise workbook_validation_error(
+                    RegistrationWorkbookErrorCode.TEMPLATE_MISMATCH,
+                    f"导入失败：缺少子表《{sheet_name}》",
+                )
             entries.extend(_parse_sheet_entries(workbook[sheet_name], sheet_meta))
         return entries
     finally:
@@ -1013,11 +1027,11 @@ class CertificateWorkbookService:
                 what="药政证书台账",
             )
 
-            await self.ensure_seeded()
-            old_entries = await self.repository.list_entries()
             parsed_entries = await asyncio.to_thread(
                 _load_entries_from_workbook_bytes, content
             )
+            await self.ensure_seeded()
+            old_entries = await self.repository.list_entries()
 
             try:
                 await self.repository.soft_delete_many(old_entries)

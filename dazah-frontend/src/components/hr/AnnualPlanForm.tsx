@@ -5,6 +5,7 @@ import { App, AutoComplete, Button, Card, Form, InputNumber, Select, Spin, Input
 import { SaveOutlined } from '@ant-design/icons'
 import { useRouter } from 'next/navigation'
 import { createAnnualTrainingPlan } from '@/actions/hr'
+import { getActionErrorMessage, unwrapServerActionResult } from '@/lib/server-action-result'
 import { fetchTrainingDepartments } from '@/lib/api/client/hr'
 import { with201SubDepts } from './trainingDept'
 
@@ -32,11 +33,11 @@ export default function AnnualPlanForm() {
   const handleSubmit = async (values: { year: number; department: string; plan_level: string }) => {
     setSubmitting(true)
     try {
-      const res = await createAnnualTrainingPlan({
+      const res = unwrapServerActionResult(await createAnnualTrainingPlan({
         year: values.year,
         department: values.department,
         plan_level: values.plan_level,
-      })
+      }))
       message.success('年度培训计划创建成功')
       const planId = res.data?.id
       if (planId) {
@@ -45,7 +46,7 @@ export default function AnnualPlanForm() {
         router.push('/hr/training/annual-plan')
       }
     } catch (err) {
-      message.error((err instanceof Error ? err.message : '') || '创建失败')
+      message.error(getActionErrorMessage(err, '年度培训计划创建'))
     } finally {
       setSubmitting(false)
     }

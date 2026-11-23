@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from contextlib import aclosing
 from datetime import UTC, datetime
 from typing import Any
 
@@ -21,6 +22,7 @@ from app.modules.quality import feishu_notification
 from app.modules.quality.models.inspection_items_mirror import (
     QualityItemsStockAlertNotification,
 )
+from app.modules.quality.repository import inspection_items_mirror as repo
 from app.modules.quality.schemas.inspection_items_dashboard import (
     ItemsDashboardResponse,
     ItemsMonthlyPoint,
@@ -28,10 +30,10 @@ from app.modules.quality.schemas.inspection_items_dashboard import (
     PushLowStockResult,
 )
 from app.modules.quality.service.inspection_items_mirror import (
+    ITEMS_DATE_SORT_FIELDS,
     PAGE_INBOUND,
     PAGE_INVENTORY,
     PAGE_OUTBOUND,
-    list_items_mirror,
 )
 from app.modules.quality.service.person_directory import resolve_person_by_name
 from app.modules.quality.service.quality_notification_settings import (
@@ -83,19 +85,6 @@ def _cell_text(value: Any) -> str:
     return str(value).strip()
 
 
-async def _all_items(
-    db: AsyncSession, page_key: str
-) -> tuple[list[dict[str, Any]], bool, str | None]:
-    result = await list_items_mirror(
-        db, page_key, page=1, page_size=100000
-    )
-    return (
-        result["items"],
-        result.get("configured", False),
-        result.get("last_sync_time"),
-    )
-
-
 def _is_low_stock(item: dict[str, Any], warning_source: str) -> bool:
     if warning_source == "local_threshold":
         current = _to_number(item.get("当前库存"))
@@ -128,14 +117,41 @@ def _build_alert_item(item: dict[str, Any]) -> ItemsStockAlertItem:
     )
 
 
+async def _read_inventory_alerts(
+    db: AsyncSession, config: ItemsStockAlertConfig
+) -> tuple[list[dict[str, Any]], int, bool, str | None]:
+    snapshot = await repo.get_snapshot(db, PAGE_INVENTORY)
+    if snapshot is None:
+        return [], 0, False, None
+    columns = [str(col["key"]) for col in (snapshot.columns or []) if col.get("key")]
+    alarm_fields = {"库存报警", "当前库存", "警戒库存"} & set(columns)
+    alerts: list[dict[str, Any]] = []
+    total = 0
+    async with aclosing(repo.iter_statistics_rows(db, snapshot.id)) as rows:
+        async for record_id, created, updated, cells in rows:
+            total += 1
+            if _is_low_stock(
+                {key: cells.get(key) for key in alarm_fields}, config.warning_source
+            ):
+                alerts.append(
+                    {
+                        "record_id": record_id,
+                        "created_at": created.isoformat() if created else None,
+                        "updated_at": cells.get("__last_modified")
+                        or (updated.isoformat() if updated else None),
+                        **{key: cells.get(key) for key in columns},
+                    }
+                )
+    last_sync = snapshot.last_synced_at
+    return alerts, total, True, last_sync.isoformat() if last_sync else None
+
+
 async def find_low_stock_items(
     db: AsyncSession, config: ItemsStockAlertConfig
 ) -> list[dict[str, Any]]:
     """返回库存不足物料原始行（含 record_id）。"""
-    items, configured, _ = await _all_items(db, PAGE_INVENTORY)
-    if not configured:
-        return []
-    return [item for item in items if _is_low_stock(item, config.warning_source)]
+    alerts, _, _, _ = await _read_inventory_alerts(db, config)
+    return alerts
 
 
 def _pick_cell_value(row: dict[str, Any], keys: list[str]) -> Any:
@@ -171,57 +187,55 @@ def _row_month(row: dict[str, Any], date_keys: list[str]) -> int | None:
     return None
 
 
-def _aggregate_monthly(
-    inbound_rows: list[dict[str, Any]],
-    outbound_rows: list[dict[str, Any]],
-    year: int,
-) -> list[ItemsMonthlyPoint]:
-    inbound = {m: 0.0 for m in range(1, 13)}
-    outbound = {m: 0.0 for m in range(1, 13)}
-    for row in inbound_rows:
-        month = _row_month(row, _INBOUND_DATE_KEYS)
-        qty = _to_number(_pick_cell_value(row, _INBOUND_QTY_KEYS))
-        if month and qty is not None:
-            inbound[month] += qty
-    for row in outbound_rows:
-        month = _row_month(row, _OUTBOUND_DATE_KEYS)
-        qty = _to_number(_pick_cell_value(row, _OUTBOUND_QTY_KEYS))
-        if month and qty is not None:
-            outbound[month] += qty
-    return [
-        ItemsMonthlyPoint(month=m, inbound=inbound[m], outbound=outbound[m])
-        for m in range(1, 13)
-    ]
+async def _monthly_quantity(
+    db: AsyncSession, page_key: str, date_keys: list[str], quantity_keys: list[str]
+) -> dict[int, float]:
+    totals = dict.fromkeys(range(1, 13), 0.0)
+    snapshot = await repo.get_snapshot(db, page_key)
+    if snapshot is None:
+        return totals
+    columns = {str(col["key"]) for col in (snapshot.columns or []) if col.get("key")}
+    fields = [key for key in (*date_keys, *quantity_keys) if key in columns]
+    sort_field = ITEMS_DATE_SORT_FIELDS.get(page_key)
+    async with aclosing(
+        repo.iter_statistics_rows(
+            db,
+            snapshot.id,
+            sort_field=sort_field if sort_field in columns else None,
+            project_fields=fields,
+        )
+    ) as rows:
+        async for _, created, _, cells in rows:
+            cells["created_at"] = created.isoformat() if created else None
+            month = _row_month(cells, date_keys)
+            quantity = _to_number(_pick_cell_value(cells, quantity_keys))
+            if month and quantity is not None:
+                totals[month] += quantity
+    return totals
 
 
 async def get_items_dashboard(db: AsyncSession) -> ItemsDashboardResponse:
     """物品管理仪表盘：库存预警 + 月度出入库量。"""
     config = await load_items_stock_alert_config(db)
-    inventory_items, configured, last_sync = await _all_items(db, PAGE_INVENTORY)
-
-    low_rows = (
-        [it for it in inventory_items if _is_low_stock(it, config.warning_source)]
-        if configured
-        else []
+    low_rows, total, configured, last_sync = await _read_inventory_alerts(db, config)
+    inbound = await _monthly_quantity(
+        db, PAGE_INBOUND, _INBOUND_DATE_KEYS, _INBOUND_QTY_KEYS
     )
-    low_items = [_build_alert_item(it) for it in low_rows]
-
-    inbound_rows, in_ok, _ = await _all_items(db, PAGE_INBOUND)
-    outbound_rows, out_ok, _ = await _all_items(db, PAGE_OUTBOUND)
-    now = datetime.now(UTC)
-    monthly = (
-        _aggregate_monthly(inbound_rows, outbound_rows, now.year)
-        if (in_ok or out_ok)
-        else [ItemsMonthlyPoint(month=m) for m in range(1, 13)]
+    outbound = await _monthly_quantity(
+        db, PAGE_OUTBOUND, _OUTBOUND_DATE_KEYS, _OUTBOUND_QTY_KEYS
     )
+    monthly = [
+        ItemsMonthlyPoint(month=month, inbound=inbound[month], outbound=outbound[month])
+        for month in range(1, 13)
+    ]
 
     return ItemsDashboardResponse(
         configured=configured,
-        total_items=len(inventory_items),
-        alert_count=len(low_items),
+        total_items=total,
+        alert_count=len(low_rows),
         warning_source=config.warning_source,
-        low_stock_items=low_items,
-        year=now.year,
+        low_stock_items=[_build_alert_item(item) for item in low_rows],
+        year=datetime.now(UTC).year,
         monthly=monthly,
         last_sync_time=last_sync,
     )

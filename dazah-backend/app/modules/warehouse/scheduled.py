@@ -65,9 +65,10 @@ async def _run_warehouse_sync() -> None:
                     # 未绑定数据源的页面（如全新环境）静默跳过，不刷错误日志
                     if not await service.is_material_page_bound(page_key):
                         continue
-                    await service.sync_material_page_to_local(
-                        page_key, incremental=True
-                    )
+                    async with session.begin_nested():
+                        await service.sync_material_page_to_local(
+                            page_key, incremental=True
+                        )
                 except Exception:
                     logger.exception(
                         "warehouse page incremental sync failed (scheduled)",
