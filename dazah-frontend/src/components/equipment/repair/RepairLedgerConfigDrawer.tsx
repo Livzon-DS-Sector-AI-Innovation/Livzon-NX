@@ -127,10 +127,12 @@ export function RepairLedgerConfigDrawer({
     }
     setSaving(true)
     try {
+      // 完整链接没有对应的表单项（只在粘贴链接时带出），validateFields 不会返回它，需直接取值
+      const baseUrl = ((form.getFieldValue('base_url') as string | undefined) || '').trim()
       const payload: RepairConfigUpdateRequest = {
         app_token: values.app_token.trim(),
         table_id: values.table_id.trim(),
-        base_url: values.base_url?.trim() || '',
+        base_url: baseUrl,
         is_enabled: values.is_enabled,
       }
       if (values.feishu_app_id && values.feishu_app_id !== MANUAL_APP) {

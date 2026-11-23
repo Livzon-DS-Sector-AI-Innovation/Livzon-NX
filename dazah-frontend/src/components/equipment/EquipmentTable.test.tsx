@@ -12,8 +12,8 @@ const storeMock = vi.hoisted(() => ({
   keyword: '',
   departments: [] as Array<{ id: string; name: string }>,
   departmentFilter: null as string | null,
-  categories: [] as Array<import('@/types/equipment').EquipmentCategory>,
-  locations: [] as Array<import('@/types/equipment').Location>,
+  categories: [{ id: 'cat-1', name: '反应设备' }] as unknown as Array<import('@/types/equipment').EquipmentCategory>,
+  locations: [{ id: 'loc-1', name: '一楼泵房' }] as unknown as Array<import('@/types/equipment').Location>,
   selectedCategory: null as string | null,
   selectedLocation: null as string | null,
   setDepartmentFilter: vi.fn(),
@@ -229,5 +229,53 @@ describe('EquipmentTable 导入入口', () => {
       onClose()
     })
     expect(importModalMock.lastProps?.open).toBe(false)
+  })
+
+  it('opens the repair and edit drawers from the row actions, and the create drawer from the toolbar', async () => {
+    storeMock.equipments = [equipment()]
+    storeMock.total = 1
+    await act(async () => {
+      root.render(
+        <AntApp>
+          <EquipmentTable onPageChange={() => {}} resetKey={0} />
+        </AntApp>,
+      )
+    })
+    const actions = Array.from(container.querySelectorAll('.ant-table-tbody .ant-table-row [role="button"]'))
+    expect(actions.map((node) => node.textContent?.trim())).toEqual(['报修', '编辑'])
+
+    await act(async () => { actions[0].dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    expect(storeMock.openRepairDrawer).toHaveBeenCalledWith('eq-1')
+    await act(async () => { actions[1].dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    expect(storeMock.openEquipmentDrawer).toHaveBeenCalledWith(expect.objectContaining({ id: 'eq-1' }))
+
+    const create = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent?.includes('新增'),
+    )
+    await act(async () => { create?.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    expect(storeMock.openEquipmentDrawer).toHaveBeenCalledWith()
+  })
+
+  it('tracks the keyword as typed and applies it with the enter key', async () => {
+    storeMock.equipments = [equipment()]
+    storeMock.total = 1
+    const onPageChange = vi.fn()
+    await act(async () => {
+      root.render(
+        <AntApp>
+          <EquipmentTable onPageChange={onPageChange} resetKey={0} />
+        </AntApp>,
+      )
+    })
+    const search = container.querySelector('input[placeholder*="搜索"]') as HTMLInputElement
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set?.call(search, '泵')
+      search.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    expect(storeMock.setKeyword).toHaveBeenCalledWith('泵')
+    await act(async () => {
+      search.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }))
+    })
+    expect(onPageChange).toHaveBeenCalledWith(1, 20)
   })
 })

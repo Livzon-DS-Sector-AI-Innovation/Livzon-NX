@@ -15,7 +15,7 @@ const api = vi.hoisted(() => ({
 const equipmentStore = vi.hoisted(() => ({
   categories: [] as Array<{ id: string }>,
   departments: [] as Array<{ id: string }>,
-  equipments: [],
+  equipments: [] as Array<{ id: string; equipment_no: string; name: string; importance: string }>,
   failureCodes: { actions: [], causes: [], symptoms: [] },
   keyword: '反应釜',
   loading: false,
@@ -64,9 +64,24 @@ vi.mock('@ant-design/icons', () => ({
   ReloadOutlined: () => null,
 }))
 
-vi.mock('./EquipmentTable', () => ({ EquipmentTable: () => <div>设备表格</div> }))
+// 子组件用占位替换并记录收到的 props，便于断言页面下发的数据与回调
+const children = vi.hoisted(() => ({
+  tableProps: [] as Array<Record<string, unknown>>,
+  repairDrawerProps: [] as Array<Record<string, unknown>>,
+}))
+vi.mock('./EquipmentTable', () => ({
+  EquipmentTable: (props: Record<string, unknown>) => {
+    children.tableProps.push(props)
+    return <div>设备表格</div>
+  },
+}))
 vi.mock('./EquipmentDrawer', () => ({ EquipmentDrawer: () => null }))
-vi.mock('./RepairDrawer', () => ({ RepairDrawer: () => null }))
+vi.mock('./RepairDrawer', () => ({
+  RepairDrawer: (props: Record<string, unknown>) => {
+    children.repairDrawerProps.push(props)
+    return null
+  },
+}))
 
 import { EquipmentPage } from './EquipmentPage'
 import type { EquipmentCategory, EquipmentStatistics, Location } from '@/types/equipment'
@@ -116,6 +131,9 @@ describe('EquipmentPage data lifecycle', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    children.tableProps.length = 0
+    children.repairDrawerProps.length = 0
+    equipmentStore.equipments = []
     container = document.createElement('div')
     document.body.append(container)
     root = createRoot(container)
@@ -282,5 +300,62 @@ describe('EquipmentPage data lifecycle', () => {
     })
 
     expect(qrcodeApi.message.error).toHaveBeenCalledWith('导出超时（>30秒），请重试')
+  })
+
+  const renderPage = async () => {
+    await act(async () => {
+      root.render(
+        <EquipmentPage
+          workshopCode="201-1"
+          initialCategories={[]}
+          initialLocations={[]}
+          initialEquipments={[]}
+          initialTotal={0}
+          initialStatistics={statistics}
+          initialDepartments={[]}
+        />,
+      )
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+  }
+
+  const buttonNamed = (text: string) =>
+    Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent?.includes(text),
+    )
+
+  it('resets the category and location filters from the toolbar', async () => {
+    await renderPage()
+
+    const reset = buttonNamed('重置筛选')
+    expect(reset).toBeTruthy()
+    await act(async () => {
+      reset!.click()
+    })
+    expect(equipmentStore.setSelectedCategory).toHaveBeenCalledWith(null)
+    expect(equipmentStore.setSelectedLocation).toHaveBeenCalledWith(null)
+  })
+
+  it('forwards paging from the table and hands the equipment list to the repair drawer', async () => {
+    equipmentStore.equipments = [
+      { id: 'eq-1', equipment_no: 'SB-1', name: '反应釜', importance: '高' },
+      { id: 'eq-2', equipment_no: 'SB-2', name: '离心泵', importance: '中' },
+    ]
+    await renderPage()
+
+    expect(children.repairDrawerProps.at(-1)?.equipments).toEqual([
+      { id: 'eq-1', equipment_no: 'SB-1', name: '反应釜', importance: '高' },
+      { id: 'eq-2', equipment_no: 'SB-2', name: '离心泵', importance: '中' },
+    ])
+    const table = children.tableProps.at(-1) as { onPageChange: (page: number, size: number) => void }
+    await act(async () => {
+      table.onPageChange(3, 50)
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(api.fetchEquipmentsClient).toHaveBeenLastCalledWith(
+      expect.objectContaining({ page: 3, page_size: 50 }),
+    )
   })
 })
