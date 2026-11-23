@@ -42,12 +42,22 @@ export default function MaintenanceBoundary({ children }: { children: React.Reac
       setState(next)
     }
     let polling = false
-    const check = async () => {
-      if (polling || document.hidden) return
+    // 探测自适应：正常态 1s；探测不可用（如开发环境 404/断网）按
+    // 2 倍退避至 10s 封顶，恢复或进入 announced/maintenance 后回到 1s，
+    // 避免每秒探测把开发服务器拖入排队
+    let probeDelay = 1000
+    let scheduled: ReturnType<typeof setTimeout> | undefined
+    const check = async (): Promise<boolean> => {
+      if (polling || document.hidden) return true
       polling = true
-      try { const next = await readMaintenance(original); if (next) apply(next) }
-      catch { /* A network failure does not reopen maintenance traffic. */ }
-      finally { polling = false }
+      try {
+        const next = await readMaintenance(original)
+        if (next) apply(next)
+        return next !== null
+      } catch {
+        /* A network failure does not reopen maintenance traffic. */
+        return false
+      } finally { polling = false }
     }
     const preventAction = (event: Event) => {
       if (!isMaintenanceActive(stateRef.current) || !(event.target instanceof Element)) return
@@ -56,19 +66,24 @@ export default function MaintenanceBoundary({ children }: { children: React.Reac
         event.preventDefault(); event.stopImmediatePropagation(); setDialogOpen(true)
       }
     }
-    const timer = setInterval(() => {
+    const tick = async () => {
+      if (!mounted) return
       setNow(Date.now())
       if (stateRef.current.phase === 'announced' && isMaintenanceActive(stateRef.current)) apply({ phase: 'maintenance' })
-      void check()
-    }, 1000)
-    document.addEventListener('visibilitychange', check)
+      const healthy = await check()
+      if (!mounted) return
+      probeDelay = (healthy || stateRef.current.phase !== 'normal') ? 1000 : Math.min(probeDelay * 2, 10000)
+      scheduled = setTimeout(tick, probeDelay)
+    }
+    void tick()
+    const onVisibility = () => { void check() }
+    document.addEventListener('visibilitychange', onVisibility)
     document.addEventListener('click', preventAction, true)
     document.addEventListener('submit', preventAction, true)
-    void check()
     return () => {
-      mounted = false; clearInterval(timer)
+      mounted = false; if (scheduled) clearTimeout(scheduled)
       if (window.fetch === wrapped) window.fetch = original
-      document.removeEventListener('visibilitychange', check)
+      document.removeEventListener('visibilitychange', onVisibility)
       document.removeEventListener('click', preventAction, true)
       document.removeEventListener('submit', preventAction, true)
     }
