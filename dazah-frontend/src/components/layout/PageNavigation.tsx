@@ -18,7 +18,8 @@ export function PageNavigation({ modules }: { modules: ModuleMenu[] }) {
   const levels = returnTo && !menuLevels.some((level) => level.path?.split("?")[0] === returnPath)
     ? [...menuLevels.slice(0, -1), { label: "列表", path: returnTo }, ...menuLevels.slice(-1)]
     : menuLevels
-  if (pathname === modulePath && levels.length === 1) return null
+  // 工作台型模块的首页地址带查询参数（如 /equipment?module=…），按路径部分比较
+  if (pathname === modulePath.split("?")[0] && levels.length === 1) return null
 
   return (
     <nav aria-label="页面层级" className="mb-4 flex min-h-8 flex-wrap items-center text-[13px] text-[var(--color-steel)]">

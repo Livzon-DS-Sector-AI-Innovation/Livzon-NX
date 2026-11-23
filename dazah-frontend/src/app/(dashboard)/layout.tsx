@@ -4,7 +4,7 @@ import { getCurrentUser } from "@/actions/auth"
 import { redirect } from "next/navigation"
 import { headers } from "next/headers"
 import { expandEquipmentPagePermissions, getModuleByKey, getPageKeyByPath } from "@/lib/menu-config"
-import { EQUIPMENT_CONSOLE_MODULE_HEADER, EQUIPMENT_MODULE_TABS, isEquipmentModule } from '@/lib/equipment-page-permissions'
+import { EQUIPMENT_CONSOLE_MODULE_HEADER, EQUIPMENT_MODULES, isEquipmentModule } from '@/lib/equipment-page-permissions'
 import '@/lib/dayjs-config'
 import MaintenanceBoundary from '@/components/shared/MaintenanceBoundary'
 
@@ -28,7 +28,7 @@ export default async function DashboardLayout({
   const equipmentConsole = pathname === '/equipment'
   const consoleModule = requestHeaders.get(EQUIPMENT_CONSOLE_MODULE_HEADER)
   const pageKeys = equipmentConsole
-    ? EQUIPMENT_MODULE_TABS.filter((tab) => !isEquipmentModule(consoleModule) || tab.module === consoleModule).map((tab) => tab.key)
+    ? EQUIPMENT_MODULES.filter((item) => !isEquipmentModule(consoleModule) || item.module === consoleModule).map((item) => item.key)
     : [getPageKeyByPath(pathname)]
   const grants = equipmentConsole ? expandEquipmentPagePermissions(user.page_permissions) : user.page_permissions
   const pagePolicyApplies = user.role !== 'admin' && Boolean(currentModule)

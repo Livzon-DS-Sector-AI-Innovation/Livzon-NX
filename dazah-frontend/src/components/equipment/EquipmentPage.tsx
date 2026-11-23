@@ -1,20 +1,15 @@
 'use client'
 
 import { useEffect, useCallback, useRef, useState } from 'react'
-import { App, ConfigProvider, Tabs, Button } from 'antd'
-import zhCN from 'antd/locale/zh_CN'
-import { MenuFoldOutlined, MenuUnfoldOutlined, QrcodeOutlined, ReloadOutlined } from '@ant-design/icons'
+import { App, Button } from 'antd'
+import { QrcodeOutlined, ReloadOutlined } from '@ant-design/icons'
 import { EquipmentCategory, Location, Equipment, EquipmentStatistics, DepartmentOption } from '@/types/equipment'
 import { useEquipmentStore } from '@/stores/equipment'
 import { fetchEquipmentsClient, fetchEquipmentStatisticsClient, fetchCategoriesClient, fetchLocationsClient, fetchDepartmentsClient } from '@/lib/api/equipment-client'
+
 import { fetchEquipmentQrcodePdf } from '@/lib/api/client/equipmentQrcode'
-import { StatsCards } from './StatsCards'
 import { EquipmentTable } from './EquipmentTable'
-import { CategoryTree } from './CategoryTree'
-import { LocationTree } from './LocationTree'
 import { EquipmentDrawer } from './EquipmentDrawer'
-import { CategoryDrawer } from './CategoryDrawer'
-import { LocationDrawer } from './LocationDrawer'
 import { RepairDrawer } from './RepairDrawer'
 
 interface EquipmentPageProps {
@@ -27,7 +22,13 @@ interface EquipmentPageProps {
   initialDepartments: DepartmentOption[]
 }
 
-const SIDEBAR_WIDTH = 280
+// 状态筛选按钮配置：点击筛选、再点取消
+const STATUS_FILTERS = [
+  { key: '' as const, label: '总数', color: '#1a1a1a', dotColor: '#787671' },
+  { key: '在用' as const, label: '在用', color: '#1aae39', dotColor: '#1aae39' },
+  { key: '维修中' as const, label: '维修中', color: '#dd5b00', dotColor: '#dd5b00' },
+  { key: '停用' as const, label: '停用', color: '#787671', dotColor: '#787671' },
+]
 
 export function EquipmentPage({
   workshopCode,
@@ -51,20 +52,19 @@ export function EquipmentPage({
     departments,
     keyword,
     loading,
-    setSelectedCategory,
-    setSelectedLocation,
+    setStatusFilter,
+    setDepartments,
     setCategories,
     setLocations,
     setEquipments,
-    setStatistics,
     setTotal,
+    setStatistics,
     setLoading,
-    setDepartments,
+    setSelectedCategory,
+    setSelectedLocation,
   } = useEquipmentStore()
 
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [resetKey, setResetKey] = useState(0)
-  // 用户当前选择的每页条数：筛选/保存后的刷新沿用，避免分页器显示 N 而数据只有 20
   const pageSizeRef = useRef(20)
   const [qrcodeExporting, setQrcodeExporting] = useState(false)
   const { message } = App.useApp()
@@ -74,7 +74,7 @@ export function EquipmentPage({
     setQrcodeExporting(true)
     try {
       await fetchEquipmentQrcodePdf(workshopCode)
-      message.success('设备报修码 PDF 已开始下载，打印覆膜后张贴到设备')
+      message.success('设备报修码 PDF 已开始下载')
     } catch (error) {
       message.error(error instanceof Error ? error.message : '设备码导出失败')
     } finally {
@@ -82,7 +82,7 @@ export function EquipmentPage({
     }
   }, [qrcodeExporting, workshopCode, message])
 
-  // 初始化 store 数据（包含 SSR 数据）
+  // 初始化 store 数据（SSR 预取）
   useEffect(() => {
     setCategories(initialCategories)
     setLocations(initialLocations)
@@ -90,61 +90,48 @@ export function EquipmentPage({
     setTotal(initialTotal)
     setStatistics(initialStatistics)
   }, [
-    initialCategories,
-    initialEquipments,
-    initialLocations,
-    initialStatistics,
-    initialTotal,
-    setCategories,
-    setEquipments,
-    setLocations,
-    setStatistics,
-    setTotal,
+    initialCategories, initialEquipments, initialLocations,
+    initialStatistics, initialTotal,
+    setCategories, setEquipments, setLocations, setStatistics, setTotal,
   ])
 
-  // 初始化部门列表（服务端数据）
   useEffect(() => {
     setDepartments(initialDepartments)
   }, [initialDepartments, setDepartments])
 
-  // 客户端补偿加载：如果服务端初始数据为空（某个 API 失败导致），从客户端重新获取
+  // 客户端补偿加载
   useEffect(() => {
     const loadMissing = async () => {
       const tasks: Promise<void>[] = []
       if (!categories.length) {
         tasks.push(
-          fetchCategoriesClient().then(cats => { setCategories(cats) }).catch(e => { console.warn('客户端加载分类失败:', e) })
+          fetchCategoriesClient().then(setCategories).catch(() => {}),
         )
       }
       if (!locations.length) {
         tasks.push(
-          fetchLocationsClient().then(locs => { setLocations(locs) }).catch(e => { console.warn('客户端加载位置失败:', e) })
+          fetchLocationsClient().then(setLocations).catch(() => {}),
         )
       }
       if (!departments.length) {
         tasks.push(
-          fetchDepartmentsClient().then(depts => { setDepartments(depts) }).catch(e => { console.warn('客户端加载部门失败:', e) })
+          fetchDepartmentsClient().then(setDepartments).catch(() => {}),
         )
       }
-      if (tasks.length) {
-        await Promise.allSettled(tasks)
-      }
+      if (tasks.length) await Promise.allSettled(tasks)
     }
-    loadMissing()
-  }, [
-    categories.length,
-    departments.length,
-    locations.length,
-    setCategories,
-    setDepartments,
-    setLocations,
-  ])
+    void loadMissing()
+  }, [categories.length, departments.length, locations.length, setCategories, setDepartments, setLocations])
 
-  // 获取列表数据
+  // 统计随车间刷新（SSR 预取失败或数据滞后时兜底）
+  useEffect(() => {
+    void fetchEquipmentStatisticsClient(workshopCode).then(setStatistics).catch(() => {})
+  }, [workshopCode, setStatistics])
+
   const fetchData = useCallback(async (p: number, ps: number) => {
     setLoading(true)
     try {
-      const equipmentsResponse = await fetchEquipmentsClient({
+      const res = await fetchEquipmentsClient({
         workshop: workshopCode,
         category_id: selectedCategory,
         location_id: selectedLocation,
@@ -154,145 +141,93 @@ export function EquipmentPage({
         page: p,
         page_size: ps,
       })
-      setEquipments(equipmentsResponse.items)
-      setTotal(equipmentsResponse.total)
-    } catch (error) {
-      console.error('获取设备数据失败:', error)
+      setEquipments(res.items)
+      setTotal(res.total)
+    } catch {
+      // 静默失败，保持上一次数据
     } finally {
       setLoading(false)
     }
   }, [workshopCode, selectedCategory, selectedLocation, departmentFilter, statusFilter, keyword, setEquipments, setTotal, setLoading])
 
-  // 单独刷新统计（仅 mount 或需要时使用）
-  const refreshStatistics = useCallback(async () => {
-    try {
-      const stats = await fetchEquipmentStatisticsClient(workshopCode)
-      setStatistics(stats)
-    } catch { /* 静默 */ }
-  }, [workshopCode, setStatistics])
-
-  // 刷新分类和位置树
-  const refreshCategoriesAndLocations = useCallback(async () => {
-    try {
-      const [cats, locs] = await Promise.all([fetchCategoriesClient(), fetchLocationsClient()])
-      setCategories(cats)
-      setLocations(locs)
-    } catch (error) {
-      console.error('刷新分类/位置失败:', error)
-    }
-  }, [setCategories, setLocations])
-
-  // 筛选变化时重置到第一页（含首次加载）
   useEffect(() => {
-    fetchData(1, pageSizeRef.current)
+    void fetchData(1, pageSizeRef.current)
     setResetKey(k => k + 1)
   }, [fetchData])
 
-  const tabItems = [
-    {
-      key: 'category',
-      label: '分类',
-      children: <CategoryTree categories={categories} onRefresh={refreshCategoriesAndLocations} />,
-    },
-    {
-      key: 'location',
-      label: '位置',
-      children: <LocationTree locations={locations} onRefresh={refreshCategoriesAndLocations} />,
-    },
-  ]
-
-  const tabBarExtra = (selectedCategory || selectedLocation) ? (
-    <Button
-      type="text"
-      size="small"
-      icon={<ReloadOutlined />}
-      onClick={() => {
-        setSelectedCategory(null)
-        setSelectedLocation(null)
-      }}
-      style={{ color: '#787671', marginRight: 4 }}
-    >
-      重置
-    </Button>
-  ) : null
-
   const currentStats = statistics ?? initialStatistics
+  const hasActiveFilters = Boolean(selectedCategory || selectedLocation || departmentFilter || keyword)
+
+  const refresh = useCallback(() => {
+    void fetchData(1, pageSizeRef.current)
+    setResetKey(k => k + 1)
+  }, [fetchData])
 
   return (
-    <ConfigProvider locale={zhCN}>
-      <App>
-        <div className="flex gap-4" style={{ height: 'calc(100vh - 210px)', minHeight: 400 }}>
-          {/* 左侧：可折叠分类/位置树 */}
-          {!sidebarCollapsed && (
-            <div
-              className="shrink-0"
+    <div className="flex flex-col gap-3" style={{ height: 'calc(100vh - 210px)', minHeight: 400 }}>
+      {/* 状态筛选按钮行 */}
+      <div className="flex items-center gap-3 flex-wrap">
+        {STATUS_FILTERS.map(({ key, label, color, dotColor }) => {
+          const isActive = statusFilter === key
+          const value = key === '' ? currentStats.total : (currentStats.by_status[key] || 0)
+          return (
+            <button
+              key={key || 'all'}
+              type="button"
+              onClick={() => setStatusFilter(key)}
               style={{
-                width: SIDEBAR_WIDTH,
-                background: '#ffffff',
-                padding: 16,
-                borderRadius: 12,
-                border: '1px solid #e5e3df',
-                display: 'flex', flexDirection: 'column',
-                overflow: 'hidden',
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                cursor: 'pointer',
+                background: isActive ? '#f0eeec' : 'transparent',
+                border: isActive ? '1px solid #c8c4be' : '1px solid transparent',
+                borderRadius: 20, padding: '4px 14px',
+                fontSize: 13, fontWeight: isActive ? 600 : 400,
+                color: isActive ? '#1a1a1a' : '#5d5b54',
+                transition: 'all 0.15s ease', fontFamily: 'inherit',
               }}
             >
-              <div style={{ flex: 1, overflow: 'auto', minHeight: 0 }}>
-                <Tabs items={tabItems} tabBarExtraContent={tabBarExtra} />
-              </div>
-            </div>
-          )}
-
-          {/* 右侧：设备列表 */}
-          <div
-            className="flex-1 min-w-0"
-            style={{
-              background: '#ffffff',
-              padding: '16px 20px',
-              borderRadius: 12,
-              border: '1px solid #e5e3df',
-              display: 'flex', flexDirection: 'column',
-              overflow: 'hidden',
-            }}
+              <span style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: dotColor, flexShrink: 0 }} />
+              {label}
+              <span style={{ fontWeight: 600, color, marginLeft: 2 }}>{value}</span>
+            </button>
+          )
+        })}
+        {hasActiveFilters && (
+          <Button
+            type="text" size="small" icon={<ReloadOutlined />}
+            onClick={() => { setSelectedCategory(null); setSelectedLocation(null) }}
+            style={{ color: '#787671' }}
           >
-            {/* 折叠按钮 + 统计 + 导出设备码 */}
-            <div className="mb-3 flex items-center gap-3" style={{ flexShrink: 0 }}>
-              <Button
-                type="text"
-                icon={sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-                onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-                style={{ color: '#5d5b54', flexShrink: 0 }}
-              />
-              <StatsCards statistics={currentStats} compact />
-              <Button
-                size="small"
-                icon={<QrcodeOutlined />}
-                loading={qrcodeExporting}
-                onClick={() => { void handleExportQrcode() }}
-                style={{ marginLeft: 'auto', flexShrink: 0 }}
-              >
-                导出设备码
-              </Button>
-            </div>
+            重置筛选
+          </Button>
+        )}
+        <div style={{ flex: 1 }} />
+        <Button
+          size="small" icon={<QrcodeOutlined />}
+          loading={qrcodeExporting}
+          onClick={() => { void handleExportQrcode() }}
+        >
+          导出设备码
+        </Button>
+      </div>
 
-            {/* 表格区域 */}
-            <div style={{ flex: 1, overflow: 'hidden', minHeight: 0 }}>
-              <EquipmentTable loading={loading} resetKey={resetKey} onPageChange={(p, ps) => { pageSizeRef.current = ps; fetchData(p, ps) }} workshopCode={workshopCode} />
-            </div>
-          </div>
-        </div>
+      {/* 表格（含搜索/下拉筛选/操作按钮） */}
+      <EquipmentTable
+        loading={loading}
+        resetKey={resetKey}
+        onPageChange={(p, ps) => { pageSizeRef.current = ps; void fetchData(p, ps) }}
+        workshopCode={workshopCode}
+      />
 
-        {/* 抽屉组件 */}
-        <EquipmentDrawer workshopCode={workshopCode} onRefresh={() => { fetchData(1, pageSizeRef.current); setResetKey(k => k + 1) }} />
-        <CategoryDrawer onRefresh={refreshCategoriesAndLocations} />
-        <LocationDrawer onRefresh={refreshCategoriesAndLocations} />
-        <RepairDrawer
-          equipments={equipments.map(e => ({
-            id: e.id, equipment_no: e.equipment_no, name: e.name, importance: e.importance,
-          }))}
-          symptoms={failureCodes.symptoms}
-          onRefresh={() => fetchData(1, pageSizeRef.current)}
-        />
-      </App>
-    </ConfigProvider>
+      {/* 抽屉 */}
+      <EquipmentDrawer workshopCode={workshopCode} onRefresh={refresh} />
+      <RepairDrawer
+        equipments={equipments.map(e => ({
+          id: e.id, equipment_no: e.equipment_no, name: e.name, importance: e.importance,
+        }))}
+        symptoms={failureCodes.symptoms}
+        onRefresh={refresh}
+      />
+    </div>
   )
 }

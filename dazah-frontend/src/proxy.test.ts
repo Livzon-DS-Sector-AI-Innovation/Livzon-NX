@@ -54,7 +54,7 @@ it('从设备工作台 URL 提取权限上下文，并忽略客户端伪造的�
   }))
   expect(allowed.headers.get('x-middleware-request-x-dazah-equipment-module')).toBe('assets')
   expect(allowed.headers.get('x-middleware-request-x-dazah-page-path')).toBe('/equipment')
-  const denied = await proxy(sessionRequest(`${root}?module=maintenance`, {
+  const denied = await proxy(sessionRequest(`${root}?module=inspection`, {
     headers: { 'X-Dazah-Equipment-Module': 'assets' },
   }))
   expect(denied.status).toBe(403)

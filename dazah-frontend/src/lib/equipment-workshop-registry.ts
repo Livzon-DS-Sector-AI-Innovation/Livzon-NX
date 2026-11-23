@@ -7,7 +7,12 @@
 
 import { useEffect, useState } from 'react'
 import { EQUIPMENT_WORKSHOPS } from '@/lib/menu-config'
-import type { WorkshopSummary } from '@/types/equipment-workshops'
+// 瘦身后内联车间摘要类型（原 types/equipment-workshops 已删）
+interface WorkshopSummary {
+  code: string
+  name: string
+  is_enabled: boolean
+}
 
 const FALLBACK: WorkshopSummary[] = EQUIPMENT_WORKSHOPS.map((ws) => ({
   code: ws.code,
@@ -16,23 +21,15 @@ const FALLBACK: WorkshopSummary[] = EQUIPMENT_WORKSHOPS.map((ws) => ({
 }))
 
 let cache: WorkshopSummary[] | null = null
-let inflight: Promise<WorkshopSummary[]> | null = null
+const inflight: Promise<WorkshopSummary[]> | null = null
 
 /** 拉取启用车间清单（带模块级缓存；force 强制刷新）。失败回落常量。 */
 export function loadEquipmentWorkshops(force = false): Promise<WorkshopSummary[]> {
   if (!force && cache) return Promise.resolve(cache)
   if (!force && inflight) return inflight
-  inflight = import('@/lib/api/equipment-workshops')
-    .then(async ({ fetchEquipmentWorkshops }) => {
-      const workshops = await fetchEquipmentWorkshops()
-      cache = workshops.length > 0 ? workshops : null
-      return workshops.length > 0 ? workshops : FALLBACK
-    })
-    .catch(() => FALLBACK)
-    .finally(() => {
-      inflight = null
-    })
-  return inflight
+  // 瘦身后车间管理页已下线，注册表 API 已删——直接用常量
+  cache = FALLBACK
+  return Promise.resolve(FALLBACK)
 }
 
 /** 使缓存失效（车间管理页保存后调用，让其他入口拿到最新清单）。 */

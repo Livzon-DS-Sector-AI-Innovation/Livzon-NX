@@ -17,6 +17,13 @@ describe("getNavigationHierarchy", () => {
     const energy = moduleMenus.find(item => item.key === 'energy')!
     expect(getNavigationHierarchy(energy, '/energy/entry').levels.map(level => level.label)).toEqual(['能源管理', '能源报表'])
   })
+  it('treats the equipment console root as the module home without an extra level', () => {
+    const equipment = moduleMenus.find(item => item.key === 'equipment')!
+    const result = getNavigationHierarchy(equipment, '/equipment')
+    // 工作台没有独立首页：模块入口落到首个功能模块（设备巡检），不多出一层面包屑
+    expect(result.modulePath).toBe('/equipment?module=inspection')
+    expect(result.levels.map(level => level.label)).toEqual(['设备管理'])
+  })
   it("builds clickable ancestors and menu choices for a detail route", () => {
     const result = getNavigationHierarchy(moduleMenu, "/quality/deviations/123")
     expect(result.levels.map((level) => level.label)).toEqual(["质量管理", "记录管理", "偏差台账", "详情"])

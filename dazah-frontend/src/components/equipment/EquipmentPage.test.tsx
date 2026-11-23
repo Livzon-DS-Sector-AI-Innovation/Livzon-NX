@@ -33,6 +33,7 @@ const equipmentStore = vi.hoisted(() => ({
   setSelectedCategory: vi.fn(),
   setSelectedLocation: vi.fn(),
   setStatistics: vi.fn(),
+  setStatusFilter: vi.fn(),
   setTotal: vi.fn(),
 }))
 
@@ -53,11 +54,7 @@ vi.mock('antd', async () => {
   const App = Object.assign(Wrapper, { useApp: () => ({ message: qrcodeApi.message }) })
   const Button = ({ children, onClick }: { children?: ReactNode; onClick?: () => void }) =>
     createElement('button', { onClick }, children)
-  const Tabs = ({ items }: { items: Array<{ children: ReactNode; label: string }> }) =>
-    createElement('div', null, items.map((item) => createElement('section', { key: item.label }, item.children)))
-  const ConfigProvider = ({ children, theme }: { children?: ReactNode; theme?: unknown }) =>
-    createElement('div', { 'data-theme-source': theme ? 'local' : 'inherited' }, children)
-  return { App, Button, ConfigProvider, Tabs }
+  return { App, Button }
 })
 
 vi.mock('@ant-design/icons', () => ({
@@ -67,13 +64,8 @@ vi.mock('@ant-design/icons', () => ({
   ReloadOutlined: () => null,
 }))
 
-vi.mock('./StatsCards', () => ({ StatsCards: () => <div>统计卡片</div> }))
 vi.mock('./EquipmentTable', () => ({ EquipmentTable: () => <div>设备表格</div> }))
-vi.mock('./CategoryTree', () => ({ CategoryTree: () => <div>分类树</div> }))
-vi.mock('./LocationTree', () => ({ LocationTree: () => <div>位置树</div> }))
 vi.mock('./EquipmentDrawer', () => ({ EquipmentDrawer: () => null }))
-vi.mock('./CategoryDrawer', () => ({ CategoryDrawer: () => null }))
-vi.mock('./LocationDrawer', () => ({ LocationDrawer: () => null }))
 vi.mock('./RepairDrawer', () => ({ RepairDrawer: () => null }))
 
 import { EquipmentPage } from './EquipmentPage'
@@ -131,6 +123,7 @@ describe('EquipmentPage data lifecycle', () => {
     api.fetchLocationsClient.mockResolvedValue([location('fallback-location')])
     api.fetchDepartmentsClient.mockResolvedValue([department('fallback-department', '设备部')])
     api.fetchEquipmentsClient.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20 })
+    api.fetchEquipmentStatisticsClient.mockResolvedValue(statistics)
   })
 
   afterEach(() => {
@@ -141,6 +134,11 @@ describe('EquipmentPage data lifecycle', () => {
   it('hydrates SSR data, compensates missing store data, and requests the active filters', async () => {
     const initialCategory = category('initial-category')
     const initialLocation = location('initial-location')
+    const initialStatistics: EquipmentStatistics = {
+      ...statistics,
+      total: 3,
+      by_status: { ...statistics.by_status, 在用: 2 },
+    }
 
     await act(async () => {
       root.render(
@@ -150,7 +148,7 @@ describe('EquipmentPage data lifecycle', () => {
           initialLocations={[initialLocation]}
           initialEquipments={[]}
           initialTotal={3}
-          initialStatistics={statistics}
+          initialStatistics={initialStatistics}
           initialDepartments={[department('initial-department', '工程设备部')]}
         />,
       )
@@ -158,14 +156,29 @@ describe('EquipmentPage data lifecycle', () => {
       await Promise.resolve()
     })
 
-    expect(container.querySelector('[data-theme-source="inherited"]')).not.toBeNull()
-    expect(container.querySelector('[data-theme-source="local"]')).toBeNull()
+    // 状态筛选按钮行：展示统计数，点击切换 statusFilter
+    const text = container.textContent || ''
+    expect(text).toContain('总数')
+    expect(text).toContain('在用')
+    expect(text).toContain('维修中')
+    expect(text).toContain('停用')
+    expect(equipmentStore.setStatistics).toHaveBeenCalledWith(initialStatistics)
+    const allPill = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent?.includes('总数'),
+    )
+    expect(allPill).toBeTruthy()
+    act(() => {
+      allPill?.click()
+    })
+    expect(equipmentStore.setStatusFilter).toHaveBeenCalledWith('')
+
     expect(equipmentStore.setCategories).toHaveBeenCalledWith([initialCategory])
     expect(equipmentStore.setLocations).toHaveBeenCalledWith([initialLocation])
     expect(equipmentStore.setTotal).toHaveBeenCalledWith(3)
     expect(api.fetchCategoriesClient).toHaveBeenCalledOnce()
     expect(api.fetchLocationsClient).toHaveBeenCalledOnce()
     expect(api.fetchDepartmentsClient).toHaveBeenCalledOnce()
+    expect(api.fetchEquipmentStatisticsClient).toHaveBeenCalledWith('201-1')
     expect(api.fetchEquipmentsClient).toHaveBeenCalledWith({
       workshop: '201-1',
       category_id: 'category-1',
