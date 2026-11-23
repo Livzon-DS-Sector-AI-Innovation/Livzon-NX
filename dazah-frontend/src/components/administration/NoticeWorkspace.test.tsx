@@ -259,3 +259,48 @@ describe('NoticeWorkspace', () => {
     expect(query.has('page')).toBe(false)
   })
 })
+
+describe('NoticeWorkspace 编辑弹窗全链与错误分支', () => {
+  function renderOperate() {
+    mocks.auth.hasPagePermission.mockReturnValue(true)
+    const container = render(<NoticeWorkspace />)
+    return container
+  }
+
+  async function openEdit(container: HTMLElement) {
+    await waitForRows(container, '年度安全培训通知')
+    const editBtn = [...container.querySelectorAll('button')].find((b) =>
+      b.textContent?.includes('编辑'),
+    )
+    expect(editBtn).toBeTruthy()
+    await act(async () => {
+      editBtn!.click()
+      await Promise.resolve()
+    })
+    // 真 antd Modal portal 到 body，等待编辑表单内容出现
+    for (let i = 0; i < 20; i += 1) {
+      if (document.body.textContent?.includes('编辑公告')) return
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 30))
+      })
+    }
+  }
+
+  it('编辑弹窗打开：经 operate 端点取回元数据与正文预填', async () => {
+    const container = renderOperate()
+    await openEdit(container)
+    expect(mocks.noticeApi.fetchNoticeDetail).toHaveBeenCalled()
+    expect(mocks.noticeApi.fetchNoticeContent).toHaveBeenCalled()
+    expect(document.body.textContent).toContain('编辑公告')
+  })
+
+  it('详情/内容端点失败：不阻塞弹窗打开', async () => {
+    mocks.noticeApi.fetchNoticeDetail.mockRejectedValue(new Error('详情失败'))
+    mocks.noticeApi.fetchNoticeContent.mockRejectedValue(new Error('内容失败'))
+    const container = renderOperate()
+    await openEdit(container)
+    expect(mocks.noticeApi.fetchNoticeDetail).toHaveBeenCalled()
+    expect(document.body.textContent).toContain('编辑公告')
+  })
+
+})
