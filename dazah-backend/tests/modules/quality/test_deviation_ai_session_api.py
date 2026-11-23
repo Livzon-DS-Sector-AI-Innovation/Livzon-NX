@@ -7,6 +7,13 @@ from types import SimpleNamespace as _SimpleNamespace
 from typing import Any
 
 import pytest
+from docx import Document
+from httpx import AsyncClient
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.modules.quality.models.ai_analysis_log import QualityAiAnalysisLog
+from app.modules.quality.models.deviations import Deviation
 
 
 @pytest.fixture(autouse=True)
@@ -20,14 +27,6 @@ def _llm_test_env(monkeypatch):
     monkeypatch.setenv("LLM_BASE_URL", "https://llm.test.invalid")
     monkeypatch.setenv("LLM_MODEL", "test-model")
 
-
-from docx import Document
-from httpx import AsyncClient
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.modules.quality.models.ai_analysis_log import QualityAiAnalysisLog
-from app.modules.quality.models.deviations import Deviation
 
 SimpleNamespace: Any = _SimpleNamespace
 

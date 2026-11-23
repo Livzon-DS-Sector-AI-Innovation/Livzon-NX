@@ -6,6 +6,11 @@ from uuid import uuid4
 
 import pytest
 
+from app.core.exceptions import AppException
+from app.core.llm import LLMConfigError
+from app.modules.quality.models.document_catalog import DocumentEntry
+from app.modules.quality.service import document_catalog_attachment as service
+
 
 @pytest.fixture(autouse=True)
 def _llm_test_env(monkeypatch):
@@ -17,12 +22,6 @@ def _llm_test_env(monkeypatch):
     monkeypatch.setenv("LLM_API_KEY", "test-key")
     monkeypatch.setenv("LLM_BASE_URL", "https://llm.test.invalid")
     monkeypatch.setenv("LLM_MODEL", "test-model")
-
-
-from app.core.exceptions import AppException
-from app.core.llm import LLMConfigError
-from app.modules.quality.models.document_catalog import DocumentEntry
-from app.modules.quality.service import document_catalog_attachment as service
 
 
 class _Result:

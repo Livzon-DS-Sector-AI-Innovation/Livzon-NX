@@ -5,6 +5,12 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
+from docx import Document
+from openpyxl import Workbook
+
+from app.core.exceptions import AppException
+from app.core.llm.exceptions import LLMOutputError, LLMProviderError, LLMRateLimitError
+from app.modules.quality.service import quality_ai as service
 
 
 @pytest.fixture(autouse=True)
@@ -17,14 +23,6 @@ def _llm_test_env(monkeypatch):
     monkeypatch.setenv("LLM_API_KEY", "test-key")
     monkeypatch.setenv("LLM_BASE_URL", "https://llm.test.invalid")
     monkeypatch.setenv("LLM_MODEL", "test-model")
-
-
-from docx import Document
-from openpyxl import Workbook
-
-from app.core.exceptions import AppException
-from app.core.llm.exceptions import LLMOutputError, LLMProviderError, LLMRateLimitError
-from app.modules.quality.service import quality_ai as service
 
 
 def _deviation(**overrides: object) -> SimpleNamespace:

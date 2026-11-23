@@ -5,6 +5,11 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+import app.modules.equipment.service.work_order_feishu as wof
+from app.core.llm import LLMError
+from app.modules.equipment.feishu import repair_intent
+from app.modules.equipment.feishu.repair_intent import parse_repair_intent
+
 
 @pytest.fixture(autouse=True)
 def _llm_test_env(monkeypatch):
@@ -16,12 +21,6 @@ def _llm_test_env(monkeypatch):
     monkeypatch.setenv("LLM_API_KEY", "test-key")
     monkeypatch.setenv("LLM_BASE_URL", "https://llm.test.invalid")
     monkeypatch.setenv("LLM_MODEL", "test-model")
-
-
-import app.modules.equipment.service.work_order_feishu as wof
-from app.core.llm import LLMError
-from app.modules.equipment.feishu import repair_intent
-from app.modules.equipment.feishu.repair_intent import parse_repair_intent
 
 
 @pytest.mark.asyncio
