@@ -5,6 +5,19 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+
+@pytest.fixture(autouse=True)
+def _llm_test_env(monkeypatch):
+    """CI 无 LLM 配置：显式注入 env fallback，避免 get_config 抛 LLMConfigError。
+
+    本测试的 LLM 交互均经 monkeypatch mock；这里只补配置存在性，
+    使测试在无 .env.local 的 CI 环境与本地行为一致。
+    """
+    monkeypatch.setenv("LLM_API_KEY", "test-key")
+    monkeypatch.setenv("LLM_BASE_URL", "https://llm.test.invalid")
+    monkeypatch.setenv("LLM_MODEL", "test-model")
+
+
 import app.modules.equipment.service.work_order_feishu as wof
 from app.core.llm import LLMError
 from app.modules.equipment.feishu import repair_intent
@@ -91,16 +104,10 @@ def _bot_env(monkeypatch, db, intent):
 
     monkeypatch.setattr(wof, "async_session_factory", _factory(db), raising=False)
     user = SimpleNamespace(id="u1", name="秦佳豪", username="q")
-    monkeypatch.setattr(
-        wof, "_find_user_by_feishu", AsyncMock(return_value=user)
-    )
+    monkeypatch.setattr(wof, "_find_user_by_feishu", AsyncMock(return_value=user))
     workshop = SimpleNamespace(code="201-1", name="201一车间")
-    monkeypatch.setattr(
-        wof, "_match_workshops", AsyncMock(return_value=[workshop])
-    )
-    monkeypatch.setattr(
-        wof, "_match_equipments", AsyncMock(return_value=[eq])
-    )
+    monkeypatch.setattr(wof, "_match_workshops", AsyncMock(return_value=[workshop]))
+    monkeypatch.setattr(wof, "_match_equipments", AsyncMock(return_value=[eq]))
     from tests.modules.equipment.test_work_order_feishu_bot import _Result
 
     lead_ws = SimpleNamespace(code="201-1", name="201一车间")
@@ -109,7 +116,10 @@ def _bot_env(monkeypatch, db, intent):
         wof, "_sample_ledger_names", AsyncMock(return_value=[]), raising=False
     )
     wo = SimpleNamespace(
-        id="w1", work_order_no="WO-9", status="待处理", priority="高",
+        id="w1",
+        work_order_no="WO-9",
+        status="待处理",
+        priority="高",
         equipment=eq,
     )
     monkeypatch.setattr(
