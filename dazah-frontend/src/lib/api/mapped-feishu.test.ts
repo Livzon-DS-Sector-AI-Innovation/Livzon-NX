@@ -110,3 +110,63 @@ describe('fetchMappedPageExport 导出参数与错误', () => {
     ).rejects.toThrow('导出失败（500）')
   })
 })
+
+describe('dormitory 镜像 API', () => {
+  it('fetchDormitoryStats 走 dashboard-stats 端点', async () => {
+    const data = { total_rooms: 12, occupied: 9, vacant: 3 }
+    mocks.fetch.mockResolvedValue(
+      new Response(JSON.stringify({ data }))
+    )
+    const { fetchDormitoryStats } = await import('./mapped-feishu')
+    const result = await fetchDormitoryStats('administration')
+    expect(result.total_rooms).toBe(12)
+    expect(String(mocks.fetch.mock.calls[0][0])).toContain(
+      '/api/v1/administration/dormitory/dashboard-stats'
+    )
+  })
+
+  it('recommendDormitoryRooms 走 POST JSON', async () => {
+    const data = {
+      recommendations: [{ room_no: '301' }],
+      message: '按住宿标准',
+      source: 'rule',
+    }
+    mocks.fetch.mockResolvedValue(
+      new Response(JSON.stringify({ data }))
+    )
+    const { recommendDormitoryRooms } = await import('./mapped-feishu')
+    const result = await recommendDormitoryRooms('administration', {
+      name: '张三',
+    })
+    expect(result.recommendations[0].room_no).toBe('301')
+    const [url, init] = mocks.fetch.mock.calls[0]
+    expect(String(url)).toContain('/dormitory/checkin-recommend')
+    expect(init.method).toBe('POST')
+    expect(JSON.parse(init.body)).toEqual({ name: '张三' })
+  })
+
+  it('submitDormitoryCheckin 走 POST 且 detail 错误透出', async () => {
+    const { submitDormitoryCheckin } = await import('./mapped-feishu')
+    mocks.fetch.mockResolvedValue(
+      new Response(JSON.stringify({ data: { room_no: '301', synced: true } }))
+    )
+    const ok = await submitDormitoryCheckin('administration', {
+      name: '张三',
+      room_no: '301',
+    } as never)
+    expect(ok.synced).toBe(true)
+    expect(String(mocks.fetch.mock.calls[0][0])).toContain(
+      '/dormitory/checkin'
+    )
+
+    mocks.fetch.mockResolvedValue(
+      new Response(
+        JSON.stringify({ detail: { message: '床位已被占用' } }),
+        { status: 409 },
+      ),
+    )
+    await expect(
+      submitDormitoryCheckin('administration', { name: '张三' } as never)
+    ).rejects.toThrow('床位已被占用')
+  })
+})
