@@ -49,6 +49,13 @@ const actions = vi.hoisted(() => ({
 
 const users = vi.hoisted(() => ({ getUsers: vi.fn() }))
 
+// URL stub 必须在每个用例后恢复：stub 残留会让同 shard 后续用例的
+// 锚点点击（happy-dom navigator new URL）抛 "URL is not a constructor"，
+// unhandled 使整个分片 exit 1。
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
+
 vi.mock('react', async (importOriginal) => {
   const original = await importOriginal<typeof import('react')>()
   return {
@@ -115,6 +122,7 @@ vi.mock('@/actions/settings', () => actions)
 vi.mock('@/actions/users', () => users)
 
 import FeishuSettingsClient, {
+
   AuthorizationConfirmation,
   FeishuAccess,
   IdentityAdmission,
@@ -295,7 +303,6 @@ describe('FeishuSettingsClient governance lifecycle', () => {
     })
   })
 
-  afterEach(() => vi.unstubAllGlobals())
 
   it('loads and renders the complete management overview', async () => {
     const tree = FeishuSettingsClient()

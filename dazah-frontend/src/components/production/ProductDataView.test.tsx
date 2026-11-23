@@ -18,6 +18,13 @@ vi.mock('@/actions/production', () => actions)
 
 import ProductDataView from './ProductDataView'
 
+// URL stub 必须在每个用例后恢复：stub 残留会让同 shard 后续用例的
+// 锚点点击（happy-dom navigator new URL）抛 "URL is not a constructor"，
+// unhandled 使整个分片 exit 1。
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
+
 const BATCHES = [
   {
     id: 'b1',
@@ -173,7 +180,6 @@ describe('ProductDataView', () => {
       await act(async () => { exportBtn.click(); await new Promise((r) => setTimeout(r, 80)) })
     }
     expect(container.textContent || '').toContain('霉酚酸')
-    vi.unstubAllGlobals()
   })
 
   it('edits a batch via the modal and submits an update', async () => {
