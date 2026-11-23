@@ -1,2 +1,5 @@
 export { TobaccoGiftDashboard, buildBarOption, formatMoney, formatQuantity } from './TobaccoGiftDashboard'
-export { default as TobaccoGiftRequisitionCard } from './TobaccoGiftRequisitionCard'
+export { default as TobaccoGiftApplyButton } from './TobaccoGiftApplyButton'
+export { default as DormitoryDashboard } from './DormitoryDashboard'
+export { default as DormitoryCheckinModal } from './DormitoryCheckinModal'
+export { default as NoticeWorkspace } from './NoticeWorkspace'

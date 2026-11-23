@@ -234,7 +234,8 @@ describe('page permission menu boundary', () => {
     { module_codes: ['production'] },
     { module_codes: ['procurement'], page_permissions: [{ page_key: 'purchasing:settings', module_code: 'procurement', permissions: ['access' as const] }] },
     { module_codes: ['production'], page_permissions: [{ page_key: 'unknown', module_code: 'production', permissions: ['access' as const] }] },
-    { module_codes: ['administration'], page_permissions: [{ page_key: 'admin:notice', module_code: 'administration', permissions: ['access' as const] }] },
+    // 公告通知已启用（access 即可落地）；改用仍处开发中的会议管理占位页
+    { module_codes: ['administration'], page_permissions: [{ page_key: 'admin:meeting', module_code: 'administration', permissions: ['access' as const] }] },
   ])('uses the neutral landing page when no usable page is authorized: %j', (user) => {
     expect(getFirstAuthorizedModulePath({ role: 'user', ...user })).toBe('/no-access')
   })

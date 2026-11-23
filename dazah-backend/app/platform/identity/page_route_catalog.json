@@ -3,6 +3,8 @@
   "routes": [
     "/",
     "/admin",
+    "/admin/dormitory",
+    "/admin/notice",
     "/admin/scrap-materials",
     "/admin/seals",
     "/admin/settings/feishu",

@@ -17,6 +17,9 @@ import {
   createAdministrationFeishuRootAction,
   deleteAdministrationFeishuRootAction,
   discoverAdministrationFeishuRootAction,
+  generateTobaccoGiftAiAnalysisAction,
+  importNoticeAction,
+  parseNoticeAction,
   saveAdministrationFeishuConfigAction,
   saveAdministrationPageBindingsAction,
   syncAdministrationFeishuResourceAction,
@@ -115,5 +118,114 @@ describe('administration server actions', () => {
       vi.fn().mockResolvedValue(new Response('gateway down', { status: 502 })),
     )
     await expect(discoverAdministrationFeishuRootAction('root-1')).rejects.toThrow('请求失败（502）')
+  })
+})
+
+describe('generateTobaccoGiftAiAnalysisAction', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.clearAllMocks()
+  })
+
+  it('posts to the ai-analysis endpoint with the dashboard page context', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () =>
+      response({ summary: '概述', insights: [], anomalies: [], suggestions: [], generated_at: '2026-11-23T08:00:00Z' }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await generateTobaccoGiftAiAnalysisAction()
+    expect(result).toEqual({
+      ok: true,
+      data: {
+        summary: '概述',
+        insights: [],
+        anomalies: [],
+        suggestions: [],
+        generated_at: '2026-11-23T08:00:00Z',
+      },
+    })
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(String(url)).toMatch(/\/api\/v1\/administration\/tobacco-gift\/ai-analysis$/)
+    expect(init.method).toBe('POST')
+    expect(init.headers['X-Dazah-Page-Key']).toBe('admin:tobacco-gift:dashboard')
+  })
+
+  it('propagates backend messages as user-facing errors', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => response(null, 503)))
+    const result = await generateTobaccoGiftAiAnalysisAction()
+    expect(result).toEqual({ ok: false, message: '凭据未配置' })
+  })
+})
+
+describe('notice upload actions', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.clearAllMocks()
+  })
+
+  it('forwards multipart parse with the notice page context', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () =>
+      response({ file_name: '公告.docx', suggestion: { notice_no: '2026-001' } }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const file = new File(['公告内容'], '公告.docx', { type: 'application/msword' })
+    const result = await parseNoticeAction(file)
+
+    expect(result).toEqual({
+      code: 200,
+      data: { file_name: '公告.docx', suggestion: { notice_no: '2026-001' } },
+    })
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(String(url)).toMatch(/\/api\/v1\/administration\/notices\/parse$/)
+    expect(init.method).toBe('POST')
+    expect(init.headers['X-Dazah-Page-Key']).toBe('admin:notice')
+    // multipart 转发必须剥离自动 Content-Type（让浏览器带 boundary）
+    expect(init.headers['Content-Type']).toBeUndefined()
+    expect(init.body).toBeInstanceOf(FormData)
+    expect(init.body.get('file').name).toBe('公告.docx')
+    expect(mocks.revalidatePath).not.toHaveBeenCalled()
+  })
+
+  it('forwards confirmed fields on import and revalidates the ledger', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () =>
+      response({ id: 'n-1', notice_no: '2026-001', title: '培训通知' }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const file = new File(['公告内容'], '公告.docx', { type: 'application/msword' })
+    const result = await importNoticeAction(file, {
+      notice_no: '2026-001',
+      title: '培训通知',
+      publisher: '安全环保部',
+      published_at: '2026-03-05',
+      category: '安全公告',
+      remark: '',
+    })
+
+    expect(result.code).toBe(200)
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(String(url)).toMatch(/\/api\/v1\/administration\/notices$/)
+    expect(init.body.get('notice_no')).toBe('2026-001')
+    expect(init.body.get('title')).toBe('培训通知')
+    // 空串字段不追加（后端按缺省处理）
+    expect(init.body.get('remark')).toBeNull()
+    expect(mocks.revalidatePath).toHaveBeenCalledWith('/admin/notice')
+  })
+
+  it('maps backend failures to status-coded envelopes', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async () =>
+        new Response(
+          JSON.stringify({ detail: 'AI 模型服务暂不可用，请稍后重试识别' }),
+          { status: 502, headers: { 'content-type': 'application/json' } },
+        ),
+      ),
+    )
+    const result = await parseNoticeAction(new File(['x'], '公告.docx'))
+    expect(result.code).toBe(502)
+    expect(result.message).toContain('暂不可用')
+    expect(result.data).toBeUndefined()
   })
 })

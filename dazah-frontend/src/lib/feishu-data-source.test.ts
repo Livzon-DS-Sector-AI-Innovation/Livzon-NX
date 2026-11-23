@@ -27,6 +27,7 @@ describe('administration read mirror data source', () => {
       { label: '烟酒礼品管理 / 领用记录', value: 'admin:tobacco-gift:records' },
       { label: '印章管理', value: 'admin:seals' },
       { label: '废旧物资', value: 'admin:scrap-materials' },
+      { label: '宿舍管理', value: 'admin:dormitory' },
     ])
   })
 

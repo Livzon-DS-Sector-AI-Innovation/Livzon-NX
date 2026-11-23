@@ -10,6 +10,11 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ refresh: navigation.refresh }),
 }))
 
+const aiAction = vi.hoisted(() => ({ generate: vi.fn() }))
+vi.mock('@/actions/administration', () => ({
+  generateTobaccoGiftAiAnalysisAction: (...args: unknown[]) => aiAction.generate(...args),
+}))
+
 // ECharts 在 happy-dom 下无画布；这里只断言传入的 option。
 const chartOptions = vi.hoisted(() => [] as unknown[])
 vi.mock('@/components/shared/ThemedEChart', () => ({
@@ -27,10 +32,20 @@ import {
   formatSyncedAt,
   sortByName,
 } from './TobaccoGiftDashboard'
-import TobaccoGiftRequisitionCard from './TobaccoGiftRequisitionCard'
 import type { TobaccoGiftDashboardStats } from '@/types/administration'
 
 let root: Root | null = null
+
+async function flushUntil(container: HTMLElement, text: string, tries = 100) {
+  // useTransition 的异步 Server Action 在微任务+定时器后才能提交
+  for (let i = 0; i < tries; i++) {
+    if ((container.textContent ?? '').includes(text)) return
+    await act(async () => {
+      await Promise.resolve()
+    })
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
+}
 
 function render(node: React.ReactNode) {
   const container = document.createElement('div')
@@ -193,12 +208,77 @@ describe('TobaccoGiftDashboard', () => {
   })
 })
 
-describe('TobaccoGiftRequisitionCard', () => {
-  it('links to the Feishu requisition form in a new tab', () => {
-    const container = render(<TobaccoGiftRequisitionCard />)
+describe('TobaccoGiftApplyButton', () => {
+  it('links to the Feishu requisition form in a new tab', async () => {
+    const { default: TobaccoGiftApplyButton } = await import('./TobaccoGiftApplyButton')
+    const container = render(<TobaccoGiftApplyButton />)
     const link = container.querySelector('a')
     expect(link?.getAttribute('href')).toContain('feishu.cn/share/base/form/')
     expect(link?.getAttribute('target')).toBe('_blank')
     expect(container.textContent).toContain('领用申请')
+    expect(container.textContent).not.toContain('飞书表单提交')
+  })
+})
+
+describe('TobaccoGiftDashboard AI analysis', () => {
+  const analysis = {
+    summary: '库存与领用整体平稳，无低于预警库存物品。',
+    insights: ['宽盒中华领用 91 件居首'],
+    anomalies: [],
+    suggestions: ['关注烟类库存补货节奏'],
+    generated_at: '2026-11-23T08:00:00Z',
+  }
+
+  function findButton(container: HTMLElement, text: string) {
+    return Array.from(container.querySelectorAll('button')).find((node) =>
+      node.textContent?.includes(text),
+    )
+  }
+
+  it('generates analysis via the server action and renders the sections', async () => {
+    aiAction.generate.mockResolvedValue({ ok: true, data: analysis })
+    const container = render(<TobaccoGiftDashboard stats={stats} />)
+    const button = findButton(container, 'AI 分析')
+    expect(button).toBeDefined()
+
+    await act(async () => {
+      button!.click()
+    })
+    await flushUntil(container, '库存与领用整体平稳')
+
+    expect(aiAction.generate).toHaveBeenCalledTimes(1)
+    const text = container.textContent ?? ''
+    expect(text).toContain('AI 分析')
+    expect(text).toContain('关键发现')
+    expect(text).toContain('宽盒中华领用 91 件居首')
+    expect(text).toContain('管理建议')
+    expect(text).toContain('仅供参考，不替代人工核对')
+  })
+
+  it('shows a friendly error banner when generation fails', async () => {
+    // 结构化错误：后端策划文案原样展示
+    aiAction.generate.mockResolvedValue({
+      ok: false,
+      message: 'AI 分析不可用：模型未配置，请在系统设置中配置模型',
+    })
+    const container = render(<TobaccoGiftDashboard stats={stats} />)
+    const button = findButton(container, 'AI 分析')
+
+    await act(async () => {
+      button!.click()
+    })
+    await flushUntil(container, 'AI 分析生成失败')
+
+    expect(container.textContent).toContain('AI 分析生成失败')
+    // 完整原因（模型未配置等）按平台提示框契约收进「了解访问规则」弹窗
+    expect(container.textContent).toContain('了解访问规则')
+    // 生成失败时 KPI 仍正常展示（分析卡片不渲染）
+    expect(container.textContent).toContain('物品品类')
+  })
+
+  it('hides the result card until the first generation', () => {
+    const container = render(<TobaccoGiftDashboard stats={stats} />)
+    expect(container.textContent).not.toContain('仅供参考，不替代人工核对')
+    expect(aiAction.generate).not.toHaveBeenCalled()
   })
 })

@@ -254,3 +254,36 @@ it('renders no description and no sync status strip', async () => {
   expect(text).not.toContain('数据截至')
   expect(text).not.toContain('未同步')
 })
+
+it('shows the tab-matched create button only on its own tab', async () => {
+  const pageDataWithTabs = {
+    bindings: [
+      { id: 'binding-place', tab_label: '放置申请', is_default: true, table: { app_token: 'app-1' } },
+      { id: 'binding-req', tab_label: '领用申请', is_default: false, table: { app_token: 'app-1' } },
+    ],
+  }
+  mappedApi.fetchMappedPageDataset.mockResolvedValue({
+    fields: [{ field_id: 'dept', field_name: '部门' }],
+    records: [{ record_id: 'r1', fields: { 部门: '201-3' } }],
+    pagination: { page: 1, page_size: 50, total: 1 },
+  })
+  act(() => root.render(<MappedDatasetPage
+    pageKey="admin:scrap-materials"
+    title="废旧物资"
+    initialPageData={pageDataWithTabs}
+    createForms={[
+      { tabLabel: '放置申请', label: '新增放置申请', url: 'https://forms.example/placement' },
+      { tabLabel: '领用申请', label: '新增领用申请', url: 'https://forms.example/requisition' },
+    ]}
+  />))
+  await act(async () => { await mappedApi.fetchMappedPageDataset.mock.results[0]?.value })
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 50)) })
+
+  const buttons = () =>
+    [...container.querySelectorAll('button, a.ant-btn')].map((button) => button.textContent)
+  expect(buttons().some((label) => label?.includes('新增放置申请'))).toBe(true)
+  expect(buttons().some((label) => label?.includes('新增领用申请'))).toBe(false)
+
+  const placementLink = container.querySelector('a[href="https://forms.example/placement"]')
+  expect(placementLink?.getAttribute('target')).toBe('_blank')
+})

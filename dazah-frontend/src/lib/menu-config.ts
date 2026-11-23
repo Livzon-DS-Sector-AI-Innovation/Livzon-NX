@@ -634,7 +634,14 @@ export const moduleMenus: ModuleMenu[] = [
         path: "/admin/scrap-materials",
         feishuPageKey: "admin:scrap-materials",
       },
-      { key: "notice", label: "公告通知（开发中）", path: "/admin/notice", disabled: true },
+      {
+        key: "dormitory",
+        label: "宿舍管理",
+        path: "/admin/dormitory",
+        feishuPageKey: "admin:dormitory",
+      },
+      // 公告通知为平台原生台账（非飞书镜像），显式空 feishuPageKey 不进映射下拉
+      { key: "notice", label: "公告通知", path: "/admin/notice", feishuPageKey: "" },
       { key: "meeting", label: "会议管理（开发中）", path: "/admin/meeting", disabled: true },
       { key: "approval", label: "文件审批（开发中）", path: "/admin/approval", disabled: true },
       {
