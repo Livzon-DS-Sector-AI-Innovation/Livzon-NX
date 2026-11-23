@@ -6,7 +6,11 @@ vi.mock('@/lib/server-api', () => ({
   serverApiUrl: (path: string) => `http://backend.test:8000${path}`,
 }))
 
-import { fetchPersonAvatars, mappedAttachmentUrl } from './mapped-feishu'
+import {
+  fetchMappedPageExport,
+  fetchPersonAvatars,
+  mappedAttachmentUrl,
+} from './mapped-feishu'
 
 beforeEach(() => {
   vi.resetAllMocks()
@@ -66,5 +70,43 @@ describe('mapped-feishu 领域 API', () => {
         'seals%3Amain/bind-1/record/rec%2F001' +
         '/attachments/%E7%85%A7%E7%89%87/tok%231',
     )
+  })
+})
+
+describe('fetchMappedPageExport 导出参数与错误', () => {
+  it('携带 format/columns/sort/filters 全量查询参数并返回 Blob', async () => {
+    const blob = new Blob(['xlsx-bytes'])
+    mocks.fetch.mockResolvedValue(new Response(blob))
+    const result = await fetchMappedPageExport('administration', 'seals:main', 'bind-1', {
+      format: 'xlsx',
+      columns: ['a', 'b'],
+      sort_field: 'created_at',
+      sort_direction: 'desc',
+      filters: [{ field_id: 'f1', operator: 'is', value: '锅炉' }],
+    })
+    expect(result).toBeInstanceOf(Blob)
+    const [url] = mocks.fetch.mock.calls[0]
+    expect(String(url)).toContain('/export?')
+    expect(String(url)).toContain('format=xlsx')
+    expect(String(url)).toContain('columns=a%2Cb')
+    expect(String(url)).toContain('sort_field=created_at')
+    expect(String(url)).toContain('filter_field=f1')
+    expect(String(url)).toContain('filter_value=')
+  })
+
+  it('导出失败抛业务错误信息', async () => {
+    mocks.fetch.mockResolvedValue(
+      new Response(JSON.stringify({ message: '镜像未同步' }), { status: 503 }),
+    )
+    await expect(
+      fetchMappedPageExport('administration', 'seals:main', 'bind-1', { format: 'pdf' }),
+    ).rejects.toThrow('镜像未同步')
+  })
+
+  it('无 message 时回退状态码文案', async () => {
+    mocks.fetch.mockResolvedValue(new Response('oops', { status: 500 }))
+    await expect(
+      fetchMappedPageExport('administration', 'seals:main', 'bind-1', { format: 'xlsx' }),
+    ).rejects.toThrow('导出失败（500）')
   })
 })
