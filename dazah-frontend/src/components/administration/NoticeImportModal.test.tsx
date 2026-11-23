@@ -78,26 +78,6 @@ function makeFile(name: string, size = 1024): File {
   return file
 }
 
-/** 从 Upload.Dragger 的 hidden input 直接触发 beforeUpload 路径。 */
-async function dropFile(file: File) {
-  const input = container.querySelector<HTMLInputElement>('input[type=file]')
-  expect(input).toBeTruthy()
-  if (!input) return
-  const store = (
-    input as unknown as { files?: FileList }
-  ).files
-  Object.defineProperty(input, 'files', { value: store })
-  // 直接调用组件内部路径：antd Upload 在 change 事件里走 beforeUpload
-  await act(async () => {
-    input.dispatchEvent(new Event('change', { bubbles: true }))
-  })
-}
-
-
-// beforeUpload 由 antd 内部触发难控：改为直接从组件实例外触发不可行，
-// 此处用 expose 给测试的 onDrop 属性不可行 —— 改用「选择文件后走解析」的
-// 公开路径：Upload 的 beforeUpload 通过 change 事件进入；如无法触发，
-// 退化为直接校验 props 与渲染。
 describe('NoticeImportModal', () => {
   beforeEach(() => {
     container = document.createElement('div')
