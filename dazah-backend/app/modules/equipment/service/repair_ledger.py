@@ -290,9 +290,6 @@ async def test_config(db: AsyncSession, workshop_code: str) -> dict[str, Any]:
     """连接测试：用当前配置拉 1 条记录，并把结果落回配置行。"""
     config = await get_effective_config(db, workshop_code)
     row = await _get_config_row(db, workshop_code)
-    now = datetime.now(UTC)
-    if row is not None:
-        row.last_tested_at = now
     try:
         if not config.enabled:
             raise AppException(
@@ -307,16 +304,23 @@ async def test_config(db: AsyncSession, workshop_code: str) -> dict[str, Any]:
         )
         total_text = page.get("total")
         total_label = str(total_text) if total_text is not None else "？"
-        message = f"连接成功，数据表共 {total_label} 条记录"
-        if row is not None:
-            row.last_test_status = "success"
-            row.last_test_error = None
-        result = {"success": True, "message": message}
+        result: dict[str, Any] = {
+            "success": True,
+            "message": f"连接成功，数据表共 {total_label} 条记录",
+        }
     except AppException as error:
-        if row is not None:
-            row.last_test_status = "failed"
-            row.last_test_error = error.message
         result = {"success": False, "message": error.message}
+    except Exception as error:  # noqa: BLE001
+        # 飞书网络、超时等未知失败：落为一次失败的测试结果，不上升为接口 500；
+        # 异常详情可能含接口地址，只保留异常类型
+        result = {
+            "success": False,
+            "message": f"连接测试失败（{type(error).__name__}），请稍后重试并检查网络",
+        }
+    if row is not None:
+        row.last_tested_at = datetime.now(UTC)
+        row.last_test_status = "success" if result["success"] else "failed"
+        row.last_test_error = None if result["success"] else result["message"]
     await db.commit()
     return result
 
@@ -341,18 +345,27 @@ def _text_value(value: Any) -> str | None:
     return str(value).strip() or None
 
 
+def _person_segment(seg: Any) -> str | None:
+    """单个人员对象 → 显示名：中文名、英文名、open_id 依次兜底。"""
+    if isinstance(seg, dict):
+        return next(
+            (
+                str(seg[key])
+                for key in ("name", "en_name", "id")
+                if isinstance(seg.get(key), str) and seg[key].strip()
+            ),
+            None,
+        )
+    return str(seg) if seg is not None else None
+
+
 def _person_value(value: Any) -> str | None:
     """人员字段（[{id,name}]）/ 文本 → 「张三、李四」。"""
     if value is None:
         return None
     if isinstance(value, list):
-        names = [
-            (seg or {}).get("name") or (seg or {}).get("en_name") or str(seg)
-            if isinstance(seg, dict)
-            else str(seg)
-            for seg in value
-        ]
-        joined = "、".join(n for n in names if n).strip("、")
+        names = [_person_segment(seg) for seg in value]
+        joined = "、".join(name.strip() for name in names if name and name.strip())
         return joined or None
     return _text_value(value)
 
