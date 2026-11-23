@@ -1,5 +1,6 @@
 """烟酒礼品仪表台 AI 分析测试（AsyncClient 真实调用路由，mock 统一 LLM 客户端）。"""
 
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -44,7 +45,12 @@ def _mock_chat_json(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
             raise error
         return dict(state["result"])
 
-    monkeypatch.setattr(admin_service.llm_client, "chat_json", _chat_json)
+    # 替换 administration 模块命名空间的 llm_client 引用（03c79aac 同款），
+    # 不触碰单例：对单例实例属性打补丁会在 teardown 残留绑定方法，
+    # 遮蔽同 shard 后续 quality/equipment 测试的类属性 LLM mock。
+    monkeypatch.setattr(
+        admin_service, "llm_client", SimpleNamespace(chat_json=_chat_json)
+    )
     return state
 
 
