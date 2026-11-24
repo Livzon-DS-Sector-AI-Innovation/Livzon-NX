@@ -37,6 +37,47 @@ describe('migrated HR server action coverage', () => {
     vi.clearAllMocks()
   })
 
+  it('returns a clear template rejection across the practical exam upload action', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        detail: { error_code: 'HR_PRACTICAL_EXAM_TEMPLATE_INVALID' },
+      }), { status: 400 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        code: 200, message: '导入成功', data: { description: '检查设备', training_date: '2026-11-24' },
+      }), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    const file = new File(['content'], 'questions.docx')
+    await expect(actions.importPracticalExamQuestions(file)).resolves.toEqual({
+      ok: false, message: expect.stringContaining('APP13'),
+    })
+    await expect(actions.importPracticalExamQuestions(file)).resolves.toMatchObject({
+      ok: true, data: { data: { description: '检查设备', training_date: '2026-11-24' } },
+    })
+    expect(fetchMock.mock.calls[0][0]).toMatch(/\/training-practical-exam\/import$/)
+    expect(fetchMock.mock.calls[0][1].body.get('file')).toBe(file)
+  })
+
+  it('returns actionable training ledger import validation errors across the action boundary', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        message: 'internal response text',
+        detail: { error_code: 'HR_TRAINING_IMPORT_MAPPING_INVALID' },
+      }), { status: 400 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        detail: { error_code: 'HR_TRAINING_IMPORT_NO_ROWS' },
+      }), { status: 400 }))
+    vi.stubGlobal('fetch', fetchMock)
+    const file = new File(['content'], 'training.xlsx')
+    const sheets = [{ name: '培训记录', header_row: 1, mapping: { '0': 'training_content' } }]
+    await expect(actions.confirmTrainingImport(file, '质量部', sheets)).resolves.toEqual({
+      ok: false, message: expect.stringContaining('表头'),
+    })
+    await expect(actions.confirmTrainingImport(file, '质量部', sheets)).resolves.toEqual({
+      ok: false, message: expect.stringContaining('没有可导入的数据'),
+    })
+    expect(mocks.revalidatePath).not.toHaveBeenCalled()
+  })
+
   it('touches legacy ledgers, settings, recruitment, and approval actions', async () => {
     const fetchMock = vi.fn().mockImplementation(async () => response())
     vi.stubGlobal('fetch', fetchMock)

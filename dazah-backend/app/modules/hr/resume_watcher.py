@@ -9,6 +9,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from app.core.config import get_settings
 from app.shared.config_reader import get_module_setting
 
 logger = logging.getLogger(__name__)
@@ -21,36 +22,39 @@ SUPPORTED_EXTENSIONS = (".pdf", ".docx", ".doc")
 # 去重记录文件名（与 mail_fetcher 共享）
 HASH_RECORD_FILE = ".processed_hashes.json"
 
-# 服务器端简历存储目录默认值（相对后端项目根）
+# 简历存放在已有的私有持久化卷，避开静态上传目录。
 _PROJECT_ROOT = Path(__file__).resolve().parents[3]
-DEFAULT_RESUME_WATCH_DIR = str(_PROJECT_ROOT / "data" / "hr" / "resumes")
 
 # 历史遗留桌面路径：检测到则自动迁移为新默认值
 _LEGACY_DESKTOP_WATCH_DIR = "C:\\Users\\Administrator\\Desktop\\简历"
 
 
 async def _resolve_watch_dir() -> Path:
-    """解析简历监控目录；若仍为旧桌面默认值则自动迁移为服务器目录。"""
-    watch_dir = await get_module_setting(
-        "hr", "HR_RESUME_WATCH_DIR", DEFAULT_RESUME_WATCH_DIR
-    )
-    if not watch_dir or watch_dir.strip() == _LEGACY_DESKTOP_WATCH_DIR:
+    """保留可用的历史目录，迁移无法使用的旧默认设置。"""
+    default_dir = _PROJECT_ROOT / get_settings().STORAGE_ROOT / "hr" / "resumes"
+    legacy_dir = _PROJECT_ROOT / "data" / "hr" / "resumes"
+    watch_dir = (await get_module_setting("hr", "HR_RESUME_WATCH_DIR", "")).strip()
+    if not watch_dir:
+        return legacy_dir if legacy_dir.is_dir() else default_dir
+    if watch_dir == _LEGACY_DESKTOP_WATCH_DIR or (
+        _PROJECT_ROOT / watch_dir == legacy_dir and not legacy_dir.is_dir()
+    ):
         from app.core.database import async_session_factory
         from app.shared.config_reader import set_module_setting
 
         try:
             async with async_session_factory() as session:
                 await set_module_setting(
-                    session, "hr", "HR_RESUME_WATCH_DIR", DEFAULT_RESUME_WATCH_DIR
+                    session, "hr", "HR_RESUME_WATCH_DIR", str(default_dir)
                 )
                 await session.commit()
             logger.info(
                 "简历目录已迁移为服务器默认值",
-                extra={"component": "hr", "watch_dir": DEFAULT_RESUME_WATCH_DIR},
+                extra={"component": "hr", "watch_dir": str(default_dir)},
             )
         except Exception:
             logger.exception("failed to migrate resume watch dir setting")
-        watch_dir = DEFAULT_RESUME_WATCH_DIR
+        return default_dir
     return Path(watch_dir)
 
 

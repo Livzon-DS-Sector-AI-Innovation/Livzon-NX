@@ -125,6 +125,26 @@ def test_training_export_permissions_keep_current_routes():
     assert confirmation_export.sensitive_action == "sensitive_export"
 
 
+def test_new_employee_candidate_lookup_is_limited_to_training_page():
+    path = "/api/v1/hr/new-employee-training/employee-candidates"
+    assert _binding_pages("GET", path) == (NEW_EMPLOYEE_PAGE_KEY,)
+    binding = api_binding_for_route("GET", path)
+    assert binding is not None and binding.permission == "operate"
+
+
+def test_training_tools_are_bound_only_to_the_pages_that_use_them():
+    assert _binding_pages(
+        "GET", "/api/v1/hr/position-training-lists/departments/{department}/positions"
+    ) == ("hr:training:position-training", NEW_EMPLOYEE_PAGE_KEY)
+    assert _binding_pages("GET", "/api/v1/hr/training-sign-in/employees") == (
+        SIGN_IN_PAGE_KEY,
+    )
+    assert _binding_pages("POST", "/api/v1/hr/training-ledgers/check-conflict") == (
+        "hr:training:training-ledger",
+        SIGN_IN_PAGE_KEY,
+    )
+
+
 def _app(db, user):
     app = FastAPI()
     app.include_router(

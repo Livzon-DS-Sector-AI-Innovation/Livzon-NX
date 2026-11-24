@@ -37,6 +37,7 @@ def test_entity_code_for_validation_type_appends_year_suffix() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("uncached_validation_ledger")
 async def test_list_validation_records_uses_year_entity(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -475,6 +476,7 @@ async def test_search_safe_retries_without_restricted_fields(
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("uncached_validation_ledger")
 async def test_list_applies_ai_categories_for_real_ledger(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

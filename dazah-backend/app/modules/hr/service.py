@@ -4919,24 +4919,30 @@ class TrainingLedgerService:
         time_end: str,
         instructor: str | None,
         trainees: list[str],
-        exclude_session_id: str | None = None,
+        exclude_session_id: str | UUID | None = None,
+        *,
+        dept_alias_set: set[str] | None = None,
     ) -> dict[str, Any]:
         """检测指定日期/时间段内授课人和参训人员是否与已有台账及培训会话冲突."""
-        ledgers = await self.repo.list_by_date(training_date)
+        ledgers = await self.repo.list_by_date(
+            training_date, dept_alias_set=dept_alias_set
+        )
 
         # 同时查询 TrainingSession 表中同日期的会话（未归档的培训也参与冲突检测）
-        session_result = await self.session.execute(
-            select(TrainingSession).where(
-                TrainingSession.training_date == training_date,
-            )
+        session_query = select(TrainingSession).where(
+            TrainingSession.training_date == training_date,
+            TrainingSession.is_deleted.is_(False),
         )
+        if dept_alias_set is not None:
+            session_query = session_query.where(
+                TrainingSession.department.in_(dept_alias_set)
+            )
+        session_result = await self.session.execute(session_query)
         sessions = list(session_result.scalars().all())
         # 排除当前正在编辑的会话自身
         if exclude_session_id:
-            from uuid import UUID as _UUID
-
             exclude_uuid = (
-                _UUID(exclude_session_id)
+                UUID(exclude_session_id)
                 if isinstance(exclude_session_id, str)
                 else exclude_session_id
             )
@@ -5006,6 +5012,8 @@ class TrainingLedgerService:
                 sess_start = datetime.strptime(sess.time_start, "%H:%M").time()
                 sess_end = datetime.strptime(sess.time_end, "%H:%M").time()
             except (ValueError, TypeError):
+                continue
+            if sess_start >= sess_end:
                 continue
 
             if new_start < sess_end and new_end > sess_start:
@@ -5103,9 +5111,12 @@ class TrainingLedgerService:
         match = re.search(r"(\d{2}:\d{2})\s*[~\-]\s*(\d{2}:\d{2})", dt_str)
         if not match:
             return None, None
-        start = datetime.strptime(match.group(1), "%H:%M").time()
-        end = datetime.strptime(match.group(2), "%H:%M").time()
-        return start, end
+        try:
+            start = datetime.strptime(match.group(1), "%H:%M").time()
+            end = datetime.strptime(match.group(2), "%H:%M").time()
+        except ValueError:
+            return None, None
+        return (start, end) if start < end else (None, None)
 
     @staticmethod
     def _suggest_free_slots(

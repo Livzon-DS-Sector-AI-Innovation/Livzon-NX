@@ -262,7 +262,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         WarehouseFeishuDailySyncGenerator,
     )
     from app.platform.integrations.feishu.read_scheduler import (
-        QualityFeishuReadDailySyncGenerator,
+        register_quality_read_mirror,
     )
     from app.modules.agent.scheduled import (
         AgentAutomationGenerator,
@@ -286,7 +286,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     scheduler_registry.register_generator(EnergyNotificationDeliveryGenerator())
     scheduler_registry.register_generator(WarehouseFeishuDailySyncGenerator())
     scheduler_registry.register_generator(WarehouseFeishuAnalysisGenerator())
-    scheduler_registry.register_generator(QualityFeishuReadDailySyncGenerator())
+    register_quality_read_mirror(scheduler_registry, settings, owner="api")
     scheduler_registry.register_generator(AdministrationFeishuReadSyncGenerator())
     scheduler_registry.register_generator(CertificateReminderGenerator())
     scheduler_registry.register_generator(ChangeActionPlanReminderGenerator())

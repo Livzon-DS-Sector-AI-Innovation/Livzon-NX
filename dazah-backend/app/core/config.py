@@ -37,6 +37,7 @@ class Settings(BaseSettings):
     APP_ENV: str = "development"
     DEBUG: bool = False
     DEV_BYPASS_AUTH: bool = False
+    QUALITY_READ_MIRROR_SCHEDULER: Literal["api", "worker"] = "api"
 
     @field_validator("DEBUG", mode="before")
     @classmethod

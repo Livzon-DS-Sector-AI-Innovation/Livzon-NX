@@ -6231,6 +6231,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/hr/new-employee-training/employee-candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 按姓名匹配新员工培训档案 */
+        get: operations["list_employee_candidates_api_v1_hr_new_employee_training_employee_candidates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/hr/new-employee-training/plans": {
         parameters: {
             query?: never;
@@ -7951,6 +7968,23 @@ export interface paths {
          *     签到表始终为一份 Word 文档：每 42 人一页，超出自动追加续页。
          */
         post: operations["export_training_sign_in_sheet_api_v1_hr_training_sign_in_sheet_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/hr/training-sign-in/employees": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查询培训签到可选员工 */
+        get: operations["list_training_sign_in_employees_api_v1_hr_training_sign_in_employees_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -33987,6 +34021,24 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** ApiResponseEnvelope[PracticalExamImportResult] */
+        ApiResponseEnvelope_PracticalExamImportResult_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["PracticalExamImportResult"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** ApiResponseEnvelope[ProductQualityOut] */
         ApiResponseEnvelope_ProductQualityOut_: {
             /**
@@ -35756,6 +35808,25 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** ApiResponseEnvelope[list[NewEmployeeTrainingEmployeeCandidate]] */
+        ApiResponseEnvelope_list_NewEmployeeTrainingEmployeeCandidate__: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            /** Data */
+            data: components["schemas"]["NewEmployeeTrainingEmployeeCandidate"][];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** ApiResponseEnvelope[list[OosOotRecordOut]] */
         ApiResponseEnvelope_list_OosOotRecordOut__: {
             /**
@@ -35955,6 +36026,25 @@ export interface components {
             code: number;
             /** Data */
             data: components["schemas"]["SupplierOut"][];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[list[TrainingSignInEmployee]] */
+        ApiResponseEnvelope_list_TrainingSignInEmployee__: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            /** Data */
+            data: components["schemas"]["TrainingSignInEmployee"][];
             /**
              * Message
              * @default success
@@ -51661,7 +51751,7 @@ export interface components {
          * HrBusinessErrorCode
          * @enum {string}
          */
-        HrBusinessErrorCode: "HR_ANNUAL_PLAN_DUPLICATE" | "HR_ANNUAL_PLAN_DEPARTMENT_MISSING" | "HR_ANNUAL_PLAN_ITEMS_MISSING" | "HR_ANNUAL_PLAN_ATTACHMENT_COUNT_EXCEEDED" | "HR_POSITION_TRAINING_TEMPLATE_INVALID" | "HR_POSITION_TRAINING_DATA_MISSING" | "HR_POSITION_TRANSFER_NOT_DRAFT" | "HR_POSITION_TRANSFER_NOT_SUBMITTED" | "HR_POSITION_TRANSFER_APPROVAL_COMPLETED" | "HR_POSITION_TRANSFER_FEISHU_NOT_CONFIGURED" | "HR_FEISHU_CONTACT_NOT_CONFIGURED";
+        HrBusinessErrorCode: "HR_ANNUAL_PLAN_DUPLICATE" | "HR_ANNUAL_PLAN_DEPARTMENT_MISSING" | "HR_ANNUAL_PLAN_ITEMS_MISSING" | "HR_ANNUAL_PLAN_ATTACHMENT_COUNT_EXCEEDED" | "HR_POSITION_TRAINING_TEMPLATE_INVALID" | "HR_PRACTICAL_EXAM_TEMPLATE_INVALID" | "HR_TRAINING_IMPORT_WORKBOOK_INVALID" | "HR_TRAINING_IMPORT_MAPPING_INVALID" | "HR_TRAINING_IMPORT_NO_ROWS" | "HR_POSITION_TRAINING_DATA_MISSING" | "HR_POSITION_TRANSFER_NOT_DRAFT" | "HR_POSITION_TRANSFER_NOT_SUBMITTED" | "HR_POSITION_TRANSFER_APPROVAL_COMPLETED" | "HR_POSITION_TRANSFER_FEISHU_NOT_CONFIGURED" | "HR_FEISHU_CONTACT_NOT_CONFIGURED";
         /** HrBusinessErrorDetail */
         HrBusinessErrorDetail: {
             error_code: components["schemas"]["HrBusinessErrorCode"];
@@ -55481,6 +55571,29 @@ export interface components {
              * @description 车间
              */
             workshop?: string | null;
+        };
+        /** NewEmployeeTrainingEmployeeCandidate */
+        NewEmployeeTrainingEmployeeCandidate: {
+            /** Department */
+            department: string;
+            /** Employee Number */
+            employee_number: string | null;
+            /**
+             * Hire Date
+             * Format: date
+             */
+            hire_date: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Position */
+            position: string | null;
+            /** Sub Department */
+            sub_department: string | null;
         };
         /**
          * NewEmployeeTrainingItemAdd
@@ -59351,6 +59464,13 @@ export interface components {
              * @description 培训日期
              */
             training_date?: string | null;
+        };
+        /** PracticalExamImportResult */
+        PracticalExamImportResult: {
+            /** Description */
+            description: string;
+            /** Training Date */
+            training_date: string;
         };
         /** PracticalExamPersonItem */
         PracticalExamPersonItem: {
@@ -69289,6 +69409,15 @@ export interface components {
             training_level?: string | null;
             /** Training Method */
             training_method?: string | null;
+        };
+        /** TrainingSignInEmployee */
+        TrainingSignInEmployee: {
+            /** Department */
+            department: string;
+            /** Name */
+            name: string;
+            /** Sub Department */
+            sub_department: string | null;
         };
         /** TrainingSignInSheetInput */
         TrainingSignInSheetInput: {
@@ -89674,6 +89803,39 @@ export interface operations {
             };
         };
     };
+    list_employee_candidates_api_v1_hr_new_employee_training_employee_candidates_get: {
+        parameters: {
+            query: {
+                name: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_list_NewEmployeeTrainingEmployeeCandidate__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_plans_api_v1_hr_new_employee_training_plans_get: {
         parameters: {
             query?: {
@@ -93373,6 +93535,15 @@ export interface operations {
                     "application/json": components["schemas"]["ImportConfirmResponse"];
                 };
             };
+            /** @description 可能的业务错误码：HR_TRAINING_IMPORT_WORKBOOK_INVALID, HR_TRAINING_IMPORT_MAPPING_INVALID, HR_TRAINING_IMPORT_NO_ROWS。通用错误可不带业务错误码。 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HrBusinessErrorResponse"];
+                };
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -93444,6 +93615,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ImportPreviewResponse"];
+                };
+            };
+            /** @description 可能的业务错误码：HR_TRAINING_IMPORT_WORKBOOK_INVALID。通用错误可不带业务错误码。 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HrBusinessErrorResponse"];
                 };
             };
             /** @description Validation Error */
@@ -93859,6 +94039,15 @@ export interface operations {
                     "application/json": unknown;
                 };
             };
+            /** @description 可能的业务错误码：HR_PRACTICAL_EXAM_TEMPLATE_INVALID。通用错误可不带业务错误码。 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HrBusinessErrorResponse"];
+                };
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -93891,7 +94080,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ApiResponseEnvelope_PracticalExamImportResult_"];
+                };
+            };
+            /** @description 可能的业务错误码：HR_PRACTICAL_EXAM_TEMPLATE_INVALID。通用错误可不带业务错误码。 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HrBusinessErrorResponse"];
                 };
             };
             /** @description Validation Error */
@@ -94063,6 +94261,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_training_sign_in_employees_api_v1_hr_training_sign_in_employees_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_list_TrainingSignInEmployee__"];
                 };
             };
             /** @description Validation Error */

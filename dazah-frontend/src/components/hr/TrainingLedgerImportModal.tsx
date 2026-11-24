@@ -1,6 +1,7 @@
 'use client'
 
 import { getUserErrorMessage } from '@/lib/user-error'
+import { getActionErrorMessage, unwrapServerActionResult } from '@/lib/server-action-result'
 import { useState } from 'react'
 import { App, Button, Checkbox, Modal, Select, Spin, Table, Tag, Upload } from 'antd'
 import { InboxOutlined } from '@ant-design/icons'
@@ -40,7 +41,7 @@ export default function TrainingLedgerImportModal({ open, department, onClose, o
     setAnalyzing(true)
     setSheets([])
     try {
-      const res = await previewTrainingImport(f, department)
+      const res = unwrapServerActionResult(await previewTrainingImport(f, department))
       const data = res.data || { sheets: [], field_catalog: [] }
       setSheets(data.sheets || [])
       setFieldCatalog((data.field_catalog || []) as FieldCatalogItem[])
@@ -89,13 +90,13 @@ export default function TrainingLedgerImportModal({ open, department, onClose, o
 
     setImporting(true)
     try {
-      const res = await confirmTrainingImport(file, department, payload)
+      const res = unwrapServerActionResult(await confirmTrainingImport(file, department, payload))
       message.success(res.message || '导入成功')
       onSuccess()
       handleReset()
       onClose()
     } catch (e) {
-      message.error(getUserErrorMessage((e instanceof Error ? e.message : '') || '导入失败'))
+      message.error(getActionErrorMessage(e, '培训台账导入'))
     } finally {
       setImporting(false)
     }
@@ -139,7 +140,7 @@ export default function TrainingLedgerImportModal({ open, department, onClose, o
       {sheets.length === 0 ? (
         <div className="py-8">
           <Upload.Dragger
-            accept=".xlsx,.xls"
+            accept=".xlsx"
             showUploadList={false}
             beforeUpload={(f) => {
               handleFile(f)

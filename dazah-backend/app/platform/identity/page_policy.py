@@ -6626,6 +6626,13 @@ def _hr_api_bindings() -> tuple[PageApiBinding, ...]:
     )
     add(
         "GET",
+        "/new-employee-training/employee-candidates",
+        new_employee_training,
+        permission="operate",
+        scope_adapter="hr.training_department",
+    )
+    add(
+        "GET",
         "/new-employee-training/plans/{plan_id}/export-confirmation",
         new_employee_training,
         permission="operate",
@@ -6747,12 +6754,24 @@ def _hr_api_bindings() -> tuple[PageApiBinding, ...]:
         "POST",
         (
             "/training-ledgers",
-            "/training-ledgers/check-conflict",
             "/training-ledgers/confirm-exam-scores",
             "/training-ledgers/pages",
         ),
         training_ledger,
         permission="operate",
+        scope_adapter="hr.training_department",
+    )
+    add(
+        "POST",
+        "/training-ledgers/check-conflict",
+        training_ledger_pages,
+        permission="operate",
+        scope_adapter="hr.training_department",
+    )
+    add(
+        "GET",
+        "/training-sign-in/employees",
+        sign_in,
         scope_adapter="hr.training_department",
     )
     add(
@@ -6999,11 +7018,16 @@ def _hr_api_bindings() -> tuple[PageApiBinding, ...]:
         (
             "/position-training-lists",
             "/position-training-lists/departments",
-            "/position-training-lists/departments/{department}/positions",
             "/position-training-lists/{list_id}",
             "/position-training-mappings",
         ),
         position_training,
+        scope_adapter="hr.training_department",
+    )
+    add(
+        "GET",
+        "/position-training-lists/departments/{department}/positions",
+        position_training + new_employee_training,
         scope_adapter="hr.training_department",
     )
     add(

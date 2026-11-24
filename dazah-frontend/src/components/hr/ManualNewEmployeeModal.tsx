@@ -1,14 +1,13 @@
 'use client'
 
-import { getUserErrorMessage } from '@/lib/user-error'
+import { getActionErrorMessage, unwrapServerActionResult } from '@/lib/server-action-result'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { App, AutoComplete, DatePicker, Form, Input, Modal, Space, Tag } from 'antd'
 import dayjs from 'dayjs'
 import { createManualNewEmployeeTrainingPlan } from '@/actions/hr'
-import { fetchEmployees } from '@/lib/api/hr'
-import { fetchDepartmentPositions, fetchTrainingDepartments } from '@/lib/api/client/hr'
+import { fetchDepartmentPositions, fetchNewEmployeeTrainingCandidates, fetchTrainingDepartments } from '@/lib/api/client/hr'
 import { resolveTrainingDept, ensureDeptMappings } from './trainingDept'
-import type { Employee } from '@/types/hr'
+import type { components } from '@/types/generated/schema'
 import type { NewEmployeeTrainingManualAddInput } from '@/types/hr'
 
 interface ManualNewEmployeeModalProps {
@@ -24,6 +23,8 @@ interface FormValues {
   training_position?: string
   hire_date: dayjs.Dayjs
 }
+
+type EmployeeCandidate = components['schemas']['NewEmployeeTrainingEmployeeCandidate']
 
 /**
  * 手动新增新员工（离岗复训）弹窗。
@@ -43,11 +44,11 @@ export default function ManualNewEmployeeModal({
   const [submitting, setSubmitting] = useState(false)
   const [deptOptions, setDeptOptions] = useState<{ value: string }[]>([])
   const [positionOptions, setPositionOptions] = useState<{ value: string }[]>([])
-  const [candidates, setCandidates] = useState<Employee[]>([])
+  const [candidates, setCandidates] = useState<EmployeeCandidate[]>([])
   const [matchedId, setMatchedId] = useState<string | undefined>(undefined)
   const [matching, setMatching] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const nameTouched = useRef(false)
+  const candidateRequest = useRef<AbortController | null>(null)
 
   // 部门下拉：培训部门列表
   useEffect(() => {
@@ -76,26 +77,32 @@ export default function ManualNewEmployeeModal({
       form.resetFields()
       setCandidates([])
       setMatchedId(undefined)
-      nameTouched.current = false
+      setMatching(false)
+    }
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+      candidateRequest.current?.abort()
     }
   }, [open, form])
 
   // 姓名防抖匹配员工档案
   const handleNameChange = useCallback(
     (value: string) => {
-      nameTouched.current = true
       // 手动修改姓名/清空后清除已匹配的档案关联
       setMatchedId(undefined)
       setCandidates([])
       if (debounceRef.current) clearTimeout(debounceRef.current)
-      const keyword = (value || '').trim()
+      candidateRequest.current?.abort()
+      setMatching(false)
+      const keyword = value.trim()
       if (!keyword) return
+      const request = new AbortController()
+      candidateRequest.current = request
       debounceRef.current = setTimeout(async () => {
         setMatching(true)
         try {
-          const res = await fetchEmployees({ keyword, page_size: 100 })
-          const list = res.data || []
-          const exact = list.filter((e) => e.name === keyword)
+          const exact = await fetchNewEmployeeTrainingCandidates(keyword, request.signal)
+          if (request.signal.aborted) return
           if (exact.length === 1) {
             // 唯一命中：自动带出档案信息（入职日期以档案为准；部门按培训规则归一，
             // 档案一级部门 201车间/动力科 → 培训部门名 201一车间/动力部，与列表页 Tab 口径一致）
@@ -116,14 +123,14 @@ export default function ManualNewEmployeeModal({
         } catch {
           // 匹配失败不阻断手动录入
         } finally {
-          setMatching(false)
+          if (!request.signal.aborted) setMatching(false)
         }
       }, 400)
     },
     [form],
   )
 
-  const handlePickCandidate = (emp: Employee) => {
+  const handlePickCandidate = (emp: EmployeeCandidate) => {
     setMatchedId(emp.id)
     setCandidates([])
     form.setFieldsValue({
@@ -146,13 +153,13 @@ export default function ManualNewEmployeeModal({
         employee_id: matchedId,
       }
       setSubmitting(true)
-      const res = await createManualNewEmployeeTrainingPlan(payload)
+      const res = unwrapServerActionResult(await createManualNewEmployeeTrainingPlan(payload))
       message.success(res.message || '已创建培训计划')
       onCreated(res.message || '已创建培训计划')
     } catch (err) {
       // 表单校验失败（(typeof err === 'object' && err !== null && 'errorFields' in err)）不提示；接口错误提示原因
       if (!(typeof err === 'object' && err !== null && 'errorFields' in err)) {
-        message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '手动新增新员工失败'))
+        message.error(getActionErrorMessage(err, '新员工培训计划创建'))
       }
     } finally {
       setSubmitting(false)

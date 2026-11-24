@@ -4,6 +4,7 @@
  */
 
 import type { components } from '@/types/generated/schema'
+import { getUserErrorMessage, UserFacingError } from '@/lib/user-error'
 import type {
   Trainer,
   TrainingEvaluation,
@@ -897,7 +898,41 @@ export async function fetchPlanTrackingPeriod(params: {
   return json.data || []
 }
 
+export async function fetchTrainingSignInEmployees(
+  signal?: AbortSignal,
+): Promise<components['schemas']['TrainingSignInEmployee'][]> {
+  const employees: components['schemas']['TrainingSignInEmployee'][] = []
+  const pageSize = 200
+  for (let page = 1; ; page += 1) {
+    const res = await fetch(`/api/v1/hr/training-sign-in/employees?page=${page}&page_size=${pageSize}`, {
+      cache: 'no-store',
+      signal,
+    })
+    if (!res.ok) throw new UserFacingError(getUserErrorMessage(undefined, undefined, res.status))
+    const payload: components['schemas']['ApiResponseEnvelope_list_TrainingSignInEmployee__'] = await res.json()
+    employees.push(...payload.data)
+    const total = payload.meta?.total
+    if (payload.data.length < pageSize || (typeof total === 'number' && employees.length >= total)) {
+      return employees
+    }
+  }
+}
+
 // ─── 新员工培训 ───
+
+export async function fetchNewEmployeeTrainingCandidates(
+  name: string,
+  signal?: AbortSignal,
+): Promise<components['schemas']['NewEmployeeTrainingEmployeeCandidate'][]> {
+  const query = new URLSearchParams({ name })
+  const res = await fetch(`/api/v1/hr/new-employee-training/employee-candidates?${query}`, {
+    cache: 'no-store',
+    signal,
+  })
+  if (!res.ok) throw new Error('匹配新员工档案失败')
+  const payload: components['schemas']['ApiResponseEnvelope_list_NewEmployeeTrainingEmployeeCandidate__'] = await res.json()
+  return payload.data
+}
 
 export async function fetchNewEmployeeTrainingPlans(
   params?: {

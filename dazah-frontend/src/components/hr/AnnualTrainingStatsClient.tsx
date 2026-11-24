@@ -12,6 +12,7 @@ import { fetchTrainingLedgersByDept } from '@/lib/api/hr'
 import { fetchSessionDocuments, fetchTrainingSession } from '@/lib/api/client/hr'
 import { updateTrainingLedger, deleteTrainingLedger, batchDeleteTrainingLedgers, createSecondLevelTraining, generateOralExamResult, generatePracticalExamResult, createTrainingLedger } from '@/actions/hr'
 import { downloadBytes } from '@/lib/download'
+import { unwrapServerActionResult } from '@/lib/server-action-result'
 import ImportExamScoresModal from './ImportExamScoresModal'
 
 const DOC_TYPE_LABELS: Record<string, string> = {
@@ -130,7 +131,7 @@ export default function AnnualTrainingStatsClient({ department, dateFrom, dateTo
         const r = await generateOralExamResult(doc.payload)
         downloadBytes(r.bytes, r.filename)
       } else if (doc.doc_type === 'practical_exam') {
-        const r = await generatePracticalExamResult(doc.payload)
+        const r = unwrapServerActionResult(await generatePracticalExamResult(doc.payload))
         downloadBytes(r.bytes, r.filename)
       }
     } catch (e) {

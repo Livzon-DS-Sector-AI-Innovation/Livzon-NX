@@ -11,11 +11,15 @@ import re
 import zipfile
 from io import BytesIO
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from typing import Any
 
 from docx import Document
+from docx.opc.exceptions import PackageNotFoundError
+from docx.table import Table
 
 from app.modules.hr.date_format import fmt_date_str
+from app.modules.hr.error_contract import HrBusinessError, HrBusinessErrorCode
 from app.modules.hr.schemas import PracticalExamExportRequest, PracticalExamPersonItem
 from app.modules.hr.template_filler import fill_whole_cell, header_fmt_source
 
@@ -67,29 +71,85 @@ def _imported_template_path() -> Path:
     return Path(__file__).resolve().parent / "_practical_imported_template.docx"
 
 
+def save_practical_exam_template(content: bytes) -> None:
+    path = _imported_template_path()
+    temp = NamedTemporaryFile(dir=path.parent, delete=False)
+    temp_path = Path(temp.name)
+    try:
+        with temp:
+            temp.write(content)
+        temp_path.replace(path)
+    finally:
+        temp_path.unlink(missing_ok=True)
+
+
+def _load_question_template(source: BytesIO) -> Table:
+    invalid_template = HrBusinessError(
+        400,
+        "实操试题模板不符合 APP13 格式，请使用 APP13 实操培训考核结果表，"
+        "保留部门、姓名、培训日期和考核情况描述的表格结构后重新导入。",
+        HrBusinessErrorCode.HR_PRACTICAL_EXAM_TEMPLATE_INVALID,
+    )
+    try:
+        doc = Document(source)
+        if doc.tables:
+            table = doc.tables[0]
+            rows = table.rows
+            if len(rows) >= 4 and rows[3].cells:
+                identification = rows[1].cells
+                training = rows[2].cells
+                if len(identification) >= 6 and len(training) >= 6:
+                    distinct_identity_cells = {
+                        identification[index]._tc for index in (0, 1, 4, 5)
+                    }
+                    if len(distinct_identity_cells) == 4 and all(
+                        re.sub(r"\s+", "", cells[label].text) == text
+                        and cells[label]._tc is not cells[value]._tc
+                        for cells, label, value, text in (
+                            (identification, 0, 1, "部门"),
+                            (identification, 4, 5, "姓名"),
+                            (training, 4, 5, "培训日期"),
+                        )
+                    ):
+                        return table
+    except (
+        ValueError,
+        KeyError,
+        IndexError,
+        zipfile.BadZipFile,
+        PackageNotFoundError,
+        SyntaxError,
+    ) as exc:
+        raise invalid_template from exc
+    raise invalid_template
+
+
 def _safe_filename(s: str | None, maxlen: int = 40) -> str:
     """去掉文件名非法字符，截断到 maxlen."""
     s = re.sub(r'[\\/:*?"<>|\r\n\t]+', "", s or "").strip()
     return s[:maxlen] or "未命名"
 
 
-def _make_person_doc(person: Any, data: PracticalExamExportRequest) -> BytesIO:
+def _make_person_doc(
+    person: PracticalExamPersonItem,
+    data: PracticalExamExportRequest,
+    template: bytes,
+    *,
+    imported: bool,
+) -> BytesIO:
     """生成单个人员的 APP13 文档（独立 docx，可多页）.
 
     若存在最近导入的实操试题文件，则以该文件为基底、只填部门/姓名/培训日期，
     完整保留试题的段落结构/方框；否则用空白模板完整填充。
     """
-    imported = _imported_template_path()
-    if imported.exists():
-        doc = Document(str(imported))
-        if doc.tables:
-            fmt_src = header_fmt_source(doc.tables[0])
-            _fill_person_only(doc.tables[0], person, data, fmt_src)
-    else:
-        doc = Document(str(_find_template()))
-        if doc.tables:
-            fmt_src = header_fmt_source(doc.tables[0])
-            _fill_table(doc.tables[0], person, data, fmt_src)
+    doc = Document(BytesIO(template))
+    if doc.tables:
+        table = doc.tables[0]
+        fmt_src = header_fmt_source(table)
+        if imported:
+            _fill_person_only(table, person, data, fmt_src)
+        else:
+            _fill_table(table, person, data, fmt_src)
     buf = BytesIO()
     doc.save(buf)
     buf.seek(0)
@@ -101,10 +161,15 @@ def generate_practical_exam_zip(data: PracticalExamExportRequest) -> BytesIO:
     persons = data.persons or []
     if not persons:
         persons = [PracticalExamPersonItem(name="")]
+    imported_path = _imported_template_path()
+    imported = imported_path.is_file()
+    template = (imported_path if imported else _find_template()).read_bytes()
+    if imported:
+        _load_question_template(BytesIO(template))
     zip_buf = BytesIO()
     with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
         for i, person in enumerate(persons, start=1):
-            doc_buf = _make_person_doc(person, data)
+            doc_buf = _make_person_doc(person, data, template, imported=imported)
             name = person.name or f"人员{i}"
             fname = (
                 f"{_safe_filename(data.training_date)}"
@@ -116,25 +181,17 @@ def generate_practical_exam_zip(data: PracticalExamExportRequest) -> BytesIO:
     return zip_buf
 
 
-def parse_practical_exam_questions(content: bytes) -> dict[str, Any]:
+def parse_practical_exam_questions(content: bytes) -> dict[str, str]:
     """解析导入的 APP13 格式 docx，提取实操考核情况描述与培训日期.
 
     模板结构：R1 部门/姓名（导入时留空），R2 培训内容/培训日期，R3
     实操考核情况描述（整行大格）。
     """
-    doc = Document(BytesIO(content))
-    if not doc.tables:
-        raise ValueError("导入文件中未找到表格")
-    t = doc.tables[0]
-    # R3 实操考核情况描述（整行合并大格，取首段文本）
-    description = ""
-    if len(t.rows) > 3:
-        description = t.rows[3].cells[0].text.strip()
-    # R2 培训日期
-    training_date = ""
-    if len(t.rows) > 2:
-        training_date = t.rows[2].cells[5].text.strip()
-    return {"description": description, "training_date": training_date}
+    table = _load_question_template(BytesIO(content))
+    return {
+        "description": table.rows[3].cells[0].text.strip(),
+        "training_date": table.rows[2].cells[5].text.strip(),
+    }
 
 
 def generate_practical_exam_result(data: PracticalExamExportRequest) -> BytesIO:

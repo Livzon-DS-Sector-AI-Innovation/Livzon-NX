@@ -29,7 +29,7 @@ const mocks = vi.hoisted(() => {
     'updateHrFeishuAppSettings', 'updateHrFeishuEntitySetting', 'uploadOfferTemplateAction',
     'fetchAnnualTrainingPlans', 'fetchPlanItems', 'fetchPlanAttachmentSections', 'fetchUsedTrainingContent',
     'fetchTrainingSession', 'fetchSessionDocuments', 'fetchNewHires', 'fetchTrainingPersonnelConfigs',
-    'fetchTrainingDepartments', 'createTrainingLedger', 'markTrainingContentUsed', 'upsertTrainingSession',
+    'fetchTrainingDepartments', 'fetchTrainingSignInEmployees', 'createTrainingLedger', 'markTrainingContentUsed', 'upsertTrainingSession',
     'upsertTrainingDocument', 'fetchEmployeeTrainingMembers', 'fetchEmployeeTrainingRecords', 'importFeishuMembers',
     'addEmployeeTrainingMember', 'removeEmployeeTrainingMember', 'updateEmployeeTrainingMember',
     'fetchNewEmployeeTrainingPlans', 'fetchNewEmployeeTrainingStats', 'fetchDepartmentPositions',
@@ -736,6 +736,7 @@ describe('migrated component coverage', () => {
         getMock(moduleName, name).mockResolvedValue([])
       }
     }
+    getMock('lib/api/client/hr', 'fetchTrainingSignInEmployees').mockResolvedValue([])
     window.matchMedia = window.matchMedia ?? (() => ({ matches: false, addListener: vi.fn(), removeListener: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn(), dispatchEvent: vi.fn() }))
     window.URL.createObjectURL = vi.fn(() => 'blob:test')
     window.URL.revokeObjectURL = vi.fn()
@@ -1565,7 +1566,7 @@ describe('migrated component coverage', () => {
   it('exercises the real sign-in sheet personnel, conflict and export paths', async () => {
     const { default: RealSignInSheetClient } = await vi.importActual<typeof import('./components/hr/SignInSheetClient')>('./components/hr/SignInSheetClient')
     getMock('lib/api/client/hr', 'fetchTrainingDepartments').mockResolvedValue(['质量部', '生产部'])
-    getMock('lib/api/hr', 'fetchEmployees').mockResolvedValue({ data: [{ name: '李四', department: '质量部', sub_department: null }], total: 1 })
+    getMock('lib/api/client/hr', 'fetchTrainingSignInEmployees').mockResolvedValue([{ name: '李四', department: '质量部', sub_department: null }])
     getMock('lib/api/client/hr', 'fetchTrainers').mockResolvedValue({ data: [{ name: '张三', department: '质量部' }], total: 1 })
     getMock('actions/hr', 'checkTrainingConflict').mockResolvedValue({ data: { has_conflict: true, instructor_conflicts: [{ training_name: '已有培训', time_range: '09:00-10:00', conflict_depts: ['质量部'], conflict_count: 1 }], trainee_conflicts: [{ training_name: '其他培训', time_range: '09:00-10:00', names: ['李四'], conflict_count: 1 }], suggested_times: [{ start: '14:00', end: '15:00' }] } })
     getMock('actions/hr', 'generateTrainingSignInSheet').mockResolvedValue({ bytes: new Uint8Array([1, 2, 3]), filename: '签到表.docx' })
@@ -1605,6 +1606,8 @@ describe('migrated component coverage', () => {
     rendered.container.querySelector('button')?.click()
     await settle()
     expect(getMock('actions/hr', 'checkTrainingConflict')).toHaveBeenCalled()
+    expect(getMock('lib/api/client/hr', 'fetchTrainingSignInEmployees')).toHaveBeenCalledOnce()
+    expect(getMock('lib/api/hr', 'fetchEmployees')).not.toHaveBeenCalled()
     expect(getMock('actions/hr', 'generateTrainingSignInSheet')).toHaveBeenCalled()
     expect(onSessionChange).toHaveBeenCalled()
     closeRendered(rendered)
@@ -2889,8 +2892,8 @@ describe('migrated component coverage', () => {
     getMock('actions/hr', 'generateTrainingNotification').mockResolvedValue({ bytes: new Uint8Array([1]), filename: 'notification.docx' })
     getMock('actions/hr', 'generateTrainingEvaluation').mockResolvedValue({ bytes: new Uint8Array([1]), filename: 'evaluation.docx' })
     getMock('actions/hr', 'generateOralExamResult').mockResolvedValue({ bytes: new Uint8Array([1]), filename: 'oral.docx' })
-    getMock('actions/hr', 'generatePracticalExamResult').mockResolvedValue({ bytes: new Uint8Array([1]), filename: 'practical.docx' })
-    getMock('actions/hr', 'importPracticalExamQuestions').mockResolvedValue({ data: { description: '实操题目', training_date: '2026-08-25' } })
+    getMock('actions/hr', 'generatePracticalExamResult').mockResolvedValue({ ok: true, data: { bytes: new Uint8Array([1]), filename: 'practical.docx' } })
+    getMock('actions/hr', 'importPracticalExamQuestions').mockResolvedValue({ ok: true, data: { data: { description: '实操题目', training_date: '2026-08-25' } } })
     const exporters = new Map<string, () => Promise<unknown>>()
     const rendered = renderClient(createElement('div', null,
       createElement(TrainingNotificationClient, { key: 'notification', sessionData, registerExporter: (name, fn) => exporters.set(name, fn as () => Promise<unknown>) }),
@@ -2912,6 +2915,23 @@ describe('migrated component coverage', () => {
     await settle()
     expect(getMock('actions/hr', 'generateTrainingNotification')).toHaveBeenCalled()
     expect(getMock('actions/hr', 'generateTrainingEvaluation')).toHaveBeenCalled()
+    closeRendered(rendered)
+  })
+
+  it('displays the APP13 template error when a practical exam upload is rejected', async () => {
+    const upload = getMock('actions/hr', 'importPracticalExamQuestions')
+    const message = '实操试题模板不符合 APP13 格式，请重新导入。'
+    upload.mockResolvedValue({ ok: false, message })
+    const rendered = renderClient(createElement(PracticalExamSheetClient, {
+      sessionData: { topic: 'GMP培训', training_date: '2026-11-24' },
+    }))
+    const importButton = Array.from(rendered.container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('导入实操试题'))
+    expect(importButton).toBeTruthy()
+    await act(async () => { importButton?.click() })
+    expect(upload).toHaveBeenCalledOnce()
+    expect(mocks.message.error).toHaveBeenCalledWith(message)
+    expect(mocks.message.success).not.toHaveBeenCalledWith('实操试题已导入')
     closeRendered(rendered)
   })
 
@@ -4045,11 +4065,11 @@ describe('migrated component coverage', () => {
     getMock('lib/api/hr', 'fetchEsgRecordsByDept').mockResolvedValue({ data: [record] })
     getMock('actions/hr', 'updateEsgTrainingRecord').mockResolvedValue({})
     getMock('actions/hr', 'deleteEsgTrainingRecord').mockResolvedValue({})
-    getMock('actions/hr', 'previewTrainingImport').mockResolvedValue({ data: {
-      sheets: [{ name: '培训记录', header_row: 1, headers: ['姓名', '培训类型'], sample_rows: [['张三', '质量类']], mapping: { '0': 'employee_name', '1': 'training_type' }, source: 'rule', data_row_count: 1, ai_judgment: '' }, { name: '其他', header_row: 1, headers: ['备注'], sample_rows: [], mapping: {}, source: 'none', data_row_count: 0, ai_judgment: '跳过' }],
-      field_catalog: [{ key: 'employee_name', label: '员工姓名' }, { key: 'training_type', label: '培训类型' }],
-    } })
-    getMock('actions/hr', 'confirmTrainingImport').mockResolvedValue({ message: '导入成功' })
+    getMock('actions/hr', 'previewTrainingImport').mockResolvedValue({ ok: true, data: { data: {
+      sheets: [{ name: '培训记录', header_row: 1, headers: ['培训内容', '培训类型'], sample_rows: [['岗位培训', '质量类']], mapping: { '0': 'training_content', '1': 'training_type' }, source: 'rule', data_row_count: 1, ai_judgment: '' }, { name: '其他', header_row: 1, headers: ['备注'], sample_rows: [], mapping: {}, source: 'none', data_row_count: 0, ai_judgment: '跳过' }],
+      field_catalog: [{ key: 'training_content', label: '培训内容' }, { key: 'training_type', label: '培训类型' }],
+    } } })
+    getMock('actions/hr', 'confirmTrainingImport').mockResolvedValue({ ok: true, data: { message: '导入成功' } })
     const printWindow = { document: { write: vi.fn(), close: vi.fn() }, focus: vi.fn(), print: vi.fn() }
     vi.stubGlobal('open', vi.fn(() => printWindow))
     const report = renderClient(createElement(EsgTrainingReportClient, { department: '质量部', dateFrom: '2026-01-01', dateTo: '2026-12-31', periodLabel: '全年', printRequest: 1 }))
@@ -4084,16 +4104,20 @@ describe('migrated component coverage', () => {
     expect(success).not.toHaveBeenCalled()
     uploadText?.parentElement?.click()
     await settle()
-    const mappingSelect = Array.from(importer.container.querySelectorAll('select')).find((select) => select.querySelector('option[value="employee_name"]'))
+    const mappingSelect = Array.from(importer.container.querySelectorAll('select')).find((select) => select.querySelector('option[value="training_content"]'))
     if (mappingSelect) {
-      mappingSelect.value = 'employee_name'
+      mappingSelect.value = 'training_content'
       mappingSelect.dispatchEvent(new Event('change', { bubbles: true }))
     }
     const sheetCheckbox = queryElement<HTMLInputElement>(importer.container, 'input[type="checkbox"]')
     sheetCheckbox?.click()
     sheetCheckbox?.click()
     await settle()
-    await expectSafeRequestFailure(getMock('actions/hr', 'confirmTrainingImport'), () => findBtn(importer, '确认导入')?.click())
+    const invalidMappingMessage = '请检查所选工作表、表头行和列映射。每个字段只能映射一列。'
+    getMock('actions/hr', 'confirmTrainingImport').mockResolvedValueOnce({ ok: false, message: invalidMappingMessage })
+    findBtn(importer, '确认导入')?.click()
+    await settle()
+    expect(mocks.message.error).toHaveBeenLastCalledWith(invalidMappingMessage)
     expect(success).not.toHaveBeenCalled()
     expect(findBtn(importer, '确认导入')).toBeDefined()
     findBtn(importer, '确认导入')?.click()
