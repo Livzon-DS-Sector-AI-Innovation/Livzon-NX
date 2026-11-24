@@ -13,14 +13,14 @@ COPY docker/apt-download.conf /etc/apt/apt.conf.d/80dazah-download
 # The base image's cleanup hook otherwise empties the BuildKit package cache.
 RUN rm -f /etc/apt/apt.conf.d/docker-clean
 
-# libreoffice-writer/draw/calc：.doc/.wps 转 docx、wmf/emf 图片转 png；
-# calc 支持镜像台账导出 xlsx→PDF；fonts-noto-cjk 中文字体；catdoc/antiword 文本级兜底
+# libreoffice-writer/draw：.doc/.wps 转 docx 及 wmf/emf 图片转 png 依赖；
+# fonts-noto-cjk 中文字体；catdoc/antiword 文本级兜底
 RUN --mount=type=cache,id=dazah-debian-apt,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,id=dazah-debian-apt-lists,target=/var/lib/apt/lists,sharing=locked \
     apt-get update \
     && apt-get upgrade -y --no-install-recommends \
     && apt-get install -y --no-install-recommends \
-        libreoffice-writer libreoffice-draw libreoffice-calc \
+        libreoffice-writer libreoffice-draw \
         fonts-noto-cjk catdoc antiword
 
 RUN pip install --no-cache-dir uv==0.13.4 \
