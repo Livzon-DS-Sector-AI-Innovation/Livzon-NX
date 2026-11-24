@@ -27,6 +27,7 @@ beforeEach(() => {
   document.body.innerHTML = '<main></main>'
   vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible')
   vi.spyOn(window.location, 'replace').mockImplementation(() => {})
+  vi.spyOn(window.location, 'reload').mockImplementation(() => {})
   const query = window.matchMedia('(min-width: 0px)')
   vi.spyOn(window, 'matchMedia').mockReturnValue({ ...query, matches: false })
 })
@@ -91,6 +92,12 @@ it('reloads the workspace after another tab switches or a stale page returns fro
     expect(window.location.replace).not.toHaveBeenCalled()
     window.dispatchEvent(Object.assign(new Event('pageshow'), { persisted: true }))
     expect(window.location.replace).toHaveBeenCalledExactlyOnceWith('/')
+
+    window.history.replaceState({}, '', '/settings?tab=permissions')
+    window.dispatchEvent(Object.assign(new Event('pageshow'), { persisted: true }))
+    expect(window.location.reload).toHaveBeenCalledOnce()
+    expect(window.location.replace).toHaveBeenCalledExactlyOnceWith('/')
+
     window.dispatchEvent(new StorageEvent('storage', { key: changeKey }))
     expect(vi.mocked(window.location.replace).mock.calls).toEqual([['/'], ['/']])
   } finally {

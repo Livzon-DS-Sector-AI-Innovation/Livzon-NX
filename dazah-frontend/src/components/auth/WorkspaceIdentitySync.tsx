@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import { isSystemSettingsPath } from '@/lib/administrator-role'
 import {
   WORKSPACE_IDENTITY_TRANSITION_KEY,
   type WorkspaceIdentityArrival,
@@ -62,7 +63,12 @@ export function WorkspaceIdentitySync() {
       if (event.key === CHANGE_KEY) window.location.replace('/')
     }
     function onPageShow(event: PageTransitionEvent) {
-      if (event.persisted && initialChange !== readIdentityChange()) window.location.replace('/')
+      if (!event.persisted || initialChange === readIdentityChange()) return
+      if (isSystemSettingsPath(window.location.pathname)) {
+        window.location.reload()
+      } else {
+        window.location.replace('/')
+      }
     }
     window.addEventListener('storage', onStorage)
     window.addEventListener('pageshow', onPageShow)
