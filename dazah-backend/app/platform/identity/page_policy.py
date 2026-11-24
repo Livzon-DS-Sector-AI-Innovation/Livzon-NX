@@ -710,6 +710,13 @@ def _sensitive_actions(
         "registration:registration-settings": ("delete",),
         # 行政管理：飞书设置页停用数据入口属于破坏性动作
         "admin:feishu-settings": ("delete",),
+        # 印章/废旧物资/宿舍管理镜像台账导出属于敏感导出
+        "admin:seals": ("sensitive_export",),
+        "admin:scrap-materials": ("sensitive_export",),
+        "admin:dormitory": ("sensitive_export",),
+        # 公告通知：删除台账记录属于破坏性动作；公告内容/原文经专用
+        # 端点绑定 operate 下发，普通查看权限拿不到内容
+        "admin:notice": ("delete",),
         "production:overview": ("delete", "sync_config"),
         "production:plan:sales-plan": ("delete", "sync_config"),
         "production:plan:scheduling": (
@@ -8144,10 +8151,12 @@ _ADMIN_TOBACCO_GIFT_TABLE_PAGES = (
     "admin:tobacco-gift:items",
     "admin:tobacco-gift:records",
 )
-# 印章管理（单表）与废旧物资（放置/领用两表按页签绑定）同属只读镜像页。
+# 印章管理（单表）、废旧物资（放置/领用两表按页签绑定）与宿舍管理（宿舍清单/
+# 员工住宿退宿清单/住宿标准三表按页签绑定）同属只读镜像页。
 _ADMIN_MIRROR_TABLE_PAGES = (
     "admin:seals",
     "admin:scrap-materials",
+    "admin:dormitory",
 )
 _ADMIN_FEISHU_SETTINGS = ("admin:feishu-settings",)
 _ADMIN_ALL_PAGES = (
@@ -8249,6 +8258,16 @@ PAGE_API_BINDINGS += _module_api_bindings(
             None,
             "not_applicable",
         ),
+        # 镜像台账导出（Excel/PDF）：数据离开系统，登记敏感导出动作
+        # （敏感动作绑定必须要求 operate 权限，见 _api_binding_errors）
+        (
+            "GET",
+            "/page-data/{page_key}/{binding_id}/export",
+            _ADMIN_MIRROR_TABLE_PAGES,
+            "operate",
+            "sensitive_export",
+            "not_applicable",
+        ),
         # 绑定配置回显：设置页维护「页面数据表映射」时要读取镜像页的绑定
         # （仓储同款：material_pages + settings_page）；仅此路由包含设置页。
         (
@@ -8286,6 +8305,94 @@ PAGE_API_BINDINGS += _module_api_bindings(
             (_ADMIN_TOBACCO_GIFT_DASHBOARD,),
             "query",
             None,
+            "not_applicable",
+        ),
+        # AI 分析：LLM 辅助结论只作参考，按钮触发生成（不自动推送）
+        (
+            "POST",
+            "/tobacco-gift/ai-analysis",
+            (_ADMIN_TOBACCO_GIFT_DASHBOARD,),
+            "operate",
+            None,
+            "not_applicable",
+        ),
+        # 宿舍管理：入住率仪表盘与 AI 推荐入住（LLM 只在确定性候选内排序，
+        # 人工确认后由 checkin 回写飞书员工住宿退宿清单）
+        (
+            "GET",
+            "/dormitory/dashboard-stats",
+            ("admin:dormitory",),
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "POST",
+            "/dormitory/checkin-recommend",
+            ("admin:dormitory",),
+            "operate",
+            None,
+            "not_applicable",
+        ),
+        (
+            "POST",
+            "/dormitory/checkin",
+            ("admin:dormitory",),
+            "operate",
+            None,
+            "not_applicable",
+        ),
+        # 公告通知（平台原生台账）：元数据列表/详情随 query 放行且响应
+        # 永不含内容字段；识别/导入/编辑与公告内容、原文下载归 operate
+        # （行政管理员经页面授权获得）；删除挂已登记的 delete 动作。
+        ("GET", "/notices", ("admin:notice",), "query", None, "not_applicable"),
+        (
+            "GET",
+            "/notices/{notice_id}",
+            ("admin:notice",),
+            "query",
+            None,
+            "not_applicable",
+        ),
+        (
+            "POST",
+            "/notices/parse",
+            ("admin:notice",),
+            "operate",
+            None,
+            "not_applicable",
+        ),
+        ("POST", "/notices", ("admin:notice",), "operate", None, "not_applicable"),
+        (
+            "GET",
+            "/notices/{notice_id}/content",
+            ("admin:notice",),
+            "operate",
+            None,
+            "not_applicable",
+        ),
+        (
+            "GET",
+            "/notices/{notice_id}/file",
+            ("admin:notice",),
+            "operate",
+            None,
+            "not_applicable",
+        ),
+        (
+            "PUT",
+            "/notices/{notice_id}",
+            ("admin:notice",),
+            "operate",
+            None,
+            "not_applicable",
+        ),
+        (
+            "DELETE",
+            "/notices/{notice_id}",
+            ("admin:notice",),
+            "operate",
+            "delete",
             "not_applicable",
         ),
     ],

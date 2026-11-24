@@ -9,6 +9,7 @@ import json
 import logging
 import re
 import uuid
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from typing import Any
@@ -30,6 +31,7 @@ logger = logging.getLogger(__name__)
 
 #: 数值型镜像字段类型（数字/日期/创建与修改时间），排序时按数值比较。
 _RECORD_NUMERIC_FIELD_TYPES = {2, 5, 1001, 1002}
+_RECORD_FILTER_OPERATORS = frozenset({"contains", "eq", "ne", "gt", "gte", "lt", "lte"})
 
 
 def _record_order_expression(
@@ -38,13 +40,64 @@ def _record_order_expression(
     field_type: int | None,
     direction: str,
 ) -> Any:
-    """镜像记录 raw_fields 字段的排序表达式（JSONB 取文本，数值型按数值比较）。"""
+    """镜像记录 raw_fields 字段的排序表达式（JSONB 取文本，数值型按数值比较）。
+
+    空值统一排最后：升序 nulls_first 会把整页空行顶到最前
+    （员工住宿退宿清单等表存在 raw_fields 为空的记录），与倒序 nulls_last
+    保持对称。
+    """
     text_expr = record_model.raw_fields[field_name].astext
     if field_type in _RECORD_NUMERIC_FIELD_TYPES:
         text_expr = cast(text_expr, Numeric)
     if direction == "asc":
-        return text_expr.asc().nulls_first()
+        return text_expr.asc().nulls_last()
     return text_expr.desc().nulls_last()
+
+
+def _record_filter_expression(
+    record_model: type[Any],
+    field_name: str,
+    field_type: int | None,
+    operator: str,
+    value: str,
+) -> Any:
+    """镜像记录单条件筛选表达式；条件之间由调用方以 AND 组合。"""
+    if operator not in _RECORD_FILTER_OPERATORS:
+        raise AppException(message="不支持的筛选操作符", status_code=400)
+    text_expr = record_model.raw_fields[field_name].astext
+    if operator == "contains":
+        escaped = value.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
+        return text_expr.ilike(f"%{escaped}%")
+    if field_type in _RECORD_NUMERIC_FIELD_TYPES:
+        try:
+            number = float(value)
+        except ValueError as exc:
+            raise AppException(
+                message="该字段为数值或日期类型，筛选值必须是数字", status_code=400
+            ) from exc
+        column_expr = cast(text_expr, Numeric)
+        if operator == "eq":
+            return column_expr == number
+        if operator == "ne":
+            return column_expr != number
+        if operator == "gt":
+            return column_expr > number
+        if operator == "gte":
+            return column_expr >= number
+        if operator == "lt":
+            return column_expr < number
+        return column_expr <= number
+    if operator == "eq":
+        return text_expr == value
+    if operator == "ne":
+        return text_expr != value
+    if operator == "gt":
+        return text_expr > value
+    if operator == "gte":
+        return text_expr >= value
+    if operator == "lt":
+        return text_expr < value
+    return text_expr <= value
 
 
 @dataclass(frozen=True)
@@ -491,6 +544,7 @@ class ModuleFeishuReadMirrorService:
         keyword: str | None,
         sort_field: str | None = None,
         sort_direction: str = "desc",
+        filters: Sequence[Mapping[str, str]] | None = None,
     ) -> dict[str, Any]:
         binding, resource = await self._bound_resource(page_key, binding_id)
         fields = await self._fields(resource.id)
@@ -528,6 +582,32 @@ class ModuleFeishuReadMirrorService:
             ]
             if keyword:
                 conditions.append(self.models.record.search_text.ilike(f"%{keyword}%"))
+            field_index = {
+                **{f.field_id: f for f in fields},
+                **{f.field_name: f for f in fields},
+            }
+            for item in filters or ():
+                field_meta = field_index.get(str(item.get("field", "")))
+                if field_meta is None:
+                    raise AppException(
+                        message="筛选字段不属于该数据表", status_code=404
+                    )
+                value = str(item.get("value", "")).strip()
+                if not value:
+                    continue
+                try:
+                    filter_type: int | None = int(field_meta.field_type)
+                except (TypeError, ValueError):
+                    filter_type = None
+                conditions.append(
+                    _record_filter_expression(
+                        self.models.record,
+                        field_meta.field_name,
+                        filter_type,
+                        str(item.get("operator", "contains")),
+                        value,
+                    )
+                )
             total = int(
                 await self.session.scalar(
                     select(func.count())
@@ -807,6 +887,10 @@ class ModuleFeishuReadMirrorService:
         if row is None:
             raise AppException(message="页面数据表绑定不存在", status_code=404)
         return row[0], row[1]
+
+    def client_for_resource(self, app_token: str) -> WarehouseFeishuClient:
+        """公开的按资源构建客户端入口（模块侧导出等编排场景使用）。"""
+        return self._client(app_token)
 
     def _client(self, app_token: str) -> WarehouseFeishuClient:
         if not self.app_id or not self.app_secret:
