@@ -456,46 +456,6 @@ export async function fetchTurnoverAnalysis(): Promise<TurnoverAnalysisResponse>
   return res.json()
 }
 
-export async function fetchOnboardingTrainingRecord(
-  employeeId: string,
-  employeeName: string
-): Promise<void> {
-  const res = await fetch(
-    `/api/v1/hr/employees/${employeeId}/onboarding-training-record`,
-    { cache: 'no-store' }
-  )
-  if (!res.ok) throw new Error('生成培训记录失败')
-  const blob = await res.blob()
-  const url = window.URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `7.3新员工入职培训记录_${employeeName}.docx`
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  window.URL.revokeObjectURL(url)
-}
-
-export async function fetchPrejobTrainingPlan(
-  employeeId: string,
-  employeeName: string
-): Promise<void> {
-  const res = await fetch(
-    `/api/v1/hr/employees/${employeeId}/prejob-training-plan`,
-    { cache: 'no-store' }
-  )
-  if (!res.ok) throw new Error('生成岗前培训计划失败')
-  const blob = await res.blob()
-  const url = window.URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `7.4岗前培训计划_${employeeName}.xlsx`
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  window.URL.revokeObjectURL(url)
-}
-
 export interface TrainingSignInSheetData {
   training_date: string
   training_time_start?: string
@@ -691,26 +651,6 @@ export async function generateOnboardingEvaluation(
   a.href = url
   const safeDate = data.approval_date || 'nodate'
   a.download = `7.12员工上岗评估表_${safeDate}.xlsx`
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  window.URL.revokeObjectURL(url)
-}
-
-export async function fetchOnboardingEvaluationByEmployeeId(
-  employeeId: string,
-  employeeName: string
-): Promise<void> {
-  const res = await fetch(
-    `/api/v1/hr/employees/${employeeId}/onboarding-evaluation`,
-    { cache: 'no-store' }
-  )
-  if (!res.ok) throw new Error('生成员工上岗评估表失败')
-  const blob = await res.blob()
-  const url = window.URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `员工上岗评估表_${employeeName}.xlsx`
   document.body.appendChild(a)
   a.click()
   document.body.removeChild(a)

@@ -109,6 +109,22 @@ def test_position_mapping_post_open_to_new_employee_page():
     )
 
 
+def test_training_export_permissions_keep_current_routes():
+    employee = "/api/v1/hr/employees/{employee_id}/"
+    assert api_binding_for_route("GET", employee + "onboarding-training-record") is None
+    assert api_binding_for_route("GET", employee + "prejob-training-plan") is None
+    assert _binding_pages("GET", employee + "onboarding-evaluation") == (
+        PROFILE_PAGE_KEY,
+    )
+
+    confirmation_export = api_binding_for_route(
+        "GET", "/api/v1/hr/new-employee-training/plans/{plan_id}/export-confirmation"
+    )
+    assert confirmation_export is not None
+    assert confirmation_export.page_keys == (NEW_EMPLOYEE_PAGE_KEY,)
+    assert confirmation_export.sensitive_action == "sensitive_export"
+
+
 def _app(db, user):
     app = FastAPI()
     app.include_router(
