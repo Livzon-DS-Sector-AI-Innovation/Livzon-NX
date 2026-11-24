@@ -1084,14 +1084,7 @@ export async function fetchOffboardingTemplateInfoAction(): Promise<{ code: numb
 
 // ─── TrainingLedger Actions ───
 
-export async function checkTrainingConflict(params: {
-  training_date: string
-  time_start: string
-  time_end: string
-  instructor?: string
-  trainees: string[]
-  exclude_session_id?: string
-}) {
+export async function checkTrainingConflict(params: components['schemas']['TrainingConflictCheckRequest']) {
   const res = await authedFetch(`${API_BASE}/api/v1/hr/training-ledgers/check-conflict`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1245,13 +1238,14 @@ export async function createTrainingLedgerPage(
 // ─── Training Document Generation Actions ───
 // 规范：Server Action 服务端执行，禁止 window/document；返回字节流，浏览器侧用 lib/download.ts 下载
 
-async function fetchDocBytes(url: string, data: unknown, errMsg: string) {
+async function fetchDocBytes(url: string, data: unknown, errMsg: string, businessMessages?: BusinessErrorMessages) {
   const res = await authedFetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
     cache: 'no-store',
   })
+  if (businessMessages) await requireActionResponse(res, businessMessages)
   if (!res.ok) {
     // 带上后端真实报错（校验/模板缺失等），便于定位
     let detail = ''
@@ -1347,16 +1341,19 @@ export async function generateOralExamResult(
 
 export async function generatePracticalExamResult(
   data: components['schemas']['PracticalExamExportRequest']
-): Promise<{ bytes: ArrayBuffer; filename: string }> {
-  const { bytes, disposition } = await fetchDocBytes(
-    `${API_BASE}/api/v1/hr/training-practical-exam/export`,
-    data,
-    '导出实操考核结果表失败',
-  )
-  return {
-    bytes,
-    filename: filenameFromDisposition(disposition, `${data.training_date || 'nodate'}-${data.training_content || ''}-实操.zip`),
-  }
+) {
+  return serverActionResult('hr.practicalExam.export', async () => {
+    const { bytes, disposition } = await fetchDocBytes(
+      `${API_BASE}/api/v1/hr/training-practical-exam/export`,
+      data,
+      '导出实操考核结果表失败',
+      practicalExamErrors,
+    )
+    return {
+      bytes,
+      filename: filenameFromDisposition(disposition, `${data.training_date || 'nodate'}-${data.training_content || ''}-实操.zip`),
+    }
+  }, '导出实操考核结果表失败，请稍后重试')
 }
 
 export async function generateTrainingAttachment(
@@ -1373,21 +1370,20 @@ export async function generateTrainingAttachment(
   }
 }
 
+const practicalExamErrors = {
+  400: {
+    HR_PRACTICAL_EXAM_TEMPLATE_INVALID: '实操试题模板不符合 APP13 格式。请使用 APP13 实操培训考核结果表，保留部门、姓名、培训日期和考核情况描述的表格结构后重新导入。',
+  },
+} satisfies HrBusinessErrorMessages
+
 /** 导入实操试题（APP13 格式 docx），返回提取的实操考核情况描述与培训日期 */
-export async function importPracticalExamQuestions(
-  file: File
-): Promise<{ code: number; message: string; data: { description: string; training_date: string } }> {
+export async function importPracticalExamQuestions(file: File) {
   const formData = new FormData()
   formData.append('file', file)
-  const res = await authedFetch(`${API_BASE}/api/v1/hr/training-practical-exam/import`, {
+  return hrMutation<components['schemas']['PracticalExamImportResult']>('practicalExam.import', '实操试题导入', () => authedFetch(`${API_BASE}/api/v1/hr/training-practical-exam/import`, {
     method: 'POST',
     body: formData,
-  })
-  if (!res.ok) {
-    const body = await res.json().catch(() => null)
-    throw new Error(body?.message || '导入实操试题失败')
-  }
-  return res.json()
+  }), { businessMessages: practicalExamErrors })
 }
 
 // ─── Feishu Sync Actions (migrated from lib/api/hr.ts) ───
@@ -1888,46 +1884,40 @@ export async function importEsgRecordsByDept(
 
 // ─── AI 智能导入（预览分析 + 确认导入）───
 
-export async function previewTrainingImport(
-  file: File,
-  department: string
-): Promise<{
-  code: number
-  message: string
-  data: components['schemas']['ImportPreviewData']
-}> {
+const trainingImportErrors = {
+  400: {
+    HR_TRAINING_IMPORT_WORKBOOK_INVALID: '无法读取培训台账文件，请上传可正常打开的 .xlsx 工作簿。',
+    HR_TRAINING_IMPORT_MAPPING_INVALID: '请检查所选工作表、表头行和列映射。每个字段只能映射一列。',
+    HR_TRAINING_IMPORT_NO_ROWS: '没有可导入的数据。请映射培训内容或培训日期，并检查表头下方的数据行。',
+  },
+} satisfies HrBusinessErrorMessages
+
+export async function previewTrainingImport(file: File, department: string) {
   const formData = new FormData()
   formData.append('file', file)
-  const res = await authedFetch(
-    `${API_BASE}/api/v1/hr/training-ledgers/import-preview?department=${encodeURIComponent(department)}`,
-    { method: 'POST', body: formData }
-  )
-  if (!res.ok) {
-    const body = await res.json().catch(() => null)
-    throw new Error(body?.message || '文件分析失败')
-  }
-  return res.json()
+  return serverActionResult('hr.trainingLedger.importPreview', async (): Promise<components['schemas']['ImportPreviewResponse']> => {
+    const res = await authedFetch(
+      `${API_BASE}/api/v1/hr/training-ledgers/import-preview?department=${encodeURIComponent(department)}`,
+      { method: 'POST', body: formData },
+    )
+    await requireActionResponse(res, trainingImportErrors)
+    return res.json()
+  }, '培训台账预览失败，请稍后重试')
 }
 
 export async function confirmTrainingImport(
   file: File,
   department: string,
   sheets: components['schemas']['ImportSheetConfirm'][]
-): Promise<{ code: number; message: string; data: unknown }> {
+) {
   const formData = new FormData()
   formData.append('file', file)
   formData.append('department', department)
   formData.append('sheets', JSON.stringify(sheets))
-  const res = await authedFetch(`${API_BASE}/api/v1/hr/training-ledgers/import-confirm`, {
+  return hrMutation<components['schemas']['ImportConfirmResponseData']>('trainingLedger.importConfirm', '培训台账导入', () => authedFetch(`${API_BASE}/api/v1/hr/training-ledgers/import-confirm`, {
     method: 'POST',
     body: formData,
-  })
-  if (!res.ok) {
-    const body = await res.json().catch(() => null)
-    throw new Error(body?.message || '导入失败')
-  }
-  revalidatePath('/hr/training/ledger')
-  return res.json()
+  }), { businessMessages: trainingImportErrors, revalidate: '/hr/training/ledger' })
 }
 
 // ─── 笔试成绩导入 ───
@@ -2148,20 +2138,14 @@ export async function generateNewEmployeeTrainingPlan(
 }
 
 export async function createManualNewEmployeeTrainingPlan(
-  data: NewEmployeeTrainingManualAddInput
-): Promise<{ code: number; message: string; data: unknown }> {
-  const res = await authedFetch(`${API_BASE}/api/v1/hr/new-employee-training/plans/manual-add`, {
+  data: NewEmployeeTrainingManualAddInput,
+) {
+  return hrMutation('newEmployeeTraining.manualAdd', '新员工培训计划创建', () => authedFetch(`${API_BASE}/api/v1/hr/new-employee-training/plans/manual-add`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
     cache: 'no-store',
-  })
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}))
-    throw new Error(err.message || err.detail || '手动新增新员工失败')
-  }
-  revalidatePath('/hr/training/new-employee')
-  return res.json()
+  }), { revalidate: '/hr/training/new-employee' })
 }
 
 export async function updateNewEmployeeTrainingPlan(

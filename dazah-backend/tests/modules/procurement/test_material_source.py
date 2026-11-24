@@ -1,10 +1,17 @@
+import asyncio
+import json
+from datetime import UTC, datetime
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import httpx
 import pytest
+from redis.exceptions import ConnectionError as RedisConnectionError
 
+from app.core import redis
+from app.core.read_through_cache import ReadThroughCache
 from app.modules.procurement import material_source
 from app.modules.procurement.material_source import (
     MaterialSourceCredentialsError,
@@ -15,6 +22,24 @@ from app.modules.procurement.material_source import (
 from app.modules.procurement.models import MaterialSourceConfig
 from app.modules.procurement.schemas import MaterialSourceConfigUpsert
 from app.platform.identity.public_api import FeishuAppCredentials
+
+
+@pytest.fixture(autouse=True)
+def options_redis(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
+    client = SimpleNamespace(
+        get=AsyncMock(return_value=None), set=AsyncMock(), aclose=AsyncMock()
+    )
+    monkeypatch.setattr(redis, "redis_client", client)
+    monkeypatch.setattr(
+        material_source,
+        "_material_options_cache",
+        ReadThroughCache(
+            "material options",
+            max_loads=4,
+            decode=material_source._decode_material_options,
+        ),
+    )
+    return client
 
 
 def _payload() -> MaterialSourceConfigUpsert:
@@ -78,6 +103,7 @@ async def test_probe_accepts_legacy_specification_field(monkeypatch: Any) -> Non
 @pytest.mark.anyio
 async def test_list_material_options_converts_field_shapes_and_keeps_duplicates(
     monkeypatch: Any,
+    options_redis: SimpleNamespace,
 ) -> None:
     config = _config()
     monkeypatch.setattr(
@@ -90,10 +116,6 @@ async def test_list_material_options_converts_field_shapes_and_keeps_duplicates(
         "_get_credentials",
         AsyncMock(return_value=FeishuAppCredentials("app-id", "app-secret")),
     )
-    cache_get: Any = AsyncMock(return_value=None)
-    cache_set: Any = AsyncMock()
-    monkeypatch.setattr(material_source, "cache_get", cache_get)
-    monkeypatch.setattr(material_source, "cache_set", cache_set)
 
     class FakeBitableClient:
         def __init__(self: Any, **_kwargs: Any) -> None:
@@ -166,8 +188,8 @@ async def test_list_material_options_converts_field_shapes_and_keeps_duplicates(
             "material_cost_category": "成本B",
         },
     ]
-    cache_set.assert_awaited_once()
-    assert cache_set.await_args.kwargs["ex"] == 60
+    options_redis.set.assert_awaited_once()
+    assert 50 <= options_redis.set.await_args.kwargs["ex"] <= 60
 
 
 @pytest.mark.anyio
@@ -185,8 +207,6 @@ async def test_number_material_code_uses_paginated_client_filter(
         "_get_credentials",
         AsyncMock(return_value=FeishuAppCredentials("app-id", "app-secret")),
     )
-    monkeypatch.setattr(material_source, "cache_get", AsyncMock(return_value=None))
-    monkeypatch.setattr(material_source, "cache_set", AsyncMock())
     pages = [
         {
             "items": [
@@ -300,8 +320,6 @@ def _material_options_harness(monkeypatch: Any, field_type: int | None = 1) -> A
         "_get_credentials",
         AsyncMock(return_value=FeishuAppCredentials("app-id", "app-secret")),
     )
-    monkeypatch.setattr(material_source, "cache_get", AsyncMock(return_value=None))
-    monkeypatch.setattr(material_source, "cache_set", AsyncMock())
     return config
 
 
@@ -551,6 +569,7 @@ async def test_text_options_fall_back_when_exact_lookup_fails(monkeypatch: Any) 
 @pytest.mark.anyio
 async def test_material_options_uses_cache_and_survives_redis_failure(
     monkeypatch: Any,
+    options_redis: SimpleNamespace,
 ) -> None:
     config = _config()
     options = [
@@ -571,11 +590,7 @@ async def test_material_options_uses_cache_and_survives_redis_failure(
         "_get_credentials",
         AsyncMock(return_value=FeishuAppCredentials("app-id", "app-secret")),
     )
-    monkeypatch.setattr(
-        material_source,
-        "cache_get",
-        AsyncMock(return_value=material_source.json.dumps(options)),  # type: ignore[attr-defined]
-    )
+    options_redis.get.return_value = json.dumps(options)
     cached_search_records: Any = AsyncMock()
 
     class FakeBitableClient:
@@ -592,10 +607,7 @@ async def test_material_options_uses_cache_and_survives_redis_failure(
     )
     cached_search_records.assert_not_awaited()
 
-    async def redis_down(_key: Any) -> Any:
-        raise RuntimeError("redis unavailable")
-
-    monkeypatch.setattr(material_source, "cache_get", redis_down)
+    options_redis.get.side_effect = RedisConnectionError("redis unavailable")
     search_records: Any = AsyncMock(return_value=[])
 
     class SearchableBitableClient:
@@ -606,9 +618,70 @@ async def test_material_options_uses_cache_and_survives_redis_failure(
             return await search_records()
 
     monkeypatch.setattr(material_source, "BitableClient", SearchableBitableClient)
-    monkeypatch.setattr(material_source, "cache_set", AsyncMock())
     assert await material_source.list_material_options(AsyncMock(), keyword="MAT") == []
     search_records.assert_awaited()
+    options_redis.set.assert_not_awaited()
+
+
+@pytest.mark.parametrize("redis_down", [False, True])
+async def test_concurrent_material_option_misses_share_exact_and_fuzzy_queries(
+    monkeypatch: pytest.MonkeyPatch,
+    options_redis: SimpleNamespace,
+    redis_down: bool,
+) -> None:
+    config = _config()
+    monkeypatch.setattr(
+        material_source, "get_material_source_config", AsyncMock(return_value=config)
+    )
+    monkeypatch.setattr(
+        material_source,
+        "_get_credentials",
+        AsyncMock(return_value=FeishuAppCredentials("app-id", "app-secret")),
+    )
+    stored: dict[str, str] = {}
+
+    async def set_cache(key: str, value: str, *, ex: int) -> None:
+        assert 9 <= ex <= 10
+        stored[key] = value
+
+    options_redis.get.side_effect = (
+        RedisConnectionError("offline") if redis_down else stored.get
+    )
+    options_redis.set.side_effect = set_cache
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    async def search_records(*_args: Any, **_kwargs: Any) -> list[dict[str, Any]]:
+        started.set()
+        await release.wait()
+        return []
+
+    search = AsyncMock(side_effect=search_records)
+    monkeypatch.setattr(
+        material_source,
+        "BitableClient",
+        lambda **_: SimpleNamespace(search_records=search),
+    )
+
+    async def lookup() -> list[dict[str, str]]:
+        return await material_source.list_material_options(
+            AsyncMock(), keyword="   MAT-404   "
+        )
+
+    tasks = [asyncio.create_task(lookup()) for _ in range(12)]
+    try:
+        await asyncio.wait_for(started.wait(), 1)
+    finally:
+        release.set()
+    assert await asyncio.gather(*tasks) == [[]] * 12
+    assert search.await_count == 2  # One exact search and one fuzzy search.
+    if redis_down:
+        options_redis.get.assert_awaited_once()
+        options_redis.set.assert_not_awaited()
+    else:
+        assert await lookup() == []
+        assert search.await_count == 2
+        options_redis.set.assert_awaited_once()
 
 
 @pytest.mark.anyio
@@ -1290,10 +1363,11 @@ async def test_number_options_timeout_is_mapped_to_material_source_timeout(
 @pytest.mark.anyio
 async def test_options_prefer_successfully_synced_local_catalog(
     monkeypatch: Any,
+    options_redis: SimpleNamespace,
 ) -> None:
     config = _config()
     config.sync_status = "success"
-    config.last_synced_at = object()  # type: ignore[assignment]
+    config.last_synced_at = datetime(2026, 8, 1, tzinfo=UTC)
     monkeypatch.setattr(
         material_source,
         "get_material_source_config",
@@ -1342,6 +1416,17 @@ async def test_options_prefer_successfully_synced_local_catalog(
     client.search_records.assert_not_awaited()
     client.search_records_page.assert_not_awaited()
 
+    cached_key, cached_value = options_redis.set.await_args.args
+    options_redis.get.side_effect = {cached_key: cached_value}.get
+    repository.list_option_records.return_value = []
+    cached_options = await material_source.list_material_options(
+        AsyncMock(), keyword="MAT"
+    )
+    assert cached_options == options
+    config.last_synced_at = datetime(2026, 8, 2, tzinfo=UTC)
+    assert await material_source.list_material_options(AsyncMock(), keyword="MAT") == []
+    assert repository.list_option_records.await_count == 2
+
 
 @pytest.mark.anyio
 async def test_options_keep_local_catalog_after_failed_resync(monkeypatch: Any) -> None:
@@ -1349,7 +1434,7 @@ async def test_options_keep_local_catalog_after_failed_resync(monkeypatch: Any) 
     config = _config()
     config.sync_status = "error"
     config.sync_error = "飞书多维表格请求超时"
-    config.last_synced_at = object()  # type: ignore[assignment]
+    config.last_synced_at = datetime(2026, 8, 1, tzinfo=UTC)
     monkeypatch.setattr(
         material_source,
         "get_material_source_config",

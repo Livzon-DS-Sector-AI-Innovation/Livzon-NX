@@ -1,13 +1,54 @@
 from __future__ import annotations
 
+import asyncio
+import json
 from datetime import UTC, date, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
+from redis.exceptions import ConnectionError as RedisConnectionError
 
+from app.core import redis
+from app.core.database import get_db
+from app.core.deps import get_current_user
 from app.core.exceptions import AppException
+from app.core.read_through_cache import ReadThroughCache
+from app.main import app_exception_handler
+from app.modules.quality.api import validation
 from app.modules.quality.service import quality_feishu_pages as pages
+
+
+@pytest.fixture(autouse=True)
+def validation_redis(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
+    stored: dict[str, str] = {}
+
+    async def set_cache(key: str, value: str, **_kwargs: int) -> None:
+        stored[key] = value
+
+    async def incr(key: str) -> int:
+        value = int(stored.get(key, "0")) + 1
+        stored[key] = str(value)
+        return value
+
+    client = SimpleNamespace(
+        get=AsyncMock(side_effect=stored.get),
+        set=AsyncMock(side_effect=set_cache),
+        incr=AsyncMock(side_effect=incr),
+        aclose=AsyncMock(),
+        stored=stored,
+    )
+    monkeypatch.setattr(redis, "redis_client", client)
+    monkeypatch.setattr(
+        pages,
+        "_validation_list_cache",
+        ReadThroughCache(
+            "validation list", max_loads=3, decode=pages._decode_validation_items
+        ),
+    )
+    return client
 
 
 class _FeishuSync:
@@ -298,6 +339,9 @@ async def test_list_validation_records_filters_and_paginates(
         "_resolve_runtime_entity",
         AsyncMock(side_effect=pages.AppException(message="disabled")),
     )
+    await pages._invalidate_validation_list_cache(
+        pages._entity_code_for_validation_type(None)
+    )
     result = await pages.list_validation_records_from_feishu(SimpleNamespace())
     assert result["total"] == 0
 
@@ -305,15 +349,166 @@ async def test_list_validation_records_filters_and_paginates(
 @pytest.mark.asyncio
 async def test_list_validation_records_returns_valid_cached_json(
     monkeypatch: pytest.MonkeyPatch,
+    validation_redis: SimpleNamespace,
 ) -> None:
-    cached = '{"items": [{"record_id": "cached-1"}], "total": 1}'
-    monkeypatch.setattr(pages, "cache_get", AsyncMock(return_value=cached))
+    entity_code = pages._entity_code_for_validation_type(None, 2026)
+    validation_redis.stored[f"quality:validation:snapshot:{entity_code}:initial"] = (
+        json.dumps(
+            [
+                {"record_id": "cached-1", "drafted_at": "2026-01-01"},
+                {"record_id": "cached-2", "drafted_at": "2026-12-01"},
+            ]
+        )
+    )
     resolve = AsyncMock(side_effect=AssertionError("cache hit should return early"))
     monkeypatch.setattr(pages, "_resolve_runtime_entity", resolve)
 
     result = await pages.list_validation_records_from_feishu(
-        SimpleNamespace(), year=2026
+        SimpleNamespace(), year=2026, drafted_at_to="2026-06-01"
     )
 
-    assert result == {"items": [{"record_id": "cached-1"}], "total": 1}
+    assert result["items"] == [
+        {"record_id": "cached-1", "drafted_at": date(2026, 1, 1)}
+    ]
+    assert result["total"] == 1
     resolve.assert_not_awaited()
+
+
+@pytest.mark.parametrize("redis_down", [False, True])
+async def test_validation_queries_share_one_ledger_read_across_filters(
+    monkeypatch: pytest.MonkeyPatch,
+    validation_redis: SimpleNamespace,
+    redis_down: bool,
+) -> None:
+    monkeypatch.setattr(pages, "_resolve_runtime_entity", AsyncMock())
+    monkeypatch.setattr(pages, "_apply_ai_validation_categories", AsyncMock())
+    if redis_down:
+        validation_redis.get.side_effect = RedisConnectionError("offline")
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    async def search(*_args, **_kwargs):
+        started.set()
+        await release.wait()
+        return [{"record_id": "one", "fields": {"确认名称": "方案 A"}}]
+
+    upstream = AsyncMock(side_effect=search)
+    monkeypatch.setattr(pages, "_search_entity_records", upstream)
+    keywords = ["方案 A", *(f"missing-{i}" for i in range(10))]
+    tasks = [
+        asyncio.create_task(
+            pages.list_validation_records_from_feishu(
+                SimpleNamespace(),
+                keyword=keyword,
+            )
+        )
+        for keyword in keywords
+    ]
+    try:
+        await asyncio.wait_for(started.wait(), 1)
+    finally:
+        release.set()
+    results = await asyncio.gather(*tasks)
+    assert [result["total"] for result in results] == [1, *([0] * 10)]
+    upstream.assert_awaited_once()
+    if redis_down:
+        validation_redis.set.assert_not_awaited()
+    else:
+        result = await pages.list_validation_records_from_feishu(
+            SimpleNamespace(), keyword="new miss"
+        )
+        assert result["total"] == 0
+        upstream.assert_awaited_once()
+
+
+async def test_validation_invalidation_during_fill_discards_previous_snapshot(
+    monkeypatch: pytest.MonkeyPatch,
+    validation_redis: SimpleNamespace,
+) -> None:
+    monkeypatch.setattr(pages, "_resolve_runtime_entity", AsyncMock())
+    monkeypatch.setattr(pages, "_apply_ai_validation_categories", AsyncMock())
+    started = asyncio.Event()
+    release = asyncio.Event()
+
+    async def search(*_args, **_kwargs):
+        record_id = "new" if started.is_set() else "old"
+        if record_id == "old":
+            started.set()
+            await release.wait()
+        return [{"record_id": record_id, "fields": {"确认名称": record_id}}]
+
+    upstream = AsyncMock(side_effect=search)
+    monkeypatch.setattr(pages, "_search_entity_records", upstream)
+    old = asyncio.create_task(
+        pages.list_validation_records_from_feishu(SimpleNamespace())
+    )
+    try:
+        await asyncio.wait_for(started.wait(), 1)
+        await pages._invalidate_validation_list_cache(
+            pages._entity_code_for_validation_type(None)
+        )
+        newest = await pages.list_validation_records_from_feishu(SimpleNamespace())
+        assert newest["items"][0]["record_id"] == "new"
+    finally:
+        release.set()
+        assert (await old)["items"][0]["record_id"] == "old"
+    current = await pages.list_validation_records_from_feishu(SimpleNamespace())
+    assert current["items"][0]["record_id"] == "new"
+    assert upstream.await_count == 2
+    assert len(validation_redis.stored) == 3  # Revision and two independent snapshots.
+
+
+async def test_validation_only_caches_confirmed_empty_ledgers(
+    monkeypatch: pytest.MonkeyPatch,
+    validation_redis: SimpleNamespace,
+) -> None:
+    monkeypatch.setattr(
+        pages,
+        "_resolve_runtime_entity",
+        AsyncMock(return_value=(object(), SimpleNamespace(app_token="app-test"))),
+    )
+    monkeypatch.setattr(pages, "_apply_ai_validation_categories", AsyncMock())
+    monkeypatch.setattr(
+        pages.feishu_sync_service.feishu_sync,
+        "_resolve_runtime",
+        AsyncMock(
+            return_value=SimpleNamespace(app_id="app-id", app_secret="synthetic")
+        ),
+    )
+    monkeypatch.setattr(
+        pages.feishu_sync_service, "_require_table_id", lambda _: "table-test"
+    )
+    monkeypatch.setattr(
+        "app.platform.integrations.feishu.bitable.BitableClient",
+        lambda **_: SimpleNamespace(
+            list_fields=AsyncMock(side_effect=RuntimeError("offline"))
+        ),
+    )
+    upstream = AsyncMock(side_effect=RuntimeError("Feishu unavailable"))
+    monkeypatch.setattr(pages, "_search_entity_records", upstream)
+
+    app = FastAPI()
+    app.add_exception_handler(AppException, app_exception_handler)
+    app.include_router(validation.router)
+    app.dependency_overrides[get_db] = lambda: SimpleNamespace()
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(
+        id="b267e9cf-2775-4dea-aa3a-98ba65e627b2"
+    )
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        failure = await client.get("/feishu/validations")
+        assert failure.status_code == 502
+        assert failure.json()["code"] == 502
+        validation_redis.set.assert_not_awaited()
+
+        upstream.side_effect = None
+        upstream.return_value = []
+        ok = await client.get("/feishu/validations")
+        assert ok.status_code == 200
+        assert ok.json()["data"] == []
+        assert 9 <= validation_redis.set.await_args.kwargs["ex"] <= 10
+        upstream.reset_mock()
+        cached = await client.get("/feishu/validations")
+        assert cached.json() == ok.json()
+        upstream.assert_not_awaited()

@@ -22,6 +22,7 @@ import pytest
 from app.core.exceptions import AppException
 from app.modules.hr.new_employee_training_api import manual_add_plan
 from app.modules.hr.new_employee_training_service import NewEmployeeTrainingService
+from app.platform.identity.data_scope import DepartmentScope
 
 
 def _make_emp(
@@ -69,8 +70,7 @@ async def test_manual_plan_no_archive_uses_virtual_uuid():
     svc = _make_service()
     # 档案查询返回空
     emp_repo = MagicMock()
-    emp_repo.list_employees = AsyncMock(return_value=([], 0))
-    emp_repo.get_by_id = AsyncMock(return_value=None)
+    emp_repo.find_training_employees = AsyncMock(return_value=[])
     with patch("app.modules.hr.repository.EmployeeRepository", return_value=emp_repo):
         await svc.create_manual_plan(
             name="李四",
@@ -78,6 +78,7 @@ async def test_manual_plan_no_archive_uses_virtual_uuid():
             position="操作工",
             hire_date=date(2026, 8, 1),
             user_id=None,
+            employee_scope=DepartmentScope(is_all=True),
             sub_department=None,
             training_position="操作工岗",
             employee_id=None,
@@ -100,8 +101,7 @@ async def test_manual_plan_archive_unique_overrides_fields():
     svc = _make_service()
     emp = _make_emp("11111111-1111-1111-1111-111111111111", hire_date="2020-05-10")
     emp_repo = MagicMock()
-    emp_repo.list_employees = AsyncMock(return_value=([emp], 1))
-    emp_repo.get_by_id = AsyncMock(return_value=emp)
+    emp_repo.find_training_employees = AsyncMock(return_value=[emp])
     with patch("app.modules.hr.repository.EmployeeRepository", return_value=emp_repo):
         await svc.create_manual_plan(
             name="张三",
@@ -109,6 +109,7 @@ async def test_manual_plan_archive_unique_overrides_fields():
             position="错误岗位",
             hire_date=date(2026, 1, 1),  # 前端传入错误日期，应被档案覆盖
             user_id=None,
+            employee_scope=DepartmentScope(is_all=True),
             training_position=None,
             employee_id=None,
         )
@@ -128,8 +129,7 @@ async def test_manual_plan_archive_unique_resolves_default_position():
     svc._resolve_training_position = AsyncMock(return_value="解析出的岗位")
     emp = _make_emp("22222222-2222-2222-2222-222222222222")
     emp_repo = MagicMock()
-    emp_repo.list_employees = AsyncMock(return_value=([emp], 1))
-    emp_repo.get_by_id = AsyncMock(return_value=emp)
+    emp_repo.find_training_employees = AsyncMock(return_value=[emp])
     with patch("app.modules.hr.repository.EmployeeRepository", return_value=emp_repo):
         await svc.create_manual_plan(
             name="张三",
@@ -137,6 +137,7 @@ async def test_manual_plan_archive_unique_resolves_default_position():
             position="操作工",
             hire_date=date(2026, 8, 1),
             user_id=None,
+            employee_scope=DepartmentScope(is_all=True),
             employee_id=None,
         )
     created = svc.repo.create.await_args.args[0]
@@ -157,8 +158,7 @@ async def test_manual_plan_archive_multiple_keeps_input():
         "44444444-4444-4444-4444-444444444444", dept="201二车间", hire_date="2021-01-01"
     )
     emp_repo = MagicMock()
-    emp_repo.list_employees = AsyncMock(return_value=([emp_a, emp_b], 2))
-    emp_repo.get_by_id = AsyncMock(return_value=None)
+    emp_repo.find_training_employees = AsyncMock(return_value=[emp_a, emp_b])
     with patch("app.modules.hr.repository.EmployeeRepository", return_value=emp_repo):
         await svc.create_manual_plan(
             name="张三",
@@ -166,6 +166,7 @@ async def test_manual_plan_archive_multiple_keeps_input():
             position="手动岗位",
             hire_date=date(2026, 8, 1),
             user_id=None,
+            employee_scope=DepartmentScope(is_all=True),
             training_position="手动培训岗位",
             employee_id=None,
         )
@@ -188,7 +189,7 @@ async def test_manual_plan_duplicate_returns_existing():
     existing = MagicMock()
     svc.repo.get_by_name_and_department = AsyncMock(return_value=existing)
     emp_repo = MagicMock()
-    emp_repo.list_employees = AsyncMock(return_value=([], 0))
+    emp_repo.find_training_employees = AsyncMock(return_value=[])
     with patch("app.modules.hr.repository.EmployeeRepository", return_value=emp_repo):
         plan = await svc.create_manual_plan(
             name="张三",
@@ -196,6 +197,7 @@ async def test_manual_plan_duplicate_returns_existing():
             position="操作工",
             hire_date=date(2026, 8, 1),
             user_id=None,
+            employee_scope=DepartmentScope(is_all=True),
             employee_id=None,
         )
     assert plan is existing
@@ -239,7 +241,9 @@ async def test_manual_add_plan_success(mock_require):
     plan.id = "plan-1"
     service.create_manual_plan = AsyncMock(return_value=plan)
     service.get_plan = AsyncMock(return_value={"id": "plan-1", "items": []})
-    resp = await manual_add_plan(body, service=service, current_user=MagicMock())
+    resp = await manual_add_plan(
+        body, service=service, current_user=MagicMock(role="admin")
+    )
     import json
 
     payload = json.loads(resp.body)["data"]

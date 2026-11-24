@@ -9144,6 +9144,40 @@
         "title": "ApiResponseEnvelope[PersonnelAddResult]",
         "type": "object"
       },
+      "ApiResponseEnvelope_PracticalExamImportResult_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/PracticalExamImportResult"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[PracticalExamImportResult]",
+        "type": "object"
+      },
       "ApiResponseEnvelope_ProductQualityOut_": {
         "properties": {
           "code": {
@@ -12588,6 +12622,44 @@
         "title": "ApiResponseEnvelope[list[KnowledgeCommentResponse]]",
         "type": "object"
       },
+      "ApiResponseEnvelope_list_NewEmployeeTrainingEmployeeCandidate__": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/NewEmployeeTrainingEmployeeCandidate"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[list[NewEmployeeTrainingEmployeeCandidate]]",
+        "type": "object"
+      },
       "ApiResponseEnvelope_list_OosOotRecordOut__": {
         "properties": {
           "code": {
@@ -13004,6 +13076,44 @@
           "data"
         ],
         "title": "ApiResponseEnvelope[list[SupplierOut]]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_list_TrainingSignInEmployee__": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/TrainingSignInEmployee"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[list[TrainingSignInEmployee]]",
         "type": "object"
       },
       "ApiResponseEnvelope_list_Union_ValidationAuditUploadSuccess__ValidationAuditUploadFailure___": {
@@ -53981,6 +54091,10 @@
           "HR_ANNUAL_PLAN_ITEMS_MISSING",
           "HR_ANNUAL_PLAN_ATTACHMENT_COUNT_EXCEEDED",
           "HR_POSITION_TRAINING_TEMPLATE_INVALID",
+          "HR_PRACTICAL_EXAM_TEMPLATE_INVALID",
+          "HR_TRAINING_IMPORT_WORKBOOK_INVALID",
+          "HR_TRAINING_IMPORT_MAPPING_INVALID",
+          "HR_TRAINING_IMPORT_NO_ROWS",
           "HR_POSITION_TRAINING_DATA_MISSING",
           "HR_POSITION_TRANSFER_NOT_DRAFT",
           "HR_POSITION_TRANSFER_NOT_SUBMITTED",
@@ -62332,6 +62446,72 @@
           }
         },
         "title": "NCEUpdate",
+        "type": "object"
+      },
+      "NewEmployeeTrainingEmployeeCandidate": {
+        "properties": {
+          "department": {
+            "title": "Department",
+            "type": "string"
+          },
+          "employee_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee Number"
+          },
+          "hire_date": {
+            "format": "date",
+            "title": "Hire Date",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          },
+          "sub_department": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sub Department"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "department",
+          "sub_department",
+          "position",
+          "hire_date",
+          "employee_number"
+        ],
+        "title": "NewEmployeeTrainingEmployeeCandidate",
         "type": "object"
       },
       "NewEmployeeTrainingItemAdd": {
@@ -71863,6 +72043,24 @@
           }
         },
         "title": "PracticalExamExportRequest",
+        "type": "object"
+      },
+      "PracticalExamImportResult": {
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "training_date": {
+            "title": "Training Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "description",
+          "training_date"
+        ],
+        "title": "PracticalExamImportResult",
         "type": "object"
       },
       "PracticalExamPersonItem": {
@@ -91618,6 +91816,7 @@
           "exclude_session_id": {
             "anyOf": [
               {
+                "format": "uuid",
                 "type": "string"
               },
               {
@@ -91641,13 +91840,13 @@
           },
           "time_end": {
             "description": "结束时间 HH:MM",
-            "maxLength": 8,
+            "pattern": "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$",
             "title": "Time End",
             "type": "string"
           },
           "time_start": {
             "description": "开始时间 HH:MM",
-            "maxLength": 8,
+            "pattern": "^(?:[01][0-9]|2[0-3]):[0-5][0-9]$",
             "title": "Time Start",
             "type": "string"
           },
@@ -95153,6 +95352,36 @@
           }
         },
         "title": "TrainingSessionUpsert",
+        "type": "object"
+      },
+      "TrainingSignInEmployee": {
+        "properties": {
+          "department": {
+            "title": "Department",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "sub_department": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sub Department"
+          }
+        },
+        "required": [
+          "name",
+          "department",
+          "sub_department"
+        ],
+        "title": "TrainingSignInEmployee",
         "type": "object"
       },
       "TrainingSignInSheetInput": {
@@ -141681,6 +141910,67 @@
         ]
       }
     },
+    "/api/v1/hr/new-employee-training/employee-candidates": {
+      "get": {
+        "operationId": "list_employee_candidates_api_v1_hr_new_employee_training_employee_candidates_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "maxLength": 64,
+              "minLength": 1,
+              "title": "Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_NewEmployeeTrainingEmployeeCandidate__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "按姓名匹配新员工培训档案",
+        "tags": [
+          "人事管理",
+          "人事-新员工培训"
+        ]
+      }
+    },
     "/api/v1/hr/new-employee-training/plans": {
       "get": {
         "operationId": "list_plans_api_v1_hr_new_employee_training_plans_get",
@@ -149087,6 +149377,16 @@
             },
             "description": "Successful Response"
           },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HrBusinessErrorResponse"
+                }
+              }
+            },
+            "description": "可能的业务错误码：HR_TRAINING_IMPORT_WORKBOOK_INVALID, HR_TRAINING_IMPORT_MAPPING_INVALID, HR_TRAINING_IMPORT_NO_ROWS。通用错误可不带业务错误码。"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -149216,6 +149516,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HrBusinessErrorResponse"
+                }
+              }
+            },
+            "description": "可能的业务错误码：HR_TRAINING_IMPORT_WORKBOOK_INVALID。通用错误可不带业务错误码。"
           },
           "422": {
             "content": {
@@ -149944,6 +150254,16 @@
             },
             "description": "Successful Response"
           },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HrBusinessErrorResponse"
+                }
+              }
+            },
+            "description": "可能的业务错误码：HR_PRACTICAL_EXAM_TEMPLATE_INVALID。通用错误可不带业务错误码。"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -149997,11 +150317,21 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Import Practical Exam Questions Api V1 Hr Training Practical Exam Import Post"
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_PracticalExamImportResult_"
                 }
               }
             },
             "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HrBusinessErrorResponse"
+                }
+              }
+            },
+            "description": "可能的业务错误码：HR_PRACTICAL_EXAM_TEMPLATE_INVALID。通用错误可不带业务错误码。"
           },
           "422": {
             "content": {
@@ -150312,6 +150642,78 @@
           }
         },
         "summary": "生成培训签到表",
+        "tags": [
+          "人事管理"
+        ]
+      }
+    },
+    "/api/v1/hr/training-sign-in/employees": {
+      "get": {
+        "operationId": "list_training_sign_in_employees_api_v1_hr_training_sign_in_employees_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_list_TrainingSignInEmployee__"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "查询培训签到可选员工",
         "tags": [
           "人事管理"
         ]

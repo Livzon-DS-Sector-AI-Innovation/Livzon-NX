@@ -15,6 +15,47 @@ from app.modules.hr import mail_fetcher, recruitment_service, resume_watcher
 
 
 @pytest.mark.asyncio
+async def test_resume_scanner_uses_private_storage_for_missing_legacy_default(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    legacy = tmp_path / "data" / "hr" / "resumes"
+    private_storage = tmp_path / "private-storage"
+    target = private_storage / "hr" / "resumes"
+    monkeypatch.setattr(resume_watcher, "_PROJECT_ROOT", tmp_path)
+    monkeypatch.setattr(
+        resume_watcher,
+        "get_settings",
+        lambda: SimpleNamespace(STORAGE_ROOT=str(private_storage)),
+        raising=False,
+    )
+    read_setting = AsyncMock(side_effect=[str(legacy), str(target), str(legacy), ""])
+    write_setting = AsyncMock()
+    session = SimpleNamespace(commit=AsyncMock())
+    session_context = AsyncMock()
+    session_context.__aenter__.return_value = session
+    monkeypatch.setattr(resume_watcher, "get_module_setting", read_setting)
+    monkeypatch.setattr(
+        "app.core.database.async_session_factory", lambda: session_context
+    )
+    monkeypatch.setattr("app.shared.config_reader.set_module_setting", write_setting)
+
+    assert await resume_watcher._resolve_watch_dir() == target
+    write_setting.assert_awaited_once_with(
+        session, "hr", "HR_RESUME_WATCH_DIR", str(target)
+    )
+    result = await resume_watcher.scan_watched_folder()
+    assert result["new_files"] == 0
+    assert (target / "processed").is_dir()
+    assert not legacy.exists()
+
+    legacy.mkdir(parents=True)
+    (legacy / "pending.docx").write_bytes(b"test")
+    assert await resume_watcher._resolve_watch_dir() == legacy
+    assert await resume_watcher._resolve_watch_dir() == legacy
+    write_setting.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_resume_watcher_helpers_scan_and_match(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -55,8 +96,14 @@ async def test_resume_watcher_helpers_scan_and_match(
     monkeypatch.setattr(database, "async_session_factory", lambda: _SessionContext())
     set_setting = AsyncMock()
     monkeypatch.setattr(config_reader, "set_module_setting", set_setting)
-    assert await resume_watcher._resolve_watch_dir() == Path(
-        resume_watcher.DEFAULT_RESUME_WATCH_DIR
+    monkeypatch.setattr(
+        resume_watcher,
+        "get_settings",
+        lambda: SimpleNamespace(STORAGE_ROOT=str(tmp_path / "private-storage")),
+    )
+    assert (
+        await resume_watcher._resolve_watch_dir()
+        == tmp_path / "private-storage" / "hr" / "resumes"
     )
     set_setting.assert_awaited_once()
     session.commit.assert_awaited_once()
@@ -325,6 +372,7 @@ async def test_recruitment_batch_analysis_covers_vision_skip_and_failure(
 
     client = _Client()
     bitable = SimpleNamespace(client=client, _path=client._path)
+
     async def _fake_table_id(entity_code: str) -> str:
         return "tblCandidate"
 

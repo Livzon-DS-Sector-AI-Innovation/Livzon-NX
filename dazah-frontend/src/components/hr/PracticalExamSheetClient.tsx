@@ -8,6 +8,7 @@ import { DownloadOutlined, UploadOutlined } from '@ant-design/icons'
 import type { ExportedDoc, TrainingDocExporter, TrainingSessionData } from '@/types/hr'
 import { upsertTrainingSession, upsertTrainingDocument, generatePracticalExamResult, importPracticalExamQuestions } from '@/actions/hr'
 import { downloadBytes } from '@/lib/download'
+import { getActionErrorMessage, unwrapServerActionResult } from '@/lib/server-action-result'
 import TrainingDocStyle from './trainingDocStyle'
 import { unify201Dept, ensureDeptMappings } from './trainingDept'
 
@@ -52,7 +53,7 @@ export default function PracticalExamSheetClient({ sessionData, initialPayload, 
   const handleImport = async (file: File) => {
     setImporting(true)
     try {
-      const res = await importPracticalExamQuestions(file)
+      const res = unwrapServerActionResult(await importPracticalExamQuestions(file))
       const desc = res.data?.description ?? ''
       const date = res.data?.training_date ?? ''
       setExamContent(desc)
@@ -62,7 +63,7 @@ export default function PracticalExamSheetClient({ sessionData, initialPayload, 
       }
       message.success('实操试题已导入')
     } catch (err) {
-      message.error(getUserErrorMessage((err instanceof Error ? err.message : '') || '导入实操试题失败'))
+      message.error(getActionErrorMessage(err, '实操试题导入'))
     } finally {
       setImporting(false)
     }
@@ -135,12 +136,12 @@ export default function PracticalExamSheetClient({ sessionData, initialPayload, 
   const buildExportEntries = async (): Promise<ExportedDoc[] | null> => {
     const hasContent = content || assessor || persons.some((p) => p.name && p.name.trim())
     if (!hasContent) return null
-    const { bytes, filename } = await generatePracticalExamResult({
+    const { bytes, filename } = unwrapServerActionResult(await generatePracticalExamResult({
       training_content: content,
       training_date: trainingDate,
       persons: persons.filter((p) => p.name.trim()).map((p) => ({ name: p.name, department: p.department, description: p.description || examContent })),
       assessor,
-    })
+    }))
     return [{ name: filename, bytes }]
   }
 

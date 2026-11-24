@@ -16,11 +16,10 @@ import {
 } from 'antd'
 import { DownloadOutlined } from '@ant-design/icons'
 import dayjs, { type Dayjs } from 'dayjs'
-import { Employee } from '@/types/hr'
+import type { components } from '@/types/generated/schema'
 import type { ExportedDoc, TrainingDocExporter, TrainingSessionData } from '@/types/hr'
-import { fetchEmployees } from '@/lib/api/hr'
 import { generateTrainingSignInSheet, checkTrainingConflict } from '@/actions/hr'
-import { fetchTrainingDepartments } from '@/lib/api/client/hr'
+import { fetchTrainingDepartments, fetchTrainingSignInEmployees } from '@/lib/api/client/hr'
 import { downloadBytes } from '@/lib/download'
 import InstructorAutoComplete from './InstructorAutoComplete'
 import TrainingDocStyle from './trainingDocStyle'
@@ -54,7 +53,8 @@ export default function SignInSheetClient({ sessionData, onSessionChange, regist
   const [form] = Form.useForm()
   const [exporting, setExporting] = useState(false)
   const [departments, setDepartments] = useState<{ value: string; label: string }[]>([])
-  const [employees, setEmployees] = useState<Employee[]>([])
+  const [employees, setEmployees] = useState<components['schemas']['TrainingSignInEmployee'][] | null>(null)
+  const [loadingEmployees, setLoadingEmployees] = useState(true)
   const [selectedDepts, setSelectedDepts] = useState<string[]>([])
   // 冲突检测 effect：用户修改日期/时间/授课人/参训人员后 500ms 触发检测
   useEffect(() => {
@@ -166,23 +166,32 @@ export default function SignInSheetClient({ sessionData, onSessionChange, regist
   const trainingMethod: string | undefined = Form.useWatch('training_method', form)
 
   useEffect(() => {
+    const directoryRequest = new AbortController()
     ensureDeptMappings().catch(() => {})
     fetchTrainingDepartments()
       .then((depts) => {
         setDepartments(depts.map((d) => ({ value: d, label: d })))
       })
       .catch(() => setDepartments([]))
-    fetchEmployees({ page_size: 200 })
-      .then((res) => setEmployees(res.data || []))
-      .catch(() => setEmployees([]))
-  }, [])
+    fetchTrainingSignInEmployees(directoryRequest.signal)
+      .then((rows) => {
+        if (!directoryRequest.signal.aborted) setEmployees(rows)
+      })
+      .catch((error: unknown) => {
+        if (!directoryRequest.signal.aborted) message.error(getUserErrorMessage(error, '签到人员加载失败，请稍后重试'))
+      })
+      .finally(() => {
+        if (!directoryRequest.signal.aborted) setLoadingEmployees(false)
+      })
+    return () => directoryRequest.abort()
+  }, [message])
 
   // 部门列取值：优先人员配置自带的部门，其次 HR 员工表（按培训规则解析：一级不在培训部门列表时回退二级）
   const trainingDeptNames = useMemo(() => departments.map((d) => d.value), [departments])
   const { version: mappingVersion } = useDeptMappings()
   const nameToDeptMap = useMemo(() => {
     const raw: Record<string, string> = { ...(sessionData.employee_dept_map || {}) }
-    employees.forEach((e) => {
+    employees?.forEach((e) => {
       if (e.name && !raw[e.name]) {
         raw[e.name] = resolveTrainingDept(e.department, e.sub_department, trainingDeptNames)
       }
@@ -212,6 +221,15 @@ export default function SignInSheetClient({ sessionData, onSessionChange, regist
 
   const handleDeptChange = (values: string[]) => {
     setSelectedDepts(values)
+    const departmentUpdate = {
+      trainee_departments: values,
+      // 公司级培训落款部门固定人事行政部，部门级取首个受训部门。
+      department: sessionData.training_level === '部门级' ? values[0] : (sessionData.department || '人事行政部'),
+    }
+    if (!employees) {
+      onSessionChange(departmentUpdate)
+      return
+    }
     const chosen = employees.filter((e) => {
       const resolved = resolveTrainingDept(e.department, e.sub_department, trainingDeptNames)
       return values.includes(e.department || '') || (resolved !== '' && values.includes(resolved))
@@ -222,9 +240,7 @@ export default function SignInSheetClient({ sessionData, onSessionChange, regist
       if (e.name && d) deptMap[e.name] = d
     })
     onSessionChange({
-      trainee_departments: values,
-      // 公司级培训落款部门固定人事行政部（不随受训部门变化）；部门级才取第一个受训部门
-      department: sessionData.training_level === '部门级' ? values[0] : (sessionData.department || '人事行政部'),
+      ...departmentUpdate,
       employee_names: chosen.map((e) => e.name),
       employee_dept_map: deptMap,
     })
@@ -438,6 +454,8 @@ export default function SignInSheetClient({ sessionData, onSessionChange, regist
                     <Select
                       mode="tags"
                       style={{ flex: 1 }}
+                      loading={loadingEmployees}
+                      disabled={loadingEmployees}
                       placeholder="选择或输入受训部门"
                       options={departments.map((d) => ({ value: d.value, label: d.label }))}
                       onChange={handleDeptChange}

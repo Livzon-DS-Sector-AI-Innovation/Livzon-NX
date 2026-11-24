@@ -43,6 +43,7 @@ MODELS = ReadMirrorModels(
     record=QualityFeishuReadRecord,
     binding=QualityFeishuReadPageBinding,
     sync_run=QualityFeishuReadSyncRun,
+    fence_sync_runs=True,
 )
 
 

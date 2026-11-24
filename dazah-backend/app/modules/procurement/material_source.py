@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
@@ -16,7 +15,7 @@ from uuid import UUID
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.redis import cache_get, cache_set
+from app.core.read_through_cache import CacheFill, ReadThroughCache
 from app.modules.procurement.models import MaterialCatalogRecord, MaterialSourceConfig
 from app.modules.procurement.repository import (
     MaterialCatalogRepository,
@@ -40,6 +39,7 @@ logger = logging.getLogger(__name__)
 
 MATERIAL_SOURCE_CONFIG_KEY = "material-master"
 MATERIAL_OPTIONS_CACHE_TTL = 60
+EMPTY_MATERIAL_OPTIONS_CACHE_TTL = 10
 MAX_MATERIAL_OPTIONS = 20
 MATERIAL_RECORD_PAGE_SIZE = 500
 MAX_MATERIAL_SCAN_PAGES = 20
@@ -872,6 +872,7 @@ def _material_options_cache_key(
                 config.material_category_field or "",
                 config.material_subcategory_field or "",
                 config.material_cost_category_field or "",
+                config.last_synced_at.isoformat() if config.last_synced_at else "",
             )
         ).encode()
     ).hexdigest()[:24]
@@ -882,43 +883,21 @@ def _material_options_cache_key(
     )
 
 
-async def _read_cached_options(key: str) -> list[dict[str, str]] | None:
-    try:
-        cached = await cache_get(key)
-    except Exception as exc:
-        logger.warning(
-            "Redis material options cache unavailable: %s",
-            type(exc).__name__,
-        )
-        return None
-    if not cached:
-        return None
-    try:
-        parsed = json.loads(cached)
-    except (TypeError, ValueError):
-        return None
+def _decode_material_options(parsed: object) -> list[dict[str, str]] | None:
     if not isinstance(parsed, list) or not all(
-        isinstance(item, dict) for item in parsed
+        isinstance(item, dict)
+        and isinstance(item.get("record_id"), str)
+        and isinstance(item.get("material_code"), str)
+        and all(isinstance(value, str) for value in item.values())
+        for item in parsed
     ):
         return None
     return cast(list[dict[str, str]], parsed)
 
 
-async def _write_cached_options(
-    key: str,
-    options: list[dict[str, str]],
-) -> None:
-    try:
-        await cache_set(
-            key,
-            json.dumps(options, ensure_ascii=False),
-            ex=MATERIAL_OPTIONS_CACHE_TTL,
-        )
-    except Exception as exc:
-        logger.warning(
-            "Redis material options cache unavailable: %s",
-            type(exc).__name__,
-        )
+_material_options_cache = ReadThroughCache(
+    "procurement material options", max_loads=4, decode=_decode_material_options
+)
 
 
 def _material_option(
@@ -1142,24 +1121,33 @@ async def list_material_options(
     normalized_keyword = keyword.strip()
     if not normalized_keyword:
         raise MaterialSourceValidationError("物料编码关键词不能为空")
+    if len(normalized_keyword) > 64:
+        raise MaterialSourceValidationError("物料编码关键词不得超过 64 个字符")
     if limit < 1 or limit > MAX_MATERIAL_OPTIONS:
         raise MaterialSourceValidationError("联想结果数量必须在 1 到 20 之间")
 
     config = await get_material_source_config(db)
     if config is None:
         raise MaterialSourceNotConfiguredError("物料数据源尚未配置")
+    return await _material_options_cache.get_or_load(
+        _material_options_cache_key(config, normalized_keyword, limit),
+        lambda: _load_material_options(db, config, normalized_keyword, limit),
+    )
+
+
+async def _load_material_options(
+    db: AsyncSession, config: MaterialSourceConfig, normalized_keyword: str, limit: int
+) -> CacheFill[list[dict[str, str]]]:
     local_options = await _list_local_material_options(
-        db,
-        config,
-        keyword=normalized_keyword,
-        limit=limit,
+        db, config, keyword=normalized_keyword, limit=limit
     )
     if local_options is not None:
-        return local_options
-    cache_key = _material_options_cache_key(config, normalized_keyword, limit)
-    cached = await _read_cached_options(cache_key)
-    if cached is not None:
-        return cached
+        ttl = (
+            MATERIAL_OPTIONS_CACHE_TTL
+            if local_options
+            else EMPTY_MATERIAL_OPTIONS_CACHE_TTL
+        )
+        return CacheFill(local_options, ttl)
     credentials = await _get_credentials(db)
 
     client = BitableClient(
@@ -1198,7 +1186,7 @@ async def list_material_options(
             ],
         }
 
-        async def fetch_exact() -> list[dict[str, Any]]:
+        async def fetch_exact() -> list[dict[str, Any]] | None:
             try:
                 return await _run_feishu(
                     "search_records",
@@ -1219,7 +1207,7 @@ async def list_material_options(
                     "Exact material option lookup skipped: %s",
                     exc.public_message,
                 )
-                return []
+                return None
 
         async def fetch_fuzzy() -> list[dict[str, Any]]:
             return await _run_feishu(
@@ -1233,16 +1221,24 @@ async def list_material_options(
                 ),
             )
 
+        searches = (
+            asyncio.create_task(fetch_exact()),
+            asyncio.create_task(fetch_fuzzy()),
+        )
         try:
             exact_records, fuzzy_records = await asyncio.wait_for(
-                asyncio.gather(fetch_exact(), fetch_fuzzy()),
+                asyncio.gather(*searches),
                 timeout=MATERIAL_OPTION_TOTAL_TIMEOUT_SECONDS,
             )
         except TimeoutError as exc:
             raise MaterialSourceTimeoutError("飞书物料数据源请求超时") from exc
+        finally:
+            for search in searches:
+                search.cancel()
+            await asyncio.gather(*searches, return_exceptions=True)
         options: list[dict[str, str]] = []
         seen_record_ids: set[str] = set()
-        for record in [*exact_records, *fuzzy_records]:
+        for record in [*(exact_records or []), *fuzzy_records]:
             option = _material_option(record, config)
             if option["record_id"] in seen_record_ids:
                 continue
@@ -1253,6 +1249,8 @@ async def list_material_options(
             normalized_keyword,
             limit,
         )
+        if exact_records is None:
+            return CacheFill(options, None)
     else:
         options = await _list_client_filtered_options(
             client,
@@ -1261,5 +1259,5 @@ async def list_material_options(
             limit=limit,
             deadline=time.monotonic() + MATERIAL_OPTION_TOTAL_TIMEOUT_SECONDS,
         )
-    await _write_cached_options(cache_key, options)
-    return options
+    ttl = MATERIAL_OPTIONS_CACHE_TTL if options else EMPTY_MATERIAL_OPTIONS_CACHE_TTL
+    return CacheFill(options, ttl)

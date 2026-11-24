@@ -24,6 +24,8 @@ desktop.ini
 /docs/*
 !/docs/module-development-ci.md
 !/docs/business-module-boundaries.md
+!/docs/architecture-optimization-plan.md
+!/docs/background-task-inventory-and-worker-runbook.md
 !/docs/module-migration-audit.md
 !/docs/dazah-enterprise-agent-gateway-tool-registry-implementation-plan-2026-07-30.md
 !/docs/livzon-platform-completion-plan-2026-10-09.md

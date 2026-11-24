@@ -446,8 +446,9 @@ async def test_hr_training_session_document_content_and_exam_paths(
         "read_upload_secure",
         AsyncMock(return_value=("questions.docx", b"docx-bytes")),
     )
+    parsed = {"description": "", "training_date": ""}
     monkeypatch.setattr(
-        api, "parse_practical_exam_questions", Mock(return_value={"items": []})
+        api, "parse_practical_exam_questions", Mock(return_value=parsed)
     )
     imported_path = tmp_path / "imported.docx"
     imported_path.write_bytes(b"")
@@ -458,4 +459,4 @@ async def test_hr_training_session_document_content_and_exam_paths(
     imported = await api.import_practical_exam_questions(
         UploadFile(filename="questions.docx", file=BytesIO(b"docx-bytes")), user
     )
-    assert imported["data"] == {"items": []}
+    assert imported.data.model_dump() == parsed
