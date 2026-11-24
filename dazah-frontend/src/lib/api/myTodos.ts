@@ -30,11 +30,11 @@ const businessTodoPages: Record<string, {
   '/quality/capas/ledger': { moduleCode: 'quality', kind: 'capas' },
   '/quality/capas/plans': { moduleCode: 'quality', kind: 'capa-plans' },
   '/quality/change/action-plans': { moduleCode: 'quality', kind: 'change-plans' },
-  '/equipment': {
+  // 与左侧菜单「设备检修」入口同一地址
+  '/equipment?module=maintenance': {
     moduleCode: 'equipment',
     kind: 'maintenance',
     pageKey: 'equipment:maintenance',
-    todoPath: '/equipment?module=maintenance',
   },
   '/safety/hazard-ledger': { moduleCode: 'safety', kind: 'hazards' },
   '/safety/accident': { moduleCode: 'safety', kind: 'accidents' },

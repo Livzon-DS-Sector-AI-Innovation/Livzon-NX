@@ -3734,6 +3734,126 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/equipment/repair/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 获取检修飞书镜像配置 */
+        get: operations["get_repair_config_api_v1_equipment_repair_config_get"];
+        /** 保存检修飞书镜像配置 */
+        put: operations["update_repair_config_api_v1_equipment_repair_config_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/repair/config/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 测试检修飞书镜像连接 */
+        post: operations["test_repair_config_api_v1_equipment_repair_config_test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/repair/frequency": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 设备维修频次排行 */
+        get: operations["repair_frequency_api_v1_equipment_repair_frequency_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/repair/records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 检修记录（飞书镜像） */
+        get: operations["list_repair_records_api_v1_equipment_repair_records_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/repair/results": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 维修后状态去重列表（筛选项） */
+        get: operations["repair_distinct_results_api_v1_equipment_repair_results_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/repair/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 手动触发检修镜像同步 */
+        post: operations["trigger_repair_sync_api_v1_equipment_repair_sync_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/repair/sync-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 检修镜像同步状态 */
+        get: operations["repair_sync_status_api_v1_equipment_repair_sync_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/equipment/spare-parts": {
         parameters: {
             query?: never;
@@ -62573,6 +62693,61 @@ export interface components {
              */
             trigger_hour: number;
         };
+        /**
+         * RepairConfigUpdateRequest
+         * @description 保存检修飞书镜像配置请求。
+         *
+         *     凭据两选一：``feishu_app_id`` 选择已登记应用（优先）；或手输
+         *     ``app_id`` / ``app_secret``（App ID 已存在则自动关联，不存在则登记新应用）。
+         */
+        RepairConfigUpdateRequest: {
+            /**
+             * App Id
+             * @description 手输的飞书应用 App ID
+             * @default
+             */
+            app_id: string;
+            /**
+             * App Name
+             * @description 手输新应用时的名称
+             * @default
+             */
+            app_name: string;
+            /**
+             * App Secret
+             * @description 手输的飞书应用 App Secret
+             */
+            app_secret?: string | null;
+            /**
+             * App Token
+             * @description 多维表格链接或 App Token
+             * @default
+             */
+            app_token: string;
+            /**
+             * Base Url
+             * @description 多维表格完整链接（直达用）
+             * @default
+             */
+            base_url: string;
+            /**
+             * Feishu App Id
+             * @description 已登记的飞书自建应用 ID（下拉选择）
+             */
+            feishu_app_id?: string | null;
+            /**
+             * Is Enabled
+             * @description 启用镜像同步
+             * @default true
+             */
+            is_enabled: boolean;
+            /**
+             * Table Id
+             * @description 维修记录数据表 ID 或子表链接
+             * @default
+             */
+            table_id: string;
+        };
         /** ReportBasis */
         ReportBasis: {
             /** Nodes */
@@ -83430,6 +83605,297 @@ export interface operations {
                 symptom_code?: string | null;
                 /** @description 返回条数 */
                 top?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_repair_config_api_v1_equipment_repair_config_get: {
+        parameters: {
+            query: {
+                /** @description 车间代码（如 101-1 / dlz） */
+                workshop: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_repair_config_api_v1_equipment_repair_config_put: {
+        parameters: {
+            query: {
+                /** @description 车间代码（如 101-1 / dlz） */
+                workshop: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RepairConfigUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    test_repair_config_api_v1_equipment_repair_config_test_post: {
+        parameters: {
+            query: {
+                /** @description 车间代码（如 101-1 / dlz） */
+                workshop: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    repair_frequency_api_v1_equipment_repair_frequency_get: {
+        parameters: {
+            query?: {
+                /** @description 车间代码；缺省跨车间查询 */
+                workshop?: string | null;
+                /** @description 统计起点（维修日期） */
+                date_from?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_repair_records_api_v1_equipment_repair_records_get: {
+        parameters: {
+            query?: {
+                /** @description 车间代码；缺省跨车间查询 */
+                workshop?: string | null;
+                /** @description 维修日期起 */
+                date_from?: string | null;
+                /** @description 维修日期止 */
+                date_to?: string | null;
+                /** @description 设备/故障/人员搜索 */
+                keyword?: string | null;
+                /** @description 设备名称原文（频次榜点入） */
+                equipment?: string | null;
+                /** @description 维修后状态原文 */
+                result_status?: string | null;
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    repair_distinct_results_api_v1_equipment_repair_results_get: {
+        parameters: {
+            query?: {
+                /** @description 车间代码；缺省跨车间查询 */
+                workshop?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    trigger_repair_sync_api_v1_equipment_repair_sync_post: {
+        parameters: {
+            query?: {
+                /** @description 车间代码；缺省跨车间查询 */
+                workshop?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    repair_sync_status_api_v1_equipment_repair_sync_status_get: {
+        parameters: {
+            query: {
+                /** @description 车间代码（如 101-1 / dlz） */
+                workshop: string;
             };
             header?: never;
             path?: never;

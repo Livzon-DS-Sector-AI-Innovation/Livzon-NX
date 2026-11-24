@@ -1,14 +1,15 @@
 import { expect, test } from '@playwright/test'
 import { openCriticalBusinessSession } from '../critical-business-session'
 
-test('设备台账只列出授权车间，切换和刷新保持当前台账及记录', async ({ context, page, baseURL }) => {
+test('设备台账切换车间和刷新后保持当前台账及记录', async ({ context, page, baseURL }) => {
   await openCriticalBusinessSession(context, baseURL, 'equipment-reader')
-  await page.goto('/equipment?workshop=201-1')
+  // 设备台账入口在左侧菜单，直达地址带 ?module=assets
+  // （未带模块进入时落到首个模块「设备巡检」）；车间块来自内置车间清单
+  await page.goto('/equipment?workshop=201-1&module=assets')
   await expect(page).toHaveURL(/workshop=201-1&module=assets$/)
   await expect(page.getByRole('row', { name: /一车间测试真空泵/ })).toBeVisible()
-  await expect(page.getByTitle('切换到 设备测试一车间')).toBeVisible()
-  await expect(page.getByTitle('切换到 设备受限车间')).toHaveCount(0)
-  await page.getByTitle('切换到 设备测试二车间').click()
+  await expect(page.getByTitle('切换到 201一车间')).toBeVisible()
+  await page.getByTitle('切换到 201二车间（MC）').click()
   await expect(page).toHaveURL(/workshop=201-2&module=assets$/)
   await expect(page.getByRole('row', { name: /二车间测试反应釜/ })).toBeVisible()
   await expect(page.getByRole('row', { name: /一车间测试真空泵/ })).toHaveCount(0)

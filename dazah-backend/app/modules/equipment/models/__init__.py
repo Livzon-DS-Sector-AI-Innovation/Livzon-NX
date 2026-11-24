@@ -54,6 +54,11 @@ from app.modules.equipment.models.personnel import (
 from app.modules.equipment.models.purchase_suggestion import (
     SparePartPurchaseSuggestion,
 )
+from app.modules.equipment.models.repair_ledger import (
+    RepairFeishuConfig,
+    RepairRecord,
+    RepairSyncState,
+)
 from app.modules.equipment.models.spare_part import (
     EquipmentSparePart,
     SparePart,
@@ -88,6 +93,9 @@ __all__ = [
     "FailureSymptom",
     "InspectionPhoto",
     "InspectionRecord",
+    "RepairFeishuConfig",
+    "RepairRecord",
+    "RepairSyncState",
     "InspectionTask",
     "InspectionTemplate",
     "InspectionTemplateItem",

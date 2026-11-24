@@ -78105,6 +78105,80 @@
         "title": "ReminderConfigUpdate",
         "type": "object"
       },
+      "RepairConfigUpdateRequest": {
+        "description": "保存检修飞书镜像配置请求。\n\n凭据两选一：``feishu_app_id`` 选择已登记应用（优先）；或手输\n``app_id`` / ``app_secret``（App ID 已存在则自动关联，不存在则登记新应用）。",
+        "properties": {
+          "app_id": {
+            "default": "",
+            "description": "手输的飞书应用 App ID",
+            "maxLength": 100,
+            "title": "App Id",
+            "type": "string"
+          },
+          "app_name": {
+            "default": "",
+            "description": "手输新应用时的名称",
+            "maxLength": 100,
+            "title": "App Name",
+            "type": "string"
+          },
+          "app_secret": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "手输的飞书应用 App Secret",
+            "title": "App Secret"
+          },
+          "app_token": {
+            "default": "",
+            "description": "多维表格链接或 App Token",
+            "maxLength": 500,
+            "title": "App Token",
+            "type": "string"
+          },
+          "base_url": {
+            "default": "",
+            "description": "多维表格完整链接（直达用）",
+            "maxLength": 500,
+            "title": "Base Url",
+            "type": "string"
+          },
+          "feishu_app_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "已登记的飞书自建应用 ID（下拉选择）",
+            "title": "Feishu App Id"
+          },
+          "is_enabled": {
+            "default": true,
+            "description": "启用镜像同步",
+            "title": "Is Enabled",
+            "type": "boolean"
+          },
+          "table_id": {
+            "default": "",
+            "description": "维修记录数据表 ID 或子表链接",
+            "maxLength": 200,
+            "title": "Table Id",
+            "type": "string"
+          }
+        },
+        "title": "RepairConfigUpdateRequest",
+        "type": "object"
+      },
       "ReportBasis": {
         "additionalProperties": false,
         "properties": {
@@ -127526,6 +127600,660 @@
           }
         },
         "summary": "相似案例检索（报修推荐）",
+        "tags": [
+          "设备管理"
+        ]
+      }
+    },
+    "/api/v1/equipment/repair/config": {
+      "get": {
+        "operationId": "get_repair_config_api_v1_equipment_repair_config_get",
+        "parameters": [
+          {
+            "description": "车间代码（如 101-1 / dlz）",
+            "in": "query",
+            "name": "workshop",
+            "required": true,
+            "schema": {
+              "description": "车间代码（如 101-1 / dlz）",
+              "pattern": "^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
+              "title": "Workshop",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "获取检修飞书镜像配置",
+        "tags": [
+          "设备管理"
+        ]
+      },
+      "put": {
+        "operationId": "update_repair_config_api_v1_equipment_repair_config_put",
+        "parameters": [
+          {
+            "description": "车间代码（如 101-1 / dlz）",
+            "in": "query",
+            "name": "workshop",
+            "required": true,
+            "schema": {
+              "description": "车间代码（如 101-1 / dlz）",
+              "pattern": "^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
+              "title": "Workshop",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RepairConfigUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "保存检修飞书镜像配置",
+        "tags": [
+          "设备管理"
+        ]
+      }
+    },
+    "/api/v1/equipment/repair/config/test": {
+      "post": {
+        "operationId": "test_repair_config_api_v1_equipment_repair_config_test_post",
+        "parameters": [
+          {
+            "description": "车间代码（如 101-1 / dlz）",
+            "in": "query",
+            "name": "workshop",
+            "required": true,
+            "schema": {
+              "description": "车间代码（如 101-1 / dlz）",
+              "pattern": "^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
+              "title": "Workshop",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "测试检修飞书镜像连接",
+        "tags": [
+          "设备管理"
+        ]
+      }
+    },
+    "/api/v1/equipment/repair/frequency": {
+      "get": {
+        "operationId": "repair_frequency_api_v1_equipment_repair_frequency_get",
+        "parameters": [
+          {
+            "description": "车间代码；缺省跨车间查询",
+            "in": "query",
+            "name": "workshop",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "车间代码；缺省跨车间查询",
+              "title": "Workshop"
+            }
+          },
+          {
+            "description": "统计起点（维修日期）",
+            "in": "query",
+            "name": "date_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "统计起点（维修日期）",
+              "title": "Date From"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "设备维修频次排行",
+        "tags": [
+          "设备管理"
+        ]
+      }
+    },
+    "/api/v1/equipment/repair/records": {
+      "get": {
+        "operationId": "list_repair_records_api_v1_equipment_repair_records_get",
+        "parameters": [
+          {
+            "description": "车间代码；缺省跨车间查询",
+            "in": "query",
+            "name": "workshop",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "车间代码；缺省跨车间查询",
+              "title": "Workshop"
+            }
+          },
+          {
+            "description": "维修日期起",
+            "in": "query",
+            "name": "date_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "维修日期起",
+              "title": "Date From"
+            }
+          },
+          {
+            "description": "维修日期止",
+            "in": "query",
+            "name": "date_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "维修日期止",
+              "title": "Date To"
+            }
+          },
+          {
+            "description": "设备/故障/人员搜索",
+            "in": "query",
+            "name": "keyword",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "设备/故障/人员搜索",
+              "title": "Keyword"
+            }
+          },
+          {
+            "description": "设备名称原文（频次榜点入）",
+            "in": "query",
+            "name": "equipment",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "设备名称原文（频次榜点入）",
+              "title": "Equipment"
+            }
+          },
+          {
+            "description": "维修后状态原文",
+            "in": "query",
+            "name": "result_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "维修后状态原文",
+              "title": "Result Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "检修记录（飞书镜像）",
+        "tags": [
+          "设备管理"
+        ]
+      }
+    },
+    "/api/v1/equipment/repair/results": {
+      "get": {
+        "operationId": "repair_distinct_results_api_v1_equipment_repair_results_get",
+        "parameters": [
+          {
+            "description": "车间代码；缺省跨车间查询",
+            "in": "query",
+            "name": "workshop",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "车间代码；缺省跨车间查询",
+              "title": "Workshop"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "维修后状态去重列表（筛选项）",
+        "tags": [
+          "设备管理"
+        ]
+      }
+    },
+    "/api/v1/equipment/repair/sync": {
+      "post": {
+        "operationId": "trigger_repair_sync_api_v1_equipment_repair_sync_post",
+        "parameters": [
+          {
+            "description": "车间代码；缺省跨车间查询",
+            "in": "query",
+            "name": "workshop",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "车间代码；缺省跨车间查询",
+              "title": "Workshop"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "手动触发检修镜像同步",
+        "tags": [
+          "设备管理"
+        ]
+      }
+    },
+    "/api/v1/equipment/repair/sync-status": {
+      "get": {
+        "operationId": "repair_sync_status_api_v1_equipment_repair_sync_status_get",
+        "parameters": [
+          {
+            "description": "车间代码（如 101-1 / dlz）",
+            "in": "query",
+            "name": "workshop",
+            "required": true,
+            "schema": {
+              "description": "车间代码（如 101-1 / dlz）",
+              "pattern": "^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
+              "title": "Workshop",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "检修镜像同步状态",
         "tags": [
           "设备管理"
         ]

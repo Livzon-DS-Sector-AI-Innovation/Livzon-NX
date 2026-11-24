@@ -131,4 +131,42 @@ describe('WorkshopNavBlocks（产线块样式）', () => {
       { scroll: false },
     )
   })
+
+  it('记忆车间在当前模块不可见时退到首个可见车间', async () => {
+    currentRoute.workshop = ''
+    currentRoute.module = 'inspection'
+    // 非管理员：巡检仅授权 101-2 / 203；记忆车间 201-2 与默认车间 201-1 都不在其中
+    authStore.state.user = {
+      ...authStore.state.user,
+      role: 'user',
+      page_permissions: [
+        { page_key: 'equipment:inspection', permissions: ['access', 'query', 'operate'], visible_sections: ['101-2', '203'] },
+      ],
+    }
+    useEquipmentWorkshopStore.setState({ workshopCode: '201-2' })
+    renderBlocks('equipment:inspection')
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)) })
+
+    expect(navigation.replace).toHaveBeenCalledWith(
+      '/equipment?workshop=101-2&module=inspection',
+      { scroll: false },
+    )
+  })
+
+  it('记忆车间不可见但默认车间可见时留在默认车间，不发生跳转', async () => {
+    currentRoute.workshop = ''
+    currentRoute.module = 'inspection'
+    authStore.state.user = {
+      ...authStore.state.user,
+      role: 'user',
+      page_permissions: [
+        { page_key: 'equipment:inspection', permissions: ['access', 'query', 'operate'], visible_sections: ['201-1', '203'] },
+      ],
+    }
+    useEquipmentWorkshopStore.setState({ workshopCode: '101-2' })
+    renderBlocks('equipment:inspection')
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)) })
+
+    expect(navigation.replace).not.toHaveBeenCalled()
+  })
 })

@@ -1,4 +1,8 @@
-"""设备模块 API 路由入口."""
+"""设备模块 API 路由入口.
+
+瘦身只下线前端页面，后端接口原地保留：台账报修（工单/图片/维修人员/故障代码/
+维修知识）与安全管理模块的设备详情抽屉仍在调用这些接口。
+"""
 
 from app.modules.equipment.api.calibration import (
     router as calibration_router,
@@ -29,6 +33,7 @@ from app.modules.equipment.api.personnel import router as personnel_router
 from app.modules.equipment.api.purchase_suggestion import (
     router as purchase_suggestion_router,
 )
+from app.modules.equipment.api.repair_ledger import router as repair_ledger_router
 from app.modules.equipment.api.spare_parts import (
     router as spare_parts_router,
 )
@@ -71,6 +76,9 @@ router.include_router(maintainers_router, prefix="/maintenance/staff")
 router.include_router(personnel_router, prefix="/personnel")
 # 巡检模块路由（飞书镜像只读；本地任务式巡检旧轨 HTTP 已下线）
 router.include_router(inspection_feishu_router, prefix="/inspection")
+
+# 设备检修台账路由（飞书维修记录镜像只读 + 频次分析 + 同步配置）
+router.include_router(repair_ledger_router, prefix="/repair")
 
 # 设备健康档案与维修知识案例路由（方案B）
 router.include_router(health_router, prefix="/health")

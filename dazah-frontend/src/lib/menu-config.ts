@@ -18,6 +18,8 @@ export interface SubMenuItem {
   feishuPageKey?: string      // 可绑定飞书只读数据表的稳定页面标识
   /** 聚合入口：所列页面 key 任一有 access 授权即显示（如设备统一工作台） */
   anyOfPageKeys?: readonly string[]
+  /** 切换到本入口时沿用当前地址里的这些查询参数（如设备工作台各功能入口沿用 ?workshop=） */
+  carryQuery?: readonly string[]
   /** localStorage key 读取激活产品集合，用于动态菜单标签 */
   labelStorageKey?: string
   /** 产品 key → 显示名 映射，配合 labelStorageKey 使用 */
@@ -56,7 +58,7 @@ export const EQUIPMENT_WORKSHOPS: ReadonlyArray<{ code: string; label: string }>
   { code: "203", label: "203车间" },
 ]
 
-/** 设备统一工作台聚合的功能模块授权 key（菜单 anyOfPageKeys 与深链校验共用） */
+/** 设备统一工作台聚合的功能模块授权 key（无 ?module= 进入时的深链校验用） */
 const EQUIPMENT_CONSOLE_MODULE_KEYS = [
   "equipment:assets",
   "equipment:maintenance",
@@ -145,22 +147,31 @@ export const moduleMenus: ModuleMenu[] = [
     label: "设备管理",
     icon: "cog",
     path: "/equipment",
-    // 统一工作台：车间块 + 功能模块 Tab（/equipment?workshop=&module=）；
-    // 模块授权 key（equipment:assets 等）仍是权限实体，入口按任一模块授权显示；
-    // 旧 /equipment/<功能>[/<车间>] 路径重定向到统一工作台
+    // 统一工作台：车间块 + 功能模块（/equipment?workshop=&module=），左侧菜单
+    // 每个功能模块各占一项；模块授权 key（equipment:inspection 等）仍是权限实体，
+    // 模块入口按任一模块授权显示；旧 /equipment/<功能>[/<车间>] 路径重定向到统一工作台
     children: [
-      { key: "stats", label: "设备汇总", path: "/equipment/stats" },
+      // 瘦身（2026-11）：仅保留现场在用的巡检 / 检修 / 台账；汇总/飞书配置/
+      // 车间管理等入口下线，后端能力原地保留，将来按需恢复。
+      // 顺序与 lib/equipment-page-permissions 的 EQUIPMENT_MODULES 一致；
+      // 切换功能入口时沿用当前车间（carryQuery）
       {
-        key: "console",
-        label: "设备管理",
-        path: "/equipment",
-        anyOfPageKeys: EQUIPMENT_CONSOLE_MODULE_KEYS,
+        key: "inspection",
+        label: "设备巡检",
+        path: "/equipment?module=inspection",
+        carryQuery: ["workshop"],
       },
-      { key: "feishu-config", label: "飞书配置", path: "/equipment/feishu-config" },
       {
-        key: "workshop-admin",
-        label: "车间管理",
-        path: "/equipment/workshop-admin",
+        key: "maintenance",
+        label: "设备检修",
+        path: "/equipment?module=maintenance",
+        carryQuery: ["workshop"],
+      },
+      {
+        key: "assets",
+        label: "设备台账",
+        path: "/equipment?module=assets",
+        carryQuery: ["workshop"],
       },
     ],
   },
@@ -1094,7 +1105,8 @@ export function getFirstAuthorizedModulePath(user: ModuleLandingAccess): string 
   function firstAuthorizedPage(items: SubMenuItem[]): string | undefined {
     for (const item of items) {
       if (item.disabled || item.adminOnly) continue
-      const key = item.path && getPageKeyByPath(item.path.split('?')[0])
+      // 带查询参数的入口（如设备工作台 /equipment?module=…）按完整地址解析授权
+      const key = item.path && (getPageKeyByPath(item.path) || getPageKeyByPath(item.path.split('?')[0]))
       const anyAllowed = item.anyOfPageKeys?.some((k) => allowedKeys.has(k))
       if ((key && allowedKeys.has(key)) || anyAllowed) return item.path
       const nested = item.children && firstAuthorizedPage(item.children)
@@ -1149,8 +1161,9 @@ function collectPageRoutes(
 // must explicitly inherit a stable leaf page identity.
 const pageRouteAliases: Record<string, string> = {
   "/energy/entry": "energy:entry",
-  // 设备模块统一工作台（/equipment）按任一功能模块授权放行（见
-  // anyOfPageKeys 与 getPostLoginPath），旧功能页路径由前缀别名解析。
+  // 设备统一工作台根路径不是权限页：具体功能页授权按 ?module= 解析（见 proxy
+  // 与 getPostLoginPath），根路径按任一功能模块授权放行（见 AppShell consoleAccess）
+  "/equipment": "equipment:console",
   "/quality/deviations": "quality:deviations:deviation-ledger",
   "/quality/capas": "quality:capas:capa-ledger",
   "/quality/complaints": "quality:complaints:complaint-ledger",
@@ -1261,7 +1274,7 @@ export function getAuthorizedDirectoryEntryPath(
     for (const item of items) {
       if (item.disabled || item.adminOnly) continue
       if (!item.children?.length && item.path) {
-        const key = getPageKeyByPath(item.path.split('?')[0])
+        const key = getPageKeyByPath(item.path) || getPageKeyByPath(item.path.split('?')[0])
         if (key && queryable.has(key)) return item.path
       }
       const nested = item.children && first(item.children)
