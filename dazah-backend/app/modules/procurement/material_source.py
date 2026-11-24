@@ -305,17 +305,23 @@ def _validate_reference(source_url: str) -> BitableReference:
 
 def _material_source_disabled_error() -> MaterialSourceCredentialsError:
     return MaterialSourceCredentialsError(
-        "采购飞书同步暂未启用，待配置独立业务应用后恢复"
+        "采购物料编码库暂不可用，请先在仓储设置中配置飞书应用"
     )
 
 
-def ensure_material_source_sync_enabled() -> None:
-    """采购独立应用接入前，禁止启动远程同步。"""
-    raise _material_source_disabled_error()
+async def ensure_material_source_ready(db: AsyncSession) -> None:
+    """测试/保存/同步的前置检查：仓储飞书应用可用，否则抛 503 业务错误。"""
+    await _get_credentials(db)
 
 
 async def _get_credentials(db: AsyncSession) -> FeishuAppCredentials:
-    raise _material_source_disabled_error()
+    """采购物料编码库挂在仓储五金多维表格上，复用仓储模块的独立应用凭证。"""
+    from app.modules.warehouse import public_api as warehouse_public_api
+
+    credentials = await warehouse_public_api.get_active_feishu_credentials(db)
+    if credentials is None:
+        raise _material_source_disabled_error()
+    return credentials
 
 
 async def _run_feishu[T](

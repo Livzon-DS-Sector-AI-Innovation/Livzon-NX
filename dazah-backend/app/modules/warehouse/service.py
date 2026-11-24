@@ -3623,6 +3623,10 @@ class WarehouseService:
             raise AppException(message="请先启用仓储飞书配置")
         return config
 
+    async def get_active_feishu_config(self) -> Any:
+        """激活的仓储飞书配置（跨模块消费经 public_api 暴露，未配置返回 None）。"""
+        return await self.repo.get_active_feishu_config()
+
     async def _get_table_by_id_or_raise(
         self, table_pk: UUID, *, config_id: UUID | None = None
     ) -> Any:

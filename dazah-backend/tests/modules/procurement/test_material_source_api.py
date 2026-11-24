@@ -47,11 +47,13 @@ def _config() -> SimpleNamespace:
 
 
 @pytest.fixture(autouse=True)
-def simulate_future_procurement_application(monkeypatch):
-    # Existing API workflow tests simulate an enabled independent application.
-    # The disabled-boundary test below restores the real guard explicitly.
+def simulate_warehouse_credentials_ready(monkeypatch):
+    # Existing API workflow tests assume the warehouse Feishu app is configured.
+    # The unconfigured-boundary test below restores the real guard explicitly.
     monkeypatch.setattr(
-        procurement_api, "ensure_material_source_sync_enabled", lambda: None
+        procurement_api,
+        "ensure_material_source_ready",
+        AsyncMock(return_value=None),
     )
 
 
@@ -781,15 +783,23 @@ async def test_sync_endpoint_serializes_real_orm_config_after_commit(
 
 
 @pytest.mark.anyio
-async def test_disabled_feishu_sync_returns_503_before_database_or_background_task(
+async def test_unconfigured_warehouse_credentials_return_503_before_config_read(
     admin_client, monkeypatch
 ):
     from app.modules.procurement import material_source
 
     monkeypatch.setattr(
         procurement_api,
-        "ensure_material_source_sync_enabled",
-        material_source.ensure_material_source_sync_enabled,
+        "ensure_material_source_ready",
+        material_source.ensure_material_source_ready,
+    )
+
+    async def _no_warehouse_credentials(db: Any) -> Any:
+        return None
+
+    monkeypatch.setattr(
+        "app.modules.warehouse.public_api.get_active_feishu_credentials",
+        _no_warehouse_credentials,
     )
     read = AsyncMock()
     monkeypatch.setattr(procurement_api, "get_material_source_config", read)
@@ -797,11 +807,11 @@ async def test_disabled_feishu_sync_returns_503_before_database_or_background_ta
         "/api/v1/procurement/material-source-config/sync"
     )
     assert response.status_code == 503
-    assert "暂未启用" in response.text
+    assert "仓储设置中配置飞书应用" in response.text
     read.assert_not_awaited()
     response = await admin_client.post(
         "/api/v1/procurement/material-source-config/test",
         json={"source_url": _config().source_url},
     )
     assert response.status_code == 503
-    assert "暂未启用" in response.text
+    assert "仓储设置中配置飞书应用" in response.text

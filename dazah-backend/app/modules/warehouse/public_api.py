@@ -11,15 +11,35 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.secrets import decrypt_secret
 from app.modules.warehouse.service import WarehouseService
+from app.platform.identity.public_api import FeishuAppCredentials
 
 __all__ = [
+    "get_active_feishu_credentials",
     "get_finished_inbound_batches",
     "get_finished_inbound_kg_total",
     "get_finished_inbound_summary",
     "get_material_page_rows",
     "update_inbound_inspection_result",
 ]
+
+
+async def get_active_feishu_credentials(
+    session: AsyncSession,
+) -> FeishuAppCredentials | None:
+    """激活仓储飞书应用的解密凭证（跨模块消费，如采购物料编码库同步）。
+
+    凭证只在当前调用内解密使用，不落日志；未配置或字段不完整时返回 None，
+    由调用方决定业务提示。
+    """
+    config = await WarehouseService(session).get_active_feishu_config()
+    if config is None or not config.app_id or not config.encrypted_app_secret:
+        return None
+    return FeishuAppCredentials(
+        app_id=config.app_id,
+        app_secret=decrypt_secret(config.encrypted_app_secret),
+    )
 
 
 async def get_finished_inbound_kg_total(
