@@ -45,7 +45,6 @@ from app.modules.hr.contract_api import _fmt_contract_seq
 from app.modules.hr.contract_api import router as contract_router
 from app.modules.hr.contract_settings_api import router as contract_settings_router
 from app.modules.hr.date_format import fmt_date_str
-from app.modules.hr.document_generator import generate_onboarding_training_record
 from app.modules.hr.error_contract import (
     HrBusinessError,
     HrBusinessErrorCode,
@@ -91,7 +90,6 @@ from app.modules.hr.practical_exam_document_generator import (
     generate_practical_exam_zip,
     parse_practical_exam_questions,
 )
-from app.modules.hr.prejob_document_generator import generate_prejob_training_plan
 from app.modules.hr.push_settings_schemas import SendNoticeRequest, SendNoticeResult
 from app.modules.hr.push_settings_service import PushSettingsService
 from app.modules.hr.recruitment_service import (
@@ -1485,64 +1483,6 @@ async def feishu_approval_webhook(  # public endpoint - webhook from Feishu
     except Exception:
         logger.exception("审批处理失败")
         raise AppException(status_code=500, message="审批处理失败，请稍后重试")
-
-
-@router.get(
-    "/employees/{employee_id}/onboarding-training-record",
-    summary="导出员工入职培训记录",
-)
-async def export_onboarding_training_record(
-    employee_id: UUID,
-    service: EmployeeService = Depends(get_employee_service),
-    current_user: CurrentUser = None,
-) -> Any:
-    """根据员工数据自动生成并下载入职培训记录 Word 文档。"""
-    _require_user(current_user)
-    employee = await service.get_employee(employee_id)
-    try:
-        buffer: BytesIO = generate_onboarding_training_record(employee)
-    except FileNotFoundError as e:
-        raise AppException(status_code=400, message=str(e))
-
-    def _iterfile() -> Any:
-        buffer.seek(0)
-        yield buffer.read()
-
-    filename = f"onboarding_training_record_{employee.employee_number}.docx"
-    return StreamingResponse(
-        _iterfile(),
-        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
-
-
-@router.get(
-    "/employees/{employee_id}/prejob-training-plan",
-    summary="导出员工岗前培训计划",
-)
-async def export_prejob_training_plan(
-    employee_id: UUID,
-    service: EmployeeService = Depends(get_employee_service),
-    current_user: CurrentUser = None,
-) -> Any:
-    """根据员工数据自动生成并下载岗前培训计划 Excel 文档。"""
-    _require_user(current_user)
-    employee = await service.get_employee(employee_id)
-    try:
-        buffer: BytesIO = generate_prejob_training_plan(employee)
-    except FileNotFoundError as e:
-        raise AppException(status_code=400, message=str(e))
-
-    def _iterfile() -> Any:
-        buffer.seek(0)
-        yield buffer.read()
-
-    filename = f"prejob_training_plan_{employee.employee_number}.xlsx"
-    return StreamingResponse(
-        _iterfile(),
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
 
 
 @router.get(

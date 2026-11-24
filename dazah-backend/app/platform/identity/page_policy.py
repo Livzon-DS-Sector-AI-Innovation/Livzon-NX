@@ -6296,13 +6296,9 @@ def _hr_api_bindings() -> tuple[PageApiBinding, ...]:
         onboarding,
         scope_adapter="hr.employee_department",
     )
-    add_many(
+    add(
         "GET",
-        (
-            "/employees/{employee_id}/onboarding-evaluation",
-            "/employees/{employee_id}/onboarding-training-record",
-            "/employees/{employee_id}/prejob-training-plan",
-        ),
+        "/employees/{employee_id}/onboarding-evaluation",
         profile,
         permission="operate",
         sensitive_action="sensitive_export",

@@ -462,8 +462,6 @@ import AnnualTrainingStatsClient from './components/hr/AnnualTrainingStatsClient
 import AnnualPlanDeptClient from './components/hr/AnnualPlanDeptClient'
 import DepartureClient from './components/hr/DepartureClient'
 import OnboardingClient from './components/hr/OnboardingClient'
-import OnboardingPrejobClient from './components/hr/OnboardingPrejobClient'
-import PreJobPlanClient from './components/hr/PreJobPlanClient'
 import TrainingLedgerClient from './components/hr/TrainingLedgerClient'
 import RecruitmentClient from './components/hr/RecruitmentClient'
 import TrainingEvaluationListClient from './components/hr/TrainingEvaluationListClient'
@@ -753,8 +751,6 @@ describe('migrated component coverage', () => {
     ['年度培训计划', 'lib/api/client/hr', 'fetchAnnualTrainingPlans', createElement(AnnualPlanDeptClient, { department: '质量部' })],
     ['离职信息', 'lib/api/hr', 'fetchDepartureRecords', createElement(DepartureClient, { initialRecords: [], initialTotal: 0 })],
     ['入职信息', 'lib/api/hr', 'fetchOnboardingRecords', createElement(OnboardingClient, { initialRecords: [], initialTotal: 0 })],
-    ['入职培训', 'lib/api/hr', 'fetchEmployees', createElement(OnboardingPrejobClient)],
-    ['岗前培训计划', 'lib/api/hr', 'fetchEmployees', createElement(PreJobPlanClient)],
     ['个人培训台账', 'lib/api/hr', 'fetchEmployeeByNumber', createElement(TrainingLedgerClient, { employeeNumber: 'EMP-001' })],
     ['新员工培训计划', 'lib/api/client/hr', 'fetchNewEmployeeTrainingPlan', createElement(NewEmployeeTrainingDetailClient, { planId: 'plan-1' })],
     ['转岗记录', 'lib/api/client/hr', 'fetchPositionTransfers', createElement(PositionTransferClient, { initialRecords: [], initialTotal: 0 })],

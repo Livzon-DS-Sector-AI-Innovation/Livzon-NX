@@ -23,14 +23,22 @@ test.describe('培训模块首页', () => {
     await expect(page).toHaveURL(/.*\/hr\/training\/annual-plan/)
   })
 
-  test('新员工培训卡片可点击', async ({ page }) => {
-    await page.goto('/hr/training')
-    await page.waitForTimeout(1000)
-    const link = page.locator('main a[href="/hr/training/new-employee"]')
+  test('新员工培训卡片可点击', async ({ context, page, baseURL }) => {
+    await context.addCookies([{ name: 'auth_token', value: 'e2e-admin', url: baseURL! }])
+    await page.route('**/__dazah_maintenance_status', route => route.fulfill({ status: 204 }))
+    await page.goto('/hr/training', { waitUntil: 'domcontentloaded' })
+    const destination = '/hr/training/new-employee'
+    const link = page.getByRole('main').getByRole('link', { name: /新员工培训/ })
     await expect(link).toBeVisible()
-    await link.click()
-    await page.waitForTimeout(1500)
-    await expect(page).toHaveURL(/.*\/hr\/training\/new-employee/)
+    await expect(link).toHaveAttribute('href', destination)
+    // The server-rendered card can appear before Next.js handles its first click.
+    await expect(async () => {
+      if (new URL(page.url()).pathname === '/hr/training') {
+        await link.click({ timeout: 1_000 })
+      }
+      await expect(page).toHaveURL(destination, { timeout: 1_000 })
+    }).toPass({ timeout: 10_000 })
+    await expect(page.getByRole('heading', { name: '新员工培训', exact: true })).toBeVisible()
   })
 
   test('培训资料卡片可点击', async ({ page }) => {
@@ -70,29 +78,10 @@ test.describe('培训模块首页', () => {
   })
 })
 
-test.describe('新员工入职培训', () => {
-  test('页面加载并显示标题', async ({ page }) => {
-    await page.goto('/hr/training/onboarding')
-    await page.waitForTimeout(2000)
-    await expect(page.locator('h1', { hasText: '新员工入职培训' })).toBeVisible()
-  })
-
-  test('旧厂/新厂切换可用', async ({ page }) => {
-    await page.goto('/hr/training/onboarding')
-    await page.waitForTimeout(2000)
-    const tabs = page.locator('.ant-tabs-tab, .ant-radio-button-wrapper, button').filter({ hasText: /旧厂|新厂/ })
-    const count = await tabs.count()
-    if (count > 0) {
-      await expect(tabs.first()).toBeVisible()
-    }
-  })
-
-  test('员工选择器加载', async ({ page }) => {
-    await page.goto('/hr/training/onboarding')
-    await page.waitForTimeout(3000)
-    const select = page.locator('.ant-select').first()
-    await expect(select).toBeVisible()
-  })
+test('旧版入职培训路径显示页面未找到', async ({ context, page, baseURL }) => {
+  await context.addCookies([{ name: 'auth_token', value: 'e2e-admin', url: baseURL! }])
+  await page.goto('/hr/training/onboarding')
+  await expect(page.getByRole('heading', { name: '页面未找到' })).toBeVisible()
 })
 
 test.describe('培训通知', () => {

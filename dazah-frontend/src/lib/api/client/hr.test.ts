@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  exportPositionTrainingConfirmation,
   fetchDeptApprovalConfigNames,
   fetchEmployeeDepartments,
   fetchEmployeeStats,
@@ -19,6 +20,23 @@ describe('hr client onboarding/dept fetchers', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     vi.clearAllMocks()
+  })
+
+  it('downloads the APP14 workbook for the current training plan', async () => {
+    const mediaType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    const fetchMock = vi.fn().mockResolvedValue(new Response('workbook', {
+      headers: { 'content-type': mediaType },
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const workbook = await exportPositionTrainingConfirmation('plan-1')
+
+    expect(workbook.type).toBe(mediaType)
+    await expect(workbook.text()).resolves.toBe('workbook')
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/hr/new-employee-training/plans/plan-1/export-confirmation',
+      { cache: 'no-store' },
+    )
   })
 
   it('downloads onboarding attachment content as blob', async () => {

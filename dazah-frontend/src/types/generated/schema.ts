@@ -5613,46 +5613,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/hr/employees/{employee_id}/onboarding-training-record": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * 导出员工入职培训记录
-         * @description 根据员工数据自动生成并下载入职培训记录 Word 文档。
-         */
-        get: operations["export_onboarding_training_record_api_v1_hr_employees__employee_id__onboarding_training_record_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/hr/employees/{employee_id}/prejob-training-plan": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * 导出员工岗前培训计划
-         * @description 根据员工数据自动生成并下载岗前培训计划 Excel 文档。
-         */
-        get: operations["export_prejob_training_plan_api_v1_hr_employees__employee_id__prejob_training_plan_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/hr/employees/{employee_id}/sync-to-feishu": {
         parameters: {
             query?: never;
@@ -88205,72 +88165,6 @@ export interface operations {
         };
     };
     export_onboarding_evaluation_by_employee_api_v1_hr_employees__employee_id__onboarding_evaluation_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                employee_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    export_onboarding_training_record_api_v1_hr_employees__employee_id__onboarding_training_record_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                employee_id: string;
-            };
-            cookie?: {
-                auth_token?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    export_prejob_training_plan_api_v1_hr_employees__employee_id__prejob_training_plan_get: {
         parameters: {
             query?: never;
             header?: never;
