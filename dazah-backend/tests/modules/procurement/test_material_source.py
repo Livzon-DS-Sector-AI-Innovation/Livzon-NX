@@ -612,7 +612,7 @@ async def test_material_options_uses_cache_and_survives_redis_failure(
 
 
 @pytest.mark.anyio
-async def test_external_errors_are_mapped_without_raw_response() -> None:
+async def test_external_errors_are_mapped_without_raw_response(monkeypatch) -> None:
     async def timeout() -> Any:
         raise httpx.ReadTimeout("secret response should not leak")
 
@@ -633,8 +633,33 @@ async def test_external_errors_are_mapped_without_raw_response() -> None:
         await material_source._run_feishu("fields", forbidden)
     assert "raw third party body" not in str(exc_info.value)
 
-    with pytest.raises(MaterialSourceCredentialsError, match="暂未启用"):
+    async def _no_warehouse_credentials(db: Any) -> Any:
+        return None
+
+    monkeypatch.setattr(
+        "app.modules.warehouse.public_api.get_active_feishu_credentials",
+        _no_warehouse_credentials,
+    )
+    with pytest.raises(
+        MaterialSourceCredentialsError, match="仓储设置中配置飞书应用"
+    ):
         await material_source._get_credentials(AsyncMock())
+
+
+@pytest.mark.anyio
+async def test_get_credentials_reuses_active_warehouse_app(monkeypatch) -> None:
+    from app.platform.identity.public_api import FeishuAppCredentials
+
+    credentials = FeishuAppCredentials(app_id="cli_wh", app_secret="wh-secret")
+
+    async def _warehouse_credentials(db: Any) -> Any:
+        return credentials
+
+    monkeypatch.setattr(
+        "app.modules.warehouse.public_api.get_active_feishu_credentials",
+        _warehouse_credentials,
+    )
+    assert await material_source._get_credentials(AsyncMock()) is credentials
 
 
 @pytest.mark.anyio
