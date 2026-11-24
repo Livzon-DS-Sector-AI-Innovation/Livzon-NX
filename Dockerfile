@@ -15,13 +15,19 @@ RUN rm -f /etc/apt/apt.conf.d/docker-clean
 
 # libreoffice-writer/draw：.doc/.wps 转 docx 及 wmf/emf 图片转 png 依赖；
 # fonts-noto-cjk 中文字体；catdoc/antiword 文本级兜底
+# Debian Bookworm 的 GPGME 安全修复最低版本（CVE-2026-129975）。
 RUN --mount=type=cache,id=dazah-debian-apt,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,id=dazah-debian-apt-lists,target=/var/lib/apt/lists,sharing=locked \
     apt-get update \
     && apt-get upgrade -y --no-install-recommends \
     && apt-get install -y --no-install-recommends \
         libreoffice-writer libreoffice-draw \
-        fonts-noto-cjk catdoc antiword
+        fonts-noto-cjk catdoc antiword libgpgme11 libgpgmepp6 \
+    && for package in libgpgme11 libgpgmepp6; do \
+        installed_version="$(dpkg-query -W -f='${Version}' "$package")" \
+        && dpkg --compare-versions "$installed_version" ge 1.18.0-3+deb12u1 \
+        || { echo "$package $installed_version is below the GPGME security fix" >&2; exit 1; }; \
+    done
 
 RUN pip install --no-cache-dir uv==0.13.4 \
     && groupadd --system app \

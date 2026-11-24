@@ -127,6 +127,9 @@ def test_release_exports_exactly_the_images_built_for_this_version(tmp_path: Pat
     digest = hashlib.sha256(archive.read_bytes()).hexdigest()
     assert archive.with_suffix(".tar.sha256").read_text(encoding="utf-8") == f"{digest}  {archive.name}"
     assert (release / "compose.yml").read_bytes() == (ROOT / "compose.yml").read_bytes()
+    assert (release / "migration-policy.json").read_bytes() == (
+        ROOT / "deploy/migration-policy.json"
+    ).read_bytes()
     assert "__PUBLIC_HOST__" not in (release / "nginx.default.conf").read_text(encoding="utf-8")
     assert (release / "deploy-production.sh").is_file()
     assert (release / "poseidon-executor.py").is_file()
@@ -173,6 +176,29 @@ def test_production_dockerfile_pins_bases_and_mounts_dependency_caches() -> None
     assert "id=dazah-frontend-pnpm,target=/root/.local/share/pnpm/store" in dockerfile
     assert "id=dazah-frontend-next,target=/app/.next/cache" in dockerfile
     assert "id=dazah-hermes-uv,target=/root/.cache/uv" in dockerfile
+
+
+def test_backend_image_requires_patched_gpgme() -> None:
+    dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+    backend = dockerfile.split(" AS backend\n", 1)[1].split("\nFROM ", 1)[0]
+
+    assert "for package in libgpgme11 libgpgmepp6; do" in backend
+    assert 'dpkg --compare-versions "$installed_version" ge 1.18.0-3+deb12u1' in backend
+
+
+def test_administration_notice_release_records_compatible_transition() -> None:
+    policy = json.loads((ROOT / "deploy/migration-policy.json").read_text(encoding="utf-8"))
+    transitions = [
+        transition
+        for transition in policy["transitions"]
+        if transition["from_revision"] == "b098d78d072c"
+    ]
+    assert len(transitions) == 1
+    transition = transitions[0]
+    assert transition["to_revision"] == "b6d8a2e4c9f1"
+    assert transition["backward_compatible"] is True
+    path, heading = transition["review_reference"].split("#", 1)
+    assert f"### {heading}" in (ROOT / path).read_text(encoding="utf-8")
 
 
 def test_production_bake_file_builds_all_release_targets() -> None:

@@ -11,6 +11,12 @@
       "to_revision": "f9a3d5c7e1b2",
       "backward_compatible": true,
       "review_reference": "docs/runbooks/production-offline-deployment.md#安全监护人名单和安全承诺迁移"
+    },
+    {
+      "from_revision": "b098d78d072c",
+      "to_revision": "b6d8a2e4c9f1",
+      "backward_compatible": true,
+      "review_reference": "docs/runbooks/production-offline-deployment.md#行政公告台账迁移"
     }
   ]
 }
