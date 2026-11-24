@@ -129,6 +129,7 @@ def test_release_exports_exactly_the_images_built_for_this_version(tmp_path: Pat
     assert (release / "compose.yml").read_bytes() == (ROOT / "compose.yml").read_bytes()
     assert "__PUBLIC_HOST__" not in (release / "nginx.default.conf").read_text(encoding="utf-8")
     assert (release / "deploy-production.sh").is_file()
+    assert (release / "poseidon-executor.py").is_file()
 
 
 def test_export_failure_does_not_produce_a_valid_release(tmp_path: Path) -> None:

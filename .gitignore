@@ -50,6 +50,7 @@ desktop.ini
 !/scripts/dev-native.ps1
 !/scripts/deploy-production.ps1
 !/scripts/deploy-production-remote.sh
+!/scripts/poseidon-executor.py
 !/scripts/cd/
 !/scripts/check-coverage-floor.py
 !/scripts/check-diff-coverage.py
@@ -65,6 +66,7 @@ desktop.ini
 !/scripts/tests/test_check_agent_instruction_bridges.py
 !/scripts/tests/test_check_test_impact.py
 !/scripts/tests/test_production_proxy_deployment.py
+!/scripts/tests/test_poseidon_executor.py
 !/scripts/tests/test_production_image_package.py
 !/scripts/tests/test_edbo_retirement.py
 !/scripts/tests/test_frontend_development_runtime.py
