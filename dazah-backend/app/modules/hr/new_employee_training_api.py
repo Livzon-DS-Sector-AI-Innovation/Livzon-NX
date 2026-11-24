@@ -4,6 +4,7 @@ import logging
 from datetime import date, timedelta
 from io import BytesIO
 from typing import Any
+from urllib.parse import quote
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
@@ -297,8 +298,11 @@ async def export_confirmation(
         f"岗位培训确认表_{plan_data['employee_name']}_"
         f"{plan_data['employee_number'] or 'nonumber'}.xlsx"
     )
+    encoded_filename = quote(filename, safe="")
     return StreamingResponse(
         _iterfile(),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
+        },
     )
