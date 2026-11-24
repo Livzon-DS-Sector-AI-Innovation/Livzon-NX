@@ -286,7 +286,7 @@ quiesce_and_migrate() {
 }
 
 wait_for_healthy() {
-  local deadline=$((SECONDS + 180))
+  local deadline=$((SECONDS + ${1:-180}))
   local service
   local container_id
   local state
@@ -518,12 +518,19 @@ verify() {
   require_file "$COMPOSE_FILE"
   compose config --quiet
   verify_compose_images
-  wait_for_healthy
+  wait_for_healthy "${1:-180}"
   check_nginx
   verify_proxy_routes
   require_file "$CONTROL_SCRIPT"
   python3 "$CONTROL_SCRIPT" verify
   log "验证成功: $(current_version)"
+}
+
+check_expected_version() {
+  local expected="$1"
+  validate_version "$expected"
+  require_file "$ENV_FILE"
+  [[ "$(current_version)" == "$expected" ]] || die "当前部署版本已变化，请重新提交变更"
 }
 
 usage() {
@@ -542,19 +549,31 @@ EOF
 
 action="${1:-}"
 case "$action" in
-  deploy)
+  deploy|deploy-if-current)
     [[ $# -ge 2 ]] || die "deploy 需要版本号"
+    if [[ "$action" == "deploy-if-current" ]]; then
+      [[ $# -eq 5 ]] || die "条件发布需要当前版本"
+      check_expected_version "$5"
+    fi
     deploy_version "$2" "${3:-$RELEASE_DIR/$2}"
     ;;
-  rollback)
+  rollback|rollback-if-current)
     [[ $# -ge 2 ]] || die "rollback 需要版本号"
+    if [[ "$action" == "rollback-if-current" ]]; then
+      [[ $# -eq 5 ]] || die "条件回滚需要当前版本"
+      check_expected_version "$5"
+    fi
     rollback_version "$2" "${3:-$RELEASE_DIR/$2}"
     ;;
   status)
     status
     ;;
   verify)
-    verify
+    if [[ "${2:-}" == "--quick" ]]; then
+      verify 1
+    else
+      verify
+    fi
     ;;
   maintenance-on)
     maintenance_on
