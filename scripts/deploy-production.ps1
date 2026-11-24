@@ -265,6 +265,7 @@ function Prepare-Release {
   $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
   [System.IO.File]::WriteAllText((Join-Path $releaseDir 'nginx.default.conf'), $nginxConfig, $utf8NoBom)
   Copy-Item -LiteralPath (Join-Path $Root 'scripts/deploy-production-remote.sh') -Destination (Join-Path $releaseDir 'deploy-production.sh')
+  Copy-Item -LiteralPath (Join-Path $Root 'scripts/poseidon-executor.py') -Destination (Join-Path $releaseDir 'poseidon-executor.py')
 
   Write-Step "发布包已生成: $releaseDir"
   Get-Item -LiteralPath $TarPath, "$TarPath.sha256", (Join-Path $releaseDir 'compose.yml') |
@@ -289,11 +290,16 @@ function Upload-Release([string]$ReleaseDir) {
       'nginx-maintenance.conf',
       'migration-policy.json',
       'nginx-capacity.conf',
-      'deploy-production.sh'
+      'deploy-production.sh',
+      'poseidon-executor.py'
     )) {
     Invoke-Scp (Join-Path $ReleaseDir $name) "$staging/"
   }
-  Invoke-Ssh "$archiveGuard; if ${sudo}test -e $RemoteRelease/$Version; then echo '远端版本目录已存在，拒绝覆盖' >&2; exit 1; fi; ${sudo}mkdir -p $RemoteRelease/$Version; ${sudo}mv $staging/* $RemoteRelease/$Version/; ${sudo}rmdir $staging; ${sudo}install -m 0755 $RemoteRelease/$Version/deploy-production.sh $RemoteCurrent/deploy-production.sh"
+  Invoke-Ssh "$archiveGuard; if ${sudo}test -e $RemoteRelease/$Version; then echo '远端版本目录已存在，拒绝覆盖' >&2; exit 1; fi; ${sudo}mkdir -p $RemoteRelease/$Version && ${sudo}mv $staging/* $RemoteRelease/$Version/ && ${sudo}rmdir $staging"
+  if (!$NoSudo) {
+    Invoke-Ssh "sudo chown root:root $RemoteRelease/$Version $RemoteRelease/$Version/* && sudo chmod go-w $RemoteRelease/$Version $RemoteRelease/$Version/*"
+  }
+  Invoke-Ssh "${sudo}install -m 0755 $RemoteRelease/$Version/deploy-production.sh $RemoteCurrent/deploy-production.sh && ${sudo}install -m 0755 $RemoteRelease/$Version/poseidon-executor.py $RemoteCurrent/poseidon-executor.py"
 }
 
 function Deploy-Remote {
