@@ -64,9 +64,6 @@ describe('WorkshopDataView', () => {
     act(() => root.unmount())
     clearProductionAuthForTest()
     container?.remove()
-    // URL stub（导出失败分支）会污染同 shard 后续测试的锚点点击
-    // （happy-dom navigator new URL 需要真实构造器），必须恢复全局
-    vi.unstubAllGlobals()
     vi.clearAllMocks()
   })
 

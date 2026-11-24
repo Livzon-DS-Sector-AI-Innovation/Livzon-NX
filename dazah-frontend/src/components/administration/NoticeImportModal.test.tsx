@@ -2,7 +2,6 @@
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const actionsMock = vi.hoisted(() => ({
@@ -10,21 +9,31 @@ const actionsMock = vi.hoisted(() => ({
   importNoticeAction: vi.fn(),
 }))
 
-vi.mock('@/actions/administration', () => actionsMock)
+const mocks = vi.hoisted(() => ({
+  message: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
+  // 记录 Dragger 的 beforeUpload 供测试直调（绕开 rc-upload 浏览器依赖）
+  beforeUpload: vi.fn(),
+}))
 
-// 记录 Dragger 的 beforeUpload 供测试直调（绕开 rc-upload 浏览器依赖）
-const uploadMocks = vi.hoisted(() => ({ beforeUpload: vi.fn() }))
+vi.mock('@/actions/administration', () => actionsMock)
 
 vi.mock('antd', async (importOriginal) => {
   const actual = await importOriginal<typeof import('antd')>()
   const { createElement } = await import('react')
   return {
     ...actual,
+    // 组件里的 message 来自 antd 的全局通知：它会创建独立 React root，并为每条
+    // 提示挂一个约 3 秒的自动关闭定时器。用例若在该定时器到期前结束，定时器会在
+    // happy-dom 环境销毁之后触发渲染，抛 "ReferenceError: window is not defined"，
+    // 让整次测试以未处理错误失败（用例本身全部通过）。这里只替换副作用边界，
+    // 保留 antd 其余组件与主题的真实实现。
+    message: mocks.message,
+    App: { ...actual.App, useApp: () => ({ message: mocks.message }) },
+    // rc-upload 在 happy-dom 留下未完成的 fetch/timer：Dragger 用纯渲染 stub
     Upload: {
       ...actual.Upload,
       Dragger: (props: Record<string, unknown>) => {
-        // 组件挂载时保存 beforeUpload（rc-upload 正常路径也会回调它）
-        uploadMocks.beforeUpload = props.beforeUpload as never
+        mocks.beforeUpload = props.beforeUpload as never
         return createElement(
           'div',
           { 'data-testid': 'dragger' },
@@ -34,8 +43,6 @@ vi.mock('antd', async (importOriginal) => {
     },
   }
 })
-
-import { App as AntdApp } from 'antd'
 
 import NoticeImportModal from './NoticeImportModal'
 
@@ -47,11 +54,32 @@ const onImported = vi.fn()
 function render() {
   act(() => {
     root.render(
-      <AntdApp>
-        <NoticeImportModal open onClose={onClose} onImported={onImported} />
-      </AntdApp>,
+      <NoticeImportModal open onClose={onClose} onImported={onImported} />,
     )
   })
+}
+
+/** 轮询到条件成立（带真实时间让出：Modal/表单渲染依赖动画帧与定时器）。 */
+async function until(condition: () => boolean, message: string) {
+  for (let i = 0; i < 60; i += 1) {
+    if (condition()) return
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 25))
+    })
+  }
+  throw new Error(message)
+}
+
+function bodyText(): string {
+  return document.body.textContent || ''
+}
+
+function button(text: string): HTMLButtonElement | undefined {
+  const needle = text.replace(/\s/g, '')
+  // antd 两字按钮会在字间插入空格（如「取 消」），统一去空白再匹配
+  return [...document.body.querySelectorAll('button')].find((b) =>
+    (b.textContent ?? '').replace(/\s/g, '').includes(needle),
+  )
 }
 
 const PREVIEW = {
@@ -78,74 +106,15 @@ function makeFile(name: string, size = 1024): File {
   return file
 }
 
+/** 选文件并等 AI 识别结果预填进表单。 */
+async function upload(file: File) {
+  expect(typeof mocks.beforeUpload).toBe('function')
+  await act(async () => {
+    await mocks.beforeUpload(file)
+  })
+}
+
 describe('NoticeImportModal', () => {
-  beforeEach(() => {
-    container = document.createElement('div')
-    document.body.append(container)
-    root = createRoot(container, {
-      onUncaughtError: (error: unknown) => {
-        // eslint-disable-next-line no-console
-        console.log('DBG uncaught:', error)
-      },
-    })
-  })
-
-  afterEach(() => {
-    act(() => root.unmount())
-    container.remove()
-    vi.clearAllMocks()
-  })
-
-  it('渲染上传区与操作提示（无文件时 footer 为空）', () => {
-    render()
-    const text = document.body.textContent || ''
-    expect(text).toContain('上传公告（AI 识别元数据）')
-    expect(text).toContain('点击或拖拽公告文件到此处')
-    // 未选文件时 footer=null：无「确认导入」按钮
-    expect(
-      [...document.body.querySelectorAll('button')].some((b) =>
-        b.textContent?.includes('确认导入'),
-      ),
-    ).toBe(false)
-  })
-
-  it('解析成功：预填表单并展示识别结果', async () => {
-    actionsMock.parseNoticeAction.mockResolvedValue({
-      code: 200,
-      data: PREVIEW,
-    })
-    render()
-    expect(typeof uploadMocks.beforeUpload).toBe('function')
-
-    await act(async () => {
-      await uploadMocks.beforeUpload(makeFile('notice.pdf'))
-      await new Promise((r) => setTimeout(r, 30))
-    })
-
-    expect(actionsMock.parseNoticeAction).toHaveBeenCalled()
-    expect(document.body.textContent).toContain('公告编号')
-    const inputValues = [...document.body.querySelectorAll('input')]
-      .map((i) => i.value)
-      .join('|')
-    expect(inputValues).toContain('Notice-2026-001')
-  })
-
-  it('解析失败：提示识别失败且不预填', async () => {
-    actionsMock.parseNoticeAction.mockResolvedValue({
-      code: 500,
-      message: 'AI 服务未配置',
-    })
-    render()
-    await act(async () => {
-      await uploadMocks.beforeUpload(makeFile('notice.docx'))
-      await new Promise((r) => setTimeout(r, 30))
-    })
-    expect(document.body.textContent).not.toContain('Notice-2026-001')
-  })
-})
-
-
-describe('NoticeImportModal 上传校验与导入', () => {
   beforeEach(() => {
     container = document.createElement('div')
     document.body.append(container)
@@ -153,76 +122,177 @@ describe('NoticeImportModal 上传校验与导入', () => {
     render()
   })
 
-  it('非法扩展名：提示仅支持指定格式且不触发解析', async () => {
+  afterEach(async () => {
     await act(async () => {
-      await uploadMocks.beforeUpload(makeFile('notice.txt'))
+      root.unmount()
     })
-    expect(actionsMock.parseNoticeAction).not.toHaveBeenCalled()
-    expect(
-      [...document.body.querySelectorAll('button')].some((b) =>
-        b.textContent?.includes('确认导入'),
-      ),
-    ).toBe(false)
+    // 卸载后让出一轮宏任务：React 调度器里排队的被动副作用必须在
+    // happy-dom 环境销毁之前执行完
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    container.remove()
+    document.body.innerHTML = ''
+    vi.clearAllMocks()
   })
 
-  it('超大文件：提示超过 30MB', async () => {
-    await act(async () => {
-      await uploadMocks.beforeUpload(makeFile('big.pdf', 31 * 1024 * 1024))
-    })
-    expect(actionsMock.parseNoticeAction).not.toHaveBeenCalled()
-    expect(document.body.textContent).toContain('不能超过 30MB')
+  it('渲染上传区与操作提示（无文件时无「确认导入」按钮）', async () => {
+    await until(
+      () => bodyText().includes('点击或拖拽公告文件到此处'),
+      '上传区未渲染',
+    )
+    expect(bodyText()).toContain('上传公告（AI 识别元数据）')
+    expect(button('确认导入')).toBeUndefined()
+    expect(button('取消')).toBeUndefined()
   })
 
-  it('解析成功后出现确认导入按钮：点击走导入成功链并触发回调', async () => {
+  it('解析成功：预填表单并展示识别结果', async () => {
     actionsMock.parseNoticeAction.mockResolvedValue({
       code: 200,
       data: PREVIEW,
     })
-    await act(async () => {
-      await uploadMocks.beforeUpload(makeFile('notice.pdf'))
-      await new Promise((r) => setTimeout(r, 30))
+    const file = makeFile('notice.pdf')
+    await upload(file)
+
+    await until(() => bodyText().includes('公告编号'), '识别结果表单未渲染')
+    expect(actionsMock.parseNoticeAction).toHaveBeenCalledWith(file)
+    const inputValues = [...document.body.querySelectorAll('input')]
+      .map((input) => input.value)
+      .join('|')
+    expect(inputValues).toContain('Notice-2026-001')
+    expect(inputValues).toContain('年度安全培训通知')
+    expect(mocks.message.error).not.toHaveBeenCalled()
+    // 选中文件后出现确认导入与取消按钮
+    expect(button('确认导入')).toBeTruthy()
+  })
+
+  it('解析失败：提示后端错误且不预填', async () => {
+    actionsMock.parseNoticeAction.mockResolvedValue({
+      code: 500,
+      message: 'AI 服务未配置',
+    })
+    await upload(makeFile('notice.docx'))
+
+    await until(
+      () => mocks.message.error.mock.calls.length > 0,
+      '解析失败未提示',
+    )
+    expect(mocks.message.error).toHaveBeenCalledWith('AI 服务未配置')
+    const inputValues = [...document.body.querySelectorAll('input')]
+      .map((input) => input.value)
+      .join('|')
+    expect(inputValues).not.toContain('Notice-2026-001')
+  })
+
+  it('解析失败且后端无文案：回退通用提示', async () => {
+    actionsMock.parseNoticeAction.mockResolvedValue({ code: 500 })
+    await upload(makeFile('notice.pdf'))
+
+    await until(
+      () => mocks.message.error.mock.calls.length > 0,
+      '解析失败未提示',
+    )
+    expect(mocks.message.error).toHaveBeenCalledWith(
+      '识别失败，请重试或手动填写后导入',
+    )
+  })
+
+  it('非法扩展名：提示仅支持指定格式且不触发解析', async () => {
+    await upload(makeFile('notice.txt'))
+
+    expect(mocks.message.error).toHaveBeenCalledWith(
+      '仅支持 PDF/Word/图片格式的公告文件',
+    )
+    expect(actionsMock.parseNoticeAction).not.toHaveBeenCalled()
+    expect(button('确认导入')).toBeUndefined()
+  })
+
+  it('超大文件：提示超过 30MB 且不触发解析', async () => {
+    await upload(makeFile('big.pdf', 31 * 1024 * 1024))
+
+    expect(mocks.message.error).toHaveBeenCalledWith('公告文件不能超过 30MB')
+    expect(actionsMock.parseNoticeAction).not.toHaveBeenCalled()
+    expect(button('确认导入')).toBeUndefined()
+  })
+
+  it('确认导入：携带识别出的元数据提交，成功后提示并通知父级', async () => {
+    actionsMock.parseNoticeAction.mockResolvedValue({
+      code: 200,
+      data: PREVIEW,
     })
     actionsMock.importNoticeAction.mockResolvedValue({
       code: 200,
       data: { id: 'n-9' },
     })
+    const file = makeFile('notice.pdf')
+    await upload(file)
+    await until(() => button('确认导入') !== undefined, '确认导入按钮未出现')
 
-    const importBtn = [...document.body.querySelectorAll('button')].find((b) =>
-      b.textContent?.includes('确认导入'),
-    )
-    expect(importBtn).toBeTruthy()
     await act(async () => {
-      importBtn!.click()
-      await new Promise((r) => setTimeout(r, 30))
+      button('确认导入')!.click()
     })
-    expect(actionsMock.importNoticeAction).toHaveBeenCalled()
-    expect(onImported).toHaveBeenCalled()
+
+    await until(() => onImported.mock.calls.length > 0, '导入成功未通知父级')
+    expect(actionsMock.importNoticeAction).toHaveBeenCalledWith(
+      file,
+      expect.objectContaining({
+        notice_no: 'Notice-2026-001',
+        title: '年度安全培训通知',
+        publisher: '安全环保部',
+        published_at: '2026-11-20',
+        category: '通知',
+        remark: '全员参加',
+      }),
+    )
+    expect(mocks.message.success).toHaveBeenCalledWith(
+      '公告已录入台账（内容已识别归档，可查看原文存档）',
+    )
+    // 成功后表单重置：文件清空，确认导入按钮消失
+    await until(
+      () => button('确认导入') === undefined,
+      '导入成功后未重置表单',
+    )
+    expect(onClose).not.toHaveBeenCalled()
   })
 
-  it('导入失败：提示错误且不触发回调', async () => {
+  it('导入失败：提示后端错误，保留表单且不通知父级', async () => {
     actionsMock.parseNoticeAction.mockResolvedValue({
       code: 200,
       data: PREVIEW,
-    })
-    await act(async () => {
-      await uploadMocks.beforeUpload(makeFile('notice.pdf'))
-      await new Promise((r) => setTimeout(r, 30))
     })
     actionsMock.importNoticeAction.mockResolvedValue({
       code: 409,
       message: '公告编号已存在',
     })
+    await upload(makeFile('notice.pdf'))
+    await until(() => button('确认导入') !== undefined, '确认导入按钮未出现')
 
-    const importBtn = [...document.body.querySelectorAll('button')].find((b) =>
-      b.textContent?.includes('确认导入'),
-    )
     await act(async () => {
-      importBtn!.click()
-      await new Promise((r) => setTimeout(r, 30))
+      button('确认导入')!.click()
     })
+
+    await until(() => mocks.message.error.mock.calls.length > 0, '导入失败未提示')
+    expect(mocks.message.error).toHaveBeenCalledWith('公告编号已存在')
+    expect(mocks.message.success).not.toHaveBeenCalled()
+    expect(onImported).not.toHaveBeenCalled()
+    // 表单保留，用户可修正后重试
+    expect(button('确认导入')).toBeTruthy()
+  })
+
+  it('取消：重置表单并关闭弹窗', async () => {
+    actionsMock.parseNoticeAction.mockResolvedValue({
+      code: 200,
+      data: PREVIEW,
+    })
+    await upload(makeFile('notice.pdf'))
+    await until(() => button('取消') !== undefined, '取消按钮未出现')
+
     await act(async () => {
-      await new Promise((r) => setTimeout(r, 100))
+      button('取消')!.click()
     })
-    expect(document.body.textContent).toContain('公告编号已存在')
+
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(onImported).not.toHaveBeenCalled()
+    expect(actionsMock.importNoticeAction).not.toHaveBeenCalled()
   })
 })

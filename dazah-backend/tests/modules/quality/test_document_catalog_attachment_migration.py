@@ -12,18 +12,6 @@ from app.modules.quality.models.document_catalog import DocumentEntry
 from app.modules.quality.service import document_catalog_attachment as service
 
 
-@pytest.fixture(autouse=True)
-def _llm_test_env(monkeypatch):
-    """CI 无 LLM 配置：显式注入 env fallback，避免 get_config 抛 LLMConfigError。
-
-    本测试的 LLM 交互均经 monkeypatch mock；这里只补配置存在性，
-    使测试在无 .env.local 的 CI 环境与本地行为一致。
-    """
-    monkeypatch.setenv("LLM_API_KEY", "test-key")
-    monkeypatch.setenv("LLM_BASE_URL", "https://llm.test.invalid")
-    monkeypatch.setenv("LLM_MODEL", "test-model")
-
-
 class _Result:
     def __init__(self, rows: list[object] | None = None):
         self.rows = rows or []
@@ -314,14 +302,18 @@ async def test_find_entry_binds_latest_when_file_version_higher() -> None:
     low = _entry(code="SOP-QA-001/02")
     high = _entry(code="SOP-QA-001/04")
     assert (
-        await service.find_entry_by_file_name(_Db([], [low, high]), "SOP-QA-001-05.pdf")
+        await service.find_entry_by_file_name(
+            _Db([], [low, high]), "SOP-QA-001-05.pdf"
+        )
         is high
     )
     # 文件名版本不高于任何候选时不走升级绑定分支（歧义仍返回 None）
     low = _entry(code="SOP-QA-001/02")
     high = _entry(code="SOP-QA-001/04")
     assert (
-        await service.find_entry_by_file_name(_Db([], [low, high]), "SOP-QA-001-03.pdf")
+        await service.find_entry_by_file_name(
+            _Db([], [low, high]), "SOP-QA-001-03.pdf"
+        )
         is None
     )
 
@@ -435,7 +427,8 @@ async def test_match_entry_by_content_code_then_title() -> None:
     )
     # 编号匹配失败时按标题归一化完全一致（唯一命中）
     assert (
-        await service.match_entry_by_content(_Db([qa]), None, "状态标识管理程序") is qa
+        await service.match_entry_by_content(_Db([qa]), None, "状态标识管理程序")
+        is qa
     )
     # 同名重复条目时不唯一，不猜测
     dup = _entry(name="状态标识管理程序", code="SMP-QA-005/11")

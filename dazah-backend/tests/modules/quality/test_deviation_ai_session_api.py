@@ -15,19 +15,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.quality.models.ai_analysis_log import QualityAiAnalysisLog
 from app.modules.quality.models.deviations import Deviation
 
-
-@pytest.fixture(autouse=True)
-def _llm_test_env(monkeypatch):
-    """CI 无 LLM 配置：显式注入 env fallback，避免 get_config 抛 LLMConfigError。
-
-    本测试的 LLM 交互均经 monkeypatch mock；这里只补配置存在性，
-    使测试在无 .env.local 的 CI 环境与本地行为一致。
-    """
-    monkeypatch.setenv("LLM_API_KEY", "test-key")
-    monkeypatch.setenv("LLM_BASE_URL", "https://llm.test.invalid")
-    monkeypatch.setenv("LLM_MODEL", "test-model")
-
-
 SimpleNamespace: Any = _SimpleNamespace
 
 

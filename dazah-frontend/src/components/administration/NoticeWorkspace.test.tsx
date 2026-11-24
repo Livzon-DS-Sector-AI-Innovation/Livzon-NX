@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   },
   auth: { hasPagePermission: vi.fn(() => false) },
   routerReplace: vi.fn(),
+  message: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
 }))
 
 vi.mock('next/navigation', () => ({
@@ -39,7 +40,19 @@ vi.mock('./NoticeImportModal', () => ({
   ),
 }))
 
-import { App as AntdApp } from 'antd'
+vi.mock('antd', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('antd')>()
+  return {
+    ...actual,
+    // 组件里的 message 来自 antd 的全局通知：它会创建独立 React root，并为每条
+    // 提示挂一个约 3 秒的自动关闭定时器。用例若在该定时器到期前结束，定时器会在
+    // happy-dom 环境销毁之后触发渲染，抛 "ReferenceError: window is not defined"，
+    // 让整次测试以未处理错误失败（用例本身全部通过）。这里只替换副作用边界，
+    // 保留 antd 其余组件与主题的真实实现。
+    message: mocks.message,
+    App: { ...actual.App, useApp: () => ({ message: mocks.message }) },
+  }
+})
 
 import NoticeWorkspace from './NoticeWorkspace'
 import type { NoticeItem, NoticeListResponse } from '@/types/administration'
@@ -81,11 +94,7 @@ function render(node: React.ReactNode) {
   })
   root = createRoot(container)
   act(() => {
-    root!.render(
-      <AntdApp>
-        <QueryClientProvider client={client}>{node}</QueryClientProvider>
-      </AntdApp>,
-    )
+    root!.render(<QueryClientProvider client={client}>{node}</QueryClientProvider>)
   })
   return container
 }
@@ -125,9 +134,14 @@ beforeEach(() => {
   mocks.noticeApi.deleteNotice.mockResolvedValue(undefined)
 })
 
-afterEach(() => {
-  act(() => root?.unmount())
+afterEach(async () => {
+  await act(async () => root?.unmount())
   root = null
+  // 卸载后让出一轮宏任务：React 调度器里排队的被动副作用必须在
+  // happy-dom 环境销毁之前执行完
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  })
   document.body.innerHTML = ''
   vi.clearAllMocks()
 })

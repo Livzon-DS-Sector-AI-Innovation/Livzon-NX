@@ -157,13 +157,6 @@ vi.mock('@ant-design/icons', () => ({
 import OhDetectionReportPanel from './OhDetectionReportPanel'
 import type { OhDetectionReport } from '@/types/safety'
 
-// URL stub（下载用例）必须在用例后恢复：残留的普通对象 URL 会让
-// 同文件后续用例点击锚点时 happy-dom navigator new URL 抛
-// "URL is not a constructor"，整 shard unhandled exit 1。
-afterEach(() => {
-  vi.unstubAllGlobals()
-})
-
 const REPORT: OhDetectionReport = {
   id: 'r-1',
   report_no: 'NZXZW-J-2026-141',
@@ -466,5 +459,6 @@ describe('OhDetectionReportPanel', () => {
         },
       }),
     )
+    vi.unstubAllGlobals()
   })
 })

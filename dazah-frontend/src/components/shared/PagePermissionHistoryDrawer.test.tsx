@@ -29,13 +29,6 @@ vi.mock('antd', async (importOriginal) => {
 })
 import { PagePermissionHistoryDrawer } from './PagePermissionHistoryDrawer'
 
-// URL stub 必须在每个用例后恢复：stub 残留会让同 shard 后续用例的
-// 锚点点击（happy-dom navigator new URL）抛 "URL is not a constructor"，
-// unhandled 使整个分片 exit 1。
-afterEach(() => {
-  vi.unstubAllGlobals()
-})
-
 let root: Root
 let host: HTMLDivElement
 beforeEach(() => {
@@ -68,6 +61,7 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount())
   host.remove()
+  vi.unstubAllGlobals()
 })
 
 function button(label: string) {

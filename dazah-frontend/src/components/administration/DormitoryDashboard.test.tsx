@@ -37,34 +37,47 @@ function render(node: React.ReactNode) {
   return container
 }
 
-async function flush(rounds = 3) {
-  for (let i = 0; i < rounds; i += 1) {
-    await act(async () => {
-      await Promise.resolve()
-    })
-  }
-}
-
 function bodyText(): string {
   document.querySelectorAll('svg').forEach((node) => node.remove())
   return document.body.textContent || ''
 }
 
 /** Card 的 loading 态会整体替换 children：轮询到统计渲染完成再操作卡片。 */
-async function waitForStats(container: HTMLElement, rounds = 30) {
-  for (let i = 0; i < rounds; i += 1) {
+async function waitForStats(container: HTMLElement) {
+  for (let i = 0; i < 80; i += 1) {
     if (container.textContent?.includes('总房间')) return
-    await flush(2)
+    // 组件内置 QueryClient 的结果通知走真实定时器：在 act 内让出事件循环
+    // 时间，保证触发的重渲染在 act 退出时被冲刷（只让微任务等不到通知）
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 25))
+    })
   }
   throw new Error('统计卡片未渲染')
 }
 
-afterEach(() => {
-  act(() => root?.unmount())
+afterEach(async () => {
+  await act(async () => root?.unmount())
   root = null
+  // 卸载后让出一轮宏任务：React 调度器里排队的被动副作用必须在
+  // happy-dom 环境销毁之前执行完
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  })
   document.body.innerHTML = ''
   vi.clearAllMocks()
 })
+
+/** 轮询到 body 出现全部文本（Drawer 挂在 portal，渲染依赖动画帧与定时器）。 */
+async function waitForBodyText(texts: string[], rounds = 60) {
+  for (let i = 0; i < rounds; i += 1) {
+    const text = bodyText()
+    if (texts.every((item) => text.includes(item))) return
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 25))
+    })
+  }
+  throw new Error(`未渲染出文本: ${texts.join(' / ')}`)
+}
 
 const stats: DormitoryOccupancyStats = {
   total_rooms: 53,
@@ -132,13 +145,8 @@ describe('DormitoryDashboard', () => {
     expect(emptyCard).toBeTruthy()
     await act(async () => {
       ;(emptyCard as HTMLButtonElement).click()
-      await Promise.resolve()
     })
-    await flush(5)
-    const text = bodyText()
-    expect(text).toContain('空房间列表')
-    expect(text).toContain('65-5-101')
-    expect(text).toContain('65-5-102')
+    await waitForBodyText(['空房间列表', '65-5-101', '65-5-102'])
   })
 
   it('shows the full-room drawer with full rooms', async () => {
@@ -149,20 +157,15 @@ describe('DormitoryDashboard', () => {
     expect(clickable.length).toBeGreaterThanOrEqual(2)
     await act(async () => {
       ;(clickable[1] as HTMLButtonElement).click()
-      await Promise.resolve()
     })
-    await flush(5)
-    const text = bodyText()
-    expect(text).toContain('满人房间列表')
-    expect(text).toContain('65-3-101')
+    await waitForBodyText(['满人房间列表', '65-3-101'])
   })
 
   it('degrades to an error notice when stats cannot load', async () => {
     api.fetchDormitoryStats.mockRejectedValue(new Error('读取宿舍入住统计失败'))
     render(<DormitoryDashboard />)
-    // 组件查询 retry=1（约 1s 退避后重试），等重试耗尽后才渲染错误态
-    await new Promise((resolve) => setTimeout(resolve, 1500))
-    await flush(5)
-    expect(bodyText()).toContain('读取宿舍入住统计失败')
+    // 组件查询 retry=1（约 1s 退避后重试）：轮询到重试耗尽后渲染的错误态
+    await waitForBodyText(['读取宿舍入住统计失败'])
+    expect(bodyText()).not.toContain('总房间')
   })
 })
