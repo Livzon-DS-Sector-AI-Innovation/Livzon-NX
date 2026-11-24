@@ -170,9 +170,16 @@ def test_migration_history_has_the_merge_as_its_single_head():
     config.set_main_option("script_location", str(_backend_root() / "alembic"))
     script = ScriptDirectory.from_config(config)
 
-    assert script.get_heads() == [MERGE_HEAD]
+    # 公告通知台账迁移（b6d8a2e4c9f1）挂在合并迁移之后成为唯一 head——
+    # 并行开发的新迁移落在 b098d78d072c 之上时的常规收口
+    assert script.get_heads() == ["b6d8a2e4c9f1"]
     revisions = {revision.revision for revision in script.walk_revisions()}
-    assert {REPAIR_TABLES_REVISION, MERGE_WITH_MAIN, "b4f2c8d1e3a5"} <= revisions
+    assert {
+        REPAIR_TABLES_REVISION,
+        MERGE_WITH_MAIN,
+        "b4f2c8d1e3a5",
+        MERGE_HEAD,
+    } <= revisions
 
 
 async def test_repair_record_is_unique_per_workshop_only_while_not_deleted(
