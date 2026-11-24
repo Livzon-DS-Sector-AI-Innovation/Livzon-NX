@@ -174,3 +174,52 @@ describe('DormitoryCheckinModal', () => {
     expect(onClose).toHaveBeenCalled()
   }, 15000)
 })
+
+describe('DormitoryCheckinModal 错误分支', () => {
+  it('推荐失败：显示用户可读错误（getUserErrorMessage 透传）', async () => {
+    mocks.recommend.mockRejectedValue(new Error('镜像未同步'))
+    await render()
+    await act(async () => {
+      buttons('获取 AI 房间推荐')[0]?.click()
+    })
+    await flush()
+    expect(mocks.message.error).toHaveBeenCalledWith('镜像未同步')
+    expect(mocks.checkin).not.toHaveBeenCalled()
+  })
+
+  it('提交失败：显示用户可读错误且不触发回调', async () => {
+    mocks.recommend.mockResolvedValue({
+      recommendations: [{ room_no: '201-2-301' }],
+      message: '',
+      source: 'ai',
+    })
+    mocks.checkin.mockRejectedValue(new Error('回写飞书失败'))
+    const onCheckedin = vi.fn()
+    const onClose = vi.fn()
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+    act(() => {
+      root!.render(
+        <AntApp>
+          <DormitoryCheckinModal
+            open
+            onClose={onClose}
+            onCheckedin={onCheckedin}
+          />
+        </AntApp>,
+      )
+    })
+    await act(async () => {
+      buttons('获取 AI 房间推荐')[0]?.click()
+    })
+    await flush()
+    await act(async () => {
+      buttons('确认办理入住')[0]?.click()
+    })
+    await flush()
+    expect(mocks.message.error).toHaveBeenCalledWith('回写飞书失败')
+    expect(onCheckedin).not.toHaveBeenCalled()
+    expect(onClose).not.toHaveBeenCalled()
+  }, 15000)
+})
