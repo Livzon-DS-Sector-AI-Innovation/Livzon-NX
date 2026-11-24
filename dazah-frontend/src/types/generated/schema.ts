@@ -21,6 +21,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/administration/dormitory/checkin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 办理新员工入住（回写飞书） */
+        post: operations["create_dormitory_checkin_api_v1_administration_dormitory_checkin_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/administration/dormitory/checkin-recommend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** AI 推荐入住房间 */
+        post: operations["recommend_dormitory_rooms_api_v1_administration_dormitory_checkin_recommend_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/administration/dormitory/dashboard-stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 宿舍入住率统计 */
+        get: operations["get_dormitory_dashboard_stats_api_v1_administration_dormitory_dashboard_stats_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/administration/feishu-config": {
         parameters: {
             query?: never;
@@ -176,6 +227,94 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/administration/notices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 公告台账列表（元数据，不含公告内容） */
+        get: operations["list_notices_api_v1_administration_notices_get"];
+        put?: never;
+        /** 导入公告（原文存档 + AI 提取正文，元数据以确认值为准） */
+        post: operations["import_notice_api_v1_administration_notices_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/administration/notices/parse": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 解析公告文件（AI 识别元数据预览，不落库） */
+        post: operations["parse_notice_api_v1_administration_notices_parse_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/administration/notices/{notice_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 公告详情（元数据，不含公告内容） */
+        get: operations["get_notice_api_v1_administration_notices__notice_id__get"];
+        /** 编辑公告元数据与内容 */
+        put: operations["update_notice_api_v1_administration_notices__notice_id__put"];
+        post?: never;
+        /** 删除公告（软删除，原文存档保留） */
+        delete: operations["delete_notice_api_v1_administration_notices__notice_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/administration/notices/{notice_id}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查看公告内容（operate 专用端点） */
+        get: operations["get_notice_content_api_v1_administration_notices__notice_id__content_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/administration/notices/{notice_id}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 下载公告原文存档（operate 专用端点） */
+        get: operations["download_notice_file_api_v1_administration_notices__notice_id__file_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/administration/page-data/{page_key}": {
         parameters: {
             query?: never;
@@ -185,6 +324,26 @@ export interface paths {
         };
         /** 页面绑定数据 */
         get: operations["get_read_page_api_v1_administration_page_data__page_key__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/administration/page-data/{page_key}/{binding_id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 导出页面数据（Excel/PDF，含图片与头像）
+         * @description 按当前筛选/排序导出全量记录；columns 为逗号分隔的展示列 field_id。
+         */
+        get: operations["export_read_page_records_api_v1_administration_page_data__page_key___binding_id__export_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -221,6 +380,23 @@ export interface paths {
         get: operations["get_read_page_records_api_v1_administration_page_data__page_key___binding_id__records_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/administration/tobacco-gift/ai-analysis": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 生成烟酒礼品仪表台 AI 分析 */
+        post: operations["generate_tobacco_gift_ai_analysis_api_v1_administration_tobacco_gift_ai_analysis_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -32690,6 +32866,60 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** ApiResponseEnvelope[DormitoryCheckinResult] */
+        ApiResponseEnvelope_DormitoryCheckinResult_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["DormitoryCheckinResult"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[DormitoryOccupancyStats] */
+        ApiResponseEnvelope_DormitoryOccupancyStats_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["DormitoryOccupancyStats"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[DormitoryRoomRecommendation] */
+        ApiResponseEnvelope_DormitoryRoomRecommendation_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["DormitoryRoomRecommendation"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
         /** ApiResponseEnvelope[EmergencyCardListResponse] */
         ApiResponseEnvelope_EmergencyCardListResponse_: {
             /**
@@ -33689,6 +33919,78 @@ export interface components {
             code: number;
             /** Data */
             data: null;
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[NoticeContentResponse] */
+        ApiResponseEnvelope_NoticeContentResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["NoticeContentResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[NoticeItem] */
+        ApiResponseEnvelope_NoticeItem_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["NoticeItem"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[NoticeListResponse] */
+        ApiResponseEnvelope_NoticeListResponse_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["NoticeListResponse"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[NoticeParsePreview] */
+        ApiResponseEnvelope_NoticeParsePreview_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["NoticeParsePreview"];
             /**
              * Message
              * @default success
@@ -34769,6 +35071,24 @@ export interface components {
              */
             code: number;
             data: components["schemas"]["SupplierOut"];
+            /**
+             * Message
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** ApiResponseEnvelope[TobaccoGiftAiAnalysis] */
+        ApiResponseEnvelope_TobaccoGiftAiAnalysis_: {
+            /**
+             * Code
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["TobaccoGiftAiAnalysis"];
             /**
              * Message
              * @default success
@@ -37925,6 +38245,44 @@ export interface components {
              */
             sheets: string;
         };
+        /** Body_import_notice_api_v1_administration_notices_post */
+        Body_import_notice_api_v1_administration_notices_post: {
+            /**
+             * Category
+             * @default
+             */
+            category: string;
+            /**
+             * File
+             * @description 公告文件（PDF/Word/图片）
+             */
+            file: string;
+            /**
+             * Notice No
+             * @default
+             */
+            notice_no: string;
+            /**
+             * Published At
+             * @description YYYY-MM-DD
+             */
+            published_at?: string | null;
+            /**
+             * Publisher
+             * @default
+             */
+            publisher: string;
+            /**
+             * Remark
+             * @default
+             */
+            remark: string;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+        };
         /** Body_import_oh_detection_report_api_v1_safety_oh_detection_reports_import_post */
         Body_import_oh_detection_report_api_v1_safety_oh_detection_reports_import_post: {
             /**
@@ -38060,6 +38418,14 @@ export interface components {
         /** Body_parse_hazard_ledger_import_api_v1_safety_hazard_identifications_import_parse_post */
         Body_parse_hazard_ledger_import_api_v1_safety_hazard_identifications_import_parse_post: {
             /** File */
+            file: string;
+        };
+        /** Body_parse_notice_api_v1_administration_notices_parse_post */
+        Body_parse_notice_api_v1_administration_notices_parse_post: {
+            /**
+             * File
+             * @description 公告文件（PDF/Word/图片）
+             */
             file: string;
         };
         /** Body_parse_oh_detection_report_api_v1_safety_oh_detection_reports_parse_post */
@@ -45591,6 +45957,278 @@ export interface components {
         DocumentEntryResolveResult: {
             /** Results */
             results?: components["schemas"]["DocumentEntryResolveItem"][];
+        };
+        /**
+         * DormitoryCheckinInput
+         * @description 新员工入住登记（确认后回写飞书员工住宿退宿清单）。
+         */
+        DormitoryCheckinInput: {
+            /**
+             * Address
+             * @description 居住地址
+             * @default
+             */
+            address: string;
+            /**
+             * Agreement Signed
+             * @description 是否签订协议（是/否）
+             * @default
+             */
+            agreement_signed: string;
+            /**
+             * Department
+             * @description 部门
+             * @default
+             */
+            department: string;
+            /**
+             * Deposit Paid
+             * @description 押金是否缴纳（是/否）
+             * @default
+             */
+            deposit_paid: string;
+            /**
+             * Employee Id
+             * @description 员工ID
+             * @default
+             */
+            employee_id: string;
+            /**
+             * Gender
+             * @description 性别（男/女）
+             */
+            gender: string;
+            /**
+             * Job Title
+             * @description 岗位
+             * @default
+             */
+            job_title: string;
+            /**
+             * Name
+             * @description 姓名
+             */
+            name: string;
+            /**
+             * Phone
+             * @description 联系方式
+             * @default
+             */
+            phone: string;
+            /**
+             * Remark
+             * @description 备注
+             * @default
+             */
+            remark: string;
+            /**
+             * Room No
+             * @description 宿舍编号（推荐结果或手填）
+             * @default
+             */
+            room_no: string;
+            /**
+             * Shift Type
+             * @description 倒班类型
+             * @default
+             */
+            shift_type: string;
+        };
+        /**
+         * DormitoryCheckinResult
+         * @description 办理入住结果（记录已写入飞书；synced 表示镜像是否已即时同步）。
+         */
+        DormitoryCheckinResult: {
+            /**
+             * Record Id
+             * @description 飞书记录 ID
+             */
+            record_id: string;
+            /**
+             * Room No
+             * @description 分配的宿舍编号
+             */
+            room_no: string;
+            /**
+             * Synced
+             * @description 写入后是否已即时触发镜像同步
+             */
+            synced: boolean;
+        };
+        /**
+         * DormitoryOccupancyStats
+         * @description 宿舍入住率仪表盘统计（未绑定或未同步时为 0/空，不报错）。
+         */
+        DormitoryOccupancyStats: {
+            /**
+             * Empty Room List
+             * @description 空房间列表（按宿舍编号排序）
+             */
+            empty_room_list?: components["schemas"]["DormitoryRoomSummary"][];
+            /**
+             * Empty Rooms
+             * @description 空房间数（已住人数为 0）
+             * @default 0
+             */
+            empty_rooms: number;
+            /**
+             * Full Room List
+             * @description 满人房间列表（按宿舍编号排序）
+             */
+            full_room_list?: components["schemas"]["DormitoryRoomSummary"][];
+            /**
+             * Full Rooms
+             * @description 满人房间数（剩余床位为 0）
+             * @default 0
+             */
+            full_rooms: number;
+            /**
+             * Occupancy Rate
+             * @description 床位入住率（0-1）
+             * @default 0
+             */
+            occupancy_rate: number;
+            /**
+             * Occupied Beds
+             * @description 已住床位合计
+             * @default 0
+             */
+            occupied_beds: number;
+            /**
+             * Partial Rooms
+             * @description 未住满房间数
+             * @default 0
+             */
+            partial_rooms: number;
+            /**
+             * Synced At
+             * @description 宿舍清单最近一次完整同步时间
+             */
+            synced_at?: string | null;
+            /**
+             * Total Beds
+             * @description 总床位数
+             * @default 0
+             */
+            total_beds: number;
+            /**
+             * Total Rooms
+             * @description 宿舍总数（宿舍清单记录数）
+             * @default 0
+             */
+            total_rooms: number;
+        };
+        /**
+         * DormitoryRecommendationItem
+         * @description 单条房间推荐（LLM 输出已校验房间号必须来自真实空床位候选）。
+         */
+        DormitoryRecommendationItem: {
+            /**
+             * Dorm Type
+             * @description 宿舍类型
+             * @default
+             */
+            dorm_type: string;
+            /**
+             * Reason
+             * @description 推荐理由（LLM 生成或规则说明）
+             * @default
+             */
+            reason: string;
+            /**
+             * Room No
+             * @description 宿舍编号（候选房间原样取值）
+             */
+            room_no: string;
+            /**
+             * Room Type
+             * @description 房间类型
+             * @default
+             */
+            room_type: string;
+            /**
+             * Source
+             * @description 推荐来源：ai=模型推荐 / rule=规则兜底
+             */
+            source: string;
+            /**
+             * Vacant Beds
+             * @description 剩余床位
+             * @default 0
+             */
+            vacant_beds: number;
+        };
+        /**
+         * DormitoryRoomRecommendation
+         * @description AI 推荐结果（最多 3 条；无候选时 recommendations 为空并给出原因）。
+         */
+        DormitoryRoomRecommendation: {
+            /**
+             * Message
+             * @description 给用户的补充说明（如无可用房间）
+             * @default
+             */
+            message: string;
+            /** Recommendations */
+            recommendations?: components["schemas"]["DormitoryRecommendationItem"][];
+            /**
+             * Source
+             * @description 整体推荐来源：ai / rule
+             */
+            source: string;
+        };
+        /**
+         * DormitoryRoomSummary
+         * @description 单间宿舍的床位概览（数据来自宿舍清单镜像，公式字段取计算值）。
+         */
+        DormitoryRoomSummary: {
+            /**
+             * Bed Count
+             * @description 床位数量
+             * @default 0
+             */
+            bed_count: number;
+            /**
+             * Building
+             * @description 楼号
+             * @default
+             */
+            building: string;
+            /**
+             * Dorm Type
+             * @description 宿舍类型（男生宿舍/女生宿舍）
+             * @default
+             */
+            dorm_type: string;
+            /**
+             * Occupied
+             * @description 已住人数
+             * @default 0
+             */
+            occupied: number;
+            /**
+             * Room No
+             * @description 宿舍编号
+             */
+            room_no: string;
+            /**
+             * Room Type
+             * @description 房间类型
+             * @default
+             */
+            room_type: string;
+            /**
+             * Unit
+             * @description 单元
+             * @default
+             */
+            unit: string;
+            /**
+             * Vacant
+             * @description 剩余床位
+             * @default 0
+             */
+            vacant: number;
         };
         /** DrugCreate */
         DrugCreate: {
@@ -55668,6 +56306,161 @@ export interface components {
             approver_user_id?: string | null;
             /** Node Key */
             node_key: string;
+        };
+        /**
+         * NoticeContentResponse
+         * @description 公告内容（仅 operate 绑定的专用端点返回）。
+         */
+        NoticeContentResponse: {
+            /** Content */
+            content: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Notice No */
+            notice_no: string;
+            /** Title */
+            title: string;
+        };
+        /**
+         * NoticeItem
+         * @description 台账条目元数据（列表/详情响应永不包含公告内容字段）。
+         */
+        NoticeItem: {
+            /** Category */
+            category: string;
+            /** Created At */
+            created_at?: string | null;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Notice No */
+            notice_no: string;
+            /** Published At */
+            published_at?: string | null;
+            /** Publisher */
+            publisher: string;
+            /** Remark */
+            remark?: string | null;
+            /** Source File Name */
+            source_file_name: string;
+            /** Source Size Bytes */
+            source_size_bytes: number;
+            /** Title */
+            title: string;
+            /** Updated At */
+            updated_at?: string | null;
+        };
+        /**
+         * NoticeListResponse
+         * @description 台账分页结果（categories 供筛选下拉，取自现存非空类别）。
+         */
+        NoticeListResponse: {
+            /** Categories */
+            categories?: string[];
+            /** Items */
+            items: components["schemas"]["NoticeItem"][];
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+            /** Total */
+            total: number;
+        };
+        /**
+         * NoticeParsePreview
+         * @description 解析预览（不落库、不存原文、不返回公告内容）。
+         */
+        NoticeParsePreview: {
+            /**
+             * File Name
+             * @description 上传文件名
+             */
+            file_name: string;
+            /** @description AI 识别建议值 */
+            suggestion: components["schemas"]["NoticeParseSuggestion"];
+        };
+        /**
+         * NoticeParseSuggestion
+         * @description AI 识别的公告元数据建议值（不含公告内容，由人工确认后随导入落库）。
+         */
+        NoticeParseSuggestion: {
+            /**
+             * Category
+             * @description 公告类别
+             */
+            category?: string | null;
+            /**
+             * Notice No
+             * @description 公告编号
+             */
+            notice_no?: string | null;
+            /**
+             * Published At
+             * @description 发布日期（YYYY-MM-DD，无法识别为 null）
+             */
+            published_at?: string | null;
+            /**
+             * Publisher
+             * @description 发布单位
+             */
+            publisher?: string | null;
+            /**
+             * Remark
+             * @description 备注
+             */
+            remark?: string | null;
+            /**
+             * Title
+             * @description 公告标题
+             */
+            title?: string | null;
+        };
+        /**
+         * NoticeUpdateInput
+         * @description 编辑公告元数据与内容（v1 不支持更换原文存档）。
+         */
+        NoticeUpdateInput: {
+            /**
+             * Category
+             * @default
+             */
+            category: string;
+            /**
+             * Content
+             * @description 公告内容
+             * @default
+             */
+            content: string;
+            /**
+             * Notice No
+             * @default
+             */
+            notice_no: string;
+            /**
+             * Published At
+             * @description YYYY-MM-DD
+             */
+            published_at?: string | null;
+            /**
+             * Publisher
+             * @default
+             */
+            publisher: string;
+            /**
+             * Remark
+             * @default
+             */
+            remark: string;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
         };
         /** NotificationResponse */
         NotificationResponse: {
@@ -67586,6 +68379,38 @@ export interface components {
             rules: components["schemas"]["RuleDefinition"][];
         };
         /**
+         * TobaccoGiftAiAnalysis
+         * @description 烟酒礼品仪表台 AI 分析结果（LLM 辅助结论，仅供参考，不替代人工核对）。
+         */
+        TobaccoGiftAiAnalysis: {
+            /**
+             * Anomalies
+             * @description 异常提示（低于预警库存、作废单等）
+             */
+            anomalies: string[];
+            /**
+             * Generated At
+             * Format: date-time
+             * @description 生成时间（UTC）
+             */
+            generated_at: string;
+            /**
+             * Insights
+             * @description 关键发现（2~5条）
+             */
+            insights: string[];
+            /**
+             * Suggestions
+             * @description 管理建议（2~4条）
+             */
+            suggestions: string[];
+            /**
+             * Summary
+             * @description 总体态势概述（≤120字）
+             */
+            summary: string;
+        };
+        /**
          * TobaccoGiftChartItem
          * @description 柱状图单根柱子：维度名称 + 数值（数量或金额）。
          */
@@ -74298,6 +75123,107 @@ export interface operations {
             };
         };
     };
+    create_dormitory_checkin_api_v1_administration_dormitory_checkin_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DormitoryCheckinInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_DormitoryCheckinResult_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    recommend_dormitory_rooms_api_v1_administration_dormitory_checkin_recommend_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DormitoryCheckinInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_DormitoryRoomRecommendation_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_dormitory_dashboard_stats_api_v1_administration_dormitory_dashboard_stats_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_DormitoryOccupancyStats_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_feishu_config_api_v1_administration_feishu_config_get: {
         parameters: {
             query?: never;
@@ -74665,6 +75591,281 @@ export interface operations {
             };
         };
     };
+    list_notices_api_v1_administration_notices_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                keyword?: string | null;
+                category?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_NoticeListResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_notice_api_v1_administration_notices_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_notice_api_v1_administration_notices_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_NoticeItem_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    parse_notice_api_v1_administration_notices_parse_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_parse_notice_api_v1_administration_notices_parse_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_NoticeParsePreview_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_notice_api_v1_administration_notices__notice_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                notice_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_NoticeItem_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_notice_api_v1_administration_notices__notice_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                notice_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NoticeUpdateInput"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_NoticeItem_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_notice_api_v1_administration_notices__notice_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                notice_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_notice_content_api_v1_administration_notices__notice_id__content_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                notice_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_NoticeContentResponse_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_notice_file_api_v1_administration_notices__notice_id__file_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                notice_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_read_page_api_v1_administration_page_data__page_key__get: {
         parameters: {
             query?: never;
@@ -74685,6 +75886,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_read_page_records_api_v1_administration_page_data__page_key___binding_id__export_get: {
+        parameters: {
+            query?: {
+                format?: string;
+                columns?: string | null;
+                sort_field?: string | null;
+                sort_direction?: string;
+                filter_field?: string[] | null;
+                filter_operator?: string[] | null;
+                filter_value?: string[] | null;
+            };
+            header?: never;
+            path: {
+                page_key: string;
+                binding_id: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -74743,6 +75986,9 @@ export interface operations {
                 keyword?: string | null;
                 sort_field?: string | null;
                 sort_direction?: string;
+                filter_field?: string[] | null;
+                filter_operator?: string[] | null;
+                filter_value?: string[] | null;
             };
             header?: never;
             path: {
@@ -74762,6 +76008,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_tobacco_gift_ai_analysis_api_v1_administration_tobacco_gift_ai_analysis_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiResponseEnvelope_TobaccoGiftAiAnalysis_"];
                 };
             };
             /** @description Validation Error */

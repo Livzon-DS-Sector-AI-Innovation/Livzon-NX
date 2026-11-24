@@ -24,10 +24,16 @@ from app.modules.administration.schemas import (
     AdministrationFeishuSourceRoot,
     AdministrationFeishuSourceRootInput,
     AdministrationFeishuSyncResult,
+    DormitoryCheckinInput,
+    DormitoryCheckinResult,
+    DormitoryOccupancyStats,
+    DormitoryRoomRecommendation,
+    TobaccoGiftAiAnalysis,
     TobaccoGiftDashboardStats,
 )
 from app.modules.administration.service import (
     ADMINISTRATION_READ_PAGE_KEYS,
+    AdministrationDormitoryService,
     AdministrationFeishuService,
     AdministrationTobaccoGiftService,
     build_read_mirror_service,
@@ -283,6 +289,28 @@ async def get_read_page(
     return ApiResponse(data=await service.page_data(page_key))
 
 
+def _parse_filters(
+    filter_field: list[str], filter_operator: list[str], filter_value: list[str]
+) -> list[dict[str, str]]:
+    """把三组平行查询参数拼成条件列表（前端筛选器逐行提供）。"""
+    filters: list[dict[str, str]] = []
+    for index, field in enumerate(filter_field):
+        if not field:
+            continue
+        filters.append(
+            {
+                "field": field,
+                "operator": (
+                    filter_operator[index]
+                    if index < len(filter_operator)
+                    else "contains"
+                ),
+                "value": filter_value[index] if index < len(filter_value) else "",
+            }
+        )
+    return filters
+
+
 @router.get(
     "/page-data/{page_key}/{binding_id}/records",
     summary="页面数据记录",
@@ -296,6 +324,9 @@ async def get_read_page_records(
     keyword: str | None = None,
     sort_field: str | None = Query(default=None, max_length=255),
     sort_direction: str = Query(default="desc", pattern="^(asc|desc)$"),
+    filter_field: list[str] | None = Query(default=None),
+    filter_operator: list[str] | None = Query(default=None),
+    filter_value: list[str] | None = Query(default=None),
     db: AsyncSession = Depends(get_db),
     _current_user: CurrentUser | None = Depends(get_current_user),
 ) -> ApiResponse:
@@ -310,10 +341,70 @@ async def get_read_page_records(
         keyword=keyword,
         sort_field=sort_field,
         sort_direction=sort_direction,
+        filters=_parse_filters(
+            filter_field or [], filter_operator or [], filter_value or []
+        ),
     )
     # 关联字段（领用物品）只回 ID，装饰成物品名称供表格与详情直接展示
     data = await decorate_records_for_display(db, data)
     return ApiResponse(data=data)
+
+
+@router.get(
+    "/page-data/{page_key}/{binding_id}/export",
+    summary="导出页面数据（Excel/PDF，含图片与头像）",
+    response_model=None,
+)
+async def export_read_page_records(
+    page_key: str,
+    binding_id: uuid.UUID,
+    format: str = Query(default="xlsx", pattern="^(xlsx|pdf)$"),
+    columns: str | None = Query(default=None, max_length=2000),
+    sort_field: str | None = Query(default=None, max_length=255),
+    sort_direction: str = Query(default="desc", pattern="^(asc|desc)$"),
+    filter_field: list[str] | None = Query(default=None),
+    filter_operator: list[str] | None = Query(default=None),
+    filter_value: list[str] | None = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+    _current_user: CurrentUser | None = Depends(get_current_user),
+) -> Response:
+    """按当前筛选/排序导出全量记录；columns 为逗号分隔的展示列 field_id。"""
+    from urllib.parse import quote
+
+    from app.modules.administration.export_service import (
+        export_binding_records,
+    )
+
+    _validate_page_key(page_key)
+    _require_page_context(page_key)
+    service = await build_read_mirror_service(db)
+    column_ids = [item for item in columns.split(",") if item] if columns else None
+    try:
+        content, filename, mime = await export_binding_records(
+            db,
+            service,
+            page_key=page_key,
+            binding_id=binding_id,
+            file_format=format,
+            columns=column_ids,
+            filters=_parse_filters(
+                filter_field or [], filter_operator or [], filter_value or []
+            ),
+            sort_field=sort_field,
+            sort_direction=sort_direction,
+        )
+    except (RuntimeError, httpx.HTTPError) as exc:
+        raise _translate_upstream_error(exc) from exc
+    quoted_name = quote(f"{page_key.split(':')[-1]}-{filename}")
+    return Response(
+        content=content,
+        media_type=mime,
+        headers={
+            "Cache-Control": "no-store",
+            "Content-Disposition": f"attachment; filename*=UTF-8''{quoted_name}",
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 @router.get(
@@ -368,3 +459,64 @@ async def get_tobacco_gift_dashboard_stats(
 ) -> ApiResponseEnvelope[TobaccoGiftDashboardStats]:
     stats = await AdministrationTobaccoGiftService(db).get_dashboard_stats()
     return ApiResponseEnvelope(data=stats)
+
+
+@router.post(
+    "/tobacco-gift/ai-analysis",
+    summary="生成烟酒礼品仪表台 AI 分析",
+    response_model=ApiResponseEnvelope[TobaccoGiftAiAnalysis],
+)
+async def generate_tobacco_gift_ai_analysis(
+    _current_user: RequireUser,
+    db: AsyncSession = Depends(get_db),
+) -> ApiResponseEnvelope[TobaccoGiftAiAnalysis]:
+    analysis = await AdministrationTobaccoGiftService(db).generate_ai_analysis()
+    return ApiResponseEnvelope(data=analysis)
+
+
+# ── 宿舍管理：入住率仪表盘 + AI 推荐入住 ───────────────────────
+
+
+@router.get(
+    "/dormitory/dashboard-stats",
+    summary="宿舍入住率统计",
+    response_model=ApiResponseEnvelope[DormitoryOccupancyStats],
+)
+async def get_dormitory_dashboard_stats(
+    db: AsyncSession = Depends(get_db),
+    _current_user: CurrentUser | None = Depends(get_current_user),
+) -> ApiResponseEnvelope[DormitoryOccupancyStats]:
+    stats = await AdministrationDormitoryService(db).get_dashboard_stats()
+    return ApiResponseEnvelope(data=stats)
+
+
+@router.post(
+    "/dormitory/checkin-recommend",
+    summary="AI 推荐入住房间",
+    response_model=ApiResponseEnvelope[DormitoryRoomRecommendation],
+)
+async def recommend_dormitory_rooms(
+    _current_user: RequireUser,
+    payload: DormitoryCheckinInput,
+    db: AsyncSession = Depends(get_db),
+) -> ApiResponseEnvelope[DormitoryRoomRecommendation]:
+    recommendation = await AdministrationDormitoryService(db).recommend_rooms(payload)
+    return ApiResponseEnvelope(data=recommendation)
+
+
+@router.post(
+    "/dormitory/checkin",
+    summary="办理新员工入住（回写飞书）",
+    response_model=ApiResponseEnvelope[DormitoryCheckinResult],
+)
+async def create_dormitory_checkin(
+    _current_user: RequireUser,
+    payload: DormitoryCheckinInput,
+    db: AsyncSession = Depends(get_db),
+) -> ApiResponseEnvelope[DormitoryCheckinResult]:
+    service = AdministrationDormitoryService(db)
+    try:
+        result = await service.checkin(payload)
+    except (RuntimeError, httpx.HTTPError) as exc:
+        raise _translate_upstream_error(exc) from exc
+    return ApiResponseEnvelope(data=result)

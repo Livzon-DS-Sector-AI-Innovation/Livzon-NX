@@ -6,7 +6,7 @@
 import asyncio
 import logging
 import uuid
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -16,6 +16,14 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppException
+from app.core.llm import (
+    LLMConfigError,
+    LLMError,
+    LLMOutputError,
+    LLMProviderError,
+    LLMRateLimitError,
+    llm_client,
+)
 from app.core.secrets import decrypt_secret, encrypt_secret
 from app.modules.administration.models import (
     AdministrationFeishuConfig,
@@ -35,11 +43,19 @@ from app.modules.administration.schemas import (
     AdministrationFeishuConfigResponse,
     AdministrationFeishuConnectivityResult,
     AdministrationFeishuConnectivityStep,
+    DormitoryCheckinInput,
+    DormitoryCheckinResult,
+    DormitoryOccupancyStats,
+    DormitoryRecommendationItem,
+    DormitoryRoomRecommendation,
+    DormitoryRoomSummary,
+    TobaccoGiftAiAnalysis,
     TobaccoGiftChartItem,
     TobaccoGiftDashboardStats,
 )
 from app.modules.hr.public_api import get_avatar_urls_by_emails
 from app.platform.integrations.feishu.auth import FeishuAuth
+from app.platform.integrations.feishu.bitable import BitableClient
 from app.platform.integrations.feishu.read_mirror import (
     ModuleFeishuReadMirrorService,
     ReadMirrorModels,
@@ -52,12 +68,14 @@ PAGE_KEY_TOBACCO_GIFT_ITEMS = "admin:tobacco-gift:items"
 PAGE_KEY_TOBACCO_GIFT_RECORDS = "admin:tobacco-gift:records"
 PAGE_KEY_SEALS = "admin:seals"
 PAGE_KEY_SCRAP_MATERIALS = "admin:scrap-materials"
+PAGE_KEY_DORMITORY = "admin:dormitory"
 ADMINISTRATION_READ_PAGE_KEYS = frozenset(
     {
         PAGE_KEY_TOBACCO_GIFT_ITEMS,
         PAGE_KEY_TOBACCO_GIFT_RECORDS,
         PAGE_KEY_SEALS,
         PAGE_KEY_SCRAP_MATERIALS,
+        PAGE_KEY_DORMITORY,
     }
 )
 
@@ -75,6 +93,7 @@ READ_MIRROR_MODELS = ReadMirrorModels(
 _INVENTORY_NAME_FIELDS = ("物品名称", "名称")
 _INVENTORY_QUANTITY_FIELDS = ("物品总数", "库存数量", "数量")
 _INVENTORY_TOTAL_PRICE_FIELDS = ("总金额", "总价", "库存金额")
+_INVENTORY_WARN_FIELDS = ("预警库存",)
 
 #: 领用记录字段（实际表：领用物品/领用数量（一~五）、申请人、领取人、状态…）。
 _REQUISITION_LINK_FIELDS = tuple(f"领用物品（{label}）" for label in "一二三四五")
@@ -88,6 +107,9 @@ _REQUISITION_RECEIVED_STATUSES = frozenset({"已领用"})
 
 #: 单图柱子上限（物品清单 35 种、申请人十余人），防止异常数据撑爆响应。
 _CHART_LIMIT = 100
+
+#: AI 分析生成超时：一次要输出概述+三组列表，比宿舍推荐的 15 秒放宽
+_ANALYSIS_AI_TIMEOUT_SECONDS = 90
 
 
 # ── 配置管理 ────────────────────────────────────────────────────
@@ -491,26 +513,20 @@ def _resolve_item_name(
     texts: list[str],
     record_ids: list[str],
     name_by_record: Mapping[str, str],
-    *,
-    inventory_available: bool,
-) -> str:
+) -> str | None:
+    """解析关联物品名称；关联的是已删除物品且无任何名称时返回 None。"""
     for record_id in record_ids:
         name = name_by_record.get(record_id)
         if name:
             return name
     if texts:
         return texts[0]
-    if inventory_available:
-        # 关联的物品已从物品清单删除（名称不可考），合并为一根柱子
-        return "已删除物品"
-    return f"物品·{record_ids[0][-6:]}"
+    return None
 
 
 def _extract_requisitions(
     table: MirroredTable | None,
     name_by_record: Mapping[str, str],
-    *,
-    inventory_available: bool,
 ) -> _RequisitionExtraction:
     if table is None:
         return _RequisitionExtraction(0.0, {}, {})
@@ -534,13 +550,11 @@ def _extract_requisitions(
             quantity = _as_number(_field_value(record, quantity_field))
             if not quantity or not (texts or record_ids):
                 continue
-            item_name = _resolve_item_name(
-                texts,
-                record_ids,
-                name_by_record,
-                inventory_available=inventory_available,
-            )
-            quantity_by_item[item_name] += quantity
+            # 已领用总数与员工统计按真实数量计；悬空关联（物品已删且无名称）
+            # 不进按物品的图表，避免编造标签
+            item_name = _resolve_item_name(texts, record_ids, name_by_record)
+            if item_name:
+                quantity_by_item[item_name] += quantity
             if employees:
                 quantity_by_employee[employees[0]] += quantity
             if received:
@@ -550,6 +564,130 @@ def _extract_requisitions(
         quantity_by_item=dict(quantity_by_item),
         quantity_by_employee=dict(quantity_by_employee),
     )
+
+
+def _extract_inventory_alerts(table: MirroredTable | None) -> list[str]:
+    """库存低于预警线的物品（确定性检查，不依赖 LLM）：“名称：现有x，预警y”。"""
+    if table is None:
+        return []
+    field_names = [field.field_name for field in table.fields]
+    name_field = _resolve_field_name(_INVENTORY_NAME_FIELDS, field_names) or (
+        table.fields[0].field_name if table.fields else None
+    )
+    quantity_field = _resolve_field_name(_INVENTORY_QUANTITY_FIELDS, field_names)
+    warn_field = _resolve_field_name(_INVENTORY_WARN_FIELDS, field_names)
+    if quantity_field is None or warn_field is None:
+        return []
+    alerts: list[tuple[float, str]] = []
+    for record in table.records:
+        quantity = _as_number(_field_value(record, quantity_field))
+        warn = _as_number(_field_value(record, warn_field))
+        if quantity is None or not warn or quantity >= warn:
+            continue
+        name = _as_text(_field_value(record, name_field)) or "未命名物品"
+        alerts.append((quantity - warn, f"{name}：现有{quantity:g}，预警{warn:g}"))
+    return [text for _gap, text in sorted(alerts)]
+
+
+def _requisition_status_distribution(table: MirroredTable | None) -> dict[str, int]:
+    """领用单状态分布（含已作废，供 AI 分析作废率与在途单判断）。"""
+    if table is None:
+        return {}
+    status_field = _resolve_field_name(
+        _REQUISITION_STATUS_FIELDS, [field.field_name for field in table.fields]
+    )
+    counts: Counter[str] = Counter()
+    for record in table.records:
+        counts[_as_text(_field_value(record, status_field)) or "未填写"] += 1
+    return dict(counts)
+
+
+def _build_analysis_digest(
+    stats: TobaccoGiftDashboardStats,
+    alerts: list[str],
+    status_counts: dict[str, int],
+) -> str:
+    """把仪表台统计压缩成供 LLM 阅读的纯数据摘要（只含事实数字）。"""
+
+    def top(items: list[TobaccoGiftChartItem], n: int = 5) -> str:
+        return "、".join(f"{item.name}{item.value:g}" for item in items[:n])
+
+    status_text = "、".join(
+        f"{name}{count}" for name, count in sorted(status_counts.items())
+    )
+    alert_text = "；".join(alerts) if alerts else "无"
+    return "\n".join(
+        [
+            f"物品品类：{stats.item_categories}",
+            f"物品总数：{stats.item_total_count:g}",
+            f"物品总价：{stats.item_total_value:g}元",
+            f"已领用物品总数（已领用状态单合计）：{stats.requisitioned_total:g}",
+            f"物品库存数量Top5：{top(stats.inventory_by_item)}",
+            f"领用数量Top5（不含已作废）：{top(stats.requisition_by_item)}",
+            f"领用物品总价Top5：{top(stats.value_by_item)}",
+            f"员工领用数量Top3（按申请人）：{top(stats.requisition_by_employee, 3)}",
+            f"领用单状态分布：{status_text or '无数据'}",
+            f"低于预警库存的物品：{alert_text}",
+        ]
+    )
+
+
+def _clean_str_list(value: Any, limit: int) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(item).strip() for item in value if str(item).strip()][:limit]
+
+
+async def _request_ai_analysis(digest: str) -> dict[str, Any]:
+    system = (
+        "你是制药工厂的行政管理助手。基于用户给出的烟酒礼品台账统计数据"
+        "生成分析，只使用给定数字，不得虚构数据或建议处罚。"
+        "回答务必简短，直接输出 JSON，不要输出任何解释："
+        '{"summary":"总体态势概述，不超过80字",'
+        '"insights":["关键发现2~4条，每条不超过40字"],'
+        '"anomalies":["异常提示0~4条，如低于预警库存、作废单占比高，无则空数组"],'
+        '"suggestions":["管理建议2~3条，每条不超过40字"]}'
+    )
+    user = f"统计数据：\n{digest}\n请按要求输出 JSON。"
+    # token-plan 端点偶发瞬态网络错误（超时/对端断连/ConnectError），重试一次
+    data: dict[str, Any] | None = None
+    for attempt in range(2):
+        try:
+            data = await llm_client.chat_json(
+                [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+                expected_keys=["summary", "insights", "anomalies", "suggestions"],
+                temperature=0.2,
+                timeout=_ANALYSIS_AI_TIMEOUT_SECONDS,
+                enable_thinking=False,
+            )
+            break
+        except LLMConfigError as exc:
+            raise AppException(
+                message="AI 分析不可用：模型未配置，请在系统设置中配置模型",
+                status_code=503,
+            ) from exc
+        except LLMRateLimitError as exc:
+            raise AppException(
+                message="AI 调用触发限流，请稍后重试", status_code=429
+            ) from exc
+        except (LLMOutputError, LLMProviderError, LLMError) as exc:
+            if attempt == 0:
+                logger.warning(
+                    "tobacco-gift AI analysis attempt 1 failed, retrying once",
+                    exc_info=exc,
+                )
+                await asyncio.sleep(1.5)
+                continue
+            logger.warning("tobacco-gift AI analysis upstream failed", exc_info=exc)
+            raise AppException(
+                message="AI 生成失败，请稍后重试", status_code=502
+            ) from exc
+    if not isinstance(data, dict):
+        raise AppException(message="AI 输出格式异常，请重试", status_code=502)
+    return data
 
 
 class AdministrationTobaccoGiftService:
@@ -567,11 +705,7 @@ class AdministrationTobaccoGiftService:
             logger.info("tobacco-gift dashboard has no bound tables yet")
 
         stock = _extract_inventory(inventory)
-        usage = _extract_requisitions(
-            requisition,
-            stock.name_by_record,
-            inventory_available=inventory is not None and bool(inventory.records),
-        )
+        usage = _extract_requisitions(requisition, stock.name_by_record)
         return TobaccoGiftDashboardStats(
             item_categories=stock.categories,
             item_total_value=round(stock.total_value, 2),
@@ -589,6 +723,30 @@ class AdministrationTobaccoGiftService:
             ),
         )
 
+    async def generate_ai_analysis(self) -> TobaccoGiftAiAnalysis:
+        """生成仪表台 AI 分析：确定性数据摘要 + 统一 LLM 结构化输出。"""
+        stats = await self.get_dashboard_stats()
+        inventory = await self.repo.get_default_bound_table(PAGE_KEY_TOBACCO_GIFT_ITEMS)
+        requisition = await self.repo.get_default_bound_table(
+            PAGE_KEY_TOBACCO_GIFT_RECORDS
+        )
+        digest = _build_analysis_digest(
+            stats,
+            _extract_inventory_alerts(inventory),
+            _requisition_status_distribution(requisition),
+        )
+        data = await _request_ai_analysis(digest)
+        summary = str(data.get("summary", "")).strip()
+        if not summary:
+            raise AppException(message="AI 输出缺少总体概述，请重试", status_code=502)
+        return TobaccoGiftAiAnalysis(
+            summary=summary,
+            insights=_clean_str_list(data.get("insights"), 6),
+            anomalies=_clean_str_list(data.get("anomalies"), 6),
+            suggestions=_clean_str_list(data.get("suggestions"), 5),
+            generated_at=datetime.now(UTC),
+        )
+
 
 async def decorate_records_for_display(
     session: AsyncSession, data: dict[str, Any]
@@ -600,8 +758,16 @@ async def decorate_records_for_display(
     这里用物品清单镜像把 ID 解析成名称，直接替换为纯文本字符串。
     """
     records = data.get("records") or []
+
+    # 关联字段两种形态：带 ID 的 {"link_record_ids":[..]}，以及空关联的裸 {}；
+    # 空关联装饰为空串（前端显示 "-"），否则会渲染成「查看详情」按钮。
+    def _is_link_like(value: Any) -> bool:
+        return isinstance(value, dict) and (
+            "link_record_ids" in value or "record_ids" in value or not value
+        )
+
     has_link = any(
-        isinstance(value, dict) and "link_record_ids" in value
+        _is_link_like(value)
         for record in records
         for value in (record.get("fields") or {}).values()
     )
@@ -612,20 +778,502 @@ async def decorate_records_for_display(
         PAGE_KEY_TOBACCO_GIFT_ITEMS
     )
     name_by_record = _extract_inventory(inventory).name_by_record if inventory else {}
-    inventory_available = bool(name_by_record)
     for record in records:
         fields = record.get("fields") or {}
         for field_name, value in fields.items():
-            if not (isinstance(value, dict) and "link_record_ids" in value):
+            if not _is_link_like(value):
                 continue
             texts, record_ids = _as_link(value)
-            if not texts and not record_ids:
-                fields[field_name] = ""
-                continue
-            fields[field_name] = _resolve_item_name(
-                texts,
-                record_ids,
-                name_by_record,
-                inventory_available=inventory_available,
-            )
+            # 悬空关联（物品已从清单删除且无名称）与空关联一样显示 "-"
+            item_name = _resolve_item_name(texts, record_ids, name_by_record)
+            fields[field_name] = item_name or ""
     return data
+
+
+# ── 宿舍管理：入住率仪表盘 + AI 推荐入住 ────────────────────────
+#
+# 口径：宿舍清单镜像的公式字段（已住人数/剩余床位）由飞书计算并随镜像同步，
+# 这里直接取值，不重复实现公式语义；镜像未同步时全部为 0/空，不报错。
+# LLM 只在确定性候选（性别→宿舍类型、岗位→住宿标准房间类型、剩余床位>0）
+# 过滤之后做排序与理由生成，不做业务裁决；用户确认后由 checkin 按既定
+# 校验（房间存在、有空床位、性别与宿舍类型相符）回写飞书员工住宿退宿清单。
+
+_ROOM_NO_FIELDS = ("宿舍编号", "房间编号", "编号")
+_ROOM_BUILDING_FIELDS = ("楼号",)
+_ROOM_UNIT_FIELDS = ("单元",)
+_ROOM_TYPE_FIELDS = ("房间类型", "房型")
+_ROOM_DORM_TYPE_FIELDS = ("宿舍类型",)
+_ROOM_BED_FIELDS = ("床位数量", "床位数", "床位")
+_ROOM_OCCUPIED_FIELDS = ("已住人数", "入住人数")
+_ROOM_VACANT_FIELDS = ("剩余床位", "空床位")
+
+_STANDARD_JOB_FIELDS = ("岗位", "职位")
+_STANDARD_ROOM_TYPE_FIELDS = ("房间类型", "房型")
+
+_EMPLOYEE_NAME_FIELDS = ("姓名",)
+_EMPLOYEE_GENDER_FIELDS = ("性别",)
+
+#: 员工住宿退宿清单（回写目标表）的识别特征：有房间编号+姓名，且没有床位字段。
+_EMPLOYEE_ROOM_NO_FIELDS = ("房间编号", "宿舍编号")
+
+_ROOM_LIST_LIMIT = 500
+#: 送入 LLM 的候选房间上限（prompt 长度可控；超出部分按规则兜底排序）。
+_AI_CANDIDATE_LIMIT = 30
+_AI_TIMEOUT_SECONDS = 15
+_REASON_MAX_CHARS = 120
+
+
+@dataclass(frozen=True)
+class _DormRoom:
+    """宿舍清单单行摘要（数值字段统一取整；缺失按 0 处理）。"""
+
+    room_no: str
+    building: str
+    unit: str
+    room_type: str
+    dorm_type: str
+    beds: int
+    occupied: int
+    vacant: int
+
+
+def _as_int(value: Any) -> int:
+    number = _as_number(value)
+    if number is None:
+        return 0
+    return int(round(number))
+
+
+def _table_field_names(table: MirroredTable) -> set[str]:
+    return {item.field_name for item in table.fields}
+
+
+def _find_table(
+    tables: list[MirroredTable],
+    *,
+    title: str,
+    required: tuple[tuple[str, ...], ...],
+    forbidden: tuple[str, ...] = (),
+) -> MirroredTable | None:
+    """先按资源标题找，退化按字段特征找（标题被改时仍可用）。"""
+    for table in tables:
+        if table.resource.title == title:
+            return table
+    for table in tables:
+        names = _table_field_names(table)
+        if any(token in names for token in forbidden):
+            continue
+        if all(
+            _resolve_field_name(candidates, sorted(names)) for candidates in required
+        ):
+            return table
+    return None
+
+
+def _extract_rooms(table: MirroredTable | None) -> list[_DormRoom]:
+    if table is None:
+        return []
+    names = sorted(_table_field_names(table))
+    no_key = _resolve_field_name(_ROOM_NO_FIELDS, names)
+    if no_key is None:
+        return []
+    building_key = _resolve_field_name(_ROOM_BUILDING_FIELDS, names)
+    unit_key = _resolve_field_name(_ROOM_UNIT_FIELDS, names)
+    type_key = _resolve_field_name(_ROOM_TYPE_FIELDS, names)
+    dorm_key = _resolve_field_name(_ROOM_DORM_TYPE_FIELDS, names)
+    bed_key = _resolve_field_name(_ROOM_BED_FIELDS, names)
+    occupied_key = _resolve_field_name(_ROOM_OCCUPIED_FIELDS, names)
+    vacant_key = _resolve_field_name(_ROOM_VACANT_FIELDS, names)
+    rooms: list[_DormRoom] = []
+    for record in table.records[:_ROOM_LIST_LIMIT]:
+        fields = record.raw_fields or {}
+        room_no = _as_text(fields.get(no_key))
+        if not room_no:
+            continue
+        beds = _as_int(fields.get(bed_key)) if bed_key else 0
+        occupied = _as_int(fields.get(occupied_key)) if occupied_key else 0
+        vacant = (
+            _as_int(fields.get(vacant_key)) if vacant_key else max(beds - occupied, 0)
+        )
+        rooms.append(
+            _DormRoom(
+                room_no=room_no,
+                building=_as_text(fields.get(building_key)) if building_key else "",
+                unit=_as_text(fields.get(unit_key)) if unit_key else "",
+                room_type=_as_text(fields.get(type_key)) if type_key else "",
+                dorm_type=_as_text(fields.get(dorm_key)) if dorm_key else "",
+                beds=beds,
+                occupied=occupied,
+                vacant=max(vacant, 0),
+            )
+        )
+    rooms.sort(key=lambda room: room.room_no)
+    return rooms
+
+
+def _extract_standards(table: MirroredTable | None) -> dict[str, str]:
+    """住宿标准：岗位 → 房间类型（丢弃空行）。"""
+    if table is None:
+        return {}
+    names = sorted(_table_field_names(table))
+    job_key = _resolve_field_name(_STANDARD_JOB_FIELDS, names)
+    type_key = _resolve_field_name(_STANDARD_ROOM_TYPE_FIELDS, names)
+    if job_key is None or type_key is None:
+        return {}
+    standards: dict[str, str] = {}
+    for record in table.records[:_ROOM_LIST_LIMIT]:
+        fields = record.raw_fields or {}
+        job = _as_text(fields.get(job_key))
+        room_type = _as_text(fields.get(type_key))
+        if job and room_type:
+            standards[job] = room_type
+    return standards
+
+
+def _match_standard(standards: dict[str, str], job_title: str) -> str | None:
+    """按岗位匹配住宿标准的房间类型：精确 → 双向包含；无标准返回 None（不限房型）。"""
+    job = job_title.strip()
+    if not job:
+        return None
+    if job in standards:
+        return standards[job]
+    lowered = {key.lower(): value for key, value in standards.items()}
+    if job.lower() in lowered:
+        return lowered[job.lower()]
+    for key, value in standards.items():
+        if key and (key in job or job in key):
+            return value
+    return None
+
+
+def _normalize_gender(value: str) -> str:
+    text = (value or "").strip().lower()
+    if "男" in text or text.startswith("m"):
+        return "男"
+    if "女" in text or text.startswith("f"):
+        return "女"
+    return ""
+
+
+def _gender_conflicts_with_dorm(gender: str, dorm_type: str) -> bool:
+    """性别与宿舍类型不符判定（宿舍类型/性别任一未知则不拦截）。"""
+    normalized = _normalize_gender(gender)
+    if not normalized or not dorm_type:
+        return False
+    has_male = "男" in dorm_type
+    has_female = "女" in dorm_type
+    if has_male and not has_female:
+        return normalized == "女"
+    if has_female and not has_male:
+        return normalized == "男"
+    return False
+
+
+def _room_summary(room: _DormRoom) -> DormitoryRoomSummary:
+    return DormitoryRoomSummary(
+        room_no=room.room_no,
+        building=room.building,
+        unit=room.unit,
+        room_type=room.room_type,
+        dorm_type=room.dorm_type,
+        bed_count=room.beds,
+        occupied=room.occupied,
+        vacant=room.vacant,
+    )
+
+
+class AdministrationDormitoryService:
+    """宿舍入住率统计、AI 房间推荐与入住登记回写飞书。"""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+        self.repo = AdministrationRepository(session)
+
+    # ── 入住率仪表盘 ────────────────────────────────────────────
+
+    async def get_dashboard_stats(self) -> DormitoryOccupancyStats:
+        rooms_table = await self.repo.get_default_bound_table(PAGE_KEY_DORMITORY)
+        rooms = _extract_rooms(rooms_table)
+        total_beds = sum(room.beds for room in rooms)
+        occupied_beds = sum(
+            min(room.occupied, max(room.beds, 0)) or room.occupied for room in rooms
+        )
+        empty = [room for room in rooms if room.occupied <= 0]
+        full = [room for room in rooms if room.occupied > 0 and room.vacant <= 0]
+        partial = [room for room in rooms if room not in empty and room not in full]
+        return DormitoryOccupancyStats(
+            total_rooms=len(rooms),
+            empty_rooms=len(empty),
+            full_rooms=len(full),
+            partial_rooms=len(partial),
+            total_beds=total_beds,
+            occupied_beds=occupied_beds,
+            occupancy_rate=(occupied_beds / total_beds) if total_beds > 0 else 0.0,
+            empty_room_list=[_room_summary(room) for room in empty],
+            full_room_list=[_room_summary(room) for room in full],
+            synced_at=(
+                rooms_table.resource.last_complete_sync_at if rooms_table else None
+            ),
+        )
+
+    # ── AI 房间推荐 ─────────────────────────────────────────────
+
+    async def recommend_rooms(
+        self, payload: DormitoryCheckinInput
+    ) -> DormitoryRoomRecommendation:
+        tables = await self._bound_tables()
+        rooms = _extract_rooms(self._rooms_table(tables))
+        gender = _normalize_gender(payload.gender)
+        standards = _extract_standards(self._standards_table(tables))
+        required_type = _match_standard(standards, payload.job_title)
+
+        candidates = [
+            room
+            for room in rooms
+            if room.vacant > 0
+            and not _gender_conflicts_with_dorm(gender, room.dorm_type)
+            and (required_type is None or room.room_type == required_type)
+        ]
+        filter_summary = "；".join(
+            item
+            for item in (
+                f"性别：{gender}" if gender else "",
+                (
+                    f"住宿标准房型：{required_type}（岗位：{payload.job_title}）"
+                    if required_type
+                    else ""
+                ),
+            )
+            if item
+        )
+        if not candidates:
+            message = (
+                f"暂无符合条件的空床位房间（{filter_summary}）"
+                if filter_summary
+                else "暂无可入住房间（宿舍清单为空或未同步）"
+            )
+            return DormitoryRoomRecommendation(
+                recommendations=[], source="rule", message=message
+            )
+
+        picked = await self._ai_rank_rooms(payload, gender, required_type, candidates)
+        source = "ai"
+        if picked is None:
+            # 规则兜底：优先住满接近满员的房间（减少分散占用），再按编号稳定排序。
+            ordered = sorted(candidates, key=lambda room: (room.vacant, room.room_no))
+            picked = []
+            for room in ordered[:3]:
+                prefix = (
+                    f"房型「{room.room_type}」符合岗位住宿标准，"
+                    if required_type
+                    else ""
+                )
+                reason = (
+                    f"{prefix}规则推荐：剩余床位 {room.vacant}，优先安排接近住满的房间"
+                )
+                picked.append((room, reason))
+            source = "rule"
+        return DormitoryRoomRecommendation(
+            recommendations=[
+                DormitoryRecommendationItem(
+                    room_no=room.room_no,
+                    room_type=room.room_type,
+                    dorm_type=room.dorm_type,
+                    vacant_beds=room.vacant,
+                    reason=reason[:_REASON_MAX_CHARS],
+                    source=source,
+                )
+                for room, reason in picked
+            ],
+            source=source,
+            message=(
+                f"已按 {filter_summary} 过滤出 {len(candidates)} 间可入住房间"
+                if filter_summary
+                else f"共 {len(candidates)} 间可入住房间"
+            ),
+        )
+
+    def _rooms_table(self, tables: list[MirroredTable]) -> MirroredTable | None:
+        return _find_table(
+            tables,
+            title="宿舍清单",
+            required=(_ROOM_BED_FIELDS, _ROOM_OCCUPIED_FIELDS),
+        )
+
+    def _standards_table(self, tables: list[MirroredTable]) -> MirroredTable | None:
+        return _find_table(
+            tables,
+            title="住宿标准",
+            required=(_STANDARD_JOB_FIELDS, _STANDARD_ROOM_TYPE_FIELDS),
+            forbidden=(*_ROOM_BED_FIELDS, "姓名"),
+        )
+
+    def _employee_table(self, tables: list[MirroredTable]) -> MirroredTable | None:
+        return _find_table(
+            tables,
+            title="员工住宿退宿清单",
+            required=(
+                _EMPLOYEE_ROOM_NO_FIELDS,
+                _EMPLOYEE_NAME_FIELDS,
+                _EMPLOYEE_GENDER_FIELDS,
+            ),
+            forbidden=(*_ROOM_BED_FIELDS, *_ROOM_VACANT_FIELDS),
+        )
+
+    async def _ai_rank_rooms(
+        self,
+        payload: DormitoryCheckinInput,
+        gender: str,
+        required_type: str | None,
+        candidates: list[_DormRoom],
+    ) -> list[tuple[_DormRoom, str]] | None:
+        """LLM 在候选内排序推荐；不可用/输出无效返回 None（规则兜底）。"""
+        shortlist = candidates[:_AI_CANDIDATE_LIMIT]
+        listing = "\n".join(
+            f"- 宿舍编号:{room.room_no}｜房间类型:{room.room_type or '未知'}"
+            f"｜宿舍类型:{room.dorm_type or '未知'}"
+            f"｜剩余床位:{room.vacant}｜已住:{room.occupied}"
+            for room in shortlist
+        )
+        profile_lines = [f"姓名：{payload.name}"]
+        if gender:
+            profile_lines.append(f"性别：{gender}")
+        if payload.job_title:
+            profile_lines.append(f"岗位：{payload.job_title}")
+        if payload.department:
+            profile_lines.append(f"部门：{payload.department}")
+        if payload.shift_type:
+            profile_lines.append(f"倒班类型：{payload.shift_type}")
+        system_prompt = (
+            "你是制药厂宿舍分配助手。根据新员工信息从候选房间中推荐最合适的房间，"
+            "只输出一个 JSON 对象：\n"
+            '{"recommendations": [{"room_no": "宿舍编号（必须从候选清单原样复制）", '
+            '"reason": "一句话推荐理由（30字内）"}]}\n'
+            "规则：\n"
+            "- 最多推荐 3 条，按推荐程度排序；只能从候选清单中选择，禁止编造房间\n"
+            "- 同岗位优先相同房间类型；优先让同岗位员工同住、减少分散占用\n"
+            "- 不得输出 JSON 以外的任何内容"
+        )
+        user_prompt = (
+            f"新员工信息：{'；'.join(profile_lines)}\n"
+            + (f"住宿标准要求房型：{required_type}\n" if required_type else "")
+            + f"候选房间（共 {len(shortlist)} 间，均可入住）：\n{listing}"
+        )
+        try:
+            data: Any = await llm_client.chat_json(
+                [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                expected_keys=["recommendations"],
+                temperature=0.0,
+                timeout=_AI_TIMEOUT_SECONDS,
+                enable_thinking=False,
+            )
+        except LLMError:
+            logger.info("宿舍 AI 推荐未生效（模型输出异常），走规则排序")
+            return None
+        except Exception:
+            logger.warning("宿舍 AI 推荐调用失败，走规则排序", exc_info=True)
+            return None
+
+        raw_items = data.get("recommendations")
+        if not isinstance(raw_items, list):
+            return None
+        by_no = {room.room_no: room for room in candidates}
+        picked: list[tuple[_DormRoom, str]] = []
+        seen: set[str] = set()
+        for item in raw_items:
+            if not isinstance(item, dict) or len(picked) >= 3:
+                break
+            room = by_no.get(str(item.get("room_no", "")).strip())
+            if room is None or room.room_no in seen:
+                continue
+            seen.add(room.room_no)
+            reason = str(item.get("reason", "")).strip()
+            picked.append((room, reason or "AI 推荐"))
+        return picked or None
+
+    # ── 办理入住（回写飞书） ────────────────────────────────────
+
+    async def checkin(self, payload: DormitoryCheckinInput) -> DormitoryCheckinResult:
+        config = await self.repo.get_latest_config()
+        if config is None or not config.app_id or not config.encrypted_app_secret:
+            raise AppException(
+                message="行政飞书应用凭据未配置，请先在「飞书设置」完成配置",
+                status_code=400,
+            )
+        app_secret = _resolve_active_secret(config)
+
+        tables = await self._bound_tables()
+        rooms = _extract_rooms(self._rooms_table(tables))
+        room_no = payload.room_no.strip()
+        room = next((item for item in rooms if item.room_no == room_no), None)
+        if room is None:
+            display_no = room_no or payload.room_no
+            raise AppException(
+                message=f"宿舍编号「{display_no}」不在宿舍清单中，请重新选择",
+                status_code=404,
+            )
+        if room.vacant <= 0:
+            raise AppException(
+                message=f"宿舍「{room.room_no}」已无空床位，请重新选择",
+                status_code=400,
+            )
+        if _gender_conflicts_with_dorm(payload.gender, room.dorm_type):
+            raise AppException(
+                message=f"性别（{payload.gender}）与宿舍类型（{room.dorm_type}）不符，请重新选择",
+                status_code=400,
+            )
+        employees = self._employee_table(tables)
+        if employees is None:
+            raise AppException(
+                message="未找到「员工住宿退宿清单」数据表绑定，请先在飞书设置页完成绑定",
+                status_code=400,
+            )
+
+        fields: dict[str, str] = {
+            next(iter(_EMPLOYEE_ROOM_NO_FIELDS)): room.room_no,
+            "姓名": payload.name.strip(),
+            "性别": payload.gender.strip(),
+        }
+        optional_values: dict[str, str] = {
+            "员工ID": payload.employee_id.strip(),
+            "部门": payload.department.strip(),
+            "岗位": payload.job_title.strip(),
+            "联系方式": payload.phone.strip(),
+            "倒班类型": payload.shift_type.strip(),
+            "居住地址": payload.address.strip(),
+            "押金是否缴纳": payload.deposit_paid.strip(),
+            "是否签订协议": payload.agreement_signed.strip(),
+            "备注": payload.remark.strip(),
+        }
+        existing_names = _table_field_names(employees)
+        for key, value in optional_values.items():
+            if value and key in existing_names:
+                fields[key] = value
+
+        client = BitableClient(
+            app_token=employees.resource.app_token,
+            app_id=config.app_id,
+            app_secret=app_secret,
+        )
+        record = await client.create_record(employees.resource.table_id, fields)
+        record_id = str(record.get("record_id") or "")
+
+        synced = False
+        try:
+            mirror = await build_read_mirror_service(self.session)
+            await mirror.sync_resource(employees.resource.id)
+            synced = True
+        except Exception:
+            logger.warning(
+                "入住记录已写入飞书，镜像即时同步失败（15 分钟定时同步会补上）",
+                exc_info=True,
+            )
+        return DormitoryCheckinResult(
+            record_id=record_id, room_no=room.room_no, synced=synced
+        )
+
+    async def _bound_tables(self) -> list[MirroredTable]:
+        return await self.repo.list_bound_tables(PAGE_KEY_DORMITORY)

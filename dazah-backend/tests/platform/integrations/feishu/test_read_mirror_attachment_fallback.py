@@ -80,7 +80,8 @@ def test_record_order_expression_numeric_desc_nulls_last() -> None:
     assert "NUMERIC" in compiled
 
 
-def test_record_order_expression_text_asc_nulls_first() -> None:
+def test_record_order_expression_text_asc_nulls_last() -> None:
+    """升序同样空值垫底（镜像存在 raw_fields 全空的记录，nulls_first 会顶满整页）。"""
     from app.platform.integrations.feishu.read_mirror import (
         _record_order_expression,
     )
@@ -89,5 +90,77 @@ def test_record_order_expression_text_asc_nulls_first() -> None:
     expr = _record_order_expression(columns, "申请人", 1, "asc")
     compiled = str(expr).upper()
     assert "ASC" in compiled
-    assert "NULLS FIRST" in compiled
+    assert "NULLS LAST" in compiled
     assert "NUMERIC" not in compiled
+
+
+def test_record_filter_contains_escapes_like_wildcards() -> None:
+    import sqlalchemy as sa
+    from sqlalchemy.dialects.postgresql import JSONB
+
+    from app.platform.integrations.feishu.read_mirror import (
+        _record_filter_expression,
+    )
+
+    metadata = sa.MetaData()
+    table = sa.Table("mirror_record", metadata, sa.Column("raw_fields", JSONB))
+    expr = _record_filter_expression(table.c, "报废物资名称", 1, "contains", "废铁%_")
+    compiled = str(expr).lower()
+    assert " like " in compiled
+    # LIKE 通配符必须被转义（转义后的值是绑定参数，不出现在 SQL 文本里）
+    right_value = getattr(expr.right, "value", None)
+    assert right_value == r"%废铁\%\_%"
+
+
+def test_record_filter_numeric_eq_casts_to_numeric() -> None:
+    import sqlalchemy as sa
+    from sqlalchemy.dialects.postgresql import JSONB
+
+    from app.platform.integrations.feishu.read_mirror import (
+        _record_filter_expression,
+    )
+
+    metadata = sa.MetaData()
+    table = sa.Table("mirror_record", metadata, sa.Column("raw_fields", JSONB))
+    expr = _record_filter_expression(table.c, "数量", 2, "gte", "12")
+    compiled = str(expr).upper()
+    assert "NUMERIC" in compiled
+    assert ">=" in compiled
+
+
+def test_record_filter_numeric_rejects_non_numeric_value() -> None:
+    import sqlalchemy as sa
+    from sqlalchemy.dialects.postgresql import JSONB
+
+    from app.core.exceptions import AppException
+    from app.platform.integrations.feishu.read_mirror import (
+        _record_filter_expression,
+    )
+
+    metadata = sa.MetaData()
+    table = sa.Table("mirror_record", metadata, sa.Column("raw_fields", JSONB))
+    try:
+        _record_filter_expression(table.c, "用印日期", 5, "gte", "abc")
+    except AppException as exc:
+        assert exc.status_code == 400
+    else:
+        raise AssertionError("expected AppException for non-numeric value")
+
+
+def test_record_filter_rejects_unknown_operator() -> None:
+    import sqlalchemy as sa
+    from sqlalchemy.dialects.postgresql import JSONB
+
+    from app.core.exceptions import AppException
+    from app.platform.integrations.feishu.read_mirror import (
+        _record_filter_expression,
+    )
+
+    metadata = sa.MetaData()
+    table = sa.Table("mirror_record", metadata, sa.Column("raw_fields", JSONB))
+    try:
+        _record_filter_expression(table.c, "申请人", 1, "regex", "x")
+    except AppException as exc:
+        assert exc.status_code == 400
+    else:
+        raise AssertionError("expected AppException for unknown operator")

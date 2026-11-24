@@ -8,6 +8,7 @@ __all__ = [
     "convert_word_attachment_text",
     "get_module_feishu_app_credentials",
     "get_qa_reminder_recipients",
+    "office_content_to_pdf",
 ]
 
 
@@ -24,6 +25,19 @@ def convert_word_attachment_text(file_name: str, content: bytes) -> str:
 
     text, _images = convert_word_attachment(file_name, content)
     return text
+
+
+def office_content_to_pdf(content: bytes, file_name: str) -> bytes:
+    """office 文档（含 xlsx）→ PDF 字节，供跨模块导出场景复用。
+
+    LibreOffice headless 同款管线；阻塞调用（soffice 子进程），
+    调用方须放线程执行。转换失败返回空字节，由调用方映射业务错误。
+    """
+    from app.modules.quality.service.feishu_attachment_preview import (
+        convert_office_to_pdf,
+    )
+
+    return convert_office_to_pdf(content, file_name)
 
 
 async def get_module_feishu_app_credentials(session: AsyncSession) -> tuple[str, str]:

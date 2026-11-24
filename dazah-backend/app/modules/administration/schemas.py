@@ -1,7 +1,8 @@
 """Administration request and response schemas.
 
-当前覆盖「烟酒礼品管理」：飞书应用配置、只读镜像入口/数据表/页面绑定，
-以及仪表台统计契约。镜像页的 ``page-data`` 载荷由平台层
+当前覆盖「烟酒礼品管理」的飞书应用配置、只读镜像入口/数据表/页面绑定、
+仪表台统计契约，以及「公告通知」原生台账契约（AI 识别建议值/导入表单/
+台账分页/公告内容）。镜像页的 ``page-data`` 载荷由平台层
 ``ModuleFeishuReadMirrorService`` 生成，前端按 ``WarehouseFeishuPageData``
 契约消费，这里不重复定义。
 """
@@ -152,3 +153,170 @@ class TobaccoGiftDashboardStats(BaseModel):
     requisition_synced_at: datetime | None = Field(
         default=None, description="领用记录最近一次完整同步时间"
     )
+
+
+# ── 宿舍管理：入住率仪表盘 + AI 推荐入住 ───────────────────────
+
+
+class DormitoryRoomSummary(BaseModel):
+    """单间宿舍的床位概览（数据来自宿舍清单镜像，公式字段取计算值）。"""
+
+    room_no: str = Field(description="宿舍编号")
+    building: str = Field(default="", description="楼号")
+    unit: str = Field(default="", description="单元")
+    room_type: str = Field(default="", description="房间类型")
+    dorm_type: str = Field(default="", description="宿舍类型（男生宿舍/女生宿舍）")
+    bed_count: int = Field(default=0, description="床位数量")
+    occupied: int = Field(default=0, description="已住人数")
+    vacant: int = Field(default=0, description="剩余床位")
+
+
+class DormitoryOccupancyStats(BaseModel):
+    """宿舍入住率仪表盘统计（未绑定或未同步时为 0/空，不报错）。"""
+
+    total_rooms: int = Field(default=0, description="宿舍总数（宿舍清单记录数）")
+    empty_rooms: int = Field(default=0, description="空房间数（已住人数为 0）")
+    full_rooms: int = Field(default=0, description="满人房间数（剩余床位为 0）")
+    partial_rooms: int = Field(default=0, description="未住满房间数")
+    total_beds: int = Field(default=0, description="总床位数")
+    occupied_beds: int = Field(default=0, description="已住床位合计")
+    occupancy_rate: float = Field(default=0.0, description="床位入住率（0-1）")
+    empty_room_list: list[DormitoryRoomSummary] = Field(
+        default_factory=list, description="空房间列表（按宿舍编号排序）"
+    )
+    full_room_list: list[DormitoryRoomSummary] = Field(
+        default_factory=list, description="满人房间列表（按宿舍编号排序）"
+    )
+    synced_at: datetime | None = Field(
+        default=None, description="宿舍清单最近一次完整同步时间"
+    )
+
+
+class DormitoryRecommendationItem(BaseModel):
+    """单条房间推荐（LLM 输出已校验房间号必须来自真实空床位候选）。"""
+
+    room_no: str = Field(description="宿舍编号（候选房间原样取值）")
+    room_type: str = Field(default="", description="房间类型")
+    dorm_type: str = Field(default="", description="宿舍类型")
+    vacant_beds: int = Field(default=0, description="剩余床位")
+    reason: str = Field(default="", description="推荐理由（LLM 生成或规则说明）")
+    source: str = Field(description="推荐来源：ai=模型推荐 / rule=规则兜底")
+
+
+class DormitoryRoomRecommendation(BaseModel):
+    """AI 推荐结果（最多 3 条；无候选时 recommendations 为空并给出原因）。"""
+
+    recommendations: list[DormitoryRecommendationItem] = Field(default_factory=list)
+    source: str = Field(description="整体推荐来源：ai / rule")
+    message: str = Field(default="", description="给用户的补充说明（如无可用房间）")
+
+
+class DormitoryCheckinInput(BaseModel):
+    """新员工入住登记（确认后回写飞书员工住宿退宿清单）。"""
+
+    room_no: str = Field(default="", description="宿舍编号（推荐结果或手填）")
+    employee_id: str = Field(default="", max_length=100, description="员工ID")
+    name: str = Field(min_length=1, max_length=100, description="姓名")
+    gender: str = Field(min_length=1, max_length=20, description="性别（男/女）")
+    department: str = Field(default="", max_length=100, description="部门")
+    job_title: str = Field(default="", max_length=100, description="岗位")
+    phone: str = Field(default="", max_length=100, description="联系方式")
+    shift_type: str = Field(default="", max_length=50, description="倒班类型")
+    address: str = Field(default="", max_length=255, description="居住地址")
+    deposit_paid: str = Field(
+        default="", max_length=20, description="押金是否缴纳（是/否）"
+    )
+    agreement_signed: str = Field(
+        default="", max_length=20, description="是否签订协议（是/否）"
+    )
+    remark: str = Field(default="", max_length=255, description="备注")
+
+
+class DormitoryCheckinResult(BaseModel):
+    """办理入住结果（记录已写入飞书；synced 表示镜像是否已即时同步）。"""
+
+    record_id: str = Field(description="飞书记录 ID")
+    room_no: str = Field(description="分配的宿舍编号")
+    synced: bool = Field(description="写入后是否已即时触发镜像同步")
+
+
+class TobaccoGiftAiAnalysis(BaseModel):
+    """烟酒礼品仪表台 AI 分析结果（LLM 辅助结论，仅供参考，不替代人工核对）。"""
+
+    summary: str = Field(description="总体态势概述（≤120字）")
+    insights: list[str] = Field(description="关键发现（2~5条）")
+    anomalies: list[str] = Field(description="异常提示（低于预警库存、作废单等）")
+    suggestions: list[str] = Field(description="管理建议（2~4条）")
+    generated_at: datetime = Field(description="生成时间（UTC）")
+
+
+# ── 公告通知台账（平台原生，非飞书镜像） ────────────────────────
+
+
+class NoticeParseSuggestion(BaseModel):
+    """AI 识别的公告元数据建议值（不含公告内容，由人工确认后随导入落库）。"""
+
+    notice_no: str | None = Field(default=None, max_length=100, description="公告编号")
+    title: str | None = Field(default=None, max_length=255, description="公告标题")
+    publisher: str | None = Field(default=None, max_length=255, description="发布单位")
+    published_at: str | None = Field(
+        default=None, description="发布日期（YYYY-MM-DD，无法识别为 null）"
+    )
+    category: str | None = Field(default=None, max_length=50, description="公告类别")
+    remark: str | None = Field(default=None, description="备注")
+
+
+class NoticeParsePreview(BaseModel):
+    """解析预览（不落库、不存原文、不返回公告内容）。"""
+
+    file_name: str = Field(description="上传文件名")
+    suggestion: NoticeParseSuggestion = Field(description="AI 识别建议值")
+
+
+class NoticeUpdateInput(BaseModel):
+    """编辑公告元数据与内容（v1 不支持更换原文存档）。"""
+
+    notice_no: str = Field(default="", max_length=100)
+    title: str = Field(default="", max_length=255)
+    publisher: str = Field(default="", max_length=255)
+    published_at: str | None = Field(default=None, description="YYYY-MM-DD")
+    category: str = Field(default="", max_length=50)
+    remark: str = Field(default="", max_length=2000)
+    content: str = Field(default="", max_length=20000, description="公告内容")
+
+
+class NoticeItem(BaseModel):
+    """台账条目元数据（列表/详情响应永不包含公告内容字段）。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    notice_no: str
+    title: str
+    publisher: str
+    published_at: str | None = None
+    category: str
+    remark: str | None = None
+    source_file_name: str
+    source_size_bytes: int
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class NoticeListResponse(BaseModel):
+    """台账分页结果（categories 供筛选下拉，取自现存非空类别）。"""
+
+    items: list[NoticeItem]
+    total: int
+    page: int
+    page_size: int
+    categories: list[str] = Field(default_factory=list)
+
+
+class NoticeContentResponse(BaseModel):
+    """公告内容（仅 operate 绑定的专用端点返回）。"""
+
+    id: uuid.UUID
+    notice_no: str
+    title: str
+    content: str

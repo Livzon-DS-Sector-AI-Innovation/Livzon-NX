@@ -6457,6 +6457,108 @@
         "title": "ApiResponseEnvelope[DocumentEntryOut]",
         "type": "object"
       },
+      "ApiResponseEnvelope_DormitoryCheckinResult_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/DormitoryCheckinResult"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[DormitoryCheckinResult]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_DormitoryOccupancyStats_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/DormitoryOccupancyStats"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[DormitoryOccupancyStats]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_DormitoryRoomRecommendation_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/DormitoryRoomRecommendation"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[DormitoryRoomRecommendation]",
+        "type": "object"
+      },
       "ApiResponseEnvelope_EmergencyCardListResponse_": {
         "properties": {
           "code": {
@@ -8360,6 +8462,142 @@
           "data"
         ],
         "title": "ApiResponseEnvelope[NoneType]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_NoticeContentResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/NoticeContentResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[NoticeContentResponse]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_NoticeItem_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/NoticeItem"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[NoticeItem]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_NoticeListResponse_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/NoticeListResponse"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[NoticeListResponse]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_NoticeParsePreview_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/NoticeParsePreview"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[NoticeParsePreview]",
         "type": "object"
       },
       "ApiResponseEnvelope_OhDetectionImportResponse_": {
@@ -10400,6 +10638,40 @@
           "data"
         ],
         "title": "ApiResponseEnvelope[SupplierOut]",
+        "type": "object"
+      },
+      "ApiResponseEnvelope_TobaccoGiftAiAnalysis_": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/TobaccoGiftAiAnalysis"
+          },
+          "message": {
+            "default": "success",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "ApiResponseEnvelope[TobaccoGiftAiAnalysis]",
         "type": "object"
       },
       "ApiResponseEnvelope_TobaccoGiftDashboardStats_": {
@@ -17023,6 +17295,63 @@
         "title": "Body_import_hazard_ledger_api_v1_safety_hazard_identifications_import_post",
         "type": "object"
       },
+      "Body_import_notice_api_v1_administration_notices_post": {
+        "properties": {
+          "category": {
+            "default": "",
+            "maxLength": 50,
+            "title": "Category",
+            "type": "string"
+          },
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "description": "公告文件（PDF/Word/图片）",
+            "title": "File",
+            "type": "string"
+          },
+          "notice_no": {
+            "default": "",
+            "maxLength": 100,
+            "title": "Notice No",
+            "type": "string"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "YYYY-MM-DD",
+            "title": "Published At"
+          },
+          "publisher": {
+            "default": "",
+            "maxLength": 255,
+            "title": "Publisher",
+            "type": "string"
+          },
+          "remark": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Remark",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "maxLength": 255,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_import_notice_api_v1_administration_notices_post",
+        "type": "object"
+      },
       "Body_import_oh_detection_report_api_v1_safety_oh_detection_reports_import_post": {
         "properties": {
           "company_name": {
@@ -17308,6 +17637,21 @@
           "file"
         ],
         "title": "Body_parse_hazard_ledger_import_api_v1_safety_hazard_identifications_import_parse_post",
+        "type": "object"
+      },
+      "Body_parse_notice_api_v1_administration_notices_parse_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "description": "公告文件（PDF/Word/图片）",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_parse_notice_api_v1_administration_notices_parse_post",
         "type": "object"
       },
       "Body_parse_oh_detection_report_api_v1_safety_oh_detection_reports_parse_post": {
@@ -37550,6 +37894,335 @@
           }
         },
         "title": "DocumentEntryResolveResult",
+        "type": "object"
+      },
+      "DormitoryCheckinInput": {
+        "description": "新员工入住登记（确认后回写飞书员工住宿退宿清单）。",
+        "properties": {
+          "address": {
+            "default": "",
+            "description": "居住地址",
+            "maxLength": 255,
+            "title": "Address",
+            "type": "string"
+          },
+          "agreement_signed": {
+            "default": "",
+            "description": "是否签订协议（是/否）",
+            "maxLength": 20,
+            "title": "Agreement Signed",
+            "type": "string"
+          },
+          "department": {
+            "default": "",
+            "description": "部门",
+            "maxLength": 100,
+            "title": "Department",
+            "type": "string"
+          },
+          "deposit_paid": {
+            "default": "",
+            "description": "押金是否缴纳（是/否）",
+            "maxLength": 20,
+            "title": "Deposit Paid",
+            "type": "string"
+          },
+          "employee_id": {
+            "default": "",
+            "description": "员工ID",
+            "maxLength": 100,
+            "title": "Employee Id",
+            "type": "string"
+          },
+          "gender": {
+            "description": "性别（男/女）",
+            "maxLength": 20,
+            "minLength": 1,
+            "title": "Gender",
+            "type": "string"
+          },
+          "job_title": {
+            "default": "",
+            "description": "岗位",
+            "maxLength": 100,
+            "title": "Job Title",
+            "type": "string"
+          },
+          "name": {
+            "description": "姓名",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "phone": {
+            "default": "",
+            "description": "联系方式",
+            "maxLength": 100,
+            "title": "Phone",
+            "type": "string"
+          },
+          "remark": {
+            "default": "",
+            "description": "备注",
+            "maxLength": 255,
+            "title": "Remark",
+            "type": "string"
+          },
+          "room_no": {
+            "default": "",
+            "description": "宿舍编号（推荐结果或手填）",
+            "title": "Room No",
+            "type": "string"
+          },
+          "shift_type": {
+            "default": "",
+            "description": "倒班类型",
+            "maxLength": 50,
+            "title": "Shift Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "gender"
+        ],
+        "title": "DormitoryCheckinInput",
+        "type": "object"
+      },
+      "DormitoryCheckinResult": {
+        "description": "办理入住结果（记录已写入飞书；synced 表示镜像是否已即时同步）。",
+        "properties": {
+          "record_id": {
+            "description": "飞书记录 ID",
+            "title": "Record Id",
+            "type": "string"
+          },
+          "room_no": {
+            "description": "分配的宿舍编号",
+            "title": "Room No",
+            "type": "string"
+          },
+          "synced": {
+            "description": "写入后是否已即时触发镜像同步",
+            "title": "Synced",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "record_id",
+          "room_no",
+          "synced"
+        ],
+        "title": "DormitoryCheckinResult",
+        "type": "object"
+      },
+      "DormitoryOccupancyStats": {
+        "description": "宿舍入住率仪表盘统计（未绑定或未同步时为 0/空，不报错）。",
+        "properties": {
+          "empty_room_list": {
+            "description": "空房间列表（按宿舍编号排序）",
+            "items": {
+              "$ref": "#/components/schemas/DormitoryRoomSummary"
+            },
+            "title": "Empty Room List",
+            "type": "array"
+          },
+          "empty_rooms": {
+            "default": 0,
+            "description": "空房间数（已住人数为 0）",
+            "title": "Empty Rooms",
+            "type": "integer"
+          },
+          "full_room_list": {
+            "description": "满人房间列表（按宿舍编号排序）",
+            "items": {
+              "$ref": "#/components/schemas/DormitoryRoomSummary"
+            },
+            "title": "Full Room List",
+            "type": "array"
+          },
+          "full_rooms": {
+            "default": 0,
+            "description": "满人房间数（剩余床位为 0）",
+            "title": "Full Rooms",
+            "type": "integer"
+          },
+          "occupancy_rate": {
+            "default": 0.0,
+            "description": "床位入住率（0-1）",
+            "title": "Occupancy Rate",
+            "type": "number"
+          },
+          "occupied_beds": {
+            "default": 0,
+            "description": "已住床位合计",
+            "title": "Occupied Beds",
+            "type": "integer"
+          },
+          "partial_rooms": {
+            "default": 0,
+            "description": "未住满房间数",
+            "title": "Partial Rooms",
+            "type": "integer"
+          },
+          "synced_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "宿舍清单最近一次完整同步时间",
+            "title": "Synced At"
+          },
+          "total_beds": {
+            "default": 0,
+            "description": "总床位数",
+            "title": "Total Beds",
+            "type": "integer"
+          },
+          "total_rooms": {
+            "default": 0,
+            "description": "宿舍总数（宿舍清单记录数）",
+            "title": "Total Rooms",
+            "type": "integer"
+          }
+        },
+        "title": "DormitoryOccupancyStats",
+        "type": "object"
+      },
+      "DormitoryRecommendationItem": {
+        "description": "单条房间推荐（LLM 输出已校验房间号必须来自真实空床位候选）。",
+        "properties": {
+          "dorm_type": {
+            "default": "",
+            "description": "宿舍类型",
+            "title": "Dorm Type",
+            "type": "string"
+          },
+          "reason": {
+            "default": "",
+            "description": "推荐理由（LLM 生成或规则说明）",
+            "title": "Reason",
+            "type": "string"
+          },
+          "room_no": {
+            "description": "宿舍编号（候选房间原样取值）",
+            "title": "Room No",
+            "type": "string"
+          },
+          "room_type": {
+            "default": "",
+            "description": "房间类型",
+            "title": "Room Type",
+            "type": "string"
+          },
+          "source": {
+            "description": "推荐来源：ai=模型推荐 / rule=规则兜底",
+            "title": "Source",
+            "type": "string"
+          },
+          "vacant_beds": {
+            "default": 0,
+            "description": "剩余床位",
+            "title": "Vacant Beds",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "room_no",
+          "source"
+        ],
+        "title": "DormitoryRecommendationItem",
+        "type": "object"
+      },
+      "DormitoryRoomRecommendation": {
+        "description": "AI 推荐结果（最多 3 条；无候选时 recommendations 为空并给出原因）。",
+        "properties": {
+          "message": {
+            "default": "",
+            "description": "给用户的补充说明（如无可用房间）",
+            "title": "Message",
+            "type": "string"
+          },
+          "recommendations": {
+            "items": {
+              "$ref": "#/components/schemas/DormitoryRecommendationItem"
+            },
+            "title": "Recommendations",
+            "type": "array"
+          },
+          "source": {
+            "description": "整体推荐来源：ai / rule",
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source"
+        ],
+        "title": "DormitoryRoomRecommendation",
+        "type": "object"
+      },
+      "DormitoryRoomSummary": {
+        "description": "单间宿舍的床位概览（数据来自宿舍清单镜像，公式字段取计算值）。",
+        "properties": {
+          "bed_count": {
+            "default": 0,
+            "description": "床位数量",
+            "title": "Bed Count",
+            "type": "integer"
+          },
+          "building": {
+            "default": "",
+            "description": "楼号",
+            "title": "Building",
+            "type": "string"
+          },
+          "dorm_type": {
+            "default": "",
+            "description": "宿舍类型（男生宿舍/女生宿舍）",
+            "title": "Dorm Type",
+            "type": "string"
+          },
+          "occupied": {
+            "default": 0,
+            "description": "已住人数",
+            "title": "Occupied",
+            "type": "integer"
+          },
+          "room_no": {
+            "description": "宿舍编号",
+            "title": "Room No",
+            "type": "string"
+          },
+          "room_type": {
+            "default": "",
+            "description": "房间类型",
+            "title": "Room Type",
+            "type": "string"
+          },
+          "unit": {
+            "default": "",
+            "description": "单元",
+            "title": "Unit",
+            "type": "string"
+          },
+          "vacant": {
+            "default": 0,
+            "description": "剩余床位",
+            "title": "Vacant",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "room_no"
+        ],
+        "title": "DormitoryRoomSummary",
         "type": "object"
       },
       "DrugCreate": {
@@ -62017,6 +62690,325 @@
           "node_key"
         ],
         "title": "NodeAssignmentInput",
+        "type": "object"
+      },
+      "NoticeContentResponse": {
+        "description": "公告内容（仅 operate 绑定的专用端点返回）。",
+        "properties": {
+          "content": {
+            "title": "Content",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "notice_no": {
+            "title": "Notice No",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "notice_no",
+          "title",
+          "content"
+        ],
+        "title": "NoticeContentResponse",
+        "type": "object"
+      },
+      "NoticeItem": {
+        "description": "台账条目元数据（列表/详情响应永不包含公告内容字段）。",
+        "properties": {
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "notice_no": {
+            "title": "Notice No",
+            "type": "string"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "publisher": {
+            "title": "Publisher",
+            "type": "string"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark"
+          },
+          "source_file_name": {
+            "title": "Source File Name",
+            "type": "string"
+          },
+          "source_size_bytes": {
+            "title": "Source Size Bytes",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "id",
+          "notice_no",
+          "title",
+          "publisher",
+          "category",
+          "source_file_name",
+          "source_size_bytes"
+        ],
+        "title": "NoticeItem",
+        "type": "object"
+      },
+      "NoticeListResponse": {
+        "description": "台账分页结果（categories 供筛选下拉，取自现存非空类别）。",
+        "properties": {
+          "categories": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Categories",
+            "type": "array"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/NoticeItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "NoticeListResponse",
+        "type": "object"
+      },
+      "NoticeParsePreview": {
+        "description": "解析预览（不落库、不存原文、不返回公告内容）。",
+        "properties": {
+          "file_name": {
+            "description": "上传文件名",
+            "title": "File Name",
+            "type": "string"
+          },
+          "suggestion": {
+            "$ref": "#/components/schemas/NoticeParseSuggestion",
+            "description": "AI 识别建议值"
+          }
+        },
+        "required": [
+          "file_name",
+          "suggestion"
+        ],
+        "title": "NoticeParsePreview",
+        "type": "object"
+      },
+      "NoticeParseSuggestion": {
+        "description": "AI 识别的公告元数据建议值（不含公告内容，由人工确认后随导入落库）。",
+        "properties": {
+          "category": {
+            "anyOf": [
+              {
+                "maxLength": 50,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "公告类别",
+            "title": "Category"
+          },
+          "notice_no": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "公告编号",
+            "title": "Notice No"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "发布日期（YYYY-MM-DD，无法识别为 null）",
+            "title": "Published At"
+          },
+          "publisher": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "发布单位",
+            "title": "Publisher"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "备注",
+            "title": "Remark"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "公告标题",
+            "title": "Title"
+          }
+        },
+        "title": "NoticeParseSuggestion",
+        "type": "object"
+      },
+      "NoticeUpdateInput": {
+        "description": "编辑公告元数据与内容（v1 不支持更换原文存档）。",
+        "properties": {
+          "category": {
+            "default": "",
+            "maxLength": 50,
+            "title": "Category",
+            "type": "string"
+          },
+          "content": {
+            "default": "",
+            "description": "公告内容",
+            "maxLength": 20000,
+            "title": "Content",
+            "type": "string"
+          },
+          "notice_no": {
+            "default": "",
+            "maxLength": 100,
+            "title": "Notice No",
+            "type": "string"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "YYYY-MM-DD",
+            "title": "Published At"
+          },
+          "publisher": {
+            "default": "",
+            "maxLength": 255,
+            "title": "Publisher",
+            "type": "string"
+          },
+          "remark": {
+            "default": "",
+            "maxLength": 2000,
+            "title": "Remark",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "maxLength": 255,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "title": "NoticeUpdateInput",
         "type": "object"
       },
       "NotificationResponse": {
@@ -89749,6 +90741,55 @@
         "title": "TemplateDraftResponse",
         "type": "object"
       },
+      "TobaccoGiftAiAnalysis": {
+        "description": "烟酒礼品仪表台 AI 分析结果（LLM 辅助结论，仅供参考，不替代人工核对）。",
+        "properties": {
+          "anomalies": {
+            "description": "异常提示（低于预警库存、作废单等）",
+            "items": {
+              "type": "string"
+            },
+            "title": "Anomalies",
+            "type": "array"
+          },
+          "generated_at": {
+            "description": "生成时间（UTC）",
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "insights": {
+            "description": "关键发现（2~5条）",
+            "items": {
+              "type": "string"
+            },
+            "title": "Insights",
+            "type": "array"
+          },
+          "suggestions": {
+            "description": "管理建议（2~4条）",
+            "items": {
+              "type": "string"
+            },
+            "title": "Suggestions",
+            "type": "array"
+          },
+          "summary": {
+            "description": "总体态势概述（≤120字）",
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "summary",
+          "insights",
+          "anomalies",
+          "suggestions",
+          "generated_at"
+        ],
+        "title": "TobaccoGiftAiAnalysis",
+        "type": "object"
+      },
       "TobaccoGiftChartItem": {
         "description": "柱状图单根柱子：维度名称 + 数值（数量或金额）。",
         "properties": {
@@ -109741,6 +110782,173 @@
         ]
       }
     },
+    "/api/v1/administration/dormitory/checkin": {
+      "post": {
+        "operationId": "create_dormitory_checkin_api_v1_administration_dormitory_checkin_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DormitoryCheckinInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_DormitoryCheckinResult_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "办理新员工入住（回写飞书）",
+        "tags": [
+          "行政管理"
+        ]
+      }
+    },
+    "/api/v1/administration/dormitory/checkin-recommend": {
+      "post": {
+        "operationId": "recommend_dormitory_rooms_api_v1_administration_dormitory_checkin_recommend_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DormitoryCheckinInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_DormitoryRoomRecommendation_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "AI 推荐入住房间",
+        "tags": [
+          "行政管理"
+        ]
+      }
+    },
+    "/api/v1/administration/dormitory/dashboard-stats": {
+      "get": {
+        "operationId": "get_dormitory_dashboard_stats_api_v1_administration_dormitory_dashboard_stats_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_DormitoryOccupancyStats_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "宿舍入住率统计",
+        "tags": [
+          "行政管理"
+        ]
+      }
+    },
     "/api/v1/administration/feishu-config": {
       "get": {
         "operationId": "get_feishu_config_api_v1_administration_feishu_config_get",
@@ -110375,6 +111583,527 @@
         ]
       }
     },
+    "/api/v1/administration/notices": {
+      "get": {
+        "operationId": "list_notices_api_v1_administration_notices_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "keyword",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 255,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Keyword"
+            }
+          },
+          {
+            "in": "query",
+            "name": "category",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 50,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_NoticeListResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "公告台账列表（元数据，不含公告内容）",
+        "tags": [
+          "行政管理"
+        ]
+      },
+      "post": {
+        "operationId": "import_notice_api_v1_administration_notices_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_notice_api_v1_administration_notices_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_NoticeItem_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "导入公告（原文存档 + AI 提取正文，元数据以确认值为准）",
+        "tags": [
+          "行政管理"
+        ]
+      }
+    },
+    "/api/v1/administration/notices/parse": {
+      "post": {
+        "operationId": "parse_notice_api_v1_administration_notices_parse_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_parse_notice_api_v1_administration_notices_parse_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_NoticeParsePreview_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "解析公告文件（AI 识别元数据预览，不落库）",
+        "tags": [
+          "行政管理"
+        ]
+      }
+    },
+    "/api/v1/administration/notices/{notice_id}": {
+      "delete": {
+        "operationId": "delete_notice_api_v1_administration_notices__notice_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notice_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Notice Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "删除公告（软删除，原文存档保留）",
+        "tags": [
+          "行政管理"
+        ]
+      },
+      "get": {
+        "operationId": "get_notice_api_v1_administration_notices__notice_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notice_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Notice Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_NoticeItem_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "公告详情（元数据，不含公告内容）",
+        "tags": [
+          "行政管理"
+        ]
+      },
+      "put": {
+        "operationId": "update_notice_api_v1_administration_notices__notice_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notice_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Notice Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NoticeUpdateInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_NoticeItem_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "编辑公告元数据与内容",
+        "tags": [
+          "行政管理"
+        ]
+      }
+    },
+    "/api/v1/administration/notices/{notice_id}/content": {
+      "get": {
+        "operationId": "get_notice_content_api_v1_administration_notices__notice_id__content_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notice_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Notice Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_NoticeContentResponse_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "查看公告内容（operate 专用端点）",
+        "tags": [
+          "行政管理"
+        ]
+      }
+    },
+    "/api/v1/administration/notices/{notice_id}/file": {
+      "get": {
+        "operationId": "download_notice_file_api_v1_administration_notices__notice_id__file_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "notice_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Notice Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "下载公告原文存档（operate 专用端点）",
+        "tags": [
+          "行政管理"
+        ]
+      }
+    },
     "/api/v1/administration/page-data/{page_key}": {
       "get": {
         "operationId": "get_read_page_api_v1_administration_page_data__page_key__get",
@@ -110428,6 +112157,186 @@
           }
         },
         "summary": "页面绑定数据",
+        "tags": [
+          "行政管理"
+        ]
+      }
+    },
+    "/api/v1/administration/page-data/{page_key}/{binding_id}/export": {
+      "get": {
+        "description": "按当前筛选/排序导出全量记录；columns 为逗号分隔的展示列 field_id。",
+        "operationId": "export_read_page_records_api_v1_administration_page_data__page_key___binding_id__export_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "page_key",
+            "required": true,
+            "schema": {
+              "title": "Page Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "binding_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Binding Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "format",
+            "required": false,
+            "schema": {
+              "default": "xlsx",
+              "pattern": "^(xlsx|pdf)$",
+              "title": "Format",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "columns",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 2000,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Columns"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort_field",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 255,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sort Field"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort_direction",
+            "required": false,
+            "schema": {
+              "default": "desc",
+              "pattern": "^(asc|desc)$",
+              "title": "Sort Direction",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "filter_field",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Filter Field"
+            }
+          },
+          {
+            "in": "query",
+            "name": "filter_operator",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Filter Operator"
+            }
+          },
+          {
+            "in": "query",
+            "name": "filter_value",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Filter Value"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "导出页面数据（Excel/PDF，含图片与头像）",
         "tags": [
           "行政管理"
         ]
@@ -110617,6 +112526,63 @@
             }
           },
           {
+            "in": "query",
+            "name": "filter_field",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Filter Field"
+            }
+          },
+          {
+            "in": "query",
+            "name": "filter_operator",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Filter Operator"
+            }
+          },
+          {
+            "in": "query",
+            "name": "filter_value",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Filter Value"
+            }
+          },
+          {
             "in": "cookie",
             "name": "auth_token",
             "required": false,
@@ -110656,6 +112622,55 @@
           }
         },
         "summary": "页面数据记录",
+        "tags": [
+          "行政管理"
+        ]
+      }
+    },
+    "/api/v1/administration/tobacco-gift/ai-analysis": {
+      "post": {
+        "operationId": "generate_tobacco_gift_ai_analysis_api_v1_administration_tobacco_gift_ai_analysis_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseEnvelope_TobaccoGiftAiAnalysis_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "生成烟酒礼品仪表台 AI 分析",
         "tags": [
           "行政管理"
         ]

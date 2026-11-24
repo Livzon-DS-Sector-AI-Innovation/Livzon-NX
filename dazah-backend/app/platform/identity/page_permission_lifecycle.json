@@ -1,6 +1,28 @@
 {
   "version": 1,
   "pages": {
+    "admin:notice": {
+      "status": "active",
+      "module_code": "administration",
+      "route_path": "/admin/notice",
+      "actions": {
+        "delete": {
+          "status": "active",
+          "category": "destructive"
+        }
+      }
+    },
+    "admin:dormitory": {
+      "status": "active",
+      "module_code": "administration",
+      "route_path": "/admin/dormitory",
+      "actions": {
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        }
+      }
+    },
     "admin:feishu-settings": {
       "status": "active",
       "module_code": "administration",
@@ -20,13 +42,23 @@
       "status": "active",
       "module_code": "administration",
       "route_path": "/admin/scrap-materials",
-      "actions": {}
+      "actions": {
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        }
+      }
     },
     "admin:seals": {
       "status": "active",
       "module_code": "administration",
       "route_path": "/admin/seals",
-      "actions": {}
+      "actions": {
+        "sensitive_export": {
+          "status": "active",
+          "category": "sensitive_export"
+        }
+      }
     },
     "admin:tobacco-gift:dashboard": {
       "status": "active",
