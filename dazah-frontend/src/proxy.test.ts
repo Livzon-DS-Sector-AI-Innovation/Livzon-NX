@@ -273,3 +273,22 @@ it('blocks direct access to system permission pages for ordinary administrators'
   }))))
   expect((await proxy(sessionRequest('http://frontend.test/system/roles'))).status).toBe(403)
 })
+
+it.each([
+  { method: 'GET', path: '/settings?tab=permissions', status: 307 },
+  { method: 'HEAD', path: '/system/roles', status: 307 },
+  { method: 'POST', path: '/settings', status: 403 },
+])('uses recovery only for safe settings navigation during impersonation: $method $path', async ({ method, path, status }) => {
+  const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ data: { role: 'user' } })))
+  vi.stubGlobal('fetch', fetchMock)
+  const response = await proxy(new NextRequest(`https://frontend.test${path}`, {
+    method,
+    headers: { cookie: 'auth_token=admin-fixture; impersonation_token=simulation-fixture' },
+  }))
+  expect(response.status).toBe(status)
+  expect(response.headers.get('location')).toBe(status === 307
+    ? 'https://frontend.test/auth/impersonation?reason=system-settings'
+    : null)
+  expect(response.headers.get('cache-control')).toContain('no-store')
+  expect(new Headers(fetchMock.mock.calls[0][1].headers).get('Authorization')).toBe('Bearer simulation-fixture')
+})

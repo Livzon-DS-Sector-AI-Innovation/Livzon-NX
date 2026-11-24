@@ -254,6 +254,45 @@ test('模拟登录切换权限视角并在同一浏览器恢复管理员', async
   await expect(otherTab).not.toHaveURL(/\/purchasing\/supplier$/)
 })
 
+test('从模拟视角后退到系统设置时可继续模拟或恢复管理员', async ({ page, context, baseURL }) => {
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' })
+  await context.addCookies([{ name: 'auth_token', value: 'impersonation-admin', url: baseURL! }])
+  await page.goto('/settings?tab=permissions')
+  await page.goto(settings)
+  await page.getByRole('button', { name: '模拟登录 采购验收用户' }).click()
+  await page.getByRole('dialog', { name: '确认模拟登录' }).getByRole('button', { name: '切换身份' }).click()
+  await expect(page).toHaveURL(/\/purchasing\/supplier$/)
+
+  await page.goBack()
+  await expect(page).toHaveURL(/\/auth\/impersonation\?reason=system-settings$/)
+  const recovery = page.getByRole('main')
+  await expect(recovery.getByRole('heading', { name: '模拟登录恢复' })).toBeVisible()
+  await expect(recovery.getByText('当前模拟用户无法访问系统设置。')).toBeVisible()
+  await expect(recovery.getByText('采购验收用户')).toBeVisible()
+  const resume = recovery.getByRole('link', { name: '继续模拟' })
+  const restore = recovery.getByRole('button', { name: '返回管理员身份' })
+
+  for (const colorScheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme })
+    await page.setViewportSize({ width: colorScheme === 'light' ? 1280 : 320, height: 720 })
+    await expect(page.locator('html')).toHaveAttribute('data-theme', colorScheme)
+    await expect(resume).toBeInViewport({ ratio: 1 })
+    await expect(restore).toBeInViewport({ ratio: 1 })
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(page.viewportSize()?.width)
+  }
+
+  await resume.focus()
+  await page.keyboard.press('Enter')
+  await expect(page).toHaveURL(/\/purchasing\/supplier$/)
+  await expect(page.getByRole('banner').getByText('采购验收用户')).toBeVisible()
+
+  await page.goto(settings)
+  await expect(page).toHaveURL(/\/auth\/impersonation\?reason=system-settings$/)
+  await restore.click()
+  await expect(page).toHaveURL(/\/settings\?tab=permissions&view=impersonation$/)
+  await expect(page.getByRole('button', { name: '返回管理员身份' })).toHaveCount(0)
+})
+
 test('失效的模拟视角经明确退出恢复原管理员会话', async ({ page, context }) => {
   await context.addCookies([
     { name: 'auth_token', value: 'impersonation-admin', url: 'http://127.0.0.1:3200' },
@@ -262,6 +301,7 @@ test('失效的模拟视角经明确退出恢复原管理员会话', async ({ pa
   await page.goto('/purchasing/supplier')
   await expect(page).toHaveURL(/\/auth\/impersonation$/)
   await expect(page.getByText('模拟登录暂不可用或已结束')).toBeVisible()
+  await expect(page.getByRole('link', { name: '继续模拟' })).toHaveCount(0)
   await page.getByRole('button', { name: '返回管理员身份' }).click()
   await expect(page).toHaveURL(new RegExp('/settings\\?tab=permissions&view=impersonation$'))
 })

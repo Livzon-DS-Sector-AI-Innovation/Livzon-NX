@@ -11,10 +11,11 @@ import { finishImpersonationListReturn } from '@/lib/impersonationListState'
 import { switchWorkspaceIdentity } from './WorkspaceIdentitySync'
 import styles from './ImpersonationBanner.module.css'
 
-export function ImpersonationBanner({ name, expiresAt, inToolbar = false }: {
+export function ImpersonationBanner({ name, expiresAt, inToolbar = false, showContinue = false }: {
   name?: string
   expiresAt?: string
   inToolbar?: boolean
+  showContinue?: boolean
 }) {
   const [pending, setPending] = useState(false)
   const [error, setError] = useState('')
@@ -72,6 +73,11 @@ export function ImpersonationBanner({ name, expiresAt, inToolbar = false }: {
     {inToolbar && <span className={styles.compactLabel} aria-hidden="true">{error ? '重试' : '返回'}</span>}
   </Button>
 
+  const recoveryActions = showContinue ? <div className="flex flex-wrap gap-2">
+    <Button href="/" type="primary" size="small" disabled={pending}>继续模拟</Button>
+    {button}
+  </div> : button
+
   return <div ref={banner} className={inToolbar ? styles.toolbar : styles.container}>
     <PlatformNotice
       type="warning"
@@ -81,7 +87,7 @@ export function ImpersonationBanner({ name, expiresAt, inToolbar = false }: {
       title={title}
       action={inToolbar ? <Tooltip trigger={['hover', 'focus']} title={error || (name ? `返回管理员身份 · 当前模拟 ${name}` : '返回管理员身份')}>
         {button}
-      </Tooltip> : button}
+      </Tooltip> : recoveryActions}
     />
     <p className={inToolbar ? 'sr-only' : styles.error} aria-live="assertive">{error}</p>
   </div>

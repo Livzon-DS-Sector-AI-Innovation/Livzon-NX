@@ -7,7 +7,7 @@ import type { SubMenuItem } from '@/lib/menu-config'
 import { EQUIPMENT_CONSOLE_MODULE_HEADER, getQueryableEquipmentTabs, isEquipmentModule } from '@/lib/equipment-page-permissions'
 import type { User } from '@/types/user'
 import { isSystemAdministrator, isSystemSettingsPath } from '@/lib/administrator-role'
-import { getEffectiveToken, IMPERSONATION_COOKIE, IMPERSONATION_RECOVERY_PATH } from '@/lib/impersonation'
+import { getEffectiveToken, IMPERSONATION_COOKIE, IMPERSONATION_RECOVERY_PATH, IMPERSONATION_SETTINGS_RECOVERY_REASON } from '@/lib/impersonation'
 import { MENU_PAGE_UNAVAILABLE, PAGE_ACCESS_NOTICE_HEADER, PAGE_ACCESS_NOTICE_PATH, PAGE_NOT_FOUND, QUERY_PERMISSION_REQUIRED } from '@/lib/page-access-notice'
 
 function firstPage(items: SubMenuItem[]): string | undefined {
@@ -138,9 +138,12 @@ export async function proxy(request: NextRequest) {
       return denied('暂时无法验证页面权限，请稍后重试。', 503)
     }
     if (isSystemSettingsPath(request.nextUrl.pathname)) {
-      return isSystemAdministrator(user)
-        ? NextResponse.next({ request: { headers: requestHeaders } })
-        : denied('仅系统管理员可以进入系统设置。')
+      if (isSystemAdministrator(user)) return NextResponse.next({ request: { headers: requestHeaders } })
+      if (simulation && safeNavigation) {
+        recovery.searchParams.set('reason', IMPERSONATION_SETTINGS_RECOVERY_REASON)
+        return NextResponse.redirect(recovery, { headers: { 'Cache-Control': 'private, no-store' } })
+      }
+      return denied('仅系统管理员可以进入系统设置。')
     }
     if (!currentModule) return NextResponse.next({ request: { headers: requestHeaders } })
     if (safeNavigation) {
