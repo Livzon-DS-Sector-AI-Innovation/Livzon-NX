@@ -11,8 +11,9 @@ const actionsMock = vi.hoisted(() => ({
 
 const mocks = vi.hoisted(() => ({
   message: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
-  // 记录 Dragger 的 beforeUpload 供测试直调（绕开 rc-upload 浏览器依赖）
+  // 记录 Dragger 的 beforeUpload / onRemove 供测试直调（绕开 rc-upload 浏览器依赖）
   beforeUpload: vi.fn(),
+  onRemove: vi.fn(),
 }))
 
 vi.mock('@/actions/administration', () => actionsMock)
@@ -34,6 +35,7 @@ vi.mock('antd', async (importOriginal) => {
       ...actual.Upload,
       Dragger: (props: Record<string, unknown>) => {
         mocks.beforeUpload = props.beforeUpload as never
+        mocks.onRemove = props.onRemove as never
         return createElement(
           'div',
           { 'data-testid': 'dragger' },
@@ -164,6 +166,24 @@ describe('NoticeImportModal', () => {
     expect(mocks.message.error).not.toHaveBeenCalled()
     // 选中文件后出现确认导入与取消按钮
     expect(button('确认导入')).toBeTruthy()
+  })
+
+  it('移除已选文件：清空文件与识别结果，回到初始上传态', async () => {
+    actionsMock.parseNoticeAction.mockResolvedValue({
+      code: 200,
+      data: PREVIEW,
+    })
+    await upload(makeFile('notice.pdf'))
+    await until(() => button('确认导入') !== undefined, '确认导入按钮未出现')
+
+    await act(async () => {
+      mocks.onRemove()
+    })
+
+    await until(() => button('确认导入') === undefined, '移除文件后未清空')
+    expect(bodyText()).not.toContain('Notice-2026-001')
+    expect(bodyText()).toContain('点击或拖拽公告文件到此处')
+    expect(actionsMock.importNoticeAction).not.toHaveBeenCalled()
   })
 
   it('解析失败：提示后端错误且不预填', async () => {

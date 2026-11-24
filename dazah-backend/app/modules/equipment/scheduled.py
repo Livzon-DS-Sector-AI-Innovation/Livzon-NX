@@ -66,6 +66,36 @@ class InspectionFeishuMirrorFullSyncGenerator(TaskGenerator):
         )
 
 
+class RepairLedgerMirrorSyncGenerator(TaskGenerator):
+    """每 30 分钟镜像同步各启用车间的飞书检修台账。
+
+    检修表数据量小，采用整表拉取 + UPSERT + 删除对账的幂等全量同步；
+    每个启用车间一个任务项，单车间失败不影响其他车间。
+    """
+
+    name = "equipment.repair_ledger_mirror_sync"
+    schedule = ScheduleConfig(
+        strategy=ScheduleStrategy.INTERVAL,
+        interval_seconds=1800,
+        timezone="Asia/Shanghai",
+    )
+
+    async def find_due(self, session: AsyncSession) -> list[Any]:
+        from app.modules.equipment.service import repair_ledger
+
+        return await repair_ledger.list_enabled_workshops(session)
+
+    async def execute_one(self, session: AsyncSession, item: Any) -> None:
+        from app.modules.equipment.service import repair_ledger
+
+        workshop_code = str(item)
+        results = await repair_ledger.sync_enabled(session, workshop_code)
+        await session.commit()
+        logger.info(
+            "repair ledger mirror sync [%s]: %s", workshop_code, results
+        )
+
+
 class SparePartHardwareSyncGenerator(TaskGenerator):
     """每小时把仓储五金镜像同步到设备备件台账（按车间聚合批次）。"""
 

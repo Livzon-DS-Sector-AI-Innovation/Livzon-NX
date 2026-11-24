@@ -56,7 +56,8 @@ export function getNavigationHierarchy(module: ModuleMenu, pathname: string): {
   const trail = findMenuTrail(module.children, pathname) || []
   const matchedPath = trail.at(-1)?.path?.split("?")[0]
   const isDetail = Boolean(matchedPath && pathname !== matchedPath && pathname.startsWith(`${matchedPath}/`))
-  const isUnlistedPage = trail.length === 0 && pathname !== modulePath
+  // 工作台型模块（如设备 /equipment?module=…）的首页按路径部分比较
+  const isUnlistedPage = trail.length === 0 && pathname !== modulePath.split("?")[0]
   const levels: NavigationLevel[] = [
     { label: module.label, path: modulePath },
     ...trail.filter((level, index) => !(index === 0 && level.path === modulePath)),

@@ -10,6 +10,7 @@ import {
   moduleMenus,
   type PageAccessSummary,
 } from './menu-config'
+import { EQUIPMENT_MODULES } from './equipment-page-permissions'
 
 describe('page permission menu boundary', () => {
   it.each([
@@ -414,35 +415,29 @@ describe('production menu structure', () => {
 })
 
 describe('equipment menu structure', () => {
-  it('collapses the equipment module to the stats page plus the unified console', () => {
+  it('exposes each equipment console module as its own sidebar entry', () => {
     const equipment = moduleMenus.find((menu) => menu.key === 'equipment')
 
-    // 统一工作台：车间块 + 功能模块 Tab 都在页内；功能页 key 仍是授权实体
-    expect(equipment?.children.map((item) => item.key)).toEqual([
-      'stats',
-      'console',
-      'feishu-config',
-      'workshop-admin',
+    // 左侧菜单：设备巡检 / 设备检修 / 设备台账，各自直达对应功能模块
+    expect(equipment?.children.map((item) => [item.key, item.label, item.path])).toEqual([
+      ['inspection', '设备巡检', '/equipment?module=inspection'],
+      ['maintenance', '设备检修', '/equipment?module=maintenance'],
+      ['assets', '设备台账', '/equipment?module=assets'],
     ])
-    expect(equipment?.children.map((item) => item.path)).toEqual([
-      '/equipment/stats',
-      '/equipment',
-      '/equipment/feishu-config',
-      '/equipment/workshop-admin',
-    ])
-    const console = equipment?.children.find((item) => item.key === 'console')
-    expect(console?.anyOfPageKeys).toEqual([
-      'equipment:assets',
-      'equipment:maintenance',
-      'equipment:inspection',
-      'equipment:spare-parts',
-      'equipment:personnel',
-    ])
+    // 切换功能入口时沿用当前车间
+    expect(equipment?.children.every((item) => item.carryQuery?.includes('workshop'))).toBe(true)
+    // 与工作台功能模块定义保持同一顺序与授权 key
+    expect(equipment?.children.map((item) => item.key)).toEqual(EQUIPMENT_MODULES.map((item) => item.key.replace('equipment:', '')))
+    expect(equipment?.children.map((item) => item.label)).toEqual(EQUIPMENT_MODULES.map((item) => item.label))
   })
 
   it.each([
-    // 工作台根按聚合入口解析；旧功能页与旧车间子路径仍解析到功能页 key（由路由层重定向到工作台）
+    // 工作台根路径不是权限页：按任一功能模块授权放行，具体模块按 ?module= 解析
     ['/equipment', 'equipment:console'],
+    ['/equipment?module=inspection', 'equipment:inspection'],
+    ['/equipment?module=maintenance', 'equipment:maintenance'],
+    ['/equipment?module=assets', 'equipment:assets'],
+    // 旧功能页与旧车间子路径仍按原功能页 key 解析（路由层重定向到工作台）
     ['/equipment/assets', 'equipment:assets'],
     ['/equipment/assets/101-1', 'equipment:assets'],
     ['/equipment/assets/201-1', 'equipment:assets'],
@@ -451,7 +446,6 @@ describe('equipment menu structure', () => {
     ['/equipment/inspection/201-3', 'equipment:inspection'],
     ['/equipment/spare-parts/101-1', 'equipment:spare-parts'],
     ['/equipment/personnel/101-1', 'equipment:personnel'],
-    ['/equipment/stats', 'equipment:stats'],
   ])('maps the equipment pages to functional permission keys: %s', (path, pageKey) => {
     expect(getPageKeyByPath(path)).toBe(pageKey)
   })
@@ -485,14 +479,32 @@ describe('equipment menu structure', () => {
       { page_key: 'equipment:workshop-201-1:inspection-201-1', module_code: 'equipment', permissions: ['access', 'query', 'operate'] },
     ])
     const equipment = menus.find((menu) => menu.key === 'equipment')
-    // 巡检叶授权投影到 equipment:inspection，聚合入口 console 因任一模块授权而可见
-    expect(equipment?.children?.map((item) => item.key)).toEqual(['console'])
+    // 巡检叶授权投影到 equipment:inspection，左侧只出现对应的「设备巡检」入口
+    expect(equipment?.children?.map((item) => item.key)).toEqual(['inspection'])
     expect(getFirstAuthorizedModulePath({
       role: 'user',
       page_permissions: [
         { page_key: 'equipment:workshop-201-1:inspection-201-1', module_code: 'equipment', permissions: ['access', 'query'] },
       ],
-    })).toBe('/equipment')
+    })).toBe('/equipment?module=inspection')
+  })
+
+  it('lets a user who only holds the ledger grant see and enter the ledger module', () => {
+    const user: Parameters<typeof getFirstAuthorizedModulePath>[0] = {
+      role: 'user',
+      page_permissions: [
+        { page_key: 'equipment:assets', module_code: 'equipment', permissions: ['access', 'query'] },
+      ],
+    }
+    const equipment = getAuthorizedPageMenus([], user.page_permissions).find((menu) => menu.key === 'equipment')
+    // 三个入口各看各的授权：没有巡检/检修授权就不出现
+    expect(equipment?.children.map((item) => item.key)).toEqual(['assets'])
+    expect(getFirstAuthorizedModulePath(user)).toBe('/equipment?module=assets')
+    // 深链：工作台根路径按任一模块授权放行，具体模块按 ?module= 对应的授权校验
+    expect(getPageKeyByPath('/equipment')).toBe('equipment:console')
+    expect(getPostLoginPath(user, '/equipment?workshop=101-1&module=assets')).toBe('/equipment?workshop=101-1&module=assets')
+    expect(getPostLoginPath(user, '/equipment?workshop=101-1&module=inspection')).toBe('/equipment?module=assets')
+    expect(getPostLoginPath(user, '/equipment?workshop=101-1')).toBe('/equipment?workshop=101-1')
   })
 })
 

@@ -223,3 +223,162 @@ describe('DormitoryCheckinModal 错误分支', () => {
     expect(onClose).not.toHaveBeenCalled()
   }, 15000)
 })
+
+describe('DormitoryCheckinModal 选房、作废推荐与关闭', () => {
+  const TWO_ROOMS = {
+    recommendations: [
+      { room_no: '201-2-301', dorm_type: '男生宿舍', room_type: '两人间', vacant_beds: 1, reason: '同部门集中' },
+      { room_no: '201-2-302', dorm_type: '男生宿舍', room_type: '两人间', vacant_beds: 2, reason: '同部门集中' },
+    ],
+    message: '',
+    source: 'ai',
+  }
+
+  /** 轮询到条件成立（Modal 内容与异步推荐结果依赖真实定时器）。 */
+  async function until(condition: () => boolean, message: string) {
+    for (let i = 0; i < 80; i += 1) {
+      if (condition()) return
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 25))
+      })
+    }
+    throw new Error(message)
+  }
+
+  function radio(value: string): HTMLInputElement | null {
+    return document.body.querySelector<HTMLInputElement>(`input[type="radio"][value="${value}"]`)
+  }
+
+  function confirmButton(): HTMLButtonElement {
+    const button = buttons('确认办理入住')[0]
+    expect(button).toBeTruthy()
+    return button!
+  }
+
+  function inputWithPlaceholder(fragment: string): HTMLInputElement {
+    const input = Array.from(document.body.querySelectorAll<HTMLInputElement>('input')).find((node) =>
+      node.getAttribute('placeholder')?.includes(fragment),
+    )
+    expect(input).toBeTruthy()
+    return input!
+  }
+
+  async function typeInto(input: HTMLInputElement, value: string) {
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set!.call(input, value)
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+  }
+
+  async function renderWithCallbacks() {
+    const onClose = vi.fn()
+    const onCheckedin = vi.fn()
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+    act(() => {
+      root!.render(
+        <AntApp>
+          <DormitoryCheckinModal open onClose={onClose} onCheckedin={onCheckedin} />
+        </AntApp>,
+      )
+    })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 30))
+    })
+    return { onClose, onCheckedin }
+  }
+
+  async function recommendTwoRooms() {
+    mocks.recommend.mockResolvedValue(TWO_ROOMS)
+    await act(async () => {
+      buttons('获取 AI 房间推荐')[0]?.click()
+    })
+    await until(() => radio('201-2-302') !== null, '推荐房间未渲染')
+    // 多个候选时不自动选中：必须由用户选定
+    expect(confirmButton().disabled).toBe(true)
+  }
+
+  it('多候选：手动选定房间后按所选房间提交', async () => {
+    mocks.checkin.mockResolvedValue({ room_no: '201-2-302', synced: false })
+    const { onCheckedin, onClose } = await renderWithCallbacks()
+    await recommendTwoRooms()
+
+    await act(async () => {
+      radio('201-2-302')?.click()
+    })
+    expect(confirmButton().disabled).toBe(false)
+
+    await act(async () => {
+      confirmButton().click()
+    })
+
+    await until(() => mocks.checkin.mock.calls.length > 0, '未提交入住')
+    expect(mocks.checkin).toHaveBeenCalledWith(
+      'administration',
+      expect.objectContaining({ room_no: '201-2-302' }),
+    )
+    expect(mocks.message.success).toHaveBeenCalledWith(
+      '已办理入住：201-2-302（台账将在数分钟内同步）',
+    )
+    expect(onCheckedin).toHaveBeenCalled()
+    expect(onClose).toHaveBeenCalled()
+  }, 15000)
+
+  it('修改性别：作废已有推荐，确认按钮回到禁用', async () => {
+    mocks.recommend.mockResolvedValue({
+      recommendations: [{ room_no: '201-2-301' }],
+      message: '',
+      source: 'ai',
+    })
+    await renderWithCallbacks()
+    await act(async () => {
+      buttons('获取 AI 房间推荐')[0]?.click()
+    })
+    // 单候选自动选中
+    await until(() => confirmButton().disabled === false, '单候选未自动选中')
+
+    await act(async () => {
+      radio('女')?.click()
+    })
+
+    await until(
+      () => document.body.textContent?.includes('201-2-301') === false,
+      '修改性别后未作废推荐',
+    )
+    expect(confirmButton().disabled).toBe(true)
+  })
+
+  it('修改岗位：作废已有推荐', async () => {
+    mocks.recommend.mockResolvedValue({
+      recommendations: [{ room_no: '201-2-301' }],
+      message: '',
+      source: 'ai',
+    })
+    await renderWithCallbacks()
+    await act(async () => {
+      buttons('获取 AI 房间推荐')[0]?.click()
+    })
+    await until(() => confirmButton().disabled === false, '单候选未自动选中')
+
+    await typeInto(inputWithPlaceholder('主管'), '工艺员')
+
+    await until(
+      () => document.body.textContent?.includes('201-2-301') === false,
+      '修改岗位后未作废推荐',
+    )
+    expect(confirmButton().disabled).toBe(true)
+  })
+
+  it('点击弹窗关闭按钮：通知父级关闭且不提交', async () => {
+    const { onClose, onCheckedin } = await renderWithCallbacks()
+
+    await act(async () => {
+      document.body.querySelector<HTMLElement>('.ant-modal-close')?.click()
+    })
+
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(mocks.checkin).not.toHaveBeenCalled()
+    expect(onCheckedin).not.toHaveBeenCalled()
+  })
+})

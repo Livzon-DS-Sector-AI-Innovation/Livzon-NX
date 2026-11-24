@@ -276,6 +276,29 @@ describe('TobaccoGiftDashboard AI analysis', () => {
     expect(container.textContent).toContain('物品品类')
   })
 
+  it('falls back to the default message when the action throws unexpectedly', async () => {
+    // Server Action 本应返回结构化结果；这里模拟传输层直接抛出
+    aiAction.generate.mockRejectedValue(new TypeError('Failed to fetch'))
+    const container = render(<TobaccoGiftDashboard stats={stats} />)
+    const button = findButton(container, 'AI 分析')
+
+    await act(async () => {
+      button!.click()
+    })
+    await flushUntil(container, 'AI 分析生成失败')
+
+    // 完整原因收进「了解访问规则」弹窗：网络类异常显示统一文案
+    const rulesEntry = findButton(container, '了解访问规则')
+    expect(rulesEntry).toBeDefined()
+    await act(async () => {
+      rulesEntry!.click()
+    })
+    // 说明弹窗挂在 body 的 portal 上
+    await flushUntil(document.body, '网络连接失败，请检查网络后重试')
+    expect(document.body.textContent).toContain('网络连接失败，请检查网络后重试')
+    expect(container.textContent).not.toContain('关键发现')
+  })
+
   it('hides the result card until the first generation', () => {
     const container = render(<TobaccoGiftDashboard stats={stats} />)
     expect(container.textContent).not.toContain('仅供参考，不替代人工核对')

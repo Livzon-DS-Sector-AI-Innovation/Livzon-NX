@@ -24,24 +24,24 @@ export type EquipmentPageKey = (typeof EQUIPMENT_PAGE_KEYS)[keyof typeof EQUIPME
 export const EQUIPMENT_CONSOLE_MODULE_HEADER = 'X-Dazah-Equipment-Module'
 
 /**
- * 统一工作台内的功能模块 Tab（展示顺序即数组顺序）：
+ * 统一工作台的功能模块（展示顺序即数组顺序）：左侧菜单各占一项，
  * module 对应 /equipment?module= 参数，key 即页面授权 key。
+ * 备件/人员模块已下线，权限 key 保留；设备检修沿用原「维护」授权 key
+ * （equipment:maintenance），无需重新授权。
  */
-export const EQUIPMENT_MODULE_TABS = [
-  { module: 'assets', key: 'equipment:assets', label: '设备台账' },
-  { module: 'maintenance', key: 'equipment:maintenance', label: '维护保养' },
+export const EQUIPMENT_MODULES = [
   { module: 'inspection', key: 'equipment:inspection', label: '设备巡检' },
-  { module: 'spare-parts', key: 'equipment:spare-parts', label: '备件管理' },
-  { module: 'personnel', key: 'equipment:personnel', label: '人员配置' },
+  { module: 'maintenance', key: 'equipment:maintenance', label: '设备检修' },
+  { module: 'assets', key: 'equipment:assets', label: '设备台账' },
 ] as const
 
-export type EquipmentModule = (typeof EQUIPMENT_MODULE_TABS)[number]['module']
+export type EquipmentModule = (typeof EQUIPMENT_MODULES)[number]['module']
 
 /** URL ?module= 参数是否为已知功能模块。 */
 export function isEquipmentModule(
   value: string | null | undefined,
 ): value is EquipmentModule {
-  return EQUIPMENT_MODULE_TABS.some((tab) => tab.module === value)
+  return EQUIPMENT_MODULES.some((item) => item.module === value)
 }
 
 type EquipmentPermissionUser = Pick<AuthUser, 'id' | 'role'> & {
@@ -98,13 +98,24 @@ export function hasEquipmentPageAccess(
 export function hasAnyEquipmentModuleAccess(
   user: EquipmentPermissionUser | null | undefined,
 ): boolean {
-  return EQUIPMENT_MODULE_TABS.some((tab) => hasEquipmentPageAccess(user, tab.key))
+  return EQUIPMENT_MODULES.some((item) => hasEquipmentPageAccess(user, item.key))
 }
 
+/** 当前用户可进入的首个功能模块（按菜单顺序）；未带 ?module= 进入工作台时的落地模块。 */
+export function firstAccessibleEquipmentModule(
+  user: EquipmentPermissionUser | null | undefined,
+): EquipmentModule {
+  return (
+    EQUIPMENT_MODULES.find((item) => hasEquipmentPageAccess(user, item.key))?.module
+    ?? EQUIPMENT_MODULES[0].module
+  )
+}
+
+/** 当前用户可查询（access + query）的功能模块；无查询权限时页面只呈现访问提示。 */
 export function getQueryableEquipmentTabs(user: EquipmentPermissionUser | null | undefined) {
-  if (user?.role === 'admin') return EQUIPMENT_MODULE_TABS
+  if (user?.role === 'admin') return EQUIPMENT_MODULES
   const grants = expandedGrants(user)
-  return EQUIPMENT_MODULE_TABS.filter(({ key }) => grants.some((grant) =>
+  return EQUIPMENT_MODULES.filter(({ key }) => grants.some((grant) =>
     grant.page_key === key && grant.permissions?.includes('access') && grant.permissions.includes('query'),
   ))
 }

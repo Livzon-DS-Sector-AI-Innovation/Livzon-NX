@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
 import { renderToStaticMarkup } from "react-dom/server"
-import type { ModuleMenu } from "@/lib/menu-config"
+import { moduleMenus, type ModuleMenu } from "@/lib/menu-config"
 
 const navigation = vi.hoisted(() => ({ pathname: "/production/batches/workshop/101-1", query: "" }))
 
@@ -30,6 +30,15 @@ describe("PageNavigation", () => {
     expect(html).toContain("展开批次管理菜单")
     expect(html).not.toContain("返回上一级")
     expect(html).not.toContain("返回模块入口")
+  })
+
+  it("renders no breadcrumb on the equipment console: the sidebar already lists its modules", () => {
+    navigation.pathname = "/equipment"
+    navigation.query = "workshop=101-1&module=maintenance"
+    const equipment = moduleMenus.find((item) => item.key === "equipment")!
+    expect(renderToStaticMarkup(<PageNavigation modules={[equipment]} />)).toBe("")
+    navigation.pathname = "/production/batches/workshop/101-1"
+    navigation.query = ""
   })
 
   it("restores list filters through the breadcrumb on a detail page", () => {

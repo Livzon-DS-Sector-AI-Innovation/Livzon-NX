@@ -34,20 +34,32 @@ function matchesMenuPath(itemPath: string, pathname: string, query: URLSearchPar
   return pathname === parsed.pathname || pathname.startsWith(parsed.pathname + "/")
 }
 
-// ── 构建 key → path 映射（叶子节点 key 唯一，path 可重复）──
-function buildKeyPathMap(items: SubMenuItem[]): Map<string, string> {
-  const map = new Map<string, string>()
+// ── 构建 key → 菜单项映射（叶子节点 key 唯一，path 可重复）──
+function buildKeyItemMap(items: SubMenuItem[]): Map<string, SubMenuItem> {
+  const map = new Map<string, SubMenuItem>()
   for (const item of items) {
     if (item.children && item.children.length > 0) {
-      const childMap = buildKeyPathMap(item.children)
-      childMap.forEach((v, k) => map.set(k, v))
+      const childMap = buildKeyItemMap(item.children)
+      childMap.forEach((value, key) => map.set(key, value))
     }
     // 叶子与带 path 的父级（如仓储三个仪表盘入口）均可点击导航
     if (item.path) {
-      map.set(item.key, item.path)
+      map.set(item.key, item)
     }
   }
   return map
+}
+
+// ── 解析点击目标：沿用入口声明的当前地址参数 ──
+// 如设备工作台的三个功能入口都带 ?workshop=，切换功能时保持当前车间
+function resolveTargetPath(item: SubMenuItem, query: URLSearchParams): string | undefined {
+  if (!item.path) return undefined
+  const parsed = parseMenuPath(item.path)
+  for (const key of item.carryQuery ?? []) {
+    const current = query.get(key)
+    if (current !== null && !parsed.query.has(key)) parsed.query.set(key, current)
+  }
+  return parsed.query.size > 0 ? `${parsed.pathname}?${parsed.query.toString()}` : parsed.pathname
 }
 
 // ── 递归构建 Ant Design 菜单项 ──
@@ -251,6 +263,14 @@ export function Sidebar({ user, modules }: SidebarProps) {
     () => splitMenuItemsByPlacement(moduleChildren),
     [moduleChildren],
   )
+  // 模块首页：模块路径自身是菜单入口时直接用它；工作台型模块（子入口带
+  // carryQuery，如设备）没有独立首页，落到首个子入口并沿用当前车间
+  const moduleHomePath = useMemo(() => {
+    if (!currentModule) return ''
+    if (currentModule.children.some((item) => item.path === currentModule.path)) return currentModule.path
+    const first = moduleChildren.find((item) => item.path && !item.disabled && item.carryQuery?.length)
+    return (first && resolveTargetPath(first, query)) || currentModule.path
+  }, [currentModule, moduleChildren, query])
   const navigateTo = (path: string) => {
     if (path === currentHref) return
     setOpenKeys([])
@@ -268,7 +288,7 @@ export function Sidebar({ user, modules }: SidebarProps) {
   }
   const menuItems = buildMenuItems(mainItems, moduleKey, prefetchPath, navigateParent, handleParentTitleClick)
   const bottomMenuItems = buildMenuItems(bottomItems, moduleKey, prefetchPath, navigateParent, handleParentTitleClick)
-  const keyPathMap = buildKeyPathMap(moduleChildren)
+  const keyItemMap = buildKeyItemMap(moduleChildren)
   const selectedKey = currentModule
     ? findSelectedKey(moduleChildren, pathname, query)
     : undefined
@@ -277,7 +297,8 @@ export function Sidebar({ user, modules }: SidebarProps) {
   }
 
   const handleClick: MenuProps['onClick'] = ({ key }) => {
-    const path = keyPathMap.get(key)
+    const item = keyItemMap.get(key)
+    const path = item && resolveTargetPath(item, query)
     if (path) navigateTo(path)
   }
 
@@ -291,16 +312,16 @@ export function Sidebar({ user, modules }: SidebarProps) {
         : "mx-3 flex h-14 items-center justify-between gap-1 border-b border-[var(--color-hairline-soft)]"}>
         {!collapsed && <h2 className="min-w-0 text-[18px] font-semibold leading-6">
           <Link
-            href={currentModule.path}
+            href={moduleHomePath}
             aria-label={`返回${currentModule.label}首页`}
             title={`点击返回${currentModule.label}首页`}
             onClick={(event) => {
               if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
               event.preventDefault()
-              navigateTo(currentModule.path)
+              navigateTo(moduleHomePath)
             }}
-            onMouseEnter={() => prefetchPath(currentModule.path)}
-            onFocus={() => prefetchPath(currentModule.path)}
+            onMouseEnter={() => prefetchPath(moduleHomePath)}
+            onFocus={() => prefetchPath(moduleHomePath)}
             className="sidebar-module-title inline-flex min-h-9 max-w-full cursor-pointer items-center gap-2 rounded-[var(--rounded-sm)] px-1.5 transition-colors hover:bg-[var(--color-surface)] focus-visible:outline-2 focus-visible:outline-[var(--color-primary)] focus-visible:outline-offset-2"
           >
             <span aria-hidden="true" className="h-5 w-[3px] shrink-0 rounded-full bg-[var(--color-primary)]" />

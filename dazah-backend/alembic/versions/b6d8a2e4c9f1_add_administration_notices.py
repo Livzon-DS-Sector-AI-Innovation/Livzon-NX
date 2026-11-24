@@ -6,7 +6,7 @@
 只拼元数据，避免关键字搜索泄露内容线索。
 
 Revision ID: b6d8a2e4c9f1
-Revises: f9a3d5c7e1b2
+Revises: b098d78d072c
 Create Date: 2026-11-23 10:00:00.000000
 """
 
@@ -20,7 +20,7 @@ from sqlalchemy.dialects import postgresql
 from alembic import op
 
 revision: str = "b6d8a2e4c9f1"
-down_revision: str | None = "698173f2428c"
+down_revision: str | None = "b098d78d072c"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

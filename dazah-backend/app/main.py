@@ -222,6 +222,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     from app.modules.equipment.scheduled import (
         EquipmentHealthSnapshotGenerator,
         EquipmentMonthlyHealthReportGenerator,
+        RepairLedgerMirrorSyncGenerator,
         SparePartPurchaseScanGenerator,
         InspectionFeishuMirrorFullSyncGenerator,
         InspectionFeishuMirrorSyncGenerator,
@@ -275,6 +276,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     scheduler_registry.register_generator(ProductionPlanFeishuSyncGenerator())
     scheduler_registry.register_generator(InspectionFeishuMirrorSyncGenerator())
     scheduler_registry.register_generator(InspectionFeishuMirrorFullSyncGenerator())
+    scheduler_registry.register_generator(RepairLedgerMirrorSyncGenerator())
     scheduler_registry.register_generator(SparePartHardwareSyncGenerator())
     scheduler_registry.register_generator(EquipmentHealthSnapshotGenerator())
     scheduler_registry.register_generator(SparePartPurchaseScanGenerator())

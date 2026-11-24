@@ -1,9 +1,10 @@
 'use client'
 
-// 设备统一工作台顶部的车间切换块（复刻生产模块产线块样式）：
+// 设备工作台顶部的车间切换块（复刻生产模块产线块样式）：
 // 数据以 URL query ?workshop= 为准（服务端取数、可分享），store 跨页记忆
 // 上次选择——无参数进入时自动补上；切换车间保留当前 ?module= 功能模块；
 // 非管理员按当前模块授权的 visible_sections 过滤车间。
+// 功能模块由左侧菜单切换（/equipment?module=），切换时沿用当前车间。
 // 车间清单来自车间注册表接口（车间管理页维护），失败回落内置常量。
 
 import { useEffect } from 'react'
@@ -36,6 +37,8 @@ const WORKSHOP_COLORS: Record<string, string> = {
   '203': '#d4b106',
 }
 const DEFAULT_WORKSHOP_COLOR = '#5667a3'
+// 默认车间（与设备工作台页面的服务端兜底一致）
+const DEFAULT_WORKSHOP_CODE = '201-1'
 
 interface WorkshopNavBlocksProps {
   /** 当前功能页 key，用于按授权过滤不可见车间 */
@@ -60,14 +63,24 @@ export function WorkshopNavBlocks({ pageKey }: WorkshopNavBlocksProps) {
   const moduleQuery = searchParams.get('module')
   const moduleSuffix = moduleQuery ? `&module=${encodeURIComponent(moduleQuery)}` : ''
 
-  // 无参数进入：跳到上次选择的车间（有记忆且非缺省时）
+  // 无参数进入：沿用上次选择的车间；记忆车间在当前模块不可见时退到默认车间
+  // （默认也不可见则取首个可见车间），保证页面内容与高亮的车间块一致
   useEffect(() => {
     if (urlWorkshop) return
+    const codes = workshops
+      .filter((ws) => hasEquipmentWorkshopAccess(user, pageKey, ws.code))
+      .map((ws) => ws.code)
+    if (codes.length === 0) return
     const saved = useEquipmentWorkshopStore.getState().workshopCode
-    if (saved !== '201-1') {
-      router.replace(`${pathname}?workshop=${encodeURIComponent(saved)}${moduleSuffix}`, { scroll: false })
+    const target = codes.includes(saved)
+      ? saved
+      : codes.includes(DEFAULT_WORKSHOP_CODE)
+        ? DEFAULT_WORKSHOP_CODE
+        : codes[0]
+    if (target !== DEFAULT_WORKSHOP_CODE) {
+      router.replace(`${pathname}?workshop=${encodeURIComponent(target)}${moduleSuffix}`, { scroll: false })
     }
-  }, [urlWorkshop, pathname, router, moduleSuffix])
+  }, [urlWorkshop, pathname, router, moduleSuffix, workshops, user, pageKey])
 
   const visible = workshops.filter((ws) =>
     hasEquipmentWorkshopAccess(user, pageKey, ws.code),

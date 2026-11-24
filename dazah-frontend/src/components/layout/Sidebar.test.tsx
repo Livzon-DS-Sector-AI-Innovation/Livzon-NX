@@ -6,7 +6,7 @@ import { act, createElement, type ReactNode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import type { ModuleMenu, SubMenuItem } from '@/lib/menu-config'
+import { moduleMenus, type ModuleMenu, type SubMenuItem } from '@/lib/menu-config'
 import type { User } from '@/types/user'
 
 const navigation = vi.hoisted(() => ({
@@ -384,6 +384,72 @@ describe('Sidebar dashboard entries', () => {
       expect(navigation.push).not.toHaveBeenCalledWith('/quality/inspection')
     } finally {
       await act(async () => root.unmount())
+    }
+  })
+})
+
+describe('Sidebar equipment console entries', () => {
+  const equipment = moduleMenus.find((menu) => menu.key === 'equipment')!
+  const renderSidebar = async () => {
+    vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+    const host = document.createElement('div')
+    document.body.append(host)
+    const root = createRoot(host)
+    await act(async () => root.render(createElement(Sidebar, { user: { ...user, role: 'admin' }, modules: [equipment] })))
+    return { host, unmount: () => act(async () => root.unmount()) }
+  }
+  const menuKeys = (host: HTMLElement) =>
+    Array.from(host.querySelectorAll('[data-menu-key]')).map((node) => node.getAttribute('data-menu-key'))
+
+  it('lists inspection, repair and ledger in order and highlights the active module', async () => {
+    navigation.pathname = '/equipment'
+    navigation.searchParams = new URLSearchParams('workshop=101-1&module=maintenance')
+    const { host, unmount } = await renderSidebar()
+    try {
+      expect(menuKeys(host)).toEqual(['inspection', 'maintenance', 'assets'])
+      expect(Array.from(host.querySelectorAll('[data-menu-key]')).map((node) => node.textContent))
+        .toEqual(['设备巡检', '设备检修', '设备台账'])
+      expect(host.querySelector('[data-selected-keys="maintenance"]')).not.toBeNull()
+    } finally {
+      await unmount()
+    }
+  })
+
+  it('keeps the current workshop when switching to another equipment module', async () => {
+    navigation.pathname = '/equipment'
+    navigation.searchParams = new URLSearchParams('workshop=101-1&module=inspection')
+    const { host, unmount } = await renderSidebar()
+    try {
+      await act(async () => host.querySelector<HTMLButtonElement>('[data-menu-key="assets"]')?.click())
+      expect(navigation.push).toHaveBeenCalledWith('/equipment?module=assets&workshop=101-1')
+    } finally {
+      await unmount()
+    }
+  })
+
+  it('enters a module without inventing a workshop when the current URL has none', async () => {
+    navigation.pathname = '/equipment'
+    navigation.searchParams = new URLSearchParams('module=inspection')
+    const { host, unmount } = await renderSidebar()
+    try {
+      await act(async () => host.querySelector<HTMLButtonElement>('[data-menu-key="maintenance"]')?.click())
+      expect(navigation.push).toHaveBeenCalledWith('/equipment?module=maintenance')
+    } finally {
+      await unmount()
+    }
+  })
+
+  it('links the module title to the first module entry and keeps the workshop', async () => {
+    navigation.pathname = '/equipment'
+    navigation.searchParams = new URLSearchParams('workshop=103&module=assets')
+    const { host, unmount } = await renderSidebar()
+    try {
+      const title = host.querySelector<HTMLAnchorElement>('a[aria-label="返回设备管理首页"]')
+      expect(title?.getAttribute('href')).toBe('/equipment?module=inspection&workshop=103')
+      await act(async () => title?.click())
+      expect(navigation.push).toHaveBeenCalledWith('/equipment?module=inspection&workshop=103')
+    } finally {
+      await unmount()
     }
   })
 })

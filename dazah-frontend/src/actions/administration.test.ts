@@ -228,4 +228,13 @@ describe('notice upload actions', () => {
     expect(result.message).toContain('暂不可用')
     expect(result.data).toBeUndefined()
   })
+
+  it('reports an unreachable backend as a coded envelope instead of throwing', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')))
+
+    const result = await parseNoticeAction(new File(['x'], '公告.pdf'))
+
+    expect(result).toEqual({ code: -1, message: '网络请求失败，无法连接到后端服务' })
+    expect(mocks.revalidatePath).not.toHaveBeenCalled()
+  })
 })
