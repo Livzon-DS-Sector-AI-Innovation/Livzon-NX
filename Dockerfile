@@ -102,6 +102,10 @@ ENV NODE_ENV=production \
     HOSTNAME=0.0.0.0 \
     PORT=3000
 
+# The standalone server starts with Node and does not need npm or npx.
+RUN rm -rf /usr/local/lib/node_modules/npm \
+    && rm -f /usr/local/bin/npm /usr/local/bin/npx
+
 COPY --from=frontend-builder --chown=node:node /app/.next/standalone ./
 COPY --from=frontend-builder --chown=node:node /app/.next/static ./.next/static
 COPY --from=frontend-builder --chown=node:node /app/public ./public

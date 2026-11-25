@@ -19,6 +19,15 @@ def test_frontend_compiler_has_a_build_only_api_origin_without_runtime_fallback(
     assert "API_BASE_URL" not in runtime
 
 
+def test_frontend_runtime_excludes_npm_and_uses_node_directly() -> None:
+    dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+    runtime = dockerfile.split(" AS frontend\n", 1)[1].split("\nFROM ", 1)[0]
+
+    assert "rm -rf /usr/local/lib/node_modules/npm" in runtime
+    assert "rm -f /usr/local/bin/npm /usr/local/bin/npx" in runtime
+    assert 'CMD ["node", "server.js"]' in runtime
+
+
 HARNESS = r"""
 param(
   [string]$TestScript,
