@@ -56,7 +56,7 @@ from app.platform.identity.models import User
 
 logger = logging.getLogger(__name__)
 
-FORM_TTL_SECONDS = 1800
+FORM_TTL_SECONDS = 86400  # 24h：手机流程中途放下再回来不作废
 
 _INTENT_KEYWORDS: tuple[tuple[str, str], ...] = (
     ("动火", "hot_work"),
@@ -246,8 +246,10 @@ class ChatFlowService:
             state["summary_message_id"] = message_id
         await self._save_state(state)
         if next_s == 2:
-            # 进入人员阶段：装载全量证书名单，游标归零（每岗位一卡）
-            await self._load_cert_roster(values)
+            # 进入人员阶段：游标归零（每岗位一卡）。
+            # 证书候选改为关键字搜索后按需装载（cert_matches ≤10 条），
+            # 不再全量装载 200 条进状态（大卡导致手机渲染失败与卡顿）
+            values.pop("cert_matches", None)
             values["person_role_idx"] = 0
             await self._save_state(state)
             return build_step_card(
@@ -356,40 +358,56 @@ class ChatFlowService:
             return by_name.scalar_one_or_none()
         return None
 
-    async def _load_cert_roster(self, values: dict[str, Any]) -> None:
-        """装载有效特种作业证书名单（第②步人员下拉选项）。"""
-        from app.modules.safety.models import SpecialWorkCertificate
-        from app.modules.safety.service.work_permit_templates import (
-            CERTIFICATE_CATEGORIES,
-        )
+    async def search_cert(
+        self, permit_type: str, person_role_idx: int, keyword: str
+    ) -> dict[str, Any]:
+        """第②步按姓名关键字搜索持证人员（≤10 条候选），重渲染本岗位卡。
 
-        cat_labels = {c["value"]: c["label"] for c in CERTIFICATE_CATEGORIES}
+        候选存 values["cert_matches"]，保存时经 person__{role} 下拉合并；
+        不再全量装载名单（169 选项大卡在手机端渲染失败且拖慢每步响应）。
+        """
+        from app.modules.safety.models import SpecialWorkCertificate
+
+        state = await self._load_state(permit_type)
+        if state is None:
+            raise AppException(status_code=410, message="表单已过期，请重新发起")
+        template = get_template(permit_type)
+        roles = list(template.person_roles)
+        idx = max(0, min(int(person_role_idx), len(roles) - 1))
+        values = state.setdefault("values", {})
+
+        kw = (keyword or "").strip()
+        stmt = select(SpecialWorkCertificate).where(
+            SpecialWorkCertificate.is_deleted.is_(False),
+            SpecialWorkCertificate.status.in_(("valid", "expiring")),
+        )
+        if kw:
+            stmt = stmt.where(SpecialWorkCertificate.person_name.ilike(f"%{kw}%"))
         rows = (
             (
                 await self.db.execute(
-                    select(SpecialWorkCertificate)
-                    .where(
-                        SpecialWorkCertificate.is_deleted.is_(False),
-                        SpecialWorkCertificate.status.in_(("valid", "expiring")),
-                    )
-                    .order_by(
+                    stmt.order_by(
                         SpecialWorkCertificate.person_name,
                         SpecialWorkCertificate.expiry_date.desc(),
-                    )
-                    .limit(200)
+                    ).limit(10)
                 )
             )
             .scalars()
             .all()
         )
-        roster: list[dict[str, str]] = []
+        from app.modules.safety.service.work_permit_templates import (
+            CERTIFICATE_CATEGORIES,
+        )
+
+        cat_labels = {c["value"]: c["label"] for c in CERTIFICATE_CATEGORIES}
+        matches: list[dict[str, str]] = []
         seen: set[tuple[str, str]] = set()
         for c in rows:
-            key = (c.person_name, c.certificate_no or "")
-            if key in seen:
+            dedupe = (c.person_name, c.certificate_no or "")
+            if dedupe in seen:
                 continue
-            seen.add(key)
-            roster.append(
+            seen.add(dedupe)
+            matches.append(
                 {
                     "id": str(c.id),
                     "name": c.person_name,
@@ -403,87 +421,17 @@ class ChatFlowService:
                     ),
                 }
             )
-        values["cert_roster"] = roster
-        # cat_labels 保留给网关外场景（当前未使用，避免未用告警）
-        _ = cat_labels
-
-    async def search_role_persons(
-        self, permit_type: str, role_key: str, kw: str
-    ) -> dict[str, Any]:
-        """第②步按姓名关键字搜索该岗位持证人员（结果以按钮渲染）。"""
-        state = await self._load_state(permit_type)
-        if state is None:
-            raise AppException(status_code=410, message="表单已过期，请重新发起")
-        values = state.setdefault("values", {})
-        keyword = (kw or "").strip()
-        roster = values.get("cert_roster") or []
-        if keyword:
-            from app.modules.safety.service.work_permit_templates import (
-                PERSON_ROLE_CERT_CATEGORIES,
-            )
-
-            cats = PERSON_ROLE_CERT_CATEGORIES.get(role_key) or ()
-            matched = [
-                r
-                for r in roster
-                if keyword in str(r.get("name") or "")
-                or keyword in str(r.get("no") or "")
-            ]
-            matched.sort(key=lambda r: 0 if str(r.get("cat")) in cats else 1)
+        values["cert_matches"] = matches
+        if not matches:
+            values["cert_matches_empty"] = True
         else:
-            matched = []
-        values["cert_search_kw"] = keyword
-        values["cert_search_role"] = role_key
-        values["cert_search_results"] = [{**r, "role": role_key} for r in matched[:10]]
+            values.pop("cert_matches_empty", None)
+        state["step"] = 2
+        values["person_role_idx"] = idx
         await self._save_state(state)
-        return build_step_card(permit_type, 2, values, self.open_id)
-
-    async def choose_cert_person(
-        self, permit_type: str, role_key: str, cert_id: str
-    ) -> dict[str, Any]:
-        """选定搜索结果中的持证人员（写入人员表并清除搜索态）。"""
-        state = await self._load_state(permit_type)
-        if state is None:
-            raise AppException(status_code=410, message="表单已过期，请重新发起")
-        values = state.setdefault("values", {})
-        match = next(
-            (
-                r
-                for r in (values.get("cert_search_results") or [])
-                if str(r.get("id")) == str(cert_id)
-            ),
-            None,
+        return build_step_card(
+            permit_type, 2, values, self.open_id, person_role_idx=idx
         )
-        if match is None:
-            raise AppException(message="请先搜索并选择人员")
-        persons = {str(p.get("role")): p for p in (values.get("persons") or [])}
-        persons[role_key] = {
-            "role": role_key,
-            "name": str(match.get("name") or ""),
-            "certificate_id": str(match.get("id") or ""),
-            "certificate_no": str(match.get("no") or ""),
-            "certificate_category": str(match.get("cat") or ""),
-            "certificate_expiry": str(match.get("expiry") or ""),
-        }
-        values["persons"] = list(persons.values())
-        values["person_sign_names"] = {
-            str(p.get("role")): str(p.get("name") or "") for p in values["persons"]
-        }
-        for key in ("cert_search_kw", "cert_search_role", "cert_search_results"):
-            values.pop(key, None)
-        await self._save_state(state)
-        return build_step_card(permit_type, 2, values, self.open_id)
-
-    async def clear_person_search(self, permit_type: str) -> dict[str, Any]:
-        """清除搜索态，返回人员填写卡。"""
-        state = await self._load_state(permit_type)
-        if state is None:
-            raise AppException(status_code=410, message="表单已过期，请重新发起")
-        values = state.setdefault("values", {})
-        for key in ("cert_search_kw", "cert_search_role", "cert_search_results"):
-            values.pop(key, None)
-        await self._save_state(state)
-        return build_step_card(permit_type, 2, values, self.open_id)
 
     async def person_prev(self, permit_type: str, idx: int) -> dict[str, Any]:
         """人员阶段上一位：idx-1 岗位卡；第 1 位则回第①步。"""
@@ -656,6 +604,9 @@ class ChatFlowService:
         values["person_sign_names"] = {
             str(p.get("role")): str(p.get("name") or "") for p in persons
         }
+        # 候选下拉为一次性搜索结果，保存后即清（避免残留过期候选）
+        values.pop("cert_matches", None)
+        values.pop("cert_matches_empty", None)
 
     async def _certificate_by_name(self, person_name: str, role_key: str) -> Any:
         """按姓名取有效证件（通讯录人员未绑定平台账号时的兜底关联）。"""
