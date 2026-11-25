@@ -100,8 +100,6 @@ def test_deploy_recreates_nginx_and_runs_proxy_smoke_checks() -> None:
     assert "--location" in script
     assert "--max-time 5" in script
     assert "deadline=$((SECONDS + 30))" in script
-    assert script.count("! recreate_nginx") == 2
-    assert script.count("! verify_proxy_routes") == 2
     assert "recreate_nginx >/dev/null" in script
 
 
@@ -158,25 +156,69 @@ def test_release_bundles_gate_and_checks_before_reopening():
     remote = (ROOT / "scripts/deploy-production-remote.sh").read_text(encoding="utf-8")
     for file in ("nginx-maintenance.conf", "nginx-capacity.conf", "migration-policy.json"):
         assert file in wrapper
-    for action in ("deploy_version", "rollback_version"):
-        function = re.search(rf"{action}\(\) \{{.*?\n\}}", remote, re.DOTALL).group()
-        assert function.index("validate_maintenance_release") < function.index("maintenance_on")
-        assert function.index("maintenance_on") < function.index("quiesce_and_migrate")
-        assert function.index("maintenance_off") < function.index("write_success_marker")
+    for action in ("deploy", "rollback"):
+        assert f"switch_version {action} " in remote
+    switch = re.search(r"switch_version\(\) \{.*?\n\}", remote, re.DOTALL).group()
+    apply = re.search(r"apply_release\(\) \{.*?\n\}", remote, re.DOTALL).group()
+    assert switch.index("validate_maintenance_release") < switch.index("apply_release") < switch.index("write_success_marker")
+    operations = ("release-preflight", "load_release_images", "preflight_release", "prepare-release",
+                  "quiesce_traffic", "stage_release_compose", "migrate_release", "verify_proxy_routes",
+                  "maintenance_off")
+    assert [apply.index(op) for op in operations] == sorted(apply.index(op) for op in operations)
 
 
 @pytest.mark.skipif(os.name == "nt" or shutil.which("bash") is None, reason="Linux shell guard")
-@pytest.mark.parametrize("head,before,approved,expected", [
-    ("same", "same", False, 0),
-    ("new", "old", False, 1),
-    ("new", "old", True, 0),
-    ("new\nother", "old", True, 1),
-    ("f9a3d5c7e1b2", "4bd62e5d78a1", None, 0),
-    ("f9a3d5c7e1b2", "e7c2a9f4b6d8", None, 1),
-])
-def test_migration_preconditions_block_writers_before_unapproved_change(tmp_path, head, before, approved, expected):
+@pytest.mark.parametrize("action", ["deploy", "rollback"])
+def test_online_drain_refusal_does_not_change_live_release(tmp_path, action):
     script = (ROOT / "scripts/deploy-production-remote.sh").read_text(encoding="utf-8")
-    function = re.search(r"quiesce_and_migrate\(\) \{.*?\n\}", script, re.DOTALL).group()
+    functions = "\n".join(re.search(rf"{name}\(\) \{{.*?\n\}}", script, re.DOTALL).group()
+                          for name in ("apply_release", "switch_version"))
+    env_file = tmp_path / ".env"
+    env_file.write_text("DAZAH_VERSION=v1\n")
+    shell = f'''
+set -Eeuo pipefail
+ENV_FILE='{env_file}'
+COMPOSE_FILE='compose.yml'
+CONTROL_SCRIPT='controller.py'
+NOTICE_SECONDS=0
+log() {{ :; }}
+validate_version() {{ :; }}
+check_release_store() {{ :; }}
+require_file() {{ :; }}
+validate_maintenance_release() {{ :; }}
+current_version() {{ printf 'v1'; }}
+backup_current_files() {{ printf 'backup'; }}
+resolve_release_tar() {{ printf 'archive'; }}
+load_release_images() {{ printf 'images\\n'; }}
+database_revision() {{ printf 'old'; }}
+preflight_release() {{ printf 'plan\\n' >&2; printf 'new'; }}
+python3() {{ printf '%s\\n' "$2"; [[ "$2" != prepare-release ]]; }}
+quiesce_traffic() {{ printf 'unexpected quiesce\\n'; }}
+set_version() {{ printf 'DAZAH_VERSION=%s\\n' "$1" > "$ENV_FILE"; }}
+{functions}
+switch_version {action} v2 release
+'''
+    result = subprocess.run(["bash", "-c", shell], capture_output=True, text=True)
+    assert result.returncode == 1
+    assert result.stderr == "plan\n"
+    assert result.stdout.splitlines() == ["release-preflight", "images", "prepare-release"]
+    assert env_file.read_text() == "DAZAH_VERSION=v1\n"
+
+
+@pytest.mark.skipif(os.name == "nt" or shutil.which("bash") is None, reason="Linux shell guard")
+@pytest.mark.parametrize("head,before,approved,drift,expected", [
+    ("same", "same", False, False, 0),
+    ("new", "old", False, False, 1),
+    ("new", "old", True, False, 0),
+    ("new", "old", True, True, 1),
+    ("new\nother", "old", True, False, 1),
+    ("f9a3d5c7e1b2", "4bd62e5d78a1", None, False, 0),
+    ("f9a3d5c7e1b2", "e7c2a9f4b6d8", None, False, 1),
+])
+def test_migration_preconditions_block_writers_before_unapproved_change(tmp_path, head, before, approved, drift, expected):
+    script = (ROOT / "scripts/deploy-production-remote.sh").read_text(encoding="utf-8")
+    functions = "\n".join(re.search(rf"{name}\(\) \{{.*?\n\}}", script, re.DOTALL).group()
+                          for name in ("database_revision", "preflight_release", "quiesce_traffic", "migrate_release"))
     if approved is None:
         policy = json.loads((ROOT / "deploy/migration-policy.json").read_text(encoding="utf-8"))
     else:
@@ -189,26 +231,36 @@ def test_migration_preconditions_block_writers_before_unapproved_change(tmp_path
     shell = f'''
 ROOT_DIR='{tmp_path}'
 CONTROL_SCRIPT='{ROOT / "scripts/cd/controller.py"}'
+COMPOSE_FILE='{tmp_path / "compose.yml"}'
 require_file() {{ return 0; }}
 check_nginx() {{ return 0; }}
 fail() {{ return 1; }}
 curl() {{ printf '503'; }}
 python3() {{ if [[ "$1" == "$CONTROL_SCRIPT" && ( "$2" == drain || "$2" == resume-work ) ]]; then printf '%s\n' "$2" >> '{calls}'; return 0; fi; command python3 "$@"; }}
+verify_compose_images() {{ return 0; }}
+compose_with_files() {{
+ [[ "$DAZAH_VERSION" == v2 ]] || return 1
+ if [[ "$*" == *--entrypoint* ]]; then printf '%s' '{head}'; fi
+ return 0
+}}
 compose() {{
  if [[ "$1" == exec ]]; then cat '{revision}'; return 0; fi
- if [[ "$*" == *--entrypoint* ]]; then printf '%s' '{head}'; return 0; fi
  printf '%s\\n' "$*" >> '{calls}'
  if [[ "$1" == run ]]; then printf '%s' "${{@: -1}}" > '{revision}'; fi
 }}
-{function}
-quiesce_and_migrate
+{functions}
+before="$(database_revision)"
+target="$(preflight_release v2 '{tmp_path}' "$before")" || exit 1
+if [[ '{drift}' == True ]]; then printf 'drift' > '{revision}'; fi
+quiesce_traffic "$before" || exit 1
+migrate_release "$target"
 '''
     result = subprocess.run(["bash", "-c", shell], capture_output=True, text=True)
     assert result.returncode == expected, result.stderr
     operations = calls.read_text() if calls.exists() else ""
     if expected:
-        assert operations == "drain\n"
-        assert revision.read_text() == before
+        assert operations == ("drain\n" if drift else "")
+        assert revision.read_text() == ("drift" if drift else before)
     else:
         assert "stop --timeout 120 hermes-lite app frontend" in operations
         assert f"migrate .venv/bin/alembic upgrade {head}" in operations
