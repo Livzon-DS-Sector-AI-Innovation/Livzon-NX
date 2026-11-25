@@ -1,9 +1,11 @@
 """Quality read-only Feishu mirror routes, separate from write-back sync."""
 
 import uuid
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +14,7 @@ from app.core.database import get_db
 from app.core.deps import CurrentUser, get_current_user
 from app.core.exceptions import AppException
 from app.core.llm.encryption import decrypt_api_key
+from app.core.maintenance import BackgroundPausedError, business_activity
 from app.modules.quality.models import (
     QualityFeishuAppSettings,
     QualityFeishuReadField,
@@ -167,16 +170,25 @@ async def delete_quality_read_root(
     return ApiResponse(data={"deleted": True})
 
 
+@asynccontextmanager
+async def _manual_mirror_work() -> AsyncIterator[None]:
+    try:
+        async with business_activity("sync"):
+            yield
+    except BackgroundPausedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
 @router.post("/feishu-read/roots/{root_id}/discover", response_model=ApiResponse)
 async def discover_quality_read_root(
     root_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
     _current_user: CurrentUser | None = Depends(get_current_user),
 ) -> Any:
-    service, _ = await _service(db)
-    return ApiResponse(
-        data=[_resource_payload(item) for item in await service.discover_root(root_id)]
-    )
+    async with _manual_mirror_work():
+        service, _ = await _service(db)
+        resources = await service.discover_root(root_id)
+        return ApiResponse(data=[_resource_payload(item) for item in resources])
 
 
 @router.get("/feishu-read/resources", response_model=ApiResponse)
@@ -196,8 +208,9 @@ async def sync_quality_read_resource(
     db: AsyncSession = Depends(get_db),
     _current_user: CurrentUser | None = Depends(get_current_user),
 ) -> Any:
-    service, _ = await _service(db)
-    return ApiResponse(data=await service.sync_resource(resource_id))
+    async with _manual_mirror_work():
+        service, _ = await _service(db)
+        return ApiResponse(data=await service.sync_resource(resource_id))
 
 
 @router.put("/feishu-read/page-bindings/{page_key:path}", response_model=ApiResponse)

@@ -221,7 +221,10 @@ def deployment_control(tmp_path, monkeypatch):
     from types import SimpleNamespace
     monkeypatch.setattr(cd.shutil, "disk_usage", lambda _: SimpleNamespace(free=100 * 1024**3))
     monkeypatch.setattr(control, "drain", lambda: None)
-    monkeypatch.setattr(control, "announce", lambda: None)
+    monkeypatch.setattr(control, "announce", lambda seconds: None)
+    monkeypatch.setattr(control, "release_backend", lambda operation, *args:
+                        {"pause_owned": True, "blocking": 0, "activities": {}}
+                        if operation == "release_preflight" else True)
     monkeypatch.setattr(control, "business_phase", lambda phase: None)
     monkeypatch.setattr(control, "wait_work_finished", lambda: None)
     monkeypatch.setattr(control, "wait_ready", lambda **kw: None)
@@ -309,6 +312,67 @@ def test_invalid_notice_refused_before_announcement(tmp_path, monkeypatch, secon
     with pytest.raises(cd.Refused, match="notice"):
         cd.Controller.announce(control, seconds)
     assert not (control.state_dir / "public" / "status.json").exists()
+
+
+@pytest.mark.parametrize("blocked", [False, True])
+def test_prepare_release_waits_online_then_closes_or_resumes(tmp_path, monkeypatch, blocked):
+    control, _ = deployment_control(tmp_path, monkeypatch)
+    elapsed = [0]
+    calls = []
+    marker = control.state_dir / "public" / "maintenance"
+    monkeypatch.setattr(cd.time, "monotonic", lambda: elapsed[0])
+    monkeypatch.setattr(cd.time, "sleep", lambda seconds: elapsed.__setitem__(0, elapsed[0] + seconds))
+    monkeypatch.setattr(control, "business_phase", lambda phase: calls.append(phase))
+    monkeypatch.setattr(control, "announce", lambda seconds: calls.append("notice"))
+
+    def backend(operation, *args):
+        calls.append(operation)
+        if operation == "pause_background_work":
+            return True
+        if operation == "release_preflight":
+            assert not marker.exists()
+            return {"pause_owned": True, "blocking": int(blocked or elapsed[0] < 3), "activities": {}}
+        assert marker.exists() is not blocked
+
+    monkeypatch.setattr(control, "release_backend", backend, raising=False)
+    if blocked:
+        with pytest.raises(cd.Refused, match="timed out"):
+            cd.Controller.prepare_release(control, 0, timeout=6)
+        assert elapsed[0] == 6
+        assert "notice" not in calls
+        assert "draining" not in calls
+        assert not marker.exists()
+        assert not (control.state_dir / "public" / "status.json").exists()
+    else:
+        cd.Controller.prepare_release(control, 0, timeout=6)
+        assert elapsed[0] == 3
+        assert marker.exists()
+        assert calls[-4:] == ["notice", "release_preflight", "draining", "resume_background_work"]
+    assert calls[-1] == "resume_background_work"
+
+
+@pytest.mark.parametrize("pause_owned,blocking", [(False, 0), (True, 1)])
+def test_prepare_release_rechecks_online_preconditions_at_cutover(tmp_path, monkeypatch, pause_owned, blocking):
+    control, _ = deployment_control(tmp_path, monkeypatch)
+    notice = control.state_dir / "public" / "status.json"
+    reports = iter([{"pause_owned": True, "blocking": 0, "activities": {}},
+                    {"pause_owned": pause_owned, "blocking": blocking, "activities": {}}])
+    released = []
+
+    def backend(operation, *args):
+        if operation == "release_preflight":
+            return next(reports)
+        if operation == "resume_background_work":
+            released.append(args[0])
+        return True
+
+    monkeypatch.setattr(control, "release_backend", backend)
+    monkeypatch.setattr(control, "announce", lambda seconds: notice.write_text("countdown"))
+    with pytest.raises(cd.Refused, match="could not be confirmed at cutover"):
+        control.prepare_release(0)
+    assert len(released) == 1
+    assert not notice.exists()
+    assert not notice.with_name("maintenance").exists()
 
 
 def test_drain_waits_for_business_work_after_nginx_becomes_idle(tmp_path, monkeypatch):
