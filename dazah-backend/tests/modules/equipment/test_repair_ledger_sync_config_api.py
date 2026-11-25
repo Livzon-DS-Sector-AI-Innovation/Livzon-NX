@@ -8,10 +8,12 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from io import BytesIO
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock
+from urllib.parse import quote
 
 import pytest
 from cryptography.fernet import Fernet
@@ -99,11 +101,37 @@ class _Client:
     """可配置的飞书多维表格客户端替身：按页返回，或直接抛错。"""
 
     def __init__(
-        self, pages: list[dict[str, Any]] | None = None, error: Exception | None = None
+        self,
+        pages: list[dict[str, Any]] | None = None,
+        error: Exception | None = None,
+        contact: dict[str, dict[str, Any]] | None = None,
     ) -> None:
         self._pages = list(pages or [])
         self._error = error
         self.calls: list[dict[str, Any]] = []
+        # 底层 FeishuClient 替身：通讯录按 open_id / 姓名目录解析
+        self.client = SimpleNamespace(request=self._contact_request)
+        self._contact = contact or {}
+        self._directory: list[dict[str, Any]] = []
+
+    async def _contact_request(
+        self, _method: str, path: str, **kwargs: Any
+    ) -> dict[str, Any]:
+        if path.startswith("/contact/v3/users/find_by_department"):
+            items = list(self._directory)
+            return {"data": {"items": items, "has_more": False}}
+        open_id = path.rsplit("/", 1)[-1]
+        info = self._contact.get(open_id)
+        if info is None:
+            return {"data": {}}
+        return {
+            "data": {
+                "user": {
+                    "name": info["name"],
+                    "avatar": {"avatar_240": info["avatar_url"]},
+                }
+            }
+        }
 
     async def search_records_page(self, table_id: str, **kwargs: Any) -> dict[str, Any]:
         self.calls.append({"table_id": table_id, **kwargs})
@@ -513,6 +541,173 @@ def test_value_helpers_tolerate_the_shapes_feishu_returns() -> None:
     assert decrypt_api_key(encrypt_api_key("round-trip")) == "round-trip"
 
 
+# ── 维修人员头像解析 ──────────────────────────────────────────────
+
+
+def _person_item(
+    record_id: str, person_value: Any, equipment: str = "离心泵A"
+) -> dict[str, Any]:
+    body: dict[str, Any] = {
+        "fields": {
+            "设备名称/型号": equipment,
+            "维修日期": 1_790_000_000_000,
+            "维修人员": person_value,
+        },
+        "last_modified_time": 1_790_000_100_000,
+    }
+    if record_id is not None:
+        body["record_id"] = record_id
+    return body
+
+
+async def test_sync_resolves_person_avatars_from_contact_directory(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    code = _code()
+    await _config(db_session, code)
+    await db_session.commit()
+    client = _Client(
+        pages=[
+            _page(
+                [
+                    # 飞书「人员」字段：返回 open_id，按 open_id 精确取
+                    _person_item(
+                        "p-1", [{"id": "ou_a", "name": "贺利"}, {"id": "ou_b"}]
+                    ),
+                    # 手打文本：按姓名匹配通讯录目录
+                    _person_item("p-2", ["赵俊锋", "王磊"]),
+                ],
+                total=2,
+            )
+        ],
+        contact={
+            "ou_a": {"name": "贺利", "avatar_url": "https://img/a.png"},
+            "ou_b": {"name": "郭继辉", "avatar_url": None},
+        },
+    )
+    client._directory = [
+        {
+            "name": "赵俊锋",
+            "open_id": "ou_c",
+            "avatar": {"avatar_240": "https://img/c.png"},
+        },
+        {
+            "name": "王磊",
+            "open_id": "ou_d",
+            "avatar": {"avatar_240": "https://img/d.png"},
+        },
+    ]
+    _route_clients({f"base-{code}": client}, monkeypatch)
+    try:
+        result = await service.sync_workshop(db_session, code)
+        assert result == {"synced": 2, "total": 2}
+
+        rows = (
+            (
+                await db_session.execute(
+                    select(RepairRecord)
+                    .where(RepairRecord.workshop_code == code)
+                    .order_by(RepairRecord.record_id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        by_id = {row.record_id: row for row in rows}
+
+        # 人员字段：open_id 命中；字段内没姓名的成员原文回退显示 open_id，
+        # 结构化 persons 里则是通讯录解析出的真实姓名
+        assert by_id["p-1"].person_text == "贺利、ou_b"
+        assert by_id["p-1"].persons == [
+            {"name": "贺利", "open_id": "ou_a", "avatar_url": "https://img/a.png"},
+            {"name": "郭继辉", "open_id": "ou_b", "avatar_url": None},
+        ]
+
+        # 手打文本：姓名目录命中
+        assert by_id["p-2"].persons == [
+            {"name": "赵俊锋", "open_id": "ou_c", "avatar_url": "https://img/c.png"},
+            {"name": "王磊", "open_id": "ou_d", "avatar_url": "https://img/d.png"},
+        ]
+    finally:
+        await _purge(db_session, [code], [])
+
+
+async def test_sync_uses_avatars_embedded_in_person_field(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """人员字段自带头像：直接采用，不调通讯录（无权限也可解析）。"""
+    code = _code()
+    await _config(db_session, code)
+    await db_session.commit()
+    client = _Client(
+        pages=[
+            _page(
+                [
+                    _person_item(
+                        "p-9",
+                        [
+                            {
+                                "id": "ou_e",
+                                "name": "贺利",
+                                "avatar_url": "https://img/e.png",
+                            },
+                            {"id": "ou_f", "name": "郭继辉"},
+                        ],
+                    )
+                ],
+                total=1,
+            )
+        ]
+    )
+
+    # 通讯录一律不可用（403）：字段自带头像的成员仍应解析成功
+    async def forbidden(_method: str, _path: str, **_kwargs: Any) -> dict[str, Any]:
+        raise RuntimeError("403 Forbidden")
+
+    client.client = SimpleNamespace(request=forbidden)
+    _route_clients({f"base-{code}": client}, monkeypatch)
+    try:
+        await service.sync_workshop(db_session, code)
+        row = (
+            await db_session.execute(
+                select(RepairRecord).where(RepairRecord.workshop_code == code)
+            )
+        ).scalar_one()
+        assert row.persons == [
+            {"name": "贺利", "open_id": "ou_e", "avatar_url": "https://img/e.png"},
+            {"name": "郭继辉", "open_id": "ou_f", "avatar_url": None},
+        ]
+    finally:
+        await _purge(db_session, [code], [])
+
+
+async def test_sync_degrades_persons_to_plain_names_without_contact_access(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    code = _code()
+    await _config(db_session, code)
+    await db_session.commit()
+    client = _Client(pages=[_page([_person_item("p-3", ["贺利"])], total=1)])
+
+    async def forbidden(_method: str, _path: str, **_kwargs: Any) -> dict[str, Any]:
+        raise RuntimeError("403 Forbidden")
+
+    client.client = SimpleNamespace(request=forbidden)
+    _route_clients({f"base-{code}": client}, monkeypatch)
+    try:
+        await service.sync_workshop(db_session, code)
+        row = (
+            await db_session.execute(
+                select(RepairRecord).where(RepairRecord.workshop_code == code)
+            )
+        ).scalar_one()
+        # 通讯录不可用：persons 置空，展示回退 person_text 原文
+        assert row.person_text == "贺利"
+        assert row.persons is None
+    finally:
+        await _purge(db_session, [code], [])
+
+
 # ── 查询 ──────────────────────────────────────────────────────────
 
 
@@ -588,6 +783,43 @@ async def test_queries_cover_the_remaining_filters(
             "待观察",
             "正常运行",
         ]
+
+        # 人员筛选：结构化 persons 与原文 person_text 都能命中
+        assert (await service.list_records(db_session, workshop=code, person="张三"))[
+            1
+        ] == 1
+        # 故障筛选按模糊匹配
+        assert (await service.list_records(db_session, workshop=code, fault="密封"))[
+            1
+        ] == 2
+
+        # 筛选下拉选项：人员合并结构化与原文、故障与设备按次数降序
+        db_session.add(
+            RepairRecord(
+                workshop_code=code,
+                record_id=f"{code}-4",
+                equipment_text="离心泵A",
+                repaired_at=today,
+                fault_desc="密封泄漏",
+                person_text="张三、李四",
+                persons=[
+                    {"name": "张三", "open_id": "ou_1", "avatar_url": "https://a"},
+                    {"name": "王五", "open_id": "ou_2", "avatar_url": None},
+                ],
+            )
+        )
+        await db_session.flush()
+        await db_session.commit()
+        options = await service.filter_options(db_session, code)
+        assert (
+            options["persons"][:2] == ["张三", "王五"]
+            or options["persons"][0] == "张三"
+        )
+        assert "李四" in options["persons"]
+        # 离心泵A 出现 3 次，排在设备选项首位
+        assert options["equipments"][0] == "离心泵A"
+        # 「密封泄漏」出现 2 次，排在故障选项首位
+        assert options["faults"][0] == "密封泄漏"
     finally:
         await _purge(db_session, [code], [])
 
@@ -615,6 +847,113 @@ async def test_generator_syncs_every_enabled_workshop(
     await generator.execute_one(session, "101-1")
     sync_enabled.assert_awaited_once_with(session, "101-1")
     session.commit.assert_awaited_once()
+
+
+# ── Excel 导出 ────────────────────────────────────────────────────
+
+
+async def test_export_records_xlsx_returns_all_filtered_rows(
+    db_session: AsyncSession,
+) -> None:
+    code = _code()
+    today = date(2026, 11, 20)
+    db_session.add_all(
+        [
+            RepairRecord(
+                workshop_code=code,
+                record_id=f"{code}-x1",
+                equipment_text="离心泵A",
+                repaired_at=today,
+                fault_desc="机封漏水",
+                person_text="张三、李四",
+                spare_parts="机封一套",
+                result="正常",
+                workshop_text="102一车间一楼",
+                remark="试压正常",
+            ),
+            RepairRecord(
+                workshop_code=code,
+                record_id=f"{code}-x2",
+                equipment_text="离心泵A",
+                repaired_at=today - timedelta(days=1),
+                fault_desc="异响",
+                result="正常",
+            ),
+        ]
+    )
+    await db_session.commit()
+    try:
+        from openpyxl import load_workbook
+
+        content, rows = await service.export_records_xlsx(db_session, workshop=code)
+        assert rows == 2
+        sheet = load_workbook(BytesIO(content)).active
+        # 表头 8 列：主表 6 列 + 车间及地点、备注
+        headers = [cell.value for cell in sheet[1]]
+        assert headers == [
+            "维修日期",
+            "车间及地点",
+            "设备名称/型号",
+            "故障描述/原因",
+            "维修人员",
+            "更换备件",
+            "维修后状态",
+            "备注",
+        ]
+        first = [cell.value for cell in sheet[2]]
+        assert first[0] == datetime(2026, 11, 20).date() or str(first[0]).startswith(
+            "2026-11-20"
+        )
+        assert first[1] == "102一车间一楼"
+        assert first[2] == "离心泵A"
+        assert first[4] == "张三、李四"
+        assert first[7] == "试压正常"
+        # 筛选只导命中行
+        _, filtered = await service.export_records_xlsx(
+            db_session, workshop=code, fault="异响"
+        )
+        assert filtered == 1
+    finally:
+        await _purge(db_session, [code], [])
+
+
+async def test_export_rejects_when_over_limit(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def fake_list(_db, **_kwargs):
+        return [], service._EXPORT_MAX_ROWS + 1  # noqa: SLF001
+
+    monkeypatch.setattr(service, "list_records", fake_list)
+    with pytest.raises(AppException, match="超过导出上限"):
+        await service.export_records_xlsx(db_session, workshop="102-1")
+
+
+async def test_export_endpoint_streams_a_workbook(
+    _equipment_session: AsyncSession,
+    client: AsyncClient,
+) -> None:
+    code = _code()
+    _equipment_session.add(
+        RepairRecord(
+            workshop_code=code,
+            record_id=f"{code}-e1",
+            equipment_text="离心泵A",
+            repaired_at=date(2026, 11, 20),
+            fault_desc="机封漏水",
+        )
+    )
+    await _equipment_session.flush()
+    try:
+        response = await client.get(f"/api/v1/equipment/repair/export?workshop={code}")
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        assert "attachment" in response.headers["content-disposition"]
+        assert quote(f"设备检修_{code}_") in response.headers["content-disposition"]
+        assert len(response.content) > 100  # 非空工作簿
+    finally:
+        await _purge(_equipment_session, [code], [])
 
 
 # ── 接口层 ────────────────────────────────────────────────────────
@@ -659,6 +998,12 @@ async def test_config_write_read_test_and_manual_sync_endpoints(
         assert tested.status_code == 200
         assert tested.json()["data"]["success"] is False
         assert "ConnectionError" in tested.json()["data"]["message"]
+
+        opts = await client.get(
+            f"/api/v1/equipment/repair/filter-options?workshop={code}"
+        )
+        assert opts.status_code == 200
+        assert opts.json()["data"]["equipments"] == []
 
         # 未配置的车间手动同步：返回说明而不是报错
         unconfigured = _code()

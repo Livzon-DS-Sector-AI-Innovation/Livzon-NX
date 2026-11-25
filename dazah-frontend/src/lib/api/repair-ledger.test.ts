@@ -1,5 +1,8 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+/* @vitest-environment happy-dom */
+
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  exportRepairRecords,
   fetchRepairConfig,
   fetchRepairFrequency,
   fetchRepairRecords,
@@ -33,6 +36,15 @@ const calledMethods = (fetchMock: ReturnType<typeof mockFetch>) =>
 
 const queryParams = (fetchMock: ReturnType<typeof mockFetch>, index = 0) =>
   new URL(fetchMock.mock.calls[index][0], 'http://test').searchParams
+
+const downloads: string[] = []
+beforeEach(() => {
+  downloads.length = 0
+  vi.stubGlobal('URL', Object.assign(URL, {
+    createObjectURL: () => 'blob:mock',
+    revokeObjectURL: () => undefined,
+  }))
+})
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -146,6 +158,70 @@ describe('repair-ledger api', () => {
     vi.stubGlobal('fetch', mockFetch({ code: 500, message: '飞书多维表格访问失败' }))
 
     await expect(triggerRepairSync('201-1')).rejects.toThrow('飞书多维表格访问失败')
+  })
+
+  it('exports the filtered records and triggers a browser download', async () => {
+    const blob = new Blob(['xlsx-bytes'], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    })
+    const fetchMock = vi.fn<(url: string) => Promise<Response>>(async () =>
+      new Response(blob, {
+        headers: {
+          'Content-Type':
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'Content-Disposition':
+            "attachment; filename*=UTF-8''%E8%AE%BE%E5%A4%87%E6%A3%80%E4%BF%AE_102-1_20261124.xlsx",
+        },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const clickSpy = vi.fn()
+    const onClick = (event: MouseEvent) => {
+      const anchor = event.target as HTMLAnchorElement | null
+      if (anchor?.tagName === 'A' && anchor.download) {
+        downloads.push(anchor.download)
+        clickSpy()
+        event.preventDefault()
+      }
+    }
+    document.addEventListener('click', onClick)
+
+    await exportRepairRecords({
+      workshop: '102-1',
+      date_from: '2026-10-25',
+      person: '贺利',
+      fault: '机封',
+    })
+
+    const url = String(fetchMock.mock.calls[0]?.[0])
+    expect(url.startsWith(`${BASE}/export?`)).toBe(true)
+    const params = new URL(url, 'http://test').searchParams
+    expect(Object.fromEntries(params)).toEqual({
+      workshop: '102-1',
+      date_from: '2026-10-25',
+      person: '贺利',
+      fault: '机封',
+    })
+    expect(downloads).toEqual(['设备检修_102-1_20261124.xlsx'])
+  })
+
+  it('surfaces the business error message when the export is rejected', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            code: 400,
+            message: '符合条件的记录共 12000 条，超过导出上限 10000 条，请缩小时间范围或筛选条件后重试',
+          }),
+          { status: 400, headers: { 'Content-Type': 'application/json' } },
+        ),
+      ),
+    )
+
+    await expect(exportRepairRecords({ workshop: '102-1' })).rejects.toThrow(
+      '超过导出上限',
+    )
   })
 
   it('saves the config with PUT and a JSON body', async () => {

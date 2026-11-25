@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Query
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -16,6 +17,7 @@ from app.modules.equipment.schemas.repair_ledger import (
     RepairConfigDetail,
     RepairConfigTestResult,
     RepairConfigUpdateRequest,
+    RepairFilterOptions,
     RepairFrequencyItem,
     RepairRecordResponse,
     RepairSyncStateResponse,
@@ -49,6 +51,8 @@ async def list_repair_records(
     date_to: date | None = Query(None, description="维修日期止"),
     keyword: str | None = Query(None, description="设备/故障/人员搜索"),
     equipment: str | None = Query(None, description="设备名称原文（频次榜点入）"),
+    person: str | None = Query(None, description="维修人员姓名（结构化或原文）"),
+    fault: str | None = Query(None, description="故障描述（模糊匹配）"),
     result_status: str | None = Query(None, description="维修后状态原文"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=200),
@@ -63,6 +67,8 @@ async def list_repair_records(
         date_to=date_to,
         keyword=keyword,
         equipment=equipment,
+        person=person,
+        fault=fault,
         result_status=result_status,
         page=page,
         page_size=page_size,
@@ -98,6 +104,43 @@ async def repair_frequency(
     )
 
 
+@router.get("/export", summary="导出检修记录 Excel（当前筛选的全部记录）")
+async def export_repair_records(
+    workshop: str | None = WORKSHOP_QUERY_OPTIONAL,
+    date_from: date | None = Query(None, description="维修日期起"),
+    date_to: date | None = Query(None, description="维修日期止"),
+    keyword: str | None = Query(None, description="设备/故障/人员搜索"),
+    equipment: str | None = Query(None, description="设备名称原文"),
+    person: str | None = Query(None, description="维修人员姓名"),
+    fault: str | None = Query(None, description="故障描述（模糊匹配）"),
+    result_status: str | None = Query(None, description="维修后状态原文"),
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> Response:
+    _require_user(current_user)
+    content, _rows = await service.export_records_xlsx(
+        db,
+        workshop=workshop,
+        date_from=date_from,
+        date_to=date_to,
+        keyword=keyword,
+        equipment=equipment,
+        person=person,
+        fault=fault,
+        result_status=result_status,
+    )
+    filename = quote(
+        f"设备检修_{workshop or '全部车间'}_{datetime.now(UTC):%Y%m%d}.xlsx"
+    )
+    return Response(
+        content=content,
+        media_type=(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        ),
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{filename}"},
+    )
+
+
 @router.get("/results", summary="维修后状态去重列表（筛选项）")
 async def repair_distinct_results(
     workshop: str | None = WORKSHOP_QUERY_OPTIONAL,
@@ -106,6 +149,19 @@ async def repair_distinct_results(
 ) -> JSONResponse:
     _require_user(current_user)
     return success_response(data=await service.distinct_results(db, workshop))
+
+
+@router.get("/filter-options", summary="筛选下拉选项（人员/故障/设备）")
+async def repair_filter_options(
+    workshop: str | None = WORKSHOP_QUERY_OPTIONAL,
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> JSONResponse:
+    _require_user(current_user)
+    data = await service.filter_options(db, workshop)
+    return success_response(
+        data=RepairFilterOptions.model_validate(data).model_dump(mode="json")
+    )
 
 
 @router.get("/sync-status", summary="检修镜像同步状态")

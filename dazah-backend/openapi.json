@@ -130034,6 +130034,266 @@
         ]
       }
     },
+    "/api/v1/equipment/repair/export": {
+      "get": {
+        "operationId": "export_repair_records_api_v1_equipment_repair_export_get",
+        "parameters": [
+          {
+            "description": "车间代码；缺省跨车间查询",
+            "in": "query",
+            "name": "workshop",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "车间代码；缺省跨车间查询",
+              "title": "Workshop"
+            }
+          },
+          {
+            "description": "维修日期起",
+            "in": "query",
+            "name": "date_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "维修日期起",
+              "title": "Date From"
+            }
+          },
+          {
+            "description": "维修日期止",
+            "in": "query",
+            "name": "date_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "维修日期止",
+              "title": "Date To"
+            }
+          },
+          {
+            "description": "设备/故障/人员搜索",
+            "in": "query",
+            "name": "keyword",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "设备/故障/人员搜索",
+              "title": "Keyword"
+            }
+          },
+          {
+            "description": "设备名称原文",
+            "in": "query",
+            "name": "equipment",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "设备名称原文",
+              "title": "Equipment"
+            }
+          },
+          {
+            "description": "维修人员姓名",
+            "in": "query",
+            "name": "person",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "维修人员姓名",
+              "title": "Person"
+            }
+          },
+          {
+            "description": "故障描述（模糊匹配）",
+            "in": "query",
+            "name": "fault",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "故障描述（模糊匹配）",
+              "title": "Fault"
+            }
+          },
+          {
+            "description": "维修后状态原文",
+            "in": "query",
+            "name": "result_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "维修后状态原文",
+              "title": "Result Status"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "导出检修记录 Excel（当前筛选的全部记录）",
+        "tags": [
+          "设备管理"
+        ]
+      }
+    },
+    "/api/v1/equipment/repair/filter-options": {
+      "get": {
+        "operationId": "repair_filter_options_api_v1_equipment_repair_filter_options_get",
+        "parameters": [
+          {
+            "description": "车间代码；缺省跨车间查询",
+            "in": "query",
+            "name": "workshop",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "车间代码；缺省跨车间查询",
+              "title": "Workshop"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "筛选下拉选项（人员/故障/设备）",
+        "tags": [
+          "设备管理"
+        ]
+      }
+    },
     "/api/v1/equipment/repair/frequency": {
       "get": {
         "operationId": "repair_frequency_api_v1_equipment_repair_frequency_get",
@@ -130226,6 +130486,42 @@
               ],
               "description": "设备名称原文（频次榜点入）",
               "title": "Equipment"
+            }
+          },
+          {
+            "description": "维修人员姓名（结构化或原文）",
+            "in": "query",
+            "name": "person",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "维修人员姓名（结构化或原文）",
+              "title": "Person"
+            }
+          },
+          {
+            "description": "故障描述（模糊匹配）",
+            "in": "query",
+            "name": "fault",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "故障描述（模糊匹配）",
+              "title": "Fault"
             }
           },
           {

@@ -122,6 +122,13 @@ class RepairRecord(BaseModel):
     person_text: Mapped[str | None] = mapped_column(
         String(500), comment="维修人员（人员/文本字段的原文）"
     )
+    persons: Mapped[list[Any] | None] = mapped_column(
+        JSONB,
+        comment=(
+            "维修人员结构化（[{name, open_id, avatar_url}]）；"
+            "通讯录无权限或未匹配到时为空，展示回退 person_text"
+        ),
+    )
     fault_desc: Mapped[str | None] = mapped_column(Text, comment="故障描述/原因")
     spare_parts: Mapped[str | None] = mapped_column(Text, comment="更换备件")
     result: Mapped[str | None] = mapped_column(
