@@ -6,7 +6,17 @@ from typing import Any
 from typing import cast as typing_cast
 from uuid import UUID
 
-from sqlalchemy import String, Table, case, cast, func, or_, select, update
+from sqlalchemy import (
+    ColumnElement,
+    String,
+    Table,
+    case,
+    cast,
+    func,
+    or_,
+    select,
+    update,
+)
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -853,7 +863,7 @@ class MaterialPriceRepository:
         page_size: int = 20,
     ) -> tuple[list[dict[str, Any]], int]:
         model = MaterialPriceRecord
-        filters = [model.is_deleted.is_(False)]
+        filters: list[ColumnElement[bool]] = [model.is_deleted.is_(False)]
         if keyword:
             pattern = f"%{_escape_like(keyword)}%"
             filters.append(

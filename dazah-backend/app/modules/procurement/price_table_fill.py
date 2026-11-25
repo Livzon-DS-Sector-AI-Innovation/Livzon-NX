@@ -10,8 +10,10 @@ from __future__ import annotations
 import io
 import re
 from dataclasses import dataclass
+from datetime import date
 from decimal import Decimal, InvalidOperation
 from difflib import SequenceMatcher
+from typing import Any
 
 from openpyxl import load_workbook
 from openpyxl.utils import get_column_letter
@@ -31,6 +33,15 @@ HEADER_SCAN_ROWS = 15
 PREVIEW_ROW_LIMIT = 200
 NAME_MATCH_THRESHOLD = 0.6
 MAX_NAME_LOOKUPS = 300
+
+def _date_sort_key(value: object) -> str:
+    """把 date / 字符串统一成可比较的排序键。"""
+    if isinstance(value, date):
+        return value.isoformat()
+    if isinstance(value, str):
+        return value
+    return ""
+
 
 MATCH_SOURCE_LABELS = {
     "live": "仓储实时入库",
@@ -86,7 +97,7 @@ def _row_is_empty(worksheet: Worksheet, row: int, max_column: int) -> bool:
     )
 
 
-def _header_score(values: list[object]) -> int:
+def _header_score(values: list[Any]) -> int:
     text = " ".join(str(value) for value in values if value not in (None, ""))
     score = 0
     if CODE_HEADER_PATTERN.search(text):
@@ -254,11 +265,11 @@ async def _load_price_context(
     repository = MaterialPriceRepository(db)
     history = await repository.latest_price_by_codes(codes)
     live_records = await list_live_prices(db, material_codes=set(codes))
-    latest_live: dict[str, dict[str, object]] = {}
+    latest_live: dict[str, dict[str, Any]] = {}
     for record in live_records:
         current = latest_live.get(record.material_code)
-        if current is None or (record.data_date or "") > (
-            current.get("data_date") or ""
+        if current is None or _date_sort_key(record.data_date) > _date_sort_key(
+            current.get("data_date")
         ):
             latest_live[record.material_code] = {
                 "unit_price": record.unit_price,
@@ -328,6 +339,8 @@ async def preview_fill(
             if mapping is not None and mapping.sheet_name in workbook.sheetnames
             else workbook.active
         )
+        if worksheet is None:
+            raise ValueError("工作簿中没有工作表")
         resolved = mapping or detect_columns(worksheet)
         max_column = max(worksheet.max_column or 1, 1)
         rows: list[tuple[int, str, str]] = []
@@ -413,6 +426,8 @@ def fill_workbook(
             if mapping.sheet_name in workbook.sheetnames
             else workbook.active
         )
+        if worksheet is None:
+            raise ValueError("工作簿中没有工作表")
         price_column = mapping.price_column
         if price_column is None:
             raise ValueError("未识别到单价列，无法回填")

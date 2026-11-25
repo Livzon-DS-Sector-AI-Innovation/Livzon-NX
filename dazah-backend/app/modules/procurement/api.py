@@ -1180,7 +1180,7 @@ def _fill_mapping(raw: str | None) -> ColumnMapping | None:
 
     def optional_int(value: object) -> int | None:
         try:
-            return int(value) if value is not None else None
+            return int(str(value)) if value is not None else None
         except (TypeError, ValueError):
             return None
 

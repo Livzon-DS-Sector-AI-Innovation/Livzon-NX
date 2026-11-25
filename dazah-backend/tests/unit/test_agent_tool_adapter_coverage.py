@@ -284,7 +284,6 @@ async def test_procurement_read_agent_tool_adapters_cover_all_list_shapes(
         "list_suppliers": AsyncMock(return_value=([], 0, [])),
         "list_purchase_requests": AsyncMock(return_value=([], 0)),
         "list_purchase_order_lines": AsyncMock(return_value=([], 0)),
-        "search_material_prices": AsyncMock(return_value=([], 0)),
         "get_purchase_request": AsyncMock(return_value={}),
         "export_purchase_order_lines_xlsx": AsyncMock(return_value=b"xlsx"),
         "list_material_catalog": AsyncMock(return_value=([], 0, None)),

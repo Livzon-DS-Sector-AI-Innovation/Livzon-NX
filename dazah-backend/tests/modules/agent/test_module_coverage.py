@@ -29,7 +29,7 @@ async def test_module_coverage_http_inventory_disabled_and_admin_boundary(
         response = await client.get("/agent/control/module-coverage")
         assert response.status_code == 200
         data = response.json()["data"]
-        assert data["registered_count"] == 179
+        assert data["registered_count"] == 178
         assert data["personal_count"] == 30
         assert data["excluded_count"] == 33
         modules = {item["module_code"]: item for item in data["modules"]}
@@ -74,7 +74,7 @@ async def test_module_coverage_http_inventory_disabled_and_admin_boundary(
         assert {"/energy/entry", "/energy/reports", "/energy/analysis"} <= {
             page["route_path"] for page in modules["energy"]["pages"]
         }
-        assert data["covered_pages"] == 229
+        assert data["covered_pages"] == 228
         assert modules["hr"]["registered_count"] == 16
         assert modules["hr"]["covered_pages"] == 17
         assert modules["hr"]["coverage_percent"] == 100.0
@@ -101,7 +101,7 @@ async def test_module_coverage_http_inventory_disabled_and_admin_boundary(
         assert modules["quality"]["covered_pages"] == 59
         assert modules["quality"]["coverage_percent"] == 100.0
         procurement = modules["procurement"]
-        assert procurement["registered_count"] == 18
+        assert procurement["registered_count"] == 17
         assert procurement["covered_pages"] <= procurement["total_pages"]
         supplier = next(
             page
@@ -142,7 +142,7 @@ async def test_module_coverage_http_inventory_disabled_and_admin_boundary(
         assert disabled_procurement["state"] == "disabled"
         assert disabled_procurement["enabled_pages"] == 0
         assert disabled_procurement["covered_pages"] == procurement["covered_pages"]
-        assert disabled["enabled_count"] == data["enabled_count"] - 18
+        assert disabled["enabled_count"] == data["enabled_count"] - 17
         user.role = "user"
         assert (await client.get("/agent/control/module-coverage")).status_code == 403
         user.role = "admin"
