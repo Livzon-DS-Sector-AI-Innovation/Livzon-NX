@@ -447,36 +447,57 @@ def build_step_card(
         )
         elements.append(
             _md(
-                "下拉为**特种作业证书名单**（全量，滚动查找），选中即自动带出"
-                "证件号；名单没有的外部人员填下方姓名与证件号。"
+                "输入**姓名关键字**点「搜索候选人」，在下拉中选择持证人员"
+                "（选中即自动带出证件号）；名单没有的外部人员填下方姓名与证件号。"
                 + ("本岗位可**多选**。" if is_multi else "")
             )
         )
         elements.append(_hr())
 
-        # 全量证书名单下拉（按姓名排序，全部加载；multi 角色可多选）
-        roster = values.get("cert_roster") or []
-        roster_options = [
-            {
-                "value": str(item["id"]),
-                "label": (
-                    f"{item.get('name')}｜"
-                    f"{item.get('cat_label') or item.get('cat') or ''}｜"
-                    f"{item.get('no') or '无证号'}｜"
-                    f"至 {item.get('expiry') or '?'}"
-                ),
-            }
-            for item in roster
-        ] or [{"value": "", "label": "（证书名单为空，请填下方外部人员）"}]
+        # 证书候选：关键字搜索后 ≤10 条（169 全量大卡在手机端渲染失败且
+        # 拖慢每步响应，故改为按需搜索）
         form_elements.append(
-            _select(
-                f"person__{role_key}",
-                f"从证书名单选择{label}" + ("（可多选）" if is_multi else ""),
-                roster_options,
-                placeholder="点击展开全部持证人员",
-                multi=is_multi,
+            _input(
+                "cert_kw",
+                "搜索证书名单（姓名关键字）",
+                placeholder="如：张 / 王五 / 全名",
             )
         )
+        search_btn = _btn(
+            "🔍 搜索候选人",
+            {"act": "search_cert", "person_role_idx": idx},
+            type_="primary",
+            form_submit=True,
+        )
+        search_btn["name"] = form_submit_name("search_cert", permit_type, idx)
+        form_elements.append(search_btn)
+        if values.get("cert_matches_empty"):
+            form_elements.append(
+                _md("⚠️ 未搜到有效持证人员，请换关键字或用下方外部人员方式填写。")
+            )
+        matches = values.get("cert_matches") or []
+        if matches:
+            cand_options = [
+                {
+                    "value": str(item["id"]),
+                    "label": (
+                        f"{item.get('name')}｜"
+                        f"{item.get('cat_label') or item.get('cat') or ''}｜"
+                        f"{item.get('no') or '无证号'}｜"
+                        f"至 {item.get('expiry') or '?'}"
+                    ),
+                }
+                for item in matches
+            ]
+            form_elements.append(
+                _select(
+                    f"person__{role_key}",
+                    f"从候选选择{label}" + ("（可多选）" if is_multi else ""),
+                    cand_options,
+                    placeholder="点击展开候选人员",
+                    multi=is_multi,
+                )
+            )
         if is_multi:
             # 外部人员多行：行数存 values["ext_rows_{role}"]（ext_add/ext_del 调整）
             ext_rows = max(1, int(values.get(f"ext_rows_{role_key}") or 1))
@@ -1057,11 +1078,13 @@ def build_summary_card(
     )
 
 
-def build_menu_card(open_id: str) -> dict[str, Any]:
+def build_menu_card(open_id: str, *, notice: str = "") -> dict[str, Any]:
     type_lines = "、".join(t.name for t in PERMIT_TEMPLATES.values())
-    elements: list[dict[str, Any]] = [
-        _md(f"发以下关键词可直接发起对应票种：\n{type_lines}"),
-    ]
+    elements: list[dict[str, Any]] = []
+    if notice:
+        elements.append(_md(f"⚠️ **{notice}**"))
+        elements.append(_hr())
+    elements.append(_md(f"发以下关键词可直接发起对应票种：\n{type_lines}"))
     elements.append(_hr())
     for code, template in PERMIT_TEMPLATES.items():
         elements.append(

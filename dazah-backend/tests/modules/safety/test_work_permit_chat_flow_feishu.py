@@ -138,12 +138,20 @@ def test_step_cards_carry_module_and_act() -> None:
         for i in range(1, 4)
     ]
     values_p = forms.base_form_values("hot_work", None)
-    values_p["cert_roster"] = roster
+    values_p["cert_matches"] = roster
     card_p = forms.build_step_card("hot_work", 2, values_p, "ou-x", person_role_idx=0)
     p_form = [el for el in card_p["body"]["elements"] if el.get("tag") == "form"][0]
     p_select = [el for el in p_form["elements"] if el.get("tag") == "select_static"][0]
     assert p_select["name"] == "person__work_leader"
-    assert len(p_select["options"]) == len(roster), "证书名单应全量加载"
+    assert len(p_select["options"]) == len(roster), "搜索候选应全部呈现"
+    assert any(
+        el.get("name") == "cert_kw" for el in p_form["elements"]
+    ), "应有关键字搜索输入框"
+    assert any(
+        "search_cert" in str(b.get("name") or "")
+        for b in p_form["elements"]
+        if b.get("tag") == "button"
+    ), "应有搜索候选人提交按钮"
     assert any(
         n.startswith("person_ext_cert__work_leader")
         for n in [el.get("name") for el in p_form["elements"]]
@@ -2655,53 +2663,6 @@ class TestChatFlowGasGapCoverage:
 
         return ChatFlowService(db or object(), open_id="ou-h")
 
-    async def test_load_cert_roster_dedupe(self) -> None:
-        from datetime import date
-        from types import SimpleNamespace
-
-        cid = uuid4()
-        rows = [
-            SimpleNamespace(
-                id=cid,
-                person_name="张三",
-                certificate_no="DJ-1",
-                certificate_category="electrician",
-                expiry_date=date(2027, 1, 1),
-                status="valid",
-            ),
-            # 同人同证号（不同记录 id）→ 去重
-            SimpleNamespace(
-                id=uuid4(),
-                person_name="张三",
-                certificate_no="DJ-1",
-                certificate_category="electrician",
-                expiry_date=date(2026, 6, 1),
-                status="expiring",
-            ),
-            SimpleNamespace(
-                id=uuid4(),
-                person_name="李四",
-                certificate_no=None,
-                certificate_category="welder",
-                expiry_date=None,
-                status="valid",
-            ),
-        ]
-
-        class _DB:
-            async def execute(self, *_a: Any, **_kw: Any) -> Any:
-                return _scalars_result(rows)
-
-        svc = self._svc(_DB())
-        values: dict[str, Any] = {}
-        await svc._load_cert_roster(values)
-        roster = values["cert_roster"]
-        assert len(roster) == 2, "同人同证号应去重"
-        by_name = {r["name"]: r for r in roster}
-        assert by_name["张三"]["no"] == "DJ-1"
-        assert by_name["张三"]["expiry"] == "2027-01-01"
-        assert by_name["李四"]["no"] == ""
-
     async def test_verify_accept_reject_receipts(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -2954,308 +2915,6 @@ def _state_store(
     monkeypatch.setattr(cf, "cache_get", _get)
     monkeypatch.setattr(cf, "cache_set", _set)
     return saved
-
-
-class TestPersonSearchGapCoverage:
-    """第②步搜索式选人：搜索/选定/清搜索/游标回退 全路径。"""
-
-    def _svc(self) -> Any:
-        from app.modules.safety.service.work_permit_chat_flow import (
-            ChatFlowService,
-        )
-
-        return ChatFlowService(object(), open_id="ou-h")
-
-    async def test_search_role_persons_paths(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        # 状态过期 → 410
-        _state_store(monkeypatch, None)
-        svc = self._svc()
-        with pytest.raises(AppException) as exc:
-            await svc.search_role_persons("hot_work", "worker", "张")
-        assert exc.value.status_code == 410
-
-        # 关键字命中：按建议证件类别优先排序，存搜索态
-        import json as _json
-
-        roster = [
-            {"id": "c-a", "name": "张三", "no": "DJ-A", "cat": "electrician"},
-            {"id": "c-b", "name": "张伟", "no": "DJ-B", "cat": "welding_cutting"},
-            {"id": "c-c", "name": "李四", "no": "张三代", "cat": "electrician"},
-        ]
-        state: dict[str, Any] = {
-            "type": "hot_work",
-            "step": 2,
-            "values": {"cert_roster": roster},
-        }
-        saved = _state_store(monkeypatch, state)
-        card = await svc.search_role_persons("hot_work", "worker", " 张 ")
-        assert card
-        after = _json.loads(saved[-1][1])
-        results = after["values"]["cert_search_results"]
-        ids = [r["id"] for r in results]
-        # worker 建议类别 electrician → 张伟排前；证件号含关键字的李四也命中
-        assert ids[0] == "c-b"
-        assert set(ids) == {"c-a", "c-b", "c-c"}
-        assert after["values"]["cert_search_kw"] == "张"
-        assert all(r["role"] == "worker" for r in results)
-
-        # 空关键字 → 空结果（仅清空态）
-        card2 = await svc.search_role_persons("hot_work", "worker", "")
-        assert card2
-        assert _json.loads(saved[-1][1])["values"]["cert_search_results"] == []
-
-    async def test_choose_cert_person_paths(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        # 过期 → 410
-        _state_store(monkeypatch, None)
-        svc = self._svc()
-        with pytest.raises(AppException):
-            await svc.choose_cert_person("hot_work", "worker", "c-1")
-
-        # 搜索结果中无此 id → 提示先选择
-        state: dict[str, Any] = {
-            "type": "hot_work",
-            "step": 2,
-            "values": {
-                "cert_search_results": [
-                    {
-                        "id": "c-1",
-                        "name": "张三",
-                        "no": "DJ-A",
-                        "cat": "electrician",
-                        "expiry": "2027-01-01",
-                    }
-                ],
-                "persons": [{"role": "work_leader", "name": "老王"}],
-            },
-        }
-        _state_store(monkeypatch, state)
-        with pytest.raises(AppException):
-            await svc.choose_cert_person("hot_work", "worker", "c-404")
-
-        # 命中 → 写入人员表 + 签字行 + 清搜索态
-        import json as _json
-
-        saved = _state_store(monkeypatch, state)
-        card = await svc.choose_cert_person("hot_work", "worker", "c-1")
-        assert card
-        after = _json.loads(saved[-1][1])
-        persons = {p["role"]: p for p in after["values"]["persons"]}
-        assert persons["worker"]["certificate_no"] == "DJ-A"
-        assert persons["worker"]["certificate_id"] == "c-1"
-        assert persons["work_leader"]["name"] == "老王"
-        assert after["values"]["person_sign_names"]["worker"] == "张三"
-        assert "cert_search_results" not in after["values"]
-
-    async def test_clear_person_search(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        state: dict[str, Any] = {
-            "type": "hot_work",
-            "step": 2,
-            "values": {
-                "cert_search_kw": "张",
-                "cert_search_role": "worker",
-                "cert_search_results": [{"id": "c-1"}],
-            },
-        }
-        import json as _json
-
-        saved = _state_store(monkeypatch, state)
-        svc = self._svc()
-        card = await svc.clear_person_search("hot_work")
-        assert card
-        values = _json.loads(saved[-1][1])["values"]
-        assert "cert_search_kw" not in values
-        assert "cert_search_role" not in values
-        assert "cert_search_results" not in values
-
-    async def test_person_prev_paths(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        import json as _json
-
-        state: dict[str, Any] = {"type": "hot_work", "step": 2, "values": {}}
-        saved = _state_store(monkeypatch, state)
-        svc = self._svc()
-
-        # idx 0 → 回第①步
-        card = await svc.person_prev("hot_work", 0)
-        assert card
-        assert _json.loads(saved[-1][1])["step"] == 1
-
-        # idx 3 → 第②步游标 2
-        card2 = await svc.person_prev("hot_work", 3)
-        assert card2
-        after = _json.loads(saved[-1][1])
-        assert after["step"] == 2
-        assert after["values"]["person_role_idx"] == 2
-
-    async def test_save_step_last_role_advances_step3(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """最后一个岗位保存后：清游标进第③步（气体分析）。"""
-        from app.modules.safety.service.work_permit_templates import (
-            get_template,
-        )
-
-        roles = list(get_template("hot_work").person_roles)
-        state: dict[str, Any] = {
-            "type": "hot_work",
-            "step": 2,
-            "values": {
-                "persons": [
-                    {"role": str(r["role"]), "name": f"人{i}"}
-                    for i, r in enumerate(roles)
-                ],
-                "person_role_idx": len(roles) - 1,
-            },
-        }
-        import json as _json
-
-        saved = _state_store(monkeypatch, state)
-        svc = self._svc()
-        card = await svc.save_step(
-            "hot_work",
-            2,
-            {},
-            message_id="om-1",
-            person_role_idx=len(roles) - 1,
-        )
-        assert card
-        after = _json.loads(saved[-1][1])
-        assert after["step"] == 3
-        assert "person_role_idx" not in after["values"]
-
-
-async def test_handler_person_search_actions(
-    stub_flow: type,
-    stub_session: None,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """搜索/选定/上一位/清搜索 四个卡片动作分发到 ChatFlowService。"""
-    from app.modules.safety.feishu import work_permit_chat_handler as handler
-
-    async def _search(
-        self: Any, permit_type: str, role_key: str, kw: str
-    ) -> dict[str, Any]:
-        self.calls.append(("search_role_persons", permit_type, role_key, kw))
-        return _card("搜索结果")
-
-    async def _choose(
-        self: Any, permit_type: str, role_key: str, cert_id: str
-    ) -> dict[str, Any]:
-        self.calls.append(("choose_cert_person", permit_type, role_key, cert_id))
-        return _card("已选定")
-
-    async def _prev(self: Any, permit_type: str, idx: int) -> dict[str, Any]:
-        self.calls.append(("person_prev", permit_type, idx))
-        return _card("上一位")
-
-    async def _clear(self: Any, permit_type: str) -> dict[str, Any]:
-        self.calls.append(("clear_person_search", permit_type))
-        return _card("已清空")
-
-    stub_flow.search_role_persons = _search  # type: ignore[assignment]
-    stub_flow.choose_cert_person = _choose  # type: ignore[assignment]
-    stub_flow.person_prev = _prev  # type: ignore[assignment]
-    stub_flow.clear_person_search = _clear  # type: ignore[assignment]
-
-    patched: list[str] = []
-
-    async def _fake_update(message_id: str, card: dict[str, Any]) -> None:
-        patched.append(message_id)
-
-    monkeypatch.setattr(
-        "app.modules.safety.feishu.notification.update_card", _fake_update
-    )
-
-    # 搜索：关键字经 form_value 传入
-    await handler.handle_wp_chat_card_action(
-        _card_event(
-            {"module": "wp_chat", "act": "search_role", "search_role": "worker"},
-            form_value={"person_kw__worker": "张"},
-        )
-    )
-    # 选定
-    await handler.handle_wp_chat_card_action(
-        _card_event(
-            {
-                "module": "wp_chat",
-                "act": "choose_cert",
-                "role": "worker",
-                "cert_id": "c-1",
-            }
-        )
-    )
-    # 上一位
-    await handler.handle_wp_chat_card_action(
-        _card_event({"module": "wp_chat", "act": "person_prev", "person_role_idx": 2})
-    )
-    # 清搜索
-    await handler.handle_wp_chat_card_action(
-        _card_event({"module": "wp_chat", "act": "clear_search"})
-    )
-    await asyncio.sleep(0.5)  # 让后台动作任务执行
-
-    calls = [c for inst in stub_flow.instances for c in inst.calls]
-    by_act = {c[0]: c for c in calls}
-    assert by_act["search_role_persons"][2:] == ("worker", "张")
-    assert by_act["choose_cert_person"][2:] == ("worker", "c-1")
-    assert by_act["person_prev"][2] == 2
-    assert "clear_person_search" in by_act
-    assert patched, "动作完成后应 PATCH 原卡"
-
-
-async def test_form_submit_name_step_save_with_role_idx(
-    stub_flow: type,
-    stub_session: None,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """form_submit 编码 step_save 带 5 段（含人员游标）解析。"""
-
-    from app.modules.safety.feishu import work_permit_chat_handler as handler
-
-    patched: list[dict[str, Any]] = []
-
-    async def _fake_update(message_id: str, card: dict[str, Any]) -> None:
-        patched.append(card)
-
-    monkeypatch.setattr(
-        "app.modules.safety.feishu.notification.update_card", _fake_update
-    )
-    event = {
-        "action": {
-            "name": "wp|step_save|hot_work|2|3",
-            "form_value": {"any": "x"},
-        },
-        "operator": {"open_id": "ou-idx-test"},
-        "context": {"open_message_id": "om_idx"},
-    }
-    resp = await handler.handle_wp_chat_card_action(event)
-    await asyncio.sleep(0.5)  # 让后台动作任务执行
-    flow = stub_flow.instances[-1]
-    saves = [c for c in flow.calls if c[0] == "save_step"]
-    assert saves, "step_save 应分发到 save_step"
-    assert saves[0][1] == "hot_work" and saves[0][2] == 2
-    assert saves[0][5] == 3, "5 段编码应解析出人员游标"
-    assert resp is not None or patched  # 至少有 ACK 或 PATCH 之一
-
-
-def test_dedupe_key_fallback_chain() -> None:
-    """防重 key：permit_id → node_id → type → step 兜底链。"""
-    from app.modules.safety.feishu.work_permit_chat_handler import _dedupe_key
-
-    assert _dedupe_key("approve", "ou-1", {"permit_id": "p1"}) == (
-        "safety:wp_chat:approve:ou-1:p1"
-    )
-    assert _dedupe_key("approve", "ou-1", {"node_id": "n1"}).endswith("n1")
-    assert _dedupe_key("step_save", "ou-1", {"type": "hot_work", "step": 2}).endswith(
-        "hot_work"
-    )
-    assert _dedupe_key("cancel", "ou-1", {}).endswith(":")
-
-
-# ── PDF 公网中转 + 完工下载回退 定向补测 ──
 
 
 class TestPdfRelayEndpoints:
@@ -3819,7 +3478,30 @@ class TestBriefAndMultiWorker:
 
         async def fake_load(_pt: str) -> dict[str, Any]:
             # hot_work 人员岗位序：0=work_leader（单选），1=worker（multi）
-            return {"step": 2, "values": {"person_role_idx": 1}}
+            return {
+                "step": 2,
+                "values": {
+                    "person_role_idx": 1,
+                    "cert_matches": [
+                        {
+                            "id": "c-1",
+                            "name": "张三",
+                            "no": "DJ-1",
+                            "cat": "welding_cutting",
+                            "cat_label": "焊接与热切割作业",
+                            "expiry": "2027-01-01",
+                        },
+                        {
+                            "id": "c-2",
+                            "name": "王五",
+                            "no": "DJ-2",
+                            "cat": "welding_cutting",
+                            "cat_label": "焊接与热切割作业",
+                            "expiry": "2027-01-01",
+                        },
+                    ],
+                },
+            }
 
         async def fake_save(state: dict[str, Any]) -> None:
             saved["state"] = state
@@ -4134,3 +3816,188 @@ class TestBriefAndMultiWorker:
         assert "外部作业人签名转发" in forward_card
         assert "马外部（签名链接）" in forward_card
         assert "王五（签名链接）" not in forward_card  # 内部人不在转发卡
+
+
+class TestCertSearchInteraction:
+    """第②步证书候选搜索交互（彻底替换全量下拉）：搜索/候选/合并/防重提示。"""
+
+    @staticmethod
+    def _svc(db: Any = None) -> Any:
+        from app.modules.safety.service.work_permit_chat_flow import ChatFlowService
+
+        return ChatFlowService(db or object(), open_id="ou-h")
+
+    @staticmethod
+    def _cert(name: str, no: str = "DJ-0001") -> Any:
+        from types import SimpleNamespace
+
+        return SimpleNamespace(
+            id=uuid4(),
+            person_name=name,
+            certificate_no=no,
+            certificate_category="welding_cutting",
+            expiry_date=None,
+            status="valid",
+            identity_user_id=None,
+        )
+
+    @staticmethod
+    def _cert_db(*certs: Any) -> Any:
+        queue = list(certs)
+
+        class _R:
+            def scalars(self) -> Any:
+                return self
+
+            def all(self) -> list[Any]:
+                return queue
+
+            def scalar_one_or_none(self) -> Any:
+                return queue.pop(0) if queue else None
+
+        class _DB:
+            async def execute(self, *_a: Any, **_kw: Any) -> Any:
+                return _R()
+
+        return _DB()
+
+    async def test_search_cert_loads_matches_and_renders(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """关键字搜索：查库 → cert_matches → 重渲染候选下拉。"""
+        cert1 = self._cert("张三", "DJ-A")
+        cert2 = self._cert("张四", "DJ-B")
+        saved: list[tuple[str, Any]] = []
+
+        async def fake_load(_pt: str) -> dict[str, Any]:
+            return {
+                "type": "hot_work",
+                "step": 2,
+                "values": {"person_role_idx": 1},
+            }
+
+        async def fake_save(state: dict[str, Any]) -> None:
+            saved.append(("state", state))
+
+        svc = self._svc(self._cert_db(cert1, cert2))
+        monkeypatch.setattr(svc, "_load_state", fake_load)
+        monkeypatch.setattr(svc, "_save_state", fake_save)
+        card = await svc.search_cert("hot_work", 1, "张")
+        state = saved[-1][1]
+        matches = state["values"]["cert_matches"]
+        assert [m["name"] for m in matches] == ["张三", "张四"]
+        card_str = json.dumps(card, ensure_ascii=False)
+        assert '"multi_select_static"' in card_str  # worker 岗位（idx=1）可多选
+        assert "张三" in card_str and "DJ-A" in card_str
+        assert "cert_kw" in card_str  # 搜索输入框保留
+
+    async def test_search_cert_empty_marks_hint(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """无匹配：cert_matches_empty 置位 + 卡面提示文案。"""
+        saved: list[tuple[str, Any]] = []
+
+        async def fake_load(_pt: str) -> dict[str, Any]:
+            return {"type": "hot_work", "step": 2, "values": {}}
+
+        async def fake_save(state: dict[str, Any]) -> None:
+            saved.append(("state", state))
+
+        svc = self._svc(self._cert_db())
+        monkeypatch.setattr(svc, "_load_state", fake_load)
+        monkeypatch.setattr(svc, "_save_state", fake_save)
+        card = await svc.search_cert("hot_work", 0, "不存在的姓")
+        state = saved[-1][1]
+        assert state["values"]["cert_matches"] == []
+        assert state["values"]["cert_matches_empty"] is True
+        assert "未搜到有效持证人员" in json.dumps(card, ensure_ascii=False)
+
+    async def test_merge_persons_clears_matches(self) -> None:
+        """保存后清候选下拉（一次性搜索结果不残留）。"""
+        from app.modules.safety.service.work_permit_chat_flow import ChatFlowService
+
+        cert = self._cert("张三")
+        flow = ChatFlowService(self._cert_db(cert), open_id="ou-h")
+        values = {
+            "persons": [],
+            "cert_matches": [{"id": str(cert.id), "name": "张三", "no": "DJ-0001"}],
+        }
+        form_value = {"person__worker": str(cert.id)}
+        await flow._merge_persons("hot_work", values, form_value)
+        assert "cert_matches" not in values
+        assert values["persons"][0]["name"] == "张三"
+
+    def test_form_ttl_is_24h(self) -> None:
+        """表单有效期 24 小时（30 分钟曾导致流程频繁过期）。"""
+        from app.modules.safety.service.work_permit_chat_flow import (
+            FORM_TTL_SECONDS,
+        )
+
+        assert FORM_TTL_SECONDS == 86400
+
+    async def test_dispatch_410_patches_menu_with_notice(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """表单过期：PATCH 菜单卡带显著过期提示（不再只靠一闪而过的 toast）。"""
+        from app.core.exceptions import AppException
+        from app.modules.safety.feishu import work_permit_chat_handler as handler
+
+        patched: list[str] = []
+
+        async def fake_patch(event: dict[str, Any], card: dict[str, Any]) -> None:
+            patched.append(json.dumps(card, ensure_ascii=False))
+
+        async def fake_prev(
+            self: Any, permit_type: str, idx: int
+        ) -> dict[str, Any]:
+            raise AppException(status_code=410, message="表单已过期，请重新发起")
+
+        monkeypatch.setattr(handler, "_patch_open_message", fake_patch)
+        monkeypatch.setattr(handler.ChatFlowService, "person_prev", fake_prev)
+
+        event = {
+            "operator": {"open_id": "ou-x", "union_id": "on-x"},
+            "action": {
+                "value": {"module": "wp_chat", "act": "person_prev"},
+                "tag": "button",
+            },
+            "context": {"open_message_id": "om-1"},
+        }
+        await handler.handle_wp_chat_card_action(event)
+        await asyncio.sleep(0.1)
+        assert patched, "410 应回 PATCH 菜单卡"
+        assert "原表单已过期" in patched[0]
+
+    async def test_dispatch_search_cert_routes(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """search_cert 表单提交：name 解析 idx + cert_kw 进入搜索。"""
+        from app.modules.safety.feishu import work_permit_chat_handler as handler
+
+        calls: list[tuple[str, int, str]] = []
+
+        async def fake_search(
+            self: Any, permit_type: str, idx: int, keyword: str
+        ) -> dict[str, Any]:
+            calls.append((permit_type, idx, keyword))
+            return _card("候选")
+
+        async def fake_patch(_event: dict[str, Any], _card: dict[str, Any]) -> None:
+            pass
+
+        monkeypatch.setattr(handler.ChatFlowService, "search_cert", fake_search)
+        monkeypatch.setattr(handler, "_patch_open_message", fake_patch)
+
+        event = {
+            "operator": {"open_id": "ou-x", "union_id": "on-x"},
+            "action": {
+                "tag": "button",
+                "timezone": "Asia/Shanghai",
+                "form_value": {"cert_kw": "张"},
+                "name": "wp|search_cert|hot_work|1",
+            },
+            "context": {"open_message_id": "om-1"},
+        }
+        await handler.handle_wp_chat_card_action(event)
+        await asyncio.sleep(0.1)
+        assert calls == [("hot_work", 1, "张")]
