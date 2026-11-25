@@ -177,3 +177,47 @@ class RepairSyncState(BaseModel):
     last_message: Mapped[str | None] = mapped_column(
         Text, comment="最近一次结果说明（失败原因）"
     )
+
+
+class RepairSummarySettings(BaseModel):
+    """检修汇总全厂默认设置（单行，scope 固定 global）"""
+
+    __tablename__ = "repair_summary_settings"
+    __table_args__ = (
+        # 部分唯一索引：未删除行内仅一条全厂默认
+        Index(
+            "uq_repair_summary_settings_scope",
+            "scope",
+            unique=True,
+            postgresql_where=text("is_deleted = false"),
+        ),
+        {"schema": "equipment"},
+    )
+
+    scope: Mapped[str] = mapped_column(
+        String(20),
+        default="global",
+        server_default="global",
+        comment="配置作用域，固定 global",
+    )
+    sort_field: Mapped[str] = mapped_column(
+        String(32),
+        default="workshop",
+        server_default="workshop",
+        comment="车间对比默认排序字段",
+    )
+    sort_order: Mapped[str] = mapped_column(
+        String(12),
+        default="ascend",
+        server_default="ascend",
+        comment="默认排序方向：ascend / descend",
+    )
+    range_key: Mapped[str] = mapped_column(
+        String(20),
+        default="30d",
+        server_default="30d",
+        comment="默认时间范围：30d/90d/year/last-year/all",
+    )
+    workshops: Mapped[list[str] | None] = mapped_column(
+        JSONB, comment="默认车间筛选代码列表；null = 全部车间"
+    )

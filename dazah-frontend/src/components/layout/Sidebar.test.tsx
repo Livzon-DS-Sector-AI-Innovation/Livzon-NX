@@ -401,14 +401,14 @@ describe('Sidebar equipment console entries', () => {
   const menuKeys = (host: HTMLElement) =>
     Array.from(host.querySelectorAll('[data-menu-key]')).map((node) => node.getAttribute('data-menu-key'))
 
-  it('lists inspection, repair and ledger in order and highlights the active module', async () => {
+  it('lists summary, inspection, repair and ledger in order and highlights the active module', async () => {
     navigation.pathname = '/equipment'
     navigation.searchParams = new URLSearchParams('workshop=101-1&module=maintenance')
     const { host, unmount } = await renderSidebar()
     try {
-      expect(menuKeys(host)).toEqual(['inspection', 'maintenance', 'assets'])
+      expect(menuKeys(host)).toEqual(['summary', 'inspection', 'maintenance', 'assets'])
       expect(Array.from(host.querySelectorAll('[data-menu-key]')).map((node) => node.textContent))
-        .toEqual(['设备巡检', '设备检修', '设备台账'])
+        .toEqual(['检修汇总', '设备巡检', '设备检修', '设备台账'])
       expect(host.querySelector('[data-selected-keys="maintenance"]')).not.toBeNull()
     } finally {
       await unmount()

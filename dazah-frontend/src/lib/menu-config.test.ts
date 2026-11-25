@@ -418,16 +418,17 @@ describe('equipment menu structure', () => {
   it('exposes each equipment console module as its own sidebar entry', () => {
     const equipment = moduleMenus.find((menu) => menu.key === 'equipment')
 
-    // 左侧菜单：设备巡检 / 设备检修 / 设备台账，各自直达对应功能模块
+    // 左侧菜单：检修汇总 / 设备巡检 / 设备检修 / 设备台账，各自直达对应功能模块
     expect(equipment?.children.map((item) => [item.key, item.label, item.path])).toEqual([
+      ['summary', '检修汇总', '/equipment?module=summary'],
       ['inspection', '设备巡检', '/equipment?module=inspection'],
       ['maintenance', '设备检修', '/equipment?module=maintenance'],
       ['assets', '设备台账', '/equipment?module=assets'],
     ])
-    // 切换功能入口时沿用当前车间
-    expect(equipment?.children.every((item) => item.carryQuery?.includes('workshop'))).toBe(true)
-    // 与工作台功能模块定义保持同一顺序与授权 key
-    expect(equipment?.children.map((item) => item.key)).toEqual(EQUIPMENT_MODULES.map((item) => item.key.replace('equipment:', '')))
+    // 汇总页是跨车间视角，不携带车间；其余功能入口切换时沿用当前车间
+    expect(equipment?.children[0].carryQuery).toBeUndefined()
+    expect(equipment?.children.slice(1).every((item) => item.carryQuery?.includes('workshop'))).toBe(true)
+    // 与工作台功能模块定义保持同一顺序与文案（汇总复用设备检修授权 key）
     expect(equipment?.children.map((item) => item.label)).toEqual(EQUIPMENT_MODULES.map((item) => item.label))
   })
 
@@ -436,6 +437,7 @@ describe('equipment menu structure', () => {
     ['/equipment', 'equipment:console'],
     ['/equipment?module=inspection', 'equipment:inspection'],
     ['/equipment?module=maintenance', 'equipment:maintenance'],
+    ['/equipment?module=summary', 'equipment:maintenance'],
     ['/equipment?module=assets', 'equipment:assets'],
     // 旧功能页与旧车间子路径仍按原功能页 key 解析（路由层重定向到工作台）
     ['/equipment/assets', 'equipment:assets'],

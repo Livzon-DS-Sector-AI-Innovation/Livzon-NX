@@ -11,6 +11,7 @@ import {
 import AssetsView from './_modules/assets-view'
 import InspectionView from './_modules/inspection-view'
 import RepairView from './_modules/repair-view'
+import SummaryView from './_modules/summary-view'
 
 export const dynamic = 'force-dynamic'
 
@@ -46,7 +47,11 @@ export default async function EquipmentConsolePage({
 
   return (
     <>
-      <WorkshopNavBlocks pageKey={pageKey ?? EQUIPMENT_PAGE_KEYS.inspection} />
+      {/* 汇总页是跨车间视角，不展示车间切换块 */}
+      {module !== 'summary' && (
+        <WorkshopNavBlocks pageKey={pageKey ?? EQUIPMENT_PAGE_KEYS.inspection} />
+      )}
+      {module === 'summary' && <SummaryView />}
       {module === 'assets' && <AssetsView workshopCode={workshopCode} />}
       {module === 'inspection' && (
         <InspectionView workshopCode={workshopCode} workshopLabel={workshopLabel} />

@@ -8,9 +8,9 @@ const hazardIdentificationsPath = '/api/v1/safety/hazard-identifications'
 const assetsKey = 'equipment:assets'
 
 const workshops = [
-  { code: '201-1', name: '设备测试一车间', is_enabled: true },
-  { code: '201-2', name: '设备测试二车间', is_enabled: true },
-  { code: '203', name: '设备受限车间', is_enabled: true },
+  { code: '201-1', name: '201一车间', is_enabled: true },
+  { code: '201-2', name: '201二车间（MC）', is_enabled: true },
+  { code: '203', name: '203车间', is_enabled: true },
 ]
 const equipmentNames = { '201-1': '一车间测试真空泵', '201-2': '二车间测试反应釜' }
 const emptyEquipmentStats = { total: 0, by_status: {}, by_category: {}, by_location: {} }

@@ -3,6 +3,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { EQUIPMENT_WORKSHOPS } from '@/lib/menu-config'
 
 const navigation = vi.hoisted(() => ({
   push: vi.fn(),
@@ -72,13 +73,13 @@ afterEach(() => {
 })
 
 describe('WorkshopNavBlocks（产线块样式）', () => {
-  it('渲染 10 个车间块并高亮 URL 指定的车间；无模块参数时点击不带 module', async () => {
+  it('渲染全部车间块并高亮 URL 指定的车间；无模块参数时点击不带 module', async () => {
     currentRoute.workshop = '201-1'
     renderBlocks()
     await act(async () => { await new Promise((r) => setTimeout(r, 0)) })
 
     const all = blocks()
-    expect(all).toHaveLength(10)
+    expect(all).toHaveLength(EQUIPMENT_WORKSHOPS.length)
     expect(all[0].getAttribute('data-testid')).toBe('workshop-block:101-1')
     const active = document.querySelector('[data-testid="workshop-block:201-1"]') as HTMLElement
     expect(active).toBeTruthy()

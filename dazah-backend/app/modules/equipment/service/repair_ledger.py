@@ -14,6 +14,8 @@
 from __future__ import annotations
 
 import logging
+import re
+import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta, timezone
@@ -29,10 +31,12 @@ from app.modules.equipment.models.feishu_app import EquipmentFeishuApp
 from app.modules.equipment.models.repair_ledger import (
     RepairFeishuConfig,
     RepairRecord,
+    RepairSummarySettings,
     RepairSyncState,
 )
 from app.modules.equipment.schemas.repair_ledger import RepairConfigUpdateRequest
 from app.modules.equipment.service import feishu_app as feishu_app_service
+from app.platform.identity.models import User
 from app.platform.integrations.feishu.bitable import BitableClient
 from app.platform.integrations.feishu.utils import (
     extract_wiki_node_token,
@@ -811,10 +815,10 @@ async def get_sync_state(db: AsyncSession, workshop_code: str) -> dict[str, Any]
 # ── 查询 ────────────────────────────────────────────────────────
 
 
-async def list_records(
-    db: AsyncSession,
+def _record_conditions(
     *,
     workshop: str | None = None,
+    workshops: list[str] | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
     keyword: str | None = None,
@@ -822,13 +826,13 @@ async def list_records(
     person: str | None = None,
     fault: str | None = None,
     result_status: str | None = None,
-    page: int = 1,
-    page_size: int = 20,
-) -> tuple[list[RepairRecord], int]:
-    """检修记录分页查询；workshop 缺省跨车间。"""
-    conditions = [RepairRecord.is_deleted == False]  # noqa: E712
+) -> list[Any]:
+    """检修记录的公共筛选条件（单车间与跨车间汇总共用）。"""
+    conditions: list[Any] = [RepairRecord.is_deleted == False]  # noqa: E712
     if workshop:
         conditions.append(RepairRecord.workshop_code == workshop)
+    if workshops:
+        conditions.append(RepairRecord.workshop_code.in_(workshops))
     if date_from is not None:
         conditions.append(RepairRecord.repaired_at >= date_from)
     if date_to is not None:
@@ -858,6 +862,36 @@ async def list_records(
                 RepairRecord.workshop_text.ilike(pattern),
             )
         )
+    return conditions
+
+
+async def list_records(
+    db: AsyncSession,
+    *,
+    workshop: str | None = None,
+    workshops: list[str] | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    keyword: str | None = None,
+    equipment: str | None = None,
+    person: str | None = None,
+    fault: str | None = None,
+    result_status: str | None = None,
+    page: int = 1,
+    page_size: int = 20,
+) -> tuple[list[RepairRecord], int]:
+    """检修记录分页查询；workshop 缺省跨车间。"""
+    conditions = _record_conditions(
+        workshop=workshop,
+        workshops=workshops,
+        date_from=date_from,
+        date_to=date_to,
+        keyword=keyword,
+        equipment=equipment,
+        person=person,
+        fault=fault,
+        result_status=result_status,
+    )
     stmt = select(RepairRecord).where(*conditions)
     total = (
         await db.execute(select(func.count()).select_from(stmt.subquery()))
@@ -1003,6 +1037,557 @@ async def filter_options(
     }
 
 
+# ── 跨车间检修汇总 ───────────────────────────────────────────────
+
+# 汇总一次拉取的最大记录数：超过时要求缩小时间范围，避免页面聚合失控
+_SUMMARY_MAX_ROWS = 20_000
+# 口径：状态原文包含以下关键词即计入「异常/待处理」
+_ABNORMAL_KEYWORDS = ("停机", "待处理", "未完成", "待观察")
+# 统计跨度超过该天数时，趋势按月聚合（否则按周）
+_TREND_MONTHLY_THRESHOLD_DAYS = 120
+
+
+def _person_names(record: RepairRecord) -> list[str]:
+    """记录里的维修人员姓名：结构化 persons 优先，回退原文按分隔符拆分。"""
+    names: list[str] = []
+    for item in record.persons or []:
+        if isinstance(item, dict):
+            name = str(item.get("name") or "").strip()
+        else:
+            name = str(item).strip()
+        if name:
+            names.append(name)
+    if not names and record.person_text:
+        names = [
+            part.strip()
+            for part in re.split(r"[、,，/]", record.person_text)
+            if part.strip()
+        ]
+    return list(dict.fromkeys(names))
+
+
+def _trend_period(value: date, granularity: str) -> str:
+    if granularity == "month":
+        return value.strftime("%Y-%m")
+    return (value - timedelta(days=value.weekday())).isoformat()
+
+
+async def summary(
+    db: AsyncSession,
+    *,
+    workshops: list[str] | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    keyword: str | None = None,
+    equipment: str | None = None,
+    person: str | None = None,
+    fault: str | None = None,
+    result_status: str | None = None,
+    top_limit: int = 10,
+) -> dict[str, Any]:
+    """跨车间检修汇总：KPI、车间对比、高频榜单与趋势。
+
+    与单车间列表使用同一套筛选条件；设备按「车间+设备名称原文」分组，
+    不跨车间合并（原文可能同名不同物）。无迁移，只读聚合。
+    """
+    conditions = _record_conditions(
+        workshops=workshops,
+        date_from=date_from,
+        date_to=date_to,
+        keyword=keyword,
+        equipment=equipment,
+        person=person,
+        fault=fault,
+        result_status=result_status,
+    )
+    rows = list(
+        (
+            await db.execute(
+                select(RepairRecord)
+                .where(*conditions)
+                .order_by(
+                    desc(RepairRecord.repaired_at), desc(RepairRecord.created_at)
+                )
+                .limit(_SUMMARY_MAX_ROWS + 1)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if len(rows) > _SUMMARY_MAX_ROWS:
+        raise AppException(
+            message=(
+                f"符合条件的记录超过 {_SUMMARY_MAX_ROWS} 条，"
+                "请缩小时间范围或筛选条件后再汇总"
+            ),
+            status_code=400,
+        )
+
+    # 车间清单：启用车间 + 本次记录中出现的车间；车间筛选时只留选中项
+    from app.modules.equipment.service import workshop as workshop_service
+
+    enabled = await workshop_service.list_enabled(db)
+    universe: dict[str, str] = {item.code: item.name for item in enabled}
+    if workshops:
+        selected = set(workshops)
+        universe = {
+            code: name for code, name in universe.items() if code in selected
+        }
+        for code in workshops:
+            universe.setdefault(code, code)
+    for record in rows:
+        universe.setdefault(record.workshop_code, record.workshop_code)
+
+    stats: dict[str, dict[str, Any]] = {
+        code: {
+            "name": name,
+            "count": 0,
+            "equipment": set(),
+            "persons": set(),
+            "abnormal": 0,
+            "last": None,
+        }
+        for code, name in universe.items()
+    }
+
+    equipment_counts: dict[tuple[str, str], int] = {}
+    equipment_last: dict[tuple[str, str], date] = {}
+    equipment_keys: set[tuple[str, str]] = set()
+    fault_counts: dict[str, int] = {}
+    fault_equipment: dict[str, set[tuple[str, str]]] = {}
+    fault_workshops: dict[str, dict[str, int]] = {}
+    fault_last: dict[str, date] = {}
+    person_info: dict[str, dict[str, Any]] = {}
+    trend_counts: dict[tuple[str, str], int] = {}
+    trend_equipment: dict[tuple[str, str], set[str]] = {}
+
+    dates = [record.repaired_at for record in rows if record.repaired_at]
+    if date_from is not None:
+        effective_to = date_to or date.today()
+        days = max((effective_to - date_from).days + 1, 1)
+    elif dates:
+        days = max((max(dates) - min(dates)).days + 1, 1)
+    else:
+        days = 1
+    granularity = (
+        "month"
+        if date_from is None or days > _TREND_MONTHLY_THRESHOLD_DAYS
+        else "week"
+    )
+
+    abnormal_count = 0
+    for record in rows:
+        code = record.workshop_code
+        state = stats[code]
+        state["count"] += 1
+
+        equipment_text = (record.equipment_text or "").strip()
+        if equipment_text:
+            key = (code, equipment_text)
+            state["equipment"].add(equipment_text)
+            equipment_keys.add(key)
+            equipment_counts[key] = equipment_counts.get(key, 0) + 1
+            if record.repaired_at is not None:
+                previous = equipment_last.get(key)
+                if previous is None or record.repaired_at > previous:
+                    equipment_last[key] = record.repaired_at
+
+        for name in _person_names(record):
+            state["persons"].add(name)
+            info = person_info.setdefault(
+                name,
+                {
+                    "times": 0,
+                    "workshops": set(),
+                    "workshop_times": {},
+                    "last": None,
+                    "open_id": None,
+                    "avatar_url": None,
+                },
+            )
+            info["times"] += 1
+            info["workshops"].add(code)
+            workshop_times = info["workshop_times"]
+            workshop_times[code] = workshop_times.get(code, 0) + 1
+            if record.repaired_at is not None:
+                last = info["last"]
+                if last is None or record.repaired_at > last:
+                    info["last"] = record.repaired_at
+        for item in record.persons or []:
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get("name") or "").strip()
+            ref = person_info.get(name)
+            if ref is None:
+                continue
+            if not ref["open_id"] and item.get("open_id"):
+                ref["open_id"] = str(item["open_id"])
+            if not ref["avatar_url"] and item.get("avatar_url"):
+                ref["avatar_url"] = str(item["avatar_url"])
+
+        is_abnormal = bool(
+            record.result
+            and any(keyword in record.result for keyword in _ABNORMAL_KEYWORDS)
+        )
+        if is_abnormal:
+            abnormal_count += 1
+            state["abnormal"] += 1
+
+        if record.repaired_at is not None:
+            last = state["last"]
+            if last is None or record.repaired_at > last:
+                state["last"] = record.repaired_at
+
+        fault_text = re.sub(r"\s+", "", record.fault_desc or "").strip()
+        if fault_text:
+            fault_counts[fault_text] = fault_counts.get(fault_text, 0) + 1
+            workshop_counts = fault_workshops.setdefault(fault_text, {})
+            workshop_counts[code] = workshop_counts.get(code, 0) + 1
+            if equipment_text:
+                fault_equipment.setdefault(fault_text, set()).add(
+                    (code, equipment_text)
+                )
+            if record.repaired_at is not None:
+                last = fault_last.get(fault_text)
+                if last is None or record.repaired_at > last:
+                    fault_last[fault_text] = record.repaired_at
+
+        if record.repaired_at is not None:
+            period = _trend_period(record.repaired_at, granularity)
+            trend_key = (period, code)
+            trend_counts[trend_key] = trend_counts.get(trend_key, 0) + 1
+            if equipment_text:
+                trend_equipment.setdefault(trend_key, set()).add(equipment_text)
+
+    previous_total: int | None = None
+    change_rate: float | None = None
+    if date_from is not None:
+        previous_to = date_from - timedelta(days=1)
+        previous_from = previous_to - timedelta(days=days - 1)
+        previous_conditions = _record_conditions(
+            workshops=workshops,
+            date_from=previous_from,
+            date_to=previous_to,
+            keyword=keyword,
+            equipment=equipment,
+            person=person,
+            fault=fault,
+            result_status=result_status,
+        )
+        previous_total = int(
+            (
+                await db.execute(
+                    select(func.count(RepairRecord.id)).where(
+                        *previous_conditions
+                    )
+                )
+            ).scalar_one()
+        )
+        if previous_total:
+            change_rate = round(
+                (len(rows) - previous_total) / previous_total * 100, 1
+            )
+
+    config_rows = (
+        (
+            await db.execute(
+                select(RepairFeishuConfig).where(
+                    RepairFeishuConfig.is_deleted == False  # noqa: E712
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    state_rows = (
+        (
+            await db.execute(
+                select(RepairSyncState).where(
+                    RepairSyncState.is_deleted == False  # noqa: E712
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    configs = {row.workshop_code: row for row in config_rows}
+    sync_states = {row.workshop_code: row for row in state_rows}
+
+    workshop_items: list[dict[str, Any]] = []
+    for code, state in stats.items():
+        config = configs.get(code)
+        configured = bool(config and config.app_token and config.table_id)
+        enabled_sync = bool(
+            config is not None and configured and config.is_enabled
+        )
+        sync_state = sync_states.get(code)
+        if not configured:
+            status = "not_configured"
+        elif not enabled_sync:
+            status = "disabled"
+        elif sync_state and sync_state.last_status == "failed":
+            status = "sync_failed"
+        elif state["count"] == 0:
+            status = "no_records"
+        else:
+            status = "normal"
+        workshop_items.append(
+            {
+                "workshop_code": code,
+                "workshop_name": state["name"],
+                "repair_count": state["count"],
+                "equipment_count": len(state["equipment"]),
+                "person_count": len(state["persons"]),
+                "abnormal_count": state["abnormal"],
+                "last_repaired_at": state["last"],
+                "last_synced_at": (
+                    sync_state.last_synced_at if sync_state else None
+                ),
+                "last_sync_status": (
+                    sync_state.last_status if sync_state else None
+                ),
+                "configured": configured,
+                "enabled": enabled_sync,
+                "status": status,
+            }
+        )
+    workshop_items.sort(
+        key=lambda item: (-item["repair_count"], item["workshop_code"])
+    )
+
+    top_equipment = [
+        {
+            "workshop_code": code,
+            "workshop_name": stats[code]["name"],
+            "equipment_text": equipment_text,
+            "times": times,
+            "last_repaired_at": equipment_last.get((code, equipment_text)),
+        }
+        for (code, equipment_text), times in sorted(
+            equipment_counts.items(),
+            key=lambda item: (-item[1], item[0][0], item[0][1]),
+        )[:top_limit]
+    ]
+
+    top_faults = [
+        {
+            "fault_desc": fault_text,
+            "times": times,
+            "equipment_count": len(fault_equipment.get(fault_text, set())),
+            "workshops": [
+                {
+                    "workshop_code": code,
+                    "workshop_name": stats[code]["name"],
+                    "times": workshop_times,
+                }
+                for code, workshop_times in sorted(
+                    fault_workshops.get(fault_text, {}).items(),
+                    key=lambda item: (-item[1], item[0]),
+                )
+            ],
+            "last_repaired_at": fault_last.get(fault_text),
+        }
+        for fault_text, times in sorted(
+            fault_counts.items(),
+            key=lambda item: (
+                -item[1],
+                -len(fault_equipment.get(item[0], set())),
+                item[0],
+            ),
+        )[:top_limit]
+    ]
+
+    top_persons = [
+        {
+            "name": name,
+            "open_id": info["open_id"],
+            "avatar_url": info["avatar_url"],
+            "times": info["times"],
+            "workshop_count": len(info["workshops"]),
+            "workshops": [
+                {
+                    "workshop_code": code,
+                    "workshop_name": stats[code]["name"],
+                    "times": workshop_times,
+                }
+                for code, workshop_times in sorted(
+                    info["workshop_times"].items(),
+                    key=lambda item: (-item[1], item[0]),
+                )
+            ],
+            "last_repaired_at": info["last"],
+        }
+        for name, info in sorted(
+            person_info.items(), key=lambda item: (-item[1]["times"], item[0])
+        )[:top_limit]
+    ]
+
+    trend = [
+        {
+            "period": period,
+            "workshop_code": code,
+            "workshop_name": stats[code]["name"],
+            "count": count,
+            "equipment_count": len(trend_equipment.get((period, code), set())),
+        }
+        for (period, code), count in sorted(
+            trend_counts.items(), key=lambda item: (item[0][0], item[0][1])
+        )
+    ]
+
+    return {
+        "kpi": {
+            "total_count": len(rows),
+            "equipment_count": len(equipment_keys),
+            "workshop_count": sum(
+                1 for state in stats.values() if state["count"] > 0
+            ),
+            "total_workshops": len(stats),
+            "person_count": len(person_info),
+            "abnormal_count": abnormal_count,
+            "daily_average": round(len(rows) / days, 1),
+            "previous_total_count": previous_total,
+            "change_rate": change_rate,
+        },
+        "workshops": workshop_items,
+        "top_equipment": top_equipment,
+        "top_faults": top_faults,
+        "top_persons": top_persons,
+        "trend": trend,
+        "trend_granularity": granularity,
+    }
+
+
+# ── 检修汇总全厂默认设置 ─────────────────────────────────────────
+
+_SUMMARY_SETTINGS_SCOPE = "global"
+_SUMMARY_SORT_FIELDS = frozenset(
+    {
+        "workshop",
+        "repair_count",
+        "equipment_count",
+        "abnormal_count",
+        "person_count",
+        "last_repaired_at",
+    }
+)
+_SUMMARY_RANGE_KEYS = frozenset({"30d", "90d", "year", "last-year", "all"})
+_SUMMARY_DEFAULT_SETTINGS: dict[str, Any] = {
+    "sort_field": "workshop",
+    "sort_order": "ascend",
+    "range_key": "30d",
+    "workshops": None,
+}
+
+
+async def _summary_settings_row(
+    db: AsyncSession,
+) -> RepairSummarySettings | None:
+    rows = (
+        await db.execute(
+            select(RepairSummarySettings).where(
+                RepairSummarySettings.scope == _SUMMARY_SETTINGS_SCOPE,
+                RepairSummarySettings.is_deleted == False,  # noqa: E712
+            )
+        )
+    ).scalars()
+    return rows.first()
+
+
+async def get_summary_settings(db: AsyncSession) -> dict[str, Any]:
+    """读取全厂默认设置；没有配置行时返回系统默认。"""
+    row = await _summary_settings_row(db)
+    if row is None:
+        return {
+            **_SUMMARY_DEFAULT_SETTINGS,
+            "updated_by_name": None,
+            "updated_at": None,
+        }
+    updated_by_name = None
+    if row.updated_by is not None:
+        updated_by_name = (
+            await db.execute(
+                select(User.name).where(User.id == row.updated_by)
+            )
+        ).scalar_one_or_none()
+    return {
+        "sort_field": row.sort_field,
+        "sort_order": row.sort_order,
+        "range_key": row.range_key,
+        "workshops": row.workshops,
+        "updated_by_name": updated_by_name,
+        "updated_at": row.updated_at,
+    }
+
+
+async def can_edit_summary_settings(
+    db: AsyncSession, user: User | None
+) -> bool:
+    """保存默认设置需要设备检修页的 operate 授权（管理员由权限服务放行）。"""
+    if user is None:
+        return False
+    from app.platform.identity.page_permissions import PagePermissionService
+
+    grants = await PagePermissionService().effective_grants(db, user=user)
+    return any(
+        grant.page_key == "equipment:maintenance"
+        and "operate" in grant.permissions
+        for grant in grants
+    )
+
+
+async def update_summary_settings(
+    db: AsyncSession,
+    *,
+    sort_field: str,
+    sort_order: str,
+    range_key: str,
+    workshops: list[str] | None,
+    updated_by: uuid.UUID | None,
+) -> dict[str, Any]:
+    """保存全厂默认设置；车间列表按当前启用车间过滤。"""
+    if sort_field not in _SUMMARY_SORT_FIELDS:
+        raise AppException(message="排序字段不正确", status_code=400)
+    if sort_order not in {"ascend", "descend"}:
+        raise AppException(message="排序方向不正确", status_code=400)
+    if range_key not in _SUMMARY_RANGE_KEYS:
+        raise AppException(message="时间范围不正确", status_code=400)
+
+    from app.modules.equipment.service import workshop as workshop_service
+
+    enabled_codes = {
+        item.code for item in await workshop_service.list_enabled(db)
+    }
+    codes = [code for code in (workshops or []) if code in enabled_codes]
+
+    row = await _summary_settings_row(db)
+    if row is None:
+        row = RepairSummarySettings(scope=_SUMMARY_SETTINGS_SCOPE)
+        db.add(row)
+    row.sort_field = sort_field
+    row.sort_order = sort_order
+    row.range_key = range_key
+    row.workshops = codes or None
+    row.updated_by = updated_by
+    await db.commit()
+    await db.refresh(row)
+    return await get_summary_settings(db)
+
+
+async def reset_summary_settings(
+    db: AsyncSession, *, updated_by: uuid.UUID | None
+) -> dict[str, Any]:
+    """恢复系统默认设置（保留修改人/时间便于追溯）。"""
+    return await update_summary_settings(
+        db,
+        sort_field="workshop",
+        sort_order="ascend",
+        range_key="30d",
+        workshops=None,
+        updated_by=updated_by,
+    )
+
+
 # 导出 Excel 列定义：主表 6 列 + 展开卡独有的车间及地点、备注
 EXPORT_COLUMNS: tuple[tuple[str, str], ...] = (
     ("repaired_at", "维修日期"),
@@ -1023,6 +1608,7 @@ async def export_records_xlsx(
     db: AsyncSession,
     *,
     workshop: str | None = None,
+    workshops: list[str] | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
     keyword: str | None = None,
@@ -1038,6 +1624,7 @@ async def export_records_xlsx(
     rows, total = await list_records(
         db,
         workshop=workshop,
+        workshops=workshops,
         date_from=date_from,
         date_to=date_to,
         keyword=keyword,

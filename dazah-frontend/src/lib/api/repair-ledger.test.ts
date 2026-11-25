@@ -7,7 +7,11 @@ import {
   fetchRepairFrequency,
   fetchRepairRecords,
   fetchRepairResults,
+  fetchRepairSummary,
+  fetchRepairSummarySettings,
   fetchRepairSyncStatus,
+  resetRepairSummarySettings,
+  saveRepairSummarySettings,
   testRepairConfig,
   triggerRepairSync,
   updateRepairConfig,
@@ -258,5 +262,90 @@ describe('repair-ledger api', () => {
     expect(init?.method).toBe('PUT')
     expect((init?.headers as Record<string, string>)['Content-Type']).toBe('application/json')
     expect(JSON.parse(init?.body as string)).toEqual(payload)
+  })
+
+  it('fetches the cross-workshop summary with filters and workshop list', async () => {
+    const payload = {
+      kpi: { total_count: 3 },
+      workshops: [],
+      top_equipment: [],
+      top_faults: [],
+      top_persons: [],
+      trend: [],
+      trend_granularity: 'week',
+    }
+    const fetchMock = mockFetch({ code: 200, data: payload })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await fetchRepairSummary({
+      workshops: ['102-1', '101-2'],
+      date_from: '2026-10-27',
+      date_to: '2026-11-25',
+      keyword: '机封',
+      equipment: '离心泵A',
+      person: '张三',
+      fault: '漏水',
+      result: '正常',
+      top_limit: 10,
+    })
+    expect(calledUrls(fetchMock)[0].startsWith(`${BASE}/summary?`)).toBe(true)
+    expect(Object.fromEntries(queryParams(fetchMock))).toEqual({
+      workshops: '102-1,101-2',
+      date_from: '2026-10-27',
+      date_to: '2026-11-25',
+      keyword: '机封',
+      equipment: '离心泵A',
+      person: '张三',
+      fault: '漏水',
+      result_status: '正常',
+      top_limit: '10',
+    })
+    expect(result).toEqual(payload)
+  })
+
+  it('omits empty summary filters', async () => {
+    const fetchMock = mockFetch({ code: 200, data: { kpi: { total_count: 0 } } })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await fetchRepairSummary()
+    expect(calledUrls(fetchMock)).toEqual([`${BASE}/summary?`])
+  })
+
+  it('loads, saves and resets the summary settings', async () => {
+    const settings = {
+      sort_field: 'workshop',
+      sort_order: 'ascend',
+      range_key: '30d',
+      workshops: null,
+      updated_by_name: '管理员',
+      updated_at: '2026-11-25T08:00:00Z',
+      can_edit: true,
+    }
+    const fetchMock = mockFetch({ code: 200, data: settings })
+    vi.stubGlobal('fetch', fetchMock)
+
+    expect(await fetchRepairSummarySettings()).toEqual(settings)
+    expect(calledUrls(fetchMock)).toEqual([`${BASE}/summary/settings`])
+
+    await saveRepairSummarySettings({
+      sort_field: 'repair_count',
+      sort_order: 'descend',
+      range_key: '90d',
+      workshops: ['102-1'],
+    })
+    const [saveUrl, saveInit] = fetchMock.mock.calls.at(-1)!
+    expect(saveUrl).toBe(`${BASE}/summary/settings`)
+    expect(saveInit?.method).toBe('PUT')
+    expect(JSON.parse(saveInit?.body as string)).toEqual({
+      sort_field: 'repair_count',
+      sort_order: 'descend',
+      range_key: '90d',
+      workshops: ['102-1'],
+    })
+
+    await resetRepairSummarySettings()
+    const [resetUrl, resetInit] = fetchMock.mock.calls.at(-1)!
+    expect(resetUrl).toBe(`${BASE}/summary/settings`)
+    expect(resetInit?.method).toBe('DELETE')
   })
 })

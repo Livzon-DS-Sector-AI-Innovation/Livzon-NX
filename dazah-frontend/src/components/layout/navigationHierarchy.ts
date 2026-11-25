@@ -50,10 +50,16 @@ export function getNavigationHierarchy(module: ModuleMenu, pathname: string): {
   levels: NavigationLevel[]
   modulePath: string
 } {
+  // 设备工作台的原首页是「设备巡检」；「检修汇总」只是菜单第一项，不作为模块首页
+  const homeChildren = module.key === "equipment"
+    ? module.children.filter((item) => item.key !== "summary")
+    : module.children
   const modulePath = module.children.some((item) => item.path === module.path)
     ? module.path
-    : firstAccessiblePath(module.children) || module.path
-  const trail = findMenuTrail(module.children, pathname) || []
+    : firstAccessiblePath(homeChildren) || module.path
+  const trail = pathname === module.path
+    ? []
+    : (findMenuTrail(module.children, pathname) || [])
   const matchedPath = trail.at(-1)?.path?.split("?")[0]
   const isDetail = Boolean(matchedPath && pathname !== matchedPath && pathname.startsWith(`${matchedPath}/`))
   // 工作台型模块（如设备 /equipment?module=…）的首页按路径部分比较
