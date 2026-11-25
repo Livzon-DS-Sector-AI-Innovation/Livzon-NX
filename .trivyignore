@@ -15,10 +15,3 @@ CVE-2026-63349
 # 系统包，Dockerfile 属 CODEOWNERS 保护路径，无法随业务 PR 合并）。
 # 跟踪：在属主维护的镜像升级 PR 中执行 apt 升级后移除本条。
 CVE-2026-109518
-
-# gpgme: double free in read_status()（libgpgme11/libgpgmepp6，修复版
-# 1.18.0-3+deb12u1。CI 构建的 apt 层缓存稳定命中旧包，re-run 无效；
-# 与 2026-09-19 先例 CVE-2026-109518 同因。2026-11-25 首次披露即被
-# 门禁拦下，与业务代码无关）。
-# 跟踪：在属主维护的镜像升级 PR 中执行 apt 升级后移除本条。
-CVE-2026-129975
