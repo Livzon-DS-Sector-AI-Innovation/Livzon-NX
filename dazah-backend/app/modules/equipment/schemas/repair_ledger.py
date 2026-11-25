@@ -8,6 +8,16 @@ from datetime import date, datetime
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class RepairPerson(BaseModel):
+    """维修人员（同步时经通讯录解析；解析不到时整列为空）"""
+
+    name: str = Field(description="姓名（解析失败时回退 open_id）")
+    open_id: str | None = Field(default=None, description="飞书 open_id")
+    avatar_url: str | None = Field(
+        default=None, description="头像（通讯录无权限时为空）"
+    )
+
+
 class RepairRecordResponse(BaseModel):
     """检修记录（飞书镜像，原文展示，不关联设备台账）"""
 
@@ -22,6 +32,9 @@ class RepairRecordResponse(BaseModel):
     )
     repaired_at: date | None = Field(default=None, description="维修日期")
     person_text: str | None = Field(default=None, description="维修人员（原文）")
+    persons: list[RepairPerson] | None = Field(
+        default=None, description="维修人员（头像解析成功时才有值，展示优先于原文）"
+    )
     fault_desc: str | None = Field(default=None, description="故障描述/原因")
     spare_parts: str | None = Field(default=None, description="更换备件")
     result: str | None = Field(default=None, description="维修后状态（原文）")
@@ -37,6 +50,14 @@ class RepairFrequencyItem(BaseModel):
     equipment_text: str = Field(description="设备名称/型号（原文）")
     times: int = Field(description="维修次数")
     last_repaired_at: date | None = Field(default=None, description="最近维修日期")
+
+
+class RepairFilterOptions(BaseModel):
+    """筛选下拉的去重选项（按出现次数降序）"""
+
+    persons: list[str] = Field(default_factory=list, description="维修人员姓名")
+    faults: list[str] = Field(default_factory=list, description="故障描述/原因")
+    equipments: list[str] = Field(default_factory=list, description="设备名称/型号")
 
 
 class RepairSyncStateResponse(BaseModel):

@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.equipment.models.repair_ledger import RepairRecord
 
 MERGE_HEAD = "b098d78d072c"
+PERSONS_COLUMN_REVISION = "db1d4d7f5632"
 MERGE_WITH_MAIN = "698173f2428c"
 REPAIR_TABLES_REVISION = "8910770ab796"
 
@@ -170,9 +171,14 @@ def test_migration_history_has_the_merge_as_its_single_head():
     config.set_main_option("script_location", str(_backend_root() / "alembic"))
     script = ScriptDirectory.from_config(config)
 
-    assert script.get_heads() == [MERGE_HEAD]
+    assert script.get_heads() == [PERSONS_COLUMN_REVISION]
     revisions = {revision.revision for revision in script.walk_revisions()}
-    assert {REPAIR_TABLES_REVISION, MERGE_WITH_MAIN, "b4f2c8d1e3a5"} <= revisions
+    assert {
+        REPAIR_TABLES_REVISION,
+        MERGE_WITH_MAIN,
+        MERGE_HEAD,
+        "b4f2c8d1e3a5",
+    } <= revisions
 
 
 async def test_repair_record_is_unique_per_workshop_only_while_not_deleted(

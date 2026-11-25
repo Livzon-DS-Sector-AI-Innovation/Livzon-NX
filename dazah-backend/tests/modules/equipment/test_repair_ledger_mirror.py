@@ -1,6 +1,7 @@
 """设备检修台账（飞书镜像）同步与查询测试。"""
 
 from datetime import date, datetime, timedelta
+from types import SimpleNamespace
 from typing import Any
 from uuid import uuid4
 
@@ -101,6 +102,15 @@ def _feishu_item(record_id: str, **field_values: Any) -> dict[str, Any]:
 class _FakeClient:
     def __init__(self, items: list[dict[str, Any]]) -> None:
         self._items = items
+        # 底层 FeishuClient 替身：人员解析用它读通讯录；默认无权限（返回空）
+        self.client = SimpleNamespace(request=self._contact_request)
+
+    async def _contact_request(
+        self, _method: str, path: str, **_kwargs: Any
+    ) -> dict[str, Any]:
+        if path.startswith("/contact/v3/users/find_by_department"):
+            return {"data": {"items": [], "has_more": False}}
+        return {"data": {}}
 
     async def search_records_page(self, table_id: str, **kwargs: Any) -> dict[str, Any]:
         return {

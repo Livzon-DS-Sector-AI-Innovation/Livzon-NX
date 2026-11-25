@@ -3769,6 +3769,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/equipment/repair/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 导出检修记录 Excel（当前筛选的全部记录） */
+        get: operations["export_repair_records_api_v1_equipment_repair_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/repair/filter-options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 筛选下拉选项（人员/故障/设备） */
+        get: operations["repair_filter_options_api_v1_equipment_repair_filter_options_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/equipment/repair/frequency": {
         parameters: {
             query?: never;
@@ -83740,6 +83774,88 @@ export interface operations {
             };
         };
     };
+    export_repair_records_api_v1_equipment_repair_export_get: {
+        parameters: {
+            query?: {
+                /** @description 车间代码；缺省跨车间查询 */
+                workshop?: string | null;
+                /** @description 维修日期起 */
+                date_from?: string | null;
+                /** @description 维修日期止 */
+                date_to?: string | null;
+                /** @description 设备/故障/人员搜索 */
+                keyword?: string | null;
+                /** @description 设备名称原文 */
+                equipment?: string | null;
+                /** @description 维修人员姓名 */
+                person?: string | null;
+                /** @description 故障描述（模糊匹配） */
+                fault?: string | null;
+                /** @description 维修后状态原文 */
+                result_status?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    repair_filter_options_api_v1_equipment_repair_filter_options_get: {
+        parameters: {
+            query?: {
+                /** @description 车间代码；缺省跨车间查询 */
+                workshop?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     repair_frequency_api_v1_equipment_repair_frequency_get: {
         parameters: {
             query?: {
@@ -83790,6 +83906,10 @@ export interface operations {
                 keyword?: string | null;
                 /** @description 设备名称原文（频次榜点入） */
                 equipment?: string | null;
+                /** @description 维修人员姓名（结构化或原文） */
+                person?: string | null;
+                /** @description 故障描述（模糊匹配） */
+                fault?: string | null;
                 /** @description 维修后状态原文 */
                 result_status?: string | null;
                 page?: number;
