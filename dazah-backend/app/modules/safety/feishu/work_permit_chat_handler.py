@@ -58,10 +58,8 @@ _FAST_ACTS = frozenset(
         "toggle_risk",
         "toggle_measure",
         "set_level",
-        "search_role",
-        "choose_cert",
+        "search_cert",
         "person_prev",
-        "clear_search",
         "ext_add",
         "ext_del",
     }
@@ -93,7 +91,7 @@ def _value_from_submit_name(name: str) -> dict[str, Any] | None:
         return None
     act = parts[1]
     value: dict[str, Any] = {"module": "wp_chat", "act": act}
-    if act in ("step_save", "submit") and len(parts) >= 4:
+    if act in ("step_save", "submit", "search_cert") and len(parts) >= 4:
         value["type"] = parts[2]
         value["step"] = parts[3]
         if act == "step_save" and len(parts) >= 5:
@@ -308,6 +306,11 @@ async def _run_fast_action(
     """快动作：2.9s 内完成业务，卡片经 PATCH 原消息呈现（EVENT 通道约束）。"""
     # 纯卡片动作不碰数据库
     if act == "menu":
+        logger.info(
+            "wp_chat 快动作: act=menu open_id=%s message_id=%s",
+            open_id,
+            _message_id(event),
+        )
         card = build_menu_card(open_id)
         asyncio.create_task(_patch_open_message(event, card))
         return _card_response(card)
@@ -342,18 +345,11 @@ async def _run_fast_action(
                 )
             elif act == "set_level":
                 card = await flow.set_level(permit_type, str(value.get("level") or ""))
-            elif act == "search_role":
-                search_role_key = str(value.get("search_role") or "")
-                card = await flow.search_role_persons(
+            elif act == "search_cert":
+                card = await flow.search_cert(
                     permit_type,
-                    search_role_key,
-                    str(_form_value(event).get(f"person_kw__{search_role_key}") or ""),
-                )
-            elif act == "choose_cert":
-                card = await flow.choose_cert_person(
-                    permit_type,
-                    str(value.get("role") or ""),
-                    str(value.get("cert_id") or ""),
+                    int(value.get("step") or 0),
+                    str(_form_value(event).get("cert_kw") or ""),
                 )
             elif act == "person_prev":
                 card = await flow.person_prev(
@@ -364,8 +360,6 @@ async def _run_fast_action(
                 card = await adjust(
                     permit_type, int(value.get("person_role_idx") or 0)
                 )
-            elif act == "clear_search":
-                card = await flow.clear_person_search(permit_type)
             elif act == "use_default_sign":
                 card = await flow.use_default_sign(
                     permit_type, str(value.get("sign_key") or "")
@@ -386,10 +380,11 @@ async def _run_fast_action(
         return _card_response(card, toast)
     except AppException as exc:
         if getattr(exc, "status_code", None) == 410:
-            # 表单过期：回菜单卡引导重新发起
-            card = build_menu_card(open_id)
+            # 表单过期：回菜单卡并在卡面显著标注（toast 一闪而过易被忽略）
+            notice = "原表单已过期（超过24小时），请重新发起"
+            card = build_menu_card(open_id, notice=notice)
             asyncio.create_task(_patch_open_message(event, card))
-            return _card_response(card, "表单已过期，请重新发起")
+            return _card_response(card, notice)
         await _reply_error(open_id, str(exc.message or "处理失败"))
         return _toast("error", str(exc.message or "处理失败"))
     except Exception:
