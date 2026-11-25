@@ -19,8 +19,9 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta, timezone
 from typing import Any
 
-from sqlalchemy import delete, desc, func, or_, select
+from sqlalchemy import String, delete, desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import InstrumentedAttribute
 
 from app.core.exceptions import AppException
 from app.core.llm.encryption import encrypt_api_key, mask_api_key
@@ -479,6 +480,163 @@ async def _fetch_all_records(
     return records
 
 
+# ── 维修人员头像解析 ──────────────────────────────────────────────
+# 与菌种页同一套思路：人员字段按 open_id 精确取，手打文本按姓名匹配
+# 通讯录（全量拉一次建索引）；通讯录无权限或未匹配时降级为仅姓名，
+# 不影响同步本身。
+
+
+def _extract_person_refs(fields: dict[str, Any]) -> list[dict[str, str]]:
+    """「维修人员」列原文 → 待解析引用（open_id / 姓名 / 字段自带头像）。
+
+    飞书人员字段返回 [{"id": "ou_…", "name": …, "avatar_url": …}]——
+    头像已随表格数据带回，无需再查通讯录；文本列返回
+    ["张三", "李四"] 或纯字符串。列名按关键字「人员」匹配。
+    """
+    for field_name, value in (fields or {}).items():
+        if "人员" not in field_name:
+            continue
+        refs: list[dict[str, str]] = []
+        if isinstance(value, list):
+            for seg in value:
+                if isinstance(seg, dict):
+                    open_id = seg.get("id")
+                    if open_id:
+                        refs.append(
+                            {
+                                "open_id": str(open_id),
+                                "name": str(seg.get("name") or ""),
+                                "avatar_url": str(seg.get("avatar_url") or ""),
+                            }
+                        )
+                elif seg is not None and str(seg).strip():
+                    refs.append({"name": str(seg).strip()})
+        elif isinstance(value, str) and value.strip():
+            refs.append({"name": value.strip()})
+        return refs
+    return []
+
+
+class _PersonResolver:
+    """一次同步内复用的维修人员解析器（按 open_id / 按姓名）。"""
+
+    def __init__(self, client: BitableClient) -> None:
+        # BitableClient 持有底层 FeishuClient，通讯录走同一个应用凭据
+        self._request = client.client.request
+        self._by_open_id: dict[str, dict[str, Any]] = {}
+        self._by_name: dict[str, dict[str, Any]] | None = None
+        self._directory_failed = False
+
+    async def _fetch_user(self, open_id: str) -> dict[str, Any]:
+        data = await self._request(
+            "GET", f"/contact/v3/users/{open_id}", params={"user_id_type": "open_id"}
+        )
+        user = (data.get("data") or {}).get("user") or {}
+        avatar = user.get("avatar") or {}
+        return {
+            "name": str(user.get("name") or ""),
+            "open_id": open_id,
+            "avatar_url": avatar.get("avatar_240") or avatar.get("avatar_72") or None,
+        }
+
+    async def _name_directory(self) -> dict[str, dict[str, Any]]:
+        """全量通讯录建「姓名 → 人」索引；无权限时返回空并记住失败。"""
+        if self._by_name is not None or self._directory_failed:
+            return self._by_name or {}
+        directory: dict[str, dict[str, Any]] = {}
+        page_token: str | None = None
+        try:
+            while True:
+                params: dict[str, Any] = {
+                    "department_id": "0",
+                    "page_size": 50,
+                    "user_id_type": "open_id",
+                }
+                if page_token:
+                    params["page_token"] = page_token
+                data = await self._request(
+                    "GET", "/contact/v3/users/find_by_department", params=params
+                )
+                payload = data.get("data") or {}
+                for user in payload.get("items") or []:
+                    name = str(user.get("name") or "").strip()
+                    if not name:
+                        continue
+                    avatar = user.get("avatar") or {}
+                    directory.setdefault(
+                        name,
+                        {
+                            "name": name,
+                            "open_id": str(user.get("open_id") or "") or None,
+                            "avatar_url": avatar.get("avatar_240")
+                            or avatar.get("avatar_72")
+                            or None,
+                        },
+                    )
+                if not payload.get("has_more"):
+                    break
+                page_token = payload.get("page_token")
+        except Exception:  # noqa: BLE001 —— 通讯录权限缺失等，降级为仅姓名
+            logger.warning("repair ledger contact directory unavailable")
+            self._directory_failed = True
+            return {}
+        self._by_name = directory
+        return directory
+
+    async def resolve(self, refs: list[dict[str, str]]) -> list[dict[str, Any]] | None:
+        """解析一组人员引用；全部解析不到头像时返回 None（展示回退原文）。"""
+        resolved: list[dict[str, Any]] = []
+        for ref in refs:
+            open_id = ref.get("open_id")
+            info: dict[str, Any]
+            if open_id and ref.get("avatar_url"):
+                # 人员字段自带头像：直接采用，不依赖通讯录权限
+                info = {
+                    "name": ref.get("name") or "",
+                    "open_id": open_id,
+                    "avatar_url": ref["avatar_url"],
+                }
+            elif open_id:
+                info = await self._resolve_by_open_id(open_id, ref.get("name") or "")
+            else:
+                info = await self._resolve_by_name(ref.get("name") or "")
+            if info.get("name") or info.get("open_id"):
+                resolved.append(
+                    {
+                        "name": str(info.get("name") or info.get("open_id") or ""),
+                        "open_id": info.get("open_id") or None,
+                        "avatar_url": info.get("avatar_url") or None,
+                    }
+                )
+        # 全部都没有头像时视为未解析（前端回退 person_text 原文展示）
+        if not resolved or not any(item["avatar_url"] for item in resolved):
+            return None
+        return resolved
+
+    async def _resolve_by_open_id(
+        self, open_id: str, fallback_name: str
+    ) -> dict[str, Any]:
+        cached = self._by_open_id.get(open_id)
+        if cached is None:
+            try:
+                cached = await self._fetch_user(open_id)
+            except Exception:  # noqa: BLE001 —— 单人失败不影响其余
+                logger.warning("repair ledger contact resolve failed: %s", open_id)
+                cached = {"name": "", "open_id": open_id, "avatar_url": None}
+            self._by_open_id[open_id] = cached
+        info = dict(cached)
+        info["name"] = info.get("name") or fallback_name
+        return info
+
+    async def _resolve_by_name(self, name: str) -> dict[str, Any]:
+        if not name:
+            return {"name": "", "open_id": None, "avatar_url": None}
+        info = (await self._name_directory()).get(name)
+        if info is None:
+            return {"name": name, "open_id": None, "avatar_url": None}
+        return dict(info)
+
+
 async def sync_workshop(
     db: AsyncSession, workshop_code: str, *, config: RepairEffectiveConfig | None = None
 ) -> dict[str, Any]:
@@ -508,6 +666,7 @@ async def sync_workshop(
         "person_text": _PERSON_TEXT_MAX,
         "result": _RESULT_MAX,
     }
+    person_resolver = _PersonResolver(client)
     keep_ids: set[str] = set()
     for item in records:
         record_id = str(item.get("record_id") or "")
@@ -516,6 +675,9 @@ async def sync_workshop(
         keep_ids.add(record_id)
         fields = item.get("fields") or {}
         values = normalize_record_fields(fields)
+        # 维修人员：人员字段/文本 → 结构化（姓名+头像）；解析不到时为空
+        person_refs = _extract_person_refs(fields)
+        persons = await person_resolver.resolve(person_refs) if person_refs else None
         column_values: dict[str, Any] = {
             "workshop_code": workshop_code,
             "record_id": record_id,
@@ -523,6 +685,7 @@ async def sync_workshop(
             "fault_desc": values.get("fault_desc"),
             "spare_parts": values.get("spare_parts"),
             "remark": values.get("remark"),
+            "persons": persons,
             "raw_fields": fields,
             "last_modified_at": _datetime_value(item.get("last_modified_time")),
         }
@@ -656,6 +819,8 @@ async def list_records(
     date_to: date | None = None,
     keyword: str | None = None,
     equipment: str | None = None,
+    person: str | None = None,
+    fault: str | None = None,
     result_status: str | None = None,
     page: int = 1,
     page_size: int = 20,
@@ -670,6 +835,17 @@ async def list_records(
         conditions.append(RepairRecord.repaired_at <= date_to)
     if equipment:
         conditions.append(RepairRecord.equipment_text == equipment)
+    if person:
+        # 姓名可能来自结构化 persons，也可能只留在原文 person_text
+        pattern = f"%{person.strip()}%"
+        conditions.append(
+            or_(
+                RepairRecord.person_text.ilike(pattern),
+                func.cast(RepairRecord.persons, String).ilike(pattern),
+            )
+        )
+    if fault:
+        conditions.append(RepairRecord.fault_desc.ilike(f"%{fault.strip()}%"))
     if result_status:
         conditions.append(RepairRecord.result == result_status)
     if keyword:
@@ -762,3 +938,157 @@ async def distinct_results(db: AsyncSession, workshop: str | None) -> list[str]:
         .all()
     )
     return [str(value) for value in rows]
+
+
+async def filter_options(
+    db: AsyncSession, workshop: str | None
+) -> dict[str, list[str]]:
+    """筛选下拉的去重选项：维修人员 / 故障描述 / 设备名称。
+
+    人员优先取结构化 persons 的姓名，回退 person_text 原文按顿号拆分；
+    故障与设备按出现次数降序（高频问题排前面，选起来更快）。
+    """
+    conditions = [RepairRecord.is_deleted == False]  # noqa: E712
+    if workshop:
+        conditions.append(RepairRecord.workshop_code == workshop)
+
+    person_rows = (
+        await db.execute(
+            select(
+                func.jsonb_array_elements(RepairRecord.persons)
+                .op("->>")("name")
+                .label("name"),
+                func.count(func.distinct(RepairRecord.id)).label("times"),
+            )
+            .where(*conditions, RepairRecord.persons.isnot(None))
+            .group_by("name")
+            .order_by(func.count(func.distinct(RepairRecord.id)).desc(), "name")
+        )
+    ).all()
+    persons = {str(row.name): int(row.times) for row in person_rows if row.name}
+    # 未解析的原文按顿号拆出的人名也计入（次数按行数近似）
+    text_rows = (
+        (
+            await db.execute(
+                select(RepairRecord.person_text).where(
+                    *conditions, RepairRecord.person_text.isnot(None)
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for raw in text_rows:
+        for name in str(raw).split("、"):
+            name = name.strip()
+            if name:
+                persons[name] = persons.get(name, 0) + 1
+
+    async def ranked(column: InstrumentedAttribute[str | None]) -> list[str]:
+        rows_ = (
+            await db.execute(
+                select(column, func.count())
+                .where(*conditions, column.isnot(None))
+                .group_by(column)
+                .order_by(func.count().desc(), column)
+                .limit(500)
+            )
+        ).all()
+        return [str(row[0]) for row in rows_]
+
+    return {
+        "persons": sorted(persons, key=lambda name: (-persons[name], name)),
+        "faults": await ranked(RepairRecord.fault_desc),
+        "equipments": await ranked(RepairRecord.equipment_text),
+    }
+
+
+# 导出 Excel 列定义：主表 6 列 + 展开卡独有的车间及地点、备注
+EXPORT_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("repaired_at", "维修日期"),
+    ("workshop_text", "车间及地点"),
+    ("equipment_text", "设备名称/型号"),
+    ("fault_desc", "故障描述/原因"),
+    ("person_text", "维修人员"),
+    ("spare_parts", "更换备件"),
+    ("result", "维修后状态"),
+    ("remark", "备注"),
+)
+_EXPORT_MAX_ROWS = 10_000
+# 各列建议宽度（字符）：日期/状态窄、设备与故障宽、备注最宽
+_EXPORT_COLUMN_WIDTHS = (12, 20, 24, 32, 18, 24, 12, 28)
+
+
+async def export_records_xlsx(
+    db: AsyncSession,
+    *,
+    workshop: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    keyword: str | None = None,
+    equipment: str | None = None,
+    person: str | None = None,
+    fault: str | None = None,
+    result_status: str | None = None,
+) -> tuple[bytes, int]:
+    """按当前筛选条件导出全部命中记录为 xlsx，返回（文件字节, 行数）。
+
+    与 list_records 同一套筛选；超过上限抛业务错误提示收窄范围。
+    """
+    rows, total = await list_records(
+        db,
+        workshop=workshop,
+        date_from=date_from,
+        date_to=date_to,
+        keyword=keyword,
+        equipment=equipment,
+        person=person,
+        fault=fault,
+        result_status=result_status,
+        page=1,
+        page_size=_EXPORT_MAX_ROWS + 1,
+    )
+    if total > _EXPORT_MAX_ROWS:
+        raise AppException(
+            message=(
+                f"符合条件的记录共 {total} 条，超过导出上限 {_EXPORT_MAX_ROWS} 条，"
+                "请缩小时间范围或筛选条件后重试"
+            )
+        )
+
+    from io import BytesIO
+
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+    from openpyxl.worksheet.worksheet import Worksheet
+
+    workbook = Workbook()
+    # Workbook.active 的类型标注是可选联合，新建工作簿必有活动页
+    sheet = workbook.active
+    assert isinstance(sheet, Worksheet)
+    sheet.title = "检修记录"
+    header_fill = PatternFill("solid", fgColor="F2F1EE")
+    header_font = Font(bold=True)
+    for col, (_, title) in enumerate(EXPORT_COLUMNS, start=1):
+        cell = sheet.cell(row=1, column=col, value=title)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(vertical="center")
+    for col, width in enumerate(_EXPORT_COLUMN_WIDTHS, start=1):
+        sheet.column_dimensions[get_column_letter(col)].width = width
+    for row_index, record in enumerate(rows, start=2):
+        for col, (key, _) in enumerate(EXPORT_COLUMNS, start=1):
+            value = getattr(record, key)
+            if key == "repaired_at":
+                # 日期列写成真正的日期类型，Excel 里可继续排序/筛选
+                sheet.cell(
+                    row=row_index, column=col, value=value
+                ).number_format = "yyyy-mm-dd"
+            else:
+                sheet.cell(row=row_index, column=col, value=value or "")
+    sheet.freeze_panes = "A2"
+
+    buffer = BytesIO()
+    workbook.save(buffer)
+    return buffer.getvalue(), len(rows)

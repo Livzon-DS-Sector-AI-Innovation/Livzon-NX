@@ -3,21 +3,24 @@
 // 设备检修：飞书维修记录表镜像的只读查询 + 维修频次排行。
 // 记录按表内原文展示，不与设备台账关联；频次按「设备名称/型号」原文聚合。
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type Key } from 'react'
 import {
-  Alert, App, Button, Descriptions, Empty, Input, Segmented, Select, Table, Tag, Tooltip,
+  Alert, App, Avatar, Button, DatePicker, Descriptions, Empty, Input, Segmented, Select, Table, Tag, Tooltip,
 } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import {
-  CloudSyncOutlined, DownOutlined, RightOutlined, SearchOutlined, SettingOutlined, SyncOutlined,
+  CloudSyncOutlined, DownOutlined, DownloadOutlined, RightOutlined, SearchOutlined, SettingOutlined, SyncOutlined,
 } from '@ant-design/icons'
-import dayjs from 'dayjs'
+import dayjs, { type Dayjs } from 'dayjs'
 import {
+  exportRepairRecords,
+  fetchRepairFilterOptions,
   fetchRepairFrequency,
   fetchRepairRecords,
   fetchRepairResults,
   fetchRepairSyncStatus,
   triggerRepairSync,
+  type RepairFilterOptions,
   type RepairFrequencyItem,
   type RepairRecord,
   type RepairSyncState,
@@ -58,30 +61,78 @@ function resultColor(value: string): string {
   return 'default'
 }
 
+// 维修人员：通讯录解析成功时显示头像+姓名小圆片（无头像显示姓氏首字），
+// 未解析时回退表内原文
+function PersonCell({ record }: { record: RepairRecord }) {
+  const people = record.persons
+  if (!people?.length) return <>{record.person_text || '-'}</>
+  return (
+    <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
+      {people.map((person, index) => (
+        <Tooltip key={person.open_id ?? `${person.name}-${index}`} title={person.name}>
+          <span className="inline-flex items-center gap-1">
+            {person.avatar_url ? (
+              <Avatar size={20} src={person.avatar_url} />
+            ) : (
+              <Avatar size={20} style={{ background: '#8b93e8', fontSize: 12 }}>
+                {(person.name || '?').slice(0, 1)}
+              </Avatar>
+            )}
+            <span>{person.name || '未知成员'}</span>
+          </span>
+        </Tooltip>
+      ))}
+    </span>
+  )
+}
+
+// 表头样式：默认灰字偏淡，加深加粗让字段名一眼可辨
+const headerCell = () => ({ style: { fontWeight: 600, color: C.ink } })
+
 const columns: ColumnsType<RepairRecord> = [
-  { title: '维修日期', dataIndex: 'repaired_at', key: 'repaired_at', width: 112, render: (v: string | null) => v || '-' },
-  { title: '设备名称/型号', dataIndex: 'equipment_text', key: 'equipment_text', width: 190, ellipsis: true, render: (v: string | null) => v || '-' },
-  { title: '故障描述/原因', dataIndex: 'fault_desc', key: 'fault_desc', ellipsis: true, render: (v: string | null) => v || '-' },
-  { title: '维修人员', dataIndex: 'person_text', key: 'person_text', width: 120, ellipsis: true, render: (v: string | null) => v || '-' },
-  { title: '更换备件', dataIndex: 'spare_parts', key: 'spare_parts', width: 160, ellipsis: true, render: (v: string | null) => v || '-' },
+  { title: '维修日期', dataIndex: 'repaired_at', key: 'repaired_at', width: 112, onHeaderCell: headerCell, render: (v: string | null) => v || '-' },
+  // 四个内容列不设固定宽度：平分剩余空间（1600px 屏各约 265px，
+  // 足够一行放下 2 个三字名 + 2 个两字名的头像小圆片）
+  { title: '设备名称/型号', dataIndex: 'equipment_text', key: 'equipment_text', onHeaderCell: headerCell, ellipsis: true, render: (v: string | null) => v || '-' },
+  { title: '故障描述/原因', dataIndex: 'fault_desc', key: 'fault_desc', ellipsis: true, onHeaderCell: headerCell, render: (v: string | null) => v || '-' },
   {
-    title: '维修后状态', dataIndex: 'result', key: 'result', width: 104,
+    title: '维修人员', dataIndex: 'person_text', key: 'person_text', onHeaderCell: headerCell,
+    render: (_: string | null, record: RepairRecord) => <PersonCell record={record} />,
+  },
+  { title: '更换备件', dataIndex: 'spare_parts', key: 'spare_parts', onHeaderCell: headerCell, ellipsis: true, render: (v: string | null) => v || '-' },
+  {
+    title: '维修后状态', dataIndex: 'result', key: 'result', width: 104, onHeaderCell: headerCell,
     render: (v: string | null) => (v ? <Tag color={resultColor(v)}>{v}</Tag> : '-'),
   },
 ]
 
-// 行展开：主表列做了省略，这里放完整的地点、人员、备件与备注（每项占 1 格，各断点都对齐）
+// 行展开（卡片式，由末列「详情」触发）：主表列做了省略，
+// 这里放完整的地点、人员、备件与备注（每项占 1 格，各断点都对齐）
 const expandedRowRender = (record: RepairRecord) => (
-  <Descriptions
-    size="small"
-    column={{ xs: 1, sm: 2, lg: 4 }}
-    items={[
-      { key: 'place', label: '车间及地点', children: record.workshop_text || '-' },
-      { key: 'person', label: '维修人员', children: record.person_text || '-' },
-      { key: 'parts', label: '更换备件', children: record.spare_parts || '-' },
-      { key: 'remark', label: '备注', children: record.remark || '-' },
-    ]}
-  />
+  <div
+    data-testid="repair-detail-card"
+    style={{
+      background: C.surface,
+      border: `1px solid ${C.hairline}`,
+      borderRadius: 10,
+      padding: '10px 16px',
+    }}
+  >
+    <Descriptions
+      size="small"
+      column={{ xs: 1, sm: 2, lg: 4 }}
+      styles={{
+        label: { color: C.ink, fontWeight: 600, fontSize: 13 },
+        content: { fontSize: 13 },
+      }}
+      items={[
+        { key: 'place', label: '车间及地点', children: record.workshop_text || '-' },
+        { key: 'person', label: '维修人员', children: <PersonCell record={record} /> },
+        { key: 'parts', label: '更换备件', children: record.spare_parts || '-' },
+        { key: 'remark', label: '备注', children: record.remark || '-' },
+      ]}
+    />
+  </div>
 )
 
 // ── 维修频次排行 ───────────────────────────────────────────────────
@@ -104,7 +155,8 @@ function FrequencyRank({
   }
   const max = Math.max(1, ...items.map((item) => item.times))
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '4px 16px' }}>
+    // 竖排榜单：左栏窄列里一行一项
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       {items.map((item, index) => {
         const isActive = active === item.equipment_text
         const hot = index < 3
@@ -115,8 +167,8 @@ function FrequencyRank({
             title={`${item.equipment_text}：${item.times} 次`}
             onClick={() => onSelect(item.equipment_text)}
             style={{
-              display: 'flex', alignItems: 'center', gap: 8, minWidth: 0,
-              padding: '6px 10px', borderRadius: 8, cursor: 'pointer', textAlign: 'left',
+              display: 'flex', alignItems: 'center', gap: 8, width: '100%', minWidth: 0,
+              padding: '6px 8px', borderRadius: 8, cursor: 'pointer', textAlign: 'left',
               fontFamily: 'inherit', fontSize: 13, color: C.ink,
               background: isActive ? 'var(--color-primary-soft)' : 'transparent',
               border: isActive ? '1px solid var(--color-primary-border)' : '1px solid transparent',
@@ -146,7 +198,7 @@ function FrequencyRank({
                   />
                 </span>
                 <span style={{ flexShrink: 0, fontSize: 12, color: C.stone }}>
-                  最近 {item.last_repaired_at || '—'}
+                  {item.last_repaired_at || '—'}
                 </span>
               </span>
             </span>
@@ -167,10 +219,14 @@ export function RepairLedgerPage({
 }) {
   const { message } = App.useApp()
   const [range, setRange] = useState<RangeValue>('30d')
+  // 自定义日期范围：设定后优先于预设时段（近30天等），清空即回落
+  const [customRange, setCustomRange] = useState<[Dayjs | null, Dayjs | null] | null>(null)
   const [keywordInput, setKeywordInput] = useState('')
   const [keyword, setKeyword] = useState('')
   const [resultFilter, setResultFilter] = useState<string | undefined>()
   const [equipmentFilter, setEquipmentFilter] = useState<string | null>(null)
+  const [personFilter, setPersonFilter] = useState<string | undefined>()
+  const [faultFilter, setFaultFilter] = useState<string | undefined>()
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [records, setRecords] = useState<RepairRecord[]>([])
@@ -179,15 +235,22 @@ export function RepairLedgerPage({
   const [rankItems, setRankItems] = useState<RepairFrequencyItem[]>([])
   const [rankOpen, setRankOpen] = useState(true)
   const [resultOptions, setResultOptions] = useState<string[]>([])
+  const [filterOptions, setFilterOptions] = useState<RepairFilterOptions>({ persons: [], faults: [], equipments: [] })
   const [syncState, setSyncState] = useState<RepairSyncState | null>(null)
   const [syncing, setSyncing] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const [configOpen, setConfigOpen] = useState(false)
+  // 「详情」列展开的行（卡片式展开，替代默认的 + 号）
+  const [expandedKeys, setExpandedKeys] = useState<readonly Key[]>([])
   // 手动同步后 +1，让三个数据 effect 重新拉取
   const [refreshKey, setRefreshKey] = useState(0)
-  const dateFrom = rangeStart(range)
+  const dateFrom = customRange?.[0]
+    ? customRange[0].format('YYYY-MM-DD')
+    : rangeStart(range)
+  const dateTo = customRange?.[1] ? customRange[1].format('YYYY-MM-DD') : undefined
   // 列表加载态由「已加载的筛选条件」推导：筛选一变 key 就不同，即进入加载
   const listKey = JSON.stringify(
-    [workshopCode, dateFrom, keyword, resultFilter, equipmentFilter, page, pageSize],
+    [workshopCode, dateFrom, dateTo, keyword, resultFilter, equipmentFilter, personFilter, faultFilter, page, pageSize],
   )
   const loading = loadedKey !== listKey
 
@@ -196,9 +259,12 @@ export function RepairLedgerPage({
     fetchRepairRecords({
       workshop: workshopCode,
       date_from: dateFrom,
+      date_to: dateTo,
       keyword: keyword || undefined,
       result: resultFilter,
       equipment: equipmentFilter ?? undefined,
+      person: personFilter,
+      fault: faultFilter,
       page,
       page_size: pageSize,
     })
@@ -216,7 +282,7 @@ export function RepairLedgerPage({
         setLoadedKey(listKey)
       })
     return () => { cancelled = true }
-  }, [workshopCode, dateFrom, keyword, resultFilter, equipmentFilter, page, pageSize, listKey, refreshKey, message])
+  }, [workshopCode, dateFrom, dateTo, keyword, resultFilter, equipmentFilter, personFilter, faultFilter, page, pageSize, listKey, refreshKey, message])
 
   useEffect(() => {
     let cancelled = false
@@ -234,10 +300,12 @@ export function RepairLedgerPage({
     let cancelled = false
     Promise.all([
       fetchRepairResults(workshopCode).catch(() => [] as string[]),
+      fetchRepairFilterOptions(workshopCode).catch(() => null),
       fetchRepairSyncStatus(workshopCode).catch(() => null),
-    ]).then(([results, status]) => {
+    ]).then(([results, options, status]) => {
       if (cancelled) return
       setResultOptions(results)
+      if (options) setFilterOptions(options)
       setSyncState(status)
     })
     return () => { cancelled = true }
@@ -273,8 +341,31 @@ export function RepairLedgerPage({
   const notConfigured = Boolean(syncState && !syncState.enabled)
   const syncFailed = syncState?.last_status === 'failed'
 
+  // 导出当前筛选命中的全部记录（与列表同一套筛选条件）
+  const handleExport = async () => {
+    if (exporting) return
+    setExporting(true)
+    try {
+      await exportRepairRecords({
+        workshop: workshopCode,
+        date_from: dateFrom,
+        date_to: dateTo,
+        keyword: keyword || undefined,
+        equipment: equipmentFilter ?? undefined,
+        person: personFilter,
+        fault: faultFilter,
+        result: resultFilter,
+      })
+      message.success('Excel 已开始下载')
+    } catch (error) {
+      message.error((error as Error).message || '导出失败')
+    } finally {
+      setExporting(false)
+    }
+  }
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div className="flex flex-col gap-3">
       <RepairLedgerConfigDrawer
         workshopCode={workshopCode}
         workshopLabel={workshopLabel}
@@ -283,136 +374,238 @@ export function RepairLedgerPage({
         onSaved={() => { void handleSync() }}
       />
 
-      {notConfigured && (
-        <Alert
-          type="info"
-          showIcon
-          title="本车间尚未连接检修表"
-          description="车间在飞书多维表格登记维修记录后，把表格链接配置到这里，平台会自动同步并统计各设备的维修频次。"
-          action={(
-            <Button size="small" type="primary" onClick={() => setConfigOpen(true)}>
-              去配置
-            </Button>
-          )}
-        />
-      )}
-
-      {/* 筛选 + 飞书同步 */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <Segmented
-          value={range}
-          options={RANGES.map(({ value, label }) => ({ value, label }))}
-          onChange={(value) => applyFilter(() => setRange(value as RangeValue))}
-        />
-        <Input
-          placeholder="搜索设备、故障描述或维修人员"
-          prefix={<SearchOutlined style={{ color: '#a4a097' }} />}
-          style={{ width: 250 }}
-          allowClear
-          value={keywordInput}
-          onChange={(e) => {
-            setKeywordInput(e.target.value)
-            if (!e.target.value) applyFilter(() => setKeyword(''))
-          }}
-          onPressEnter={() => applyFilter(() => setKeyword(keywordInput.trim()))}
-        />
-        <Select
-          placeholder="维修后状态"
-          allowClear
-          showSearch
-          optionFilterProp="label"
-          style={{ width: 140 }}
-          value={resultFilter}
-          onChange={(value) => applyFilter(() => setResultFilter(value))}
-          options={resultOptions.map((item) => ({ value: item, label: item }))}
-        />
-        {equipmentFilter && (
-          <Tag
-            color="purple"
-            closable
-            onClose={() => applyFilter(() => setEquipmentFilter(null))}
+      {/* 左右分栏：左侧同步状态 + 频次榜单，右侧筛选 + 记录表（窄屏自动叠回单栏） */}
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start">
+        {/* 左栏：同步状态在频次榜单上方 */}
+        <aside className="flex w-full shrink-0 flex-col gap-3 lg:w-64">
+          {/* 同步状态 + 飞书同步 / 配置 */}
+          <div
+            style={{
+              background: C.surface,
+              border: `1px solid ${C.hairline}`,
+              borderRadius: 10,
+              padding: '10px 12px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 8,
+            }}
           >
-            设备：{equipmentFilter}
-          </Tag>
-        )}
-        <div style={{ flex: 1 }} />
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: C.slate }}>
-          {notConfigured ? (
-            <span style={{ color: C.stone }}>未连接检修表</span>
-          ) : (
-            <>
-              <CloudSyncOutlined style={{ color: syncFailed ? C.red : C.green }} />
-              {syncState?.last_run_at ? `最近同步 ${fmtTime(syncState.last_run_at)}` : '尚未同步'}
-              {syncFailed && (
-                <Tooltip title={syncState?.last_message || '同步失败'}>
-                  <span style={{ color: C.red, cursor: 'help', borderBottom: `1px dotted ${C.red}` }}>
-                    同步失败
-                  </span>
-                </Tooltip>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: C.slate }}>
+              {notConfigured ? (
+                <span style={{ color: C.stone }}>未连接检修表</span>
+              ) : (
+                <>
+                  <CloudSyncOutlined style={{ color: syncFailed ? C.red : C.green }} />
+                  {syncState?.last_run_at ? `最近同步 ${fmtTime(syncState.last_run_at)}` : '尚未同步'}
+                  {syncFailed && (
+                    <Tooltip title={syncState?.last_message || '同步失败'}>
+                      <span style={{ color: C.red, cursor: 'help', borderBottom: `1px dotted ${C.red}` }}>
+                        同步失败
+                      </span>
+                    </Tooltip>
+                  )}
+                </>
               )}
-            </>
-          )}
-        </span>
-        <Button
-          size="small"
-          icon={<SyncOutlined spin={syncing} />}
-          loading={syncing}
-          onClick={() => { void handleSync() }}
-        >
-          飞书同步
-        </Button>
-        <Button size="small" icon={<SettingOutlined />} onClick={() => setConfigOpen(true)}>
-          配置
-        </Button>
-      </div>
+            </span>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Button
+                size="small"
+                icon={<SyncOutlined spin={syncing} />}
+                loading={syncing}
+                onClick={() => { void handleSync() }}
+              >
+                飞书同步
+              </Button>
+              <Button size="small" icon={<SettingOutlined />} onClick={() => setConfigOpen(true)}>
+                配置
+              </Button>
+            </div>
+          </div>
 
-      {/* 维修频次排行：哪台设备修得最多 */}
-      <div style={{ background: C.surface, border: `1px solid ${C.hairline}`, borderRadius: 10, padding: '10px 16px 12px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontWeight: 600, color: C.ink }}>维修频次</span>
-          <span style={{ fontSize: 12, color: C.stone }}>
-            按「设备名称/型号」统计维修次数；点击设备只看它的记录，再点一次取消
-          </span>
-          <div style={{ flex: 1 }} />
-          <Button
-            type="text" size="small"
-            icon={rankOpen ? <DownOutlined /> : <RightOutlined />}
-            onClick={() => setRankOpen((value) => !value)}
+          {/* 维修频次竖排榜单 */}
+          <div
+            style={{ background: C.surface, border: `1px solid ${C.hairline}`, borderRadius: 10, padding: '10px 12px 12px' }}
           >
-            {rankOpen ? '收起' : '展开'}
-          </Button>
-        </div>
-        {rankOpen && (
-          <FrequencyRank
-            items={rankItems}
-            active={equipmentFilter}
-            onSelect={(equipment) => applyFilter(() => setEquipmentFilter(
-              equipmentFilter === equipment ? null : equipment,
-            ))}
-          />
-        )}
-      </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ fontWeight: 600, color: C.ink }}>维修频次</span>
+              <div style={{ flex: 1 }} />
+              <Button
+                type="text" size="small"
+                icon={rankOpen ? <DownOutlined /> : <RightOutlined />}
+                onClick={() => setRankOpen((value) => !value)}
+              >
+                {rankOpen ? '收起' : '展开'}
+              </Button>
+            </div>
+            <div style={{ fontSize: 12, color: C.stone, margin: '2px 0 6px' }}>
+              点击设备只看它的记录，再点一次取消
+            </div>
+            {rankOpen && (
+              <FrequencyRank
+                items={rankItems}
+                active={equipmentFilter}
+                onSelect={(equipment) => applyFilter(() => setEquipmentFilter(
+                  equipmentFilter === equipment ? null : equipment,
+                ))}
+              />
+            )}
+          </div>
+        </aside>
 
-      <Table
-        columns={columns}
-        dataSource={records}
-        rowKey="id"
-        size="small"
-        loading={loading}
-        expandable={{ expandedRowRender }}
-        locale={{ emptyText: notConfigured ? '尚未连接检修表' : '所选范围内没有检修记录' }}
-        pagination={{
-          current: page,
-          pageSize,
-          total,
-          showSizeChanger: true,
-          showTotal: (count) => `共 ${count} 条`,
-          onChange: (nextPage, nextSize) => {
-            setPage(nextPage)
-            if (nextSize !== pageSize) setPageSize(nextSize)
-          },
-        }}
-      />
+        {/* 右栏：未配置提示 + 筛选行 + 记录表 */}
+        <div className="flex min-w-0 flex-1 flex-col gap-3">
+          {notConfigured && (
+            <Alert
+              type="info"
+              showIcon
+              title="本车间尚未连接检修表"
+              description="车间在飞书多维表格登记维修记录后，把表格链接配置到这里，平台会自动同步并统计各设备的维修频次。"
+              action={(
+                <Button size="small" type="primary" onClick={() => setConfigOpen(true)}>
+                  去配置
+                </Button>
+              )}
+            />
+          )}
+
+          {/* 筛选：始终单行，搜索框在最后弹性占满剩余宽度 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'nowrap', minWidth: 0 }}>
+            <Segmented
+              value={customRange ? undefined : range}
+              options={RANGES.map(({ value, label }) => ({ value, label }))}
+              onChange={(value) => applyFilter(() => {
+                setRange(value as RangeValue)
+                setCustomRange(null)
+              })}
+            />
+            <DatePicker.RangePicker
+              size="small"
+              style={{ width: 210, flexShrink: 0 }}
+              allowEmpty={[true, true]}
+              value={customRange ?? undefined}
+              onChange={(values) => applyFilter(() => setCustomRange(values ?? null))}
+            />
+            <Select
+              placeholder="维修人员"
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              style={{ width: 104, flexShrink: 0 }}
+              value={personFilter}
+              onChange={(value) => applyFilter(() => setPersonFilter(value))}
+              options={filterOptions.persons.map((item) => ({ value: item, label: item }))}
+            />
+            <Select
+              placeholder="故障描述"
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              style={{ width: 116, flexShrink: 0 }}
+              value={faultFilter}
+              onChange={(value) => applyFilter(() => setFaultFilter(value))}
+              options={filterOptions.faults.map((item) => ({ value: item, label: item }))}
+            />
+            <Select
+              placeholder="设备名称"
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              style={{ width: 116, flexShrink: 0 }}
+              value={equipmentFilter ?? undefined}
+              onChange={(value) => applyFilter(() => setEquipmentFilter(value ?? null))}
+              options={filterOptions.equipments.map((item) => ({ value: item, label: item }))}
+            />
+            <Select
+              placeholder="维修后状态"
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              style={{ width: 104, flexShrink: 0 }}
+              value={resultFilter}
+              onChange={(value) => applyFilter(() => setResultFilter(value))}
+              options={resultOptions.map((item) => ({ value: item, label: item }))}
+            />
+            <Input
+              placeholder="搜索设备、故障、人员"
+              prefix={<SearchOutlined style={{ color: '#a4a097' }} />}
+              style={{ flex: '1 1 96px', minWidth: 96 }}
+              allowClear
+              value={keywordInput}
+              onChange={(e) => {
+                setKeywordInput(e.target.value)
+                if (!e.target.value) applyFilter(() => setKeyword(''))
+              }}
+              onPressEnter={() => applyFilter(() => setKeyword(keywordInput.trim()))}
+            />
+            <Button
+              size="small"
+              icon={<DownloadOutlined />}
+              loading={exporting}
+              onClick={() => { void handleExport() }}
+            >
+              导出
+            </Button>
+          </div>
+
+          {/* 记录表：与左栏卡片同款的圆角容器 */}
+          <div
+            style={{
+              background: C.surface,
+              border: `1px solid ${C.hairline}`,
+              borderRadius: 10,
+              padding: '8px 12px 12px',
+            }}
+          >
+            <Table
+              columns={[
+                ...columns,
+                {
+                  title: '详情', key: 'detail', width: 76, onHeaderCell: headerCell,
+                  render: (_: unknown, record: RepairRecord) => {
+                    const open = expandedKeys.includes(record.id)
+                    return (
+                      <span
+                        role="button"
+                        style={{ color: 'var(--color-primary)', cursor: 'pointer', fontWeight: open ? 600 : 400 }}
+                        onClick={() => {
+                          setExpandedKeys((keys) =>
+                            keys.includes(record.id)
+                              ? keys.filter((key) => key !== record.id)
+                              : [...keys, record.id],
+                          )
+                        }}
+                      >
+                        {open ? '收起' : '详情'}
+                      </span>
+                    )
+                  },
+                },
+              ]}
+              dataSource={records}
+              rowKey="id"
+              size="small"
+              loading={loading}
+              expandable={{
+                expandedRowRender,
+                expandedRowKeys: expandedKeys,
+                showExpandColumn: false,
+              }}
+              locale={{ emptyText: notConfigured ? '尚未连接检修表' : '所选范围内没有检修记录' }}
+              pagination={{
+                current: page,
+                pageSize,
+                total,
+                showSizeChanger: true,
+                showTotal: (count) => `共 ${count} 条`,
+                onChange: (nextPage, nextSize) => {
+                  setPage(nextPage)
+                  if (nextSize !== pageSize) setPageSize(nextSize)
+                },
+              }}
+            />
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

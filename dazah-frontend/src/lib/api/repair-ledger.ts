@@ -3,6 +3,12 @@
 const BASE = '/api/v1/equipment/repair'
 
 /** 检修记录（飞书镜像原文展示，不关联设备台账） */
+export interface RepairPerson {
+  name: string
+  open_id: string | null
+  avatar_url: string | null
+}
+
 export interface RepairRecord {
   id: string
   workshop_code: string
@@ -11,6 +17,8 @@ export interface RepairRecord {
   equipment_text: string | null
   repaired_at: string | null
   person_text: string | null
+  /** 同步时经通讯录解析的维修人员；解析不到（无权限/未匹配）时为空，展示回退 person_text */
+  persons?: RepairPerson[] | null
   fault_desc: string | null
   spare_parts: string | null
   result: string | null
@@ -25,6 +33,10 @@ export interface RepairRecordFilters {
   keyword?: string
   /** 设备名称原文（频次榜点入） */
   equipment?: string
+  /** 维修人员姓名（结构化或原文） */
+  person?: string
+  /** 故障描述（模糊匹配） */
+  fault?: string
   /** 维修后状态原文 */
   result?: string
   page?: number
@@ -130,6 +142,8 @@ export async function fetchRepairRecords(
   if (filters.date_to) params.append('date_to', filters.date_to)
   if (filters.keyword) params.append('keyword', filters.keyword)
   if (filters.equipment) params.append('equipment', filters.equipment)
+  if (filters.person) params.append('person', filters.person)
+  if (filters.fault) params.append('fault', filters.fault)
   if (filters.result) params.append('result_status', filters.result)
   params.append('page', String(filters.page || 1))
   params.append('page_size', String(filters.page_size || 20))
@@ -155,6 +169,56 @@ export async function fetchRepairFrequency(
 export async function fetchRepairResults(workshop: string): Promise<string[]> {
   const json = await getJson<string[]>(`${BASE}/results?${workshopQuery(workshop)}`)
   return json.data ?? []
+}
+
+/** 筛选下拉的去重选项（人员 / 故障 / 设备，按出现次数降序） */
+export interface RepairFilterOptions {
+  persons: string[]
+  faults: string[]
+  equipments: string[]
+}
+
+export async function fetchRepairFilterOptions(
+  workshop: string,
+): Promise<RepairFilterOptions> {
+  const json = await getJson<RepairFilterOptions>(
+    `${BASE}/filter-options?${workshopQuery(workshop)}`,
+  )
+  return json.data ?? { persons: [], faults: [], equipments: [] }
+}
+
+/** 按当前筛选条件导出全部命中记录为 Excel 并触发浏览器下载 */
+export async function exportRepairRecords(
+  filters: RepairRecordFilters,
+): Promise<void> {
+  const params = new URLSearchParams()
+  if (filters.workshop) params.append('workshop', filters.workshop)
+  if (filters.date_from) params.append('date_from', filters.date_from)
+  if (filters.date_to) params.append('date_to', filters.date_to)
+  if (filters.keyword) params.append('keyword', filters.keyword)
+  if (filters.equipment) params.append('equipment', filters.equipment)
+  if (filters.person) params.append('person', filters.person)
+  if (filters.fault) params.append('fault', filters.fault)
+  if (filters.result) params.append('result_status', filters.result)
+  const response = await fetch(`${BASE}/export?${params.toString()}`)
+  if (!response.ok) {
+    // 业务失败（如超上限）返回统一 JSON 封装；文件流响应不能先读 JSON
+    const json = await response.json().catch(() => null)
+    throw new Error(json?.message || `导出失败: ${response.status}`)
+  }
+  const blob = await response.blob()
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  const disposition = response.headers.get('Content-Disposition') || ''
+  const starred = disposition.match(/filename\*=UTF-8''([^;]+)/)
+  anchor.download = starred
+    ? decodeURIComponent(starred[1])
+    : `设备检修_${filters.workshop ?? '全部车间'}_${new Date().toISOString().slice(0, 10).replaceAll('-', '')}.xlsx`
+  document.body.append(anchor)
+  anchor.click()
+  anchor.remove()
+  URL.revokeObjectURL(url)
 }
 
 export async function fetchRepairSyncStatus(workshop: string): Promise<RepairSyncState> {
