@@ -21,6 +21,7 @@ import tempfile
 import time
 import urllib.request
 from pathlib import Path
+from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 APPS = ("app", "hermes-lite", "frontend")
@@ -444,6 +445,60 @@ class Controller:
         code = "import asyncio,sys; from app.core.maintenance import set_release_phase; asyncio.run(set_release_phase(sys.argv[1]))"
         self.compose("exec", "-T", "app", ".venv/bin/python", "-c", code, phase, timeout=15)
 
+    def release_backend(self, operation: str, *args):
+        code = ("import asyncio,json,sys; from app.core import maintenance; "
+                "print(json.dumps(asyncio.run(getattr(maintenance, sys.argv[1])(*json.loads(sys.argv[2])))))")
+        return json.loads(self.compose("exec", "-T", "app", ".venv/bin/python", "-c", code,
+                                       operation, json.dumps(args), timeout=15))
+
+    def release_preflight(self) -> None:
+        report = self.release_backend("release_preflight")
+        self.event("release_preflight", blocking=report["blocking"], activities=report["activities"])
+
+    def prepare_release(self, seconds: int | None = None, *, timeout: int = 120,
+                        enforce_window: bool = False) -> None:
+        seconds = self.notice_seconds(seconds)
+        marker = self.state_dir / "public" / "maintenance"
+        if marker.exists():
+            self.maintenance_on()
+            return
+
+        token = uuid4().hex
+        # Cover the online wait, notice and final checks. Expiry recovers from a killed controller.
+        if not self.release_backend("pause_background_work", token, timeout + seconds + 120):
+            raise Refused("background scheduling is already paused by another release")
+        draining = False
+        try:
+            deadline = time.monotonic() + timeout
+            report = self.release_backend("release_preflight", token)
+            self.event("release_preflight", blocking=report["blocking"], activities=report["activities"])
+            while report["pause_owned"] and report["blocking"] and time.monotonic() < deadline:
+                time.sleep(max(0, min(3, deadline - time.monotonic())))
+                report = self.release_backend("release_preflight", token)
+            if not report["pause_owned"]:
+                raise Refused("background scheduling pause was lost before maintenance")
+            if report["blocking"] or time.monotonic() >= deadline:
+                self.event("online_drain_timeout", blocking=report["blocking"], activities=report["activities"])
+                raise Refused("online drain timed out; public traffic remains open")
+
+            self.announce(seconds)
+            if enforce_window and not in_window(dt.datetime.now(dt.timezone.utc), switch=True):
+                raise Refused("switch cutoff reached during maintenance notice")
+            report = self.release_backend("release_preflight", token)
+            if not report["pause_owned"] or report["blocking"]:
+                self.event("release_preflight_changed", blocking=report["blocking"], activities=report["activities"])
+                raise Refused("online drain could not be confirmed at cutover; public traffic remains open")
+            self.maintenance_on()
+            draining = True
+        finally:
+            if not marker.exists():
+                (marker.parent / "status.json").unlink(missing_ok=True)
+            if draining or not marker.exists():
+                try:
+                    self.release_backend("resume_background_work", token)
+                except (Refused, OSError, ValueError, subprocess.TimeoutExpired):
+                    self.event("background_pause_release_failed", recovery="lease expiry")
+
     def resume_work(self) -> None:
         """Permit bootstrap work while the public gate stays closed."""
         code = "import asyncio; from app.core.maintenance import set_release_phase; asyncio.run(set_release_phase('starting'))"
@@ -465,10 +520,14 @@ class Controller:
             time.sleep(3)
         raise Refused("unfinished business work blocks reopening; maintenance remains closed")
 
-    def announce(self, seconds: int | None = None) -> None:
+    def notice_seconds(self, seconds: int | None) -> int:
         seconds = self.config.get("maintenance_notice_seconds", 180) if seconds is None else seconds
         if isinstance(seconds, bool) or not isinstance(seconds, int) or not 0 <= seconds <= 3600:
             raise Refused("maintenance notice must be between 0 and 3600 seconds")
+        return seconds
+
+    def announce(self, seconds: int | None = None) -> None:
+        seconds = self.notice_seconds(seconds)
         if (self.state_dir / "public" / "maintenance").exists():
             return
         # Capability check happens before publishing a promise to users.
@@ -663,12 +722,8 @@ class Controller:
             previous[service] = command(["docker", "inspect", "--format", "{{.Image}}", inventory[service]["id"]])
         previous["migrate"] = previous["app"]
         atomic_json(self.state_dir / "previous-images.json", previous)
-        self.announce()
-        if enforce_window and not in_window(dt.datetime.now(dt.timezone.utc), switch=True):
-            (self.state_dir / "public" / "status.json").unlink(missing_ok=True)
-            raise Refused("switch cutoff reached during maintenance notice")
+        self.prepare_release(enforce_window=enforce_window)
         self.phase("quiescing", candidate_sha=sha, previous_revision=before, traffic_opened=False)
-        self.maintenance(True)
         migrated = False
         # Failure to drain must not restart containers or reopen traffic.
         self.drain()
@@ -1370,7 +1425,8 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("action", choices=["backup", "drill", "watchdog", "schedule", "status", "mount-check",
                                          "verify", "drain", "traffic-guard", "maintenance-on", "maintenance-off",
-                                         "announce", "resume-work", "open-work", "prune-candidates"])
+                                         "announce", "prepare-release", "release-preflight", "resume-work",
+                                         "open-work", "prune-candidates"])
     parser.add_argument("--config", default="/etc/dazah-cd/config.json")
     parser.add_argument("--notice-seconds", type=int, default=None)
     parser.add_argument("--lock-held", action="store_true", help="Called by the deployment helper which already owns the release lock")
@@ -1386,15 +1442,18 @@ def main() -> int:
         if args.action == "mount-check":
             controller.mount_check()
             return 0
-        if args.action in ("verify", "traffic-guard"):
+        if args.action in ("verify", "traffic-guard", "release-preflight"):
             {"verify": controller.wait_ready,
-             "traffic-guard": controller.traffic_guard}[args.action]()
+             "traffic-guard": controller.traffic_guard,
+             "release-preflight": controller.release_preflight}[args.action]()
             return 0
         with (contextlib.nullcontext() if args.lock_held else lock(Path("/var/lock/dazah-deploy.lock"))):
             if args.action == "status":
                 controller.event("status", state=read_json(controller.state_file, {}), enabled=controller.config.get("enabled", False))
             elif args.action == "announce":
                 controller.announce(args.notice_seconds)
+            elif args.action == "prepare-release":
+                controller.prepare_release(args.notice_seconds)
             else:
                 getattr(controller, args.action.replace("-", "_"))()
         return 0

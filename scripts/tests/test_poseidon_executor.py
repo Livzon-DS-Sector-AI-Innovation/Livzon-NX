@@ -50,8 +50,7 @@ def test_shared_deploy_entry_rejects_stale_versions_before_a_project_write(tmp_p
     (root / ".env").write_text("DAZAH_VERSION=v1\n")
     content = (SCRIPTS / "deploy-production-remote.sh").read_text(encoding="utf-8")
     content = content.replace('action="$' + '{1:-}"',
-                              'deploy_version() { printf "invoked deploy\\n"; }\n'
-                              'rollback_version() { printf "invoked rollback\\n"; }\n'
+                              'switch_version() { printf "invoked %s\\n" "$1"; }\n'
                               'action="$' + '{1:-}"')
     isolated = tmp_path / "isolated.sh"
     isolated.write_text(content, encoding="utf-8")

@@ -87,13 +87,20 @@ check_release_store() {
 }
 
 compose() {
+  compose_with_files "$COMPOSE_FILE" "$EDGE_COMPOSE_FILE" "$@"
+}
+
+compose_with_files() {
+  local base="$1" edge="$2"
+  shift 2
   local args=(
     --project-name "$COMPOSE_PROJECT"
+    --project-directory "$ROOT_DIR"
     --env-file "$ENV_FILE"
-    --file "$COMPOSE_FILE"
+    --file "$base"
   )
-  if [[ -f "$EDGE_COMPOSE_FILE" ]]; then
-    args+=(--file "$EDGE_COMPOSE_FILE")
+  if [[ -f "$edge" ]]; then
+    args+=(--file "$edge")
   fi
   for overlay in compose.single-host.yml compose.release.yml; do
     if [[ -f "$ROOT_DIR/$overlay" ]]; then args+=(--file "$ROOT_DIR/$overlay"); fi
@@ -108,7 +115,7 @@ current_version() {
 set_version() {
   local version="$1"
   local temp_file
-  temp_file="$(mktemp "$ROOT_DIR/.env.deploy.XXXXXX")"
+  temp_file="$(mktemp "$ROOT_DIR/.env.deploy.XXXXXX")" || return 1
   awk -v version="$version" '
     BEGIN { replaced = 0 }
     /^DAZAH_VERSION=/ {
@@ -120,8 +127,8 @@ set_version() {
     END {
       if (!replaced) print "DAZAH_VERSION=" version
     }
-  ' "$ENV_FILE" > "$temp_file"
-  chmod 600 "$temp_file"
+  ' "$ENV_FILE" > "$temp_file" || return 1
+  chmod 600 "$temp_file" || return 1
   mv -f "$temp_file" "$ENV_FILE"
 }
 
@@ -131,16 +138,16 @@ backup_current_files() {
   local backup_path
   stamp="$(date -u +%Y%m%dT%H%M%SZ)"
   backup_path="$BACKUP_DIR/${stamp}-${previous_version:-unknown}"
-  mkdir -p "$backup_path"
-  chmod 700 "$BACKUP_DIR" "$backup_path"
+  mkdir -p "$backup_path" || return 1
+  chmod 700 "$BACKUP_DIR" "$backup_path" || return 1
 
   for name in .env compose.yml compose.edge.yml nginx.default.conf nginx-maintenance.conf nginx-capacity.conf migration-policy.json; do
     if [[ -f "$ROOT_DIR/$name" ]]; then
-      cp -p "$ROOT_DIR/$name" "$backup_path/$name"
+      cp -p "$ROOT_DIR/$name" "$backup_path/$name" || return 1
     fi
   done
-  printf '%s\n' "$previous_version" > "$backup_path/current-version"
-  printf '%s\n' "$backup_path" > "$BACKUP_DIR/last-backup"
+  printf '%s\n' "$previous_version" > "$backup_path/current-version" || return 1
+  printf '%s\n' "$backup_path" > "$BACKUP_DIR/last-backup" || return 1
   printf '%s\n' "$backup_path"
 }
 
@@ -207,7 +214,7 @@ load_release_images() {
   if [[ -n "$release_path" && -f "$release_path" ]]; then
     verify_release_checksum "$release_path" || return 1
     log "加载离线镜像包: $(basename "$release_path")"
-    docker load --input "$release_path"
+    docker load --input "$release_path" || return 1
   else
     log "未找到离线镜像包，检查服务器现有镜像: $version"
   fi
@@ -225,16 +232,18 @@ load_release_images() {
 stage_release_compose() {
   local release_path="$1"
   if [[ -f "$release_path/compose.yml" ]]; then
-    install -m 0644 "$release_path/compose.yml" "$COMPOSE_FILE"
+    install -m 0644 "$release_path/compose.yml" "$COMPOSE_FILE" || return 1
   fi
   if [[ -f "$release_path/compose.edge.yml" ]]; then
-    install -m 0644 "$release_path/compose.edge.yml" "$EDGE_COMPOSE_FILE"
+    install -m 0644 "$release_path/compose.edge.yml" "$EDGE_COMPOSE_FILE" || return 1
   fi
   if [[ -f "$release_path/nginx.default.conf" ]]; then
-    install -m 0644 "$release_path/nginx.default.conf" "$ROOT_DIR/nginx.default.conf"
+    install -m 0644 "$release_path/nginx.default.conf" "$ROOT_DIR/nginx.default.conf" || return 1
   fi
   for name in nginx-maintenance.conf nginx-capacity.conf migration-policy.json; do
-    if [[ -f "$release_path/$name" ]]; then install -m 0644 "$release_path/$name" "$ROOT_DIR/$name"; fi
+    if [[ -f "$release_path/$name" ]]; then
+      install -m 0644 "$release_path/$name" "$ROOT_DIR/$name" || return 1
+    fi
   done
 }
 
@@ -246,7 +255,7 @@ verify_compose_images() {
       log "服务器缺少 Compose 所需镜像: $image" >&2
       return 1
     fi
-  done < <(compose config --images)
+  done <<< "$1"
 }
 
 validate_maintenance_release() {
@@ -261,11 +270,28 @@ validate_maintenance_release() {
     || { fail "发布包缺少维护入口，拒绝覆盖当前代理"; return 1; }
 }
 
-quiesce_and_migrate() {
+database_revision() {
+  compose exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "select version_num from alembic_version order by version_num"'
+}
+
+preflight_release() {
+  local version="$1" release_path="$2" before="$3"
+  local base="$release_path/compose.yml" edge="$release_path/compose.edge.yml"
+  local images heads code
+  [[ -f "$base" ]] || base="$COMPOSE_FILE"
+  DAZAH_VERSION="$version" compose_with_files "$base" "$edge" config --quiet || return 1
+  images="$(DAZAH_VERSION="$version" compose_with_files "$base" "$edge" config --images)" || return 1
+  verify_compose_images "$images" || return 1
+  heads="$(DAZAH_VERSION="$version" compose_with_files "$base" "$edge" run --rm --no-deps --entrypoint .venv/bin/python migrate -c "from alembic.config import Config; from alembic.script import ScriptDirectory; print('\\n'.join(ScriptDirectory.from_config(Config('alembic.ini')).get_heads()))")" || return 1
+  [[ "$heads" =~ ^[A-Za-z0-9_]+$ && "$before" =~ ^[A-Za-z0-9_]+$ ]] || { fail "迁移 head 或数据库版本不唯一"; return 1; }
+  code='import importlib.util,json,sys; from pathlib import Path; s=importlib.util.spec_from_file_location("cd",sys.argv[1]); m=importlib.util.module_from_spec(s); s.loader.exec_module(m); p=json.loads(Path(sys.argv[2]).read_text()); h,b=sys.argv[3:5]; t=h if h==b else m.migration_target(p,h,b); assert t==b or any(x.get("from_revision")==b and x.get("to_revision")==t and x.get("backward_compatible") is True and x.get("review_reference") for x in p.get("transitions",[])), "migration approval required"; print(t)'
+  python3 -c "$code" "$CONTROL_SCRIPT" "$release_path/migration-policy.json" "$heads" "$before" 2>/dev/null \
+    || { fail "迁移缺少兼容性审批，发布预检中止"; return 1; }
+}
+
+quiesce_traffic() {
   # Refuse legacy packages without a working public gate before stopping writers.
-  local code heads before target status
-  require_file "$ROOT_DIR/nginx-maintenance.conf"
-  require_file "$ROOT_DIR/migration-policy.json"
+  local before="$1" status revision
   check_nginx || return 1
   status="$(curl --silent --insecure --output /dev/null --write-out '%{http_code}' --max-time 5 https://127.0.0.1/health || true)"
   if [[ "$status" != 503 ]]; then
@@ -273,15 +299,16 @@ quiesce_and_migrate() {
   fi
   [[ "$status" == 503 ]] || { fail "维护入口未生效，拒绝停止应用"; return 1; }
   python3 "$CONTROL_SCRIPT" drain --lock-held || return 1
-  before="$(compose exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "select version_num from alembic_version order by version_num"')" || return 1
-  heads="$(compose run --rm --no-deps --entrypoint .venv/bin/python migrate -c "from alembic.config import Config; from alembic.script import ScriptDirectory; print('\\n'.join(ScriptDirectory.from_config(Config('alembic.ini')).get_heads()))")" || return 1
-  [[ "$heads" =~ ^[A-Za-z0-9_]+$ && "$before" =~ ^[A-Za-z0-9_]+$ ]] || { fail "迁移 head 或数据库版本不唯一"; return 1; }
-  code='import importlib.util,json,sys; from pathlib import Path; s=importlib.util.spec_from_file_location("cd",sys.argv[1]); m=importlib.util.module_from_spec(s); s.loader.exec_module(m); p=json.loads(Path(sys.argv[2]).read_text()); h,b=sys.argv[3:5]; t=h if h==b else m.migration_target(p,h,b); assert t==b or any(x.get("from_revision")==b and x.get("to_revision")==t and x.get("backward_compatible") is True and x.get("review_reference") for x in p.get("transitions",[])), "migration approval required"; print(t)'
-  target="$(python3 -c "$code" "$CONTROL_SCRIPT" "$ROOT_DIR/migration-policy.json" "$heads" "$before" 2>/dev/null)" || { fail "迁移缺少兼容性审批，维护模式保持开启"; return 1; }
+  revision="$(database_revision)" || return 1
+  [[ "$revision" == "$before" ]] || { fail "排空后数据库版本与预检不一致，拒绝停止应用"; return 1; }
+}
+
+migrate_release() {
+  local target="$1" revision
   compose stop --timeout 120 hermes-lite app frontend || return 1
   compose run --rm --no-deps migrate .venv/bin/alembic upgrade "$target" || return 1
-  before="$(compose exec -T db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "select version_num from alembic_version order by version_num"')" || return 1
-  [[ "$before" == "$target" ]] || { fail "迁移后版本不一致"; return 1; }
+  revision="$(database_revision)" || return 1
+  [[ "$revision" == "$target" ]] || { fail "迁移后版本不一致"; return 1; }
   python3 "$CONTROL_SCRIPT" resume-work --lock-held || return 1
 }
 
@@ -387,101 +414,24 @@ write_success_marker() {
     > "$BACKUP_DIR/last-success"
 }
 
-deploy_version() {
-  local version="$1"
-  local release_path="${2:-$RELEASE_DIR/$version}"
-  local release_tar
-  local previous_version
-  local backup_path
-
-  validate_version "$version"
-  check_release_store
-  require_file "$ENV_FILE"
-  require_file "$COMPOSE_FILE"
-
-  validate_maintenance_release "$release_path" || return 1
-
-  previous_version="$(current_version)"
-  backup_path="$(backup_current_files "$previous_version")"
+apply_release() {
+  local version="$1" release_path="$2" backup_path="$3"
+  local release_tar before target
   release_tar="$(resolve_release_tar "$version" "$release_path" || true)"
   require_file "$CONTROL_SCRIPT"
-  python3 "$CONTROL_SCRIPT" announce --notice-seconds "$NOTICE_SECONDS" --lock-held || return 1
-  maintenance_on
+  python3 "$CONTROL_SCRIPT" release-preflight || return 1
+  load_release_images "$version" "$release_tar" || return 1
+  before="$(database_revision)" || return 1
+  target="$(preflight_release "$version" "$release_path" "$before")" || return 1
+  log "发布预检通过，数据库版本计划: $before -> $target"
+  python3 "$CONTROL_SCRIPT" prepare-release --notice-seconds "$NOTICE_SECONDS" --lock-held || return 1
+  quiesce_traffic "$before" || return 1
 
-  if ! load_release_images "$version" "$release_tar"; then
-    restore_after_failed_change "$backup_path"
+  if ! stage_release_compose "$release_path" || ! set_version "$version" || ! compose config --quiet; then
+    restore_backup "$backup_path" || log "WARNING: 配置恢复失败，请检查 $backup_path"
     return 1
   fi
-  if ! stage_release_compose "$release_path"; then
-    restore_after_failed_change "$backup_path"
-    return 1
-  fi
-  set_version "$version"
-
-  if ! compose config --quiet; then
-    restore_after_failed_change "$backup_path"
-    return 1
-  fi
-  if ! verify_compose_images; then
-    restore_after_failed_change "$backup_path"
-    return 1
-  fi
-  if ! quiesce_and_migrate; then return 1; fi
-  if ! compose up -d --no-deps app hermes-lite frontend; then
-    restore_after_failed_change "$backup_path"
-    return 1
-  fi
-  if ! wait_for_healthy; then
-    restore_after_failed_change "$backup_path"
-    return 1
-  fi
-  if ! recreate_nginx || ! check_nginx || ! verify_proxy_routes; then
-    restore_after_failed_change "$backup_path"
-    return 1
-  fi
-
-  maintenance_off || return 1
-  write_success_marker "$version" "$backup_path"
-  log "部署成功: $version"
-  compose ps
-}
-
-rollback_version() {
-  local version="$1"
-  local release_path="${2:-$RELEASE_DIR/$version}"
-  local release_tar
-  local previous_version
-  local backup_path
-
-  validate_version "$version"
-  check_release_store
-  require_file "$ENV_FILE"
-  require_file "$COMPOSE_FILE"
-
-  validate_maintenance_release "$release_path" || return 1
-
-  previous_version="$(current_version)"
-  backup_path="$(backup_current_files "$previous_version")"
-  release_tar="$(resolve_release_tar "$version" "$release_path" || true)"
-  require_file "$CONTROL_SCRIPT"
-  python3 "$CONTROL_SCRIPT" announce --notice-seconds "$NOTICE_SECONDS" --lock-held || return 1
-  maintenance_on
-
-  if ! load_release_images "$version" "$release_tar"; then
-    restore_after_failed_change "$backup_path"
-    return 1
-  fi
-  if ! stage_release_compose "$release_path"; then
-    restore_after_failed_change "$backup_path"
-    return 1
-  fi
-  set_version "$version"
-
-  if ! compose config --quiet || ! verify_compose_images; then
-    restore_after_failed_change "$backup_path"
-    return 1
-  fi
-  if ! quiesce_and_migrate; then return 1; fi
+  migrate_release "$target" || return 1
   if ! compose up -d --no-deps app hermes-lite frontend; then
     restore_after_failed_change "$backup_path"
     return 1
@@ -494,10 +444,27 @@ rollback_version() {
     return 1
   fi
 
-  maintenance_off || return 1
+  maintenance_off
+}
+
+switch_version() {
+  local action="$1" version="$2" release_path="$3"
+  local previous_version backup_path
+  validate_version "$version"
+  check_release_store || return 1
+  require_file "$ENV_FILE"
+  require_file "$COMPOSE_FILE"
+  validate_maintenance_release "$release_path" || return 1
+  previous_version="$(current_version)" || return 1
+  backup_path="$(backup_current_files "$previous_version")" || return 1
+  apply_release "$version" "$release_path" "$backup_path" || return 1
   write_success_marker "$version" "$backup_path"
-  log "回滚成功: $previous_version -> $version"
-  log "注意：回滚只切换应用镜像和 Compose 配置，不会自动回滚数据库迁移"
+  if [[ "$action" == rollback ]]; then
+    log "回滚成功: $previous_version -> $version"
+    log "注意：回滚只切换应用镜像和 Compose 配置，不会自动回滚数据库迁移"
+  else
+    log "部署成功: $version"
+  fi
   compose ps
 }
 
@@ -555,7 +522,7 @@ case "$action" in
       [[ $# -eq 5 ]] || die "条件发布需要当前版本"
       check_expected_version "$5"
     fi
-    deploy_version "$2" "${3:-$RELEASE_DIR/$2}"
+    switch_version deploy "$2" "${3:-$RELEASE_DIR/$2}"
     ;;
   rollback|rollback-if-current)
     [[ $# -ge 2 ]] || die "rollback 需要版本号"
@@ -563,7 +530,7 @@ case "$action" in
       [[ $# -eq 5 ]] || die "条件回滚需要当前版本"
       check_expected_version "$5"
     fi
-    rollback_version "$2" "${3:-$RELEASE_DIR/$2}"
+    switch_version rollback "$2" "${3:-$RELEASE_DIR/$2}"
     ;;
   status)
     status

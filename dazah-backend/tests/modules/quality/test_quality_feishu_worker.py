@@ -13,6 +13,7 @@ from redis.exceptions import ConnectionError as RedisConnectionError
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.core import maintenance
 from app.core.database import get_db
 from app.core.exceptions import AppException
 from app.modules.quality.api import read_mirror as quality_api
@@ -30,6 +31,7 @@ from app.platform.integrations.feishu import read_mirror
 from app.platform.integrations.feishu.read_mirror import ModuleFeishuReadMirrorService
 
 pytestmark = pytest.mark.asyncio
+pytest_plugins = ("tests.maintenance_fixtures",)
 
 
 class LeaseStore:
@@ -334,3 +336,53 @@ async def test_manual_sync_requires_configuration_action(
                 "data": {"resource_id": str(resource_id), "record_count": 2},
                 "meta": None,
             }
+
+
+@pytest.mark.parametrize(
+    "route,method,result",
+    [
+        ("resources/{id}/sync", "sync_resource", {}),
+        ("roots/{id}/discover", "discover_root", []),
+    ],
+)
+async def test_manual_mirror_work_pauses_until_release_resumes(
+    isolated_redis, monkeypatch, route, method, result,
+) -> None:
+    app = FastAPI()
+    app.include_router(quality_api.router)
+    app.dependency_overrides[get_db] = lambda: None
+    app.dependency_overrides[quality_api.get_current_user] = lambda: None
+    entered, complete = asyncio.Event(), asyncio.Event()
+
+    async def finish_work(*_args):
+        entered.set()
+        await complete.wait()
+        return result
+
+    work = AsyncMock(side_effect=finish_work)
+    make_service = AsyncMock(return_value=(SimpleNamespace(**{method: work}), None))
+    monkeypatch.setattr(quality_api, "_service", make_service)
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        path = "/feishu-read/" + route.format(id=uuid4())
+        existing = asyncio.create_task(client.post(path))
+        try:
+            await asyncio.wait_for(entered.wait(), timeout=3)
+            assert await maintenance.pause_background_work("release", 60)
+            report = await maintenance.release_preflight("release")
+            assert report["activities"]["sync"]["count"] == 1
+            paused = await client.post(path)
+            assert paused.status_code == 409
+            assert "X-Dazah-Maintenance" not in paused.headers
+            make_service.assert_awaited_once()
+        finally:
+            complete.set()
+            finished = await existing
+        assert finished.status_code == 200
+        assert (await maintenance.release_preflight("release"))["blocking"] == 0
+
+        await maintenance.resume_background_work("release")
+        served = await client.post(path)
+        assert served.status_code == 200
+        assert work.await_count == 2

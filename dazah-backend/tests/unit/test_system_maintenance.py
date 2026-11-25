@@ -21,6 +21,53 @@ from app.platform.system import operations
 pytest_plugins = ("tests.maintenance_fixtures",)
 
 
+async def test_release_preflight_pauses_new_work_and_keeps_existing_work_online(
+    isolated_redis,
+):
+    async with maintenance.business_activity("scheduler"):
+        assert await maintenance.pause_background_work("release", 60)
+        assert not await maintenance.pause_background_work("other-release", 60)
+        async with maintenance.business_activity("database-task"):
+            report = await maintenance.release_preflight("release")
+            assert report["pause_owned"] is True
+            assert report["blocking"] == 2
+            assert report["activities"]["scheduler"]["count"] == 1
+            assert report["activities"]["scheduler"]["oldest_seconds"] >= 0
+    with pytest.raises(maintenance.BackgroundPausedError):
+        await maintenance.admit_activity("scheduler")
+    async with maintenance.business_activity("request"):
+        with pytest.raises(maintenance.BackgroundPausedError):
+            await maintenance.admit_activity("sync")
+        async with maintenance.business_activity("database-task"):
+            assert (await maintenance.release_preflight("release"))["blocking"] == 0
+        async with maintenance.business_activity("job"):
+            assert (await maintenance.release_preflight("release"))["blocking"] == 1
+    await maintenance.resume_background_work("other-release")
+    assert (await maintenance.release_preflight("release"))["pause_owned"] is True
+    await maintenance.resume_background_work("release")
+    assert (await maintenance.release_preflight("release"))["pause_owned"] is False
+    async with maintenance.business_activity("scheduler"):
+        pass
+
+
+async def test_release_preflight_reports_long_requests_and_unconfirmed_work(
+    isolated_redis, monkeypatch,
+):
+    clock = SimpleNamespace(time=lambda: 1000)
+    monkeypatch.setattr(maintenance, "time", clock)
+    async with maintenance.business_activity("request"):
+        async with maintenance.business_activity("database-task"):
+            await isolated_redis.hset(maintenance.ACTIVE_KEY, "old-entry", "invalid")
+            clock.time = lambda: 1120
+            report = await maintenance.release_preflight()
+            assert report["blocking"] == 2
+            assert report["activities"]["request"] == {
+                "count": 1,
+                "oldest_seconds": 120,
+            }
+            assert report["activities"]["unknown"]["count"] == 1
+
+
 async def test_drain_refuses_new_work_but_waits_for_admitted_parent_and_child(
     isolated_redis,
 ):
@@ -470,15 +517,24 @@ async def test_jobs_remain_in_drain_until_their_result_is_recorded(
     assert await maintenance.active_work() == {}
 
 
-async def test_scheduler_refuses_new_tasks_without_losing_due_time(isolated_redis):
-    await maintenance.set_release_phase("draining")
+@pytest.mark.parametrize("online", [False, True])
+async def test_scheduler_refuses_new_tasks_without_losing_due_time(
+    isolated_redis, online,
+):
+    if online:
+        assert await maintenance.pause_background_work("release", 60)
+    else:
+        await maintenance.set_release_phase("draining")
     engine = SchedulerEngine(SchedulerRegistry())
     work = AsyncMock()
     task = TaskDefinition("fixture-task", ScheduleConfig(), work)
     await engine._maybe_run_task(task, SimpleNamespace())
     work.assert_not_awaited()
     assert task.name not in engine._last_run
-    await maintenance.set_release_phase("normal")
+    if online:
+        await maintenance.resume_background_work("release")
+    else:
+        await maintenance.set_release_phase("normal")
     await engine._maybe_run_task(task, SimpleNamespace())
     work.assert_awaited_once()
     assert await maintenance.active_work() == {}
