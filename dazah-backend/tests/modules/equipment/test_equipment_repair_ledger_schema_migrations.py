@@ -27,6 +27,7 @@ PERSONS_COLUMN_REVISION = "db1d4d7f5632"
 MERGE_WITH_MAIN = "698173f2428c"
 REPAIR_TABLES_REVISION = "8910770ab796"
 MERGE_PERSONS_AND_NOTICES = "c7e3a1b9d5f2"
+SUMMARY_SETTINGS_REVISION = "d4c8e2f7a1b9"
 
 
 def _load(file_name: str):
@@ -172,9 +173,9 @@ def test_migration_history_has_the_merge_as_its_single_head():
     config.set_main_option("script_location", str(_backend_root() / "alembic"))
     script = ScriptDirectory.from_config(config)
 
-    # persons 迁移（db1d4d7f5632）与主线公告迁移（b6d8a2e4c9f1）并行开发，
-    # 由合并版本 c7e3a1b9d5f2 收口为唯一 head
-    assert script.get_heads() == [MERGE_PERSONS_AND_NOTICES]
+    # persons 迁移（db1d4d7f5632）与主线公告迁移（b6d8a2e4c9f1）由合并版本
+    # c7e3a1b9d5f2 收口；汇总设置迁移 d4c8e2f7a1b9 接在其后成为唯一 head
+    assert script.get_heads() == [SUMMARY_SETTINGS_REVISION]
     revisions = {revision.revision for revision in script.walk_revisions()}
     assert {
         REPAIR_TABLES_REVISION,
@@ -184,7 +185,30 @@ def test_migration_history_has_the_merge_as_its_single_head():
         "b4f2c8d1e3a5",
         "b6d8a2e4c9f1",
         MERGE_PERSONS_AND_NOTICES,
+        SUMMARY_SETTINGS_REVISION,
     } <= revisions
+
+
+def test_summary_settings_migration_creates_single_row_table(monkeypatch):
+    module = _load("d4c8e2f7a1b9_add_repair_summary_settings.py")
+    mocks = _mock_ops(monkeypatch, module)
+
+    module.upgrade()
+
+    assert module.revision == SUMMARY_SETTINGS_REVISION
+    assert mocks["create_table"].call_count == 1
+    table_call = mocks["create_table"].call_args
+    assert table_call.args[0] == "repair_summary_settings"
+    assert table_call.kwargs["schema"] == "equipment"
+    assert mocks["create_index"].call_count == 1
+    index_call = mocks["create_index"].call_args
+    assert index_call.args[0] == "uq_repair_summary_settings_scope"
+    assert index_call.kwargs["unique"] is True
+    assert index_call.kwargs["schema"] == "equipment"
+
+    module.downgrade()
+    assert mocks["drop_index"].call_count == 1
+    assert mocks["drop_table"].call_count == 1
 
 
 async def test_repair_record_is_unique_per_workshop_only_while_not_deleted(

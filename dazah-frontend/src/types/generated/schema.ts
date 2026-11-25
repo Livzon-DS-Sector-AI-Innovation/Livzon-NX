@@ -4030,6 +4030,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/equipment/repair/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 检修汇总（跨车间） */
+        get: operations["repair_summary_api_v1_equipment_repair_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/equipment/repair/summary/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 检修汇总默认设置 */
+        get: operations["get_repair_summary_settings_api_v1_equipment_repair_summary_settings_get"];
+        /** 保存检修汇总默认设置 */
+        put: operations["update_repair_summary_settings_api_v1_equipment_repair_summary_settings_put"];
+        post?: never;
+        /** 恢复检修汇总默认设置 */
+        delete: operations["reset_repair_summary_settings_api_v1_equipment_repair_summary_settings_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/equipment/repair/sync": {
         parameters: {
             query?: never;
@@ -63655,6 +63691,35 @@ export interface components {
              */
             table_id: string;
         };
+        /**
+         * RepairSummarySettingsUpdate
+         * @description 保存检修汇总全厂默认设置
+         */
+        RepairSummarySettingsUpdate: {
+            /**
+             * Range Key
+             * @default 30d
+             * @enum {string}
+             */
+            range_key: "30d" | "90d" | "year" | "last-year" | "all";
+            /**
+             * Sort Field
+             * @default workshop
+             * @enum {string}
+             */
+            sort_field: "workshop" | "repair_count" | "equipment_count" | "abnormal_count" | "person_count" | "last_repaired_at";
+            /**
+             * Sort Order
+             * @default ascend
+             * @enum {string}
+             */
+            sort_order: "ascend" | "descend";
+            /**
+             * Workshops
+             * @description 默认车间筛选；null/空 = 全部
+             */
+            workshops?: string[] | null;
+        };
         /** ReportBasis */
         ReportBasis: {
             /** Nodes */
@@ -85145,6 +85210,8 @@ export interface operations {
             query?: {
                 /** @description 车间代码；缺省跨车间查询 */
                 workshop?: string | null;
+                /** @description 逗号分隔的车间代码 */
+                workshops?: string | null;
                 /** @description 维修日期起 */
                 date_from?: string | null;
                 /** @description 维修日期止 */
@@ -85264,6 +85331,8 @@ export interface operations {
             query?: {
                 /** @description 车间代码；缺省跨车间查询 */
                 workshop?: string | null;
+                /** @description 逗号分隔的车间代码 */
+                workshops?: string | null;
                 /** @description 维修日期起 */
                 date_from?: string | null;
                 /** @description 维修日期止 */
@@ -85315,6 +85384,153 @@ export interface operations {
                 /** @description 车间代码；缺省跨车间查询 */
                 workshop?: string | null;
             };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    repair_summary_api_v1_equipment_repair_summary_get: {
+        parameters: {
+            query?: {
+                /** @description 维修日期起 */
+                date_from?: string | null;
+                /** @description 维修日期止 */
+                date_to?: string | null;
+                /** @description 逗号分隔的车间代码；缺省全部车间 */
+                workshops?: string | null;
+                /** @description 设备/故障/人员搜索 */
+                keyword?: string | null;
+                /** @description 设备名称原文 */
+                equipment?: string | null;
+                /** @description 维修人员姓名 */
+                person?: string | null;
+                /** @description 故障描述（模糊匹配） */
+                fault?: string | null;
+                /** @description 维修后状态原文 */
+                result_status?: string | null;
+                /** @description 榜单条数 */
+                top_limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_repair_summary_settings_api_v1_equipment_repair_summary_settings_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_repair_summary_settings_api_v1_equipment_repair_summary_settings_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RepairSummarySettingsUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reset_repair_summary_settings_api_v1_equipment_repair_summary_settings_delete: {
+        parameters: {
+            query?: never;
             header?: never;
             path?: never;
             cookie?: {

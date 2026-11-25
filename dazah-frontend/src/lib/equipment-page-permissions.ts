@@ -30,6 +30,8 @@ export const EQUIPMENT_CONSOLE_MODULE_HEADER = 'X-Dazah-Equipment-Module'
  * （equipment:maintenance），无需重新授权。
  */
 export const EQUIPMENT_MODULES = [
+  // 汇总复用「设备检修」授权，不新增权限项；菜单排在最前，方便领导直接进入。
+  { module: 'summary', key: 'equipment:maintenance', label: '检修汇总' },
   { module: 'inspection', key: 'equipment:inspection', label: '设备巡检' },
   { module: 'maintenance', key: 'equipment:maintenance', label: '设备检修' },
   { module: 'assets', key: 'equipment:assets', label: '设备台账' },
@@ -101,13 +103,18 @@ export function hasAnyEquipmentModuleAccess(
   return EQUIPMENT_MODULES.some((item) => hasEquipmentPageAccess(user, item.key))
 }
 
-/** 当前用户可进入的首个功能模块（按菜单顺序）；未带 ?module= 进入工作台时的落地模块。 */
+/** 当前用户可进入的首个功能模块（按菜单顺序）；未带 ?module= 进入工作台时的落地模块。
+ *
+ * 汇总页排菜单第一，但不作为默认落地：保留巡检/检修/台账原有落点，
+ * 领导可从左侧菜单第一项进入汇总。
+ */
 export function firstAccessibleEquipmentModule(
   user: EquipmentPermissionUser | null | undefined,
 ): EquipmentModule {
+  const landing = EQUIPMENT_MODULES.filter((item) => item.module !== 'summary')
   return (
-    EQUIPMENT_MODULES.find((item) => hasEquipmentPageAccess(user, item.key))?.module
-    ?? EQUIPMENT_MODULES[0].module
+    landing.find((item) => hasEquipmentPageAccess(user, item.key))?.module
+    ?? landing[0].module
   )
 }
 

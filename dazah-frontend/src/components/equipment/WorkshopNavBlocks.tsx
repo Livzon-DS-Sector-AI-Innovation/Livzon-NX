@@ -40,6 +40,13 @@ const DEFAULT_WORKSHOP_COLOR = '#5667a3'
 // 默认车间（与设备工作台页面的服务端兜底一致）
 const DEFAULT_WORKSHOP_CODE = '201-1'
 
+/** 车间名含括号后缀时拆成两行：201二车间（MC） → 201二车间 / （MC） */
+function splitWorkshopName(name: string): [string, string | null] {
+  const index = name.indexOf('（')
+  if (index <= 0) return [name, null]
+  return [name.slice(0, index), name.slice(index)]
+}
+
 interface WorkshopNavBlocksProps {
   /** 当前功能页 key，用于按授权过滤不可见车间 */
   pageKey: EquipmentPageKey
@@ -88,12 +95,13 @@ export function WorkshopNavBlocks({ pageKey }: WorkshopNavBlocksProps) {
   const active = urlWorkshop ?? workshopCode
 
   return (
-    <Row gutter={[12, 12]} style={{ marginBottom: 8 }}>
+    <Row gutter={[8, 8]} style={{ marginBottom: 6 }}>
       {visible.map((ws) => {
         const isActive = active === ws.code
+        const [primaryName, suffixName] = splitWorkshopName(ws.name)
         return (
-          // 弹性等宽：宽屏多块一行铺满，窄屏按 144px 基准自然换行
-          <Col key={ws.code} flex="1 1 144px">
+          // 弹性等宽：宽屏一行铺满，窄屏按 112px 基准自然换行
+          <Col key={ws.code} flex="1 1 112px">
             <div
               title={`切换到 ${ws.name}`}
               onClick={() => {
@@ -101,9 +109,11 @@ export function WorkshopNavBlocks({ pageKey }: WorkshopNavBlocksProps) {
                 router.push(`${pathname}?workshop=${encodeURIComponent(ws.code)}${moduleSuffix}`, { scroll: false })
               }}
               data-testid={`workshop-block:${ws.code}`}
-              className="flex items-center justify-center gap-2 rounded-lg border bg-white cursor-pointer transition-colors"
+              className="flex items-center justify-center gap-1.5 rounded-lg border bg-white cursor-pointer transition-colors"
               style={{
-                height: 56,
+                height: 44,
+                padding: '0 4px',
+                overflow: 'hidden',
                 borderColor: isActive
                   ? 'var(--color-primary)'
                   : 'var(--color-hairline)',
@@ -113,10 +123,36 @@ export function WorkshopNavBlocks({ pageKey }: WorkshopNavBlocksProps) {
               }}
             >
               <ApartmentOutlined
-                style={{ color: WORKSHOP_COLORS[ws.code] ?? DEFAULT_WORKSHOP_COLOR, fontSize: 18 }}
+                style={{ color: WORKSHOP_COLORS[ws.code] ?? DEFAULT_WORKSHOP_COLOR, fontSize: 15, flexShrink: 0 }}
               />
-              <Text strong style={{ fontSize: 13 }}>
-                {ws.name}
+              <Text
+                strong
+                style={{
+                  fontSize: 12,
+                  lineHeight: '15px',
+                  minWidth: 0,
+                  maxWidth: '100%',
+                  overflow: 'hidden',
+                }}
+              >
+                <span style={{ display: 'block', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
+                  {primaryName}
+                </span>
+                {suffixName && (
+                  <span
+                    style={{
+                      display: 'block',
+                      fontSize: 11,
+                      fontWeight: 500,
+                      color: 'var(--color-slate)',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}
+                  >
+                    {suffixName}
+                  </span>
+                )}
               </Text>
             </div>
           </Col>

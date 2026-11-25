@@ -28,6 +28,8 @@ export interface RepairRecord {
 
 export interface RepairRecordFilters {
   workshop?: string
+  /** 跨车间筛选（汇总页使用；与 workshop 互斥） */
+  workshops?: string[]
   date_from?: string
   date_to?: string
   keyword?: string
@@ -99,6 +101,140 @@ export interface RepairConfigTestResult {
   message: string
 }
 
+export interface RepairSummaryKpi {
+  total_count: number
+  equipment_count: number
+  workshop_count: number
+  total_workshops: number
+  person_count: number
+  abnormal_count: number
+  daily_average: number
+  previous_total_count: number | null
+  change_rate: number | null
+}
+
+export type RepairWorkshopStatus =
+  | 'normal'
+  | 'sync_failed'
+  | 'disabled'
+  | 'not_configured'
+  | 'no_records'
+
+export interface RepairSummaryWorkshop {
+  workshop_code: string
+  workshop_name: string
+  repair_count: number
+  equipment_count: number
+  person_count: number
+  abnormal_count: number
+  last_repaired_at: string | null
+  last_synced_at: string | null
+  last_sync_status: string | null
+  configured: boolean
+  enabled: boolean
+  status: RepairWorkshopStatus
+}
+
+export interface RepairSummaryEquipment {
+  workshop_code: string
+  workshop_name: string
+  equipment_text: string
+  times: number
+  last_repaired_at: string | null
+}
+
+export interface RepairSummaryFaultWorkshop {
+  workshop_code: string
+  workshop_name: string
+  times: number
+}
+
+export interface RepairSummaryFault {
+  fault_desc: string
+  times: number
+  equipment_count: number
+  workshops: RepairSummaryFaultWorkshop[]
+  last_repaired_at: string | null
+}
+
+export interface RepairSummaryPersonWorkshop {
+  workshop_code: string
+  workshop_name: string
+  times: number
+}
+
+export interface RepairSummaryPerson {
+  name: string
+  open_id: string | null
+  avatar_url: string | null
+  times: number
+  workshop_count: number
+  workshops: RepairSummaryPersonWorkshop[]
+  last_repaired_at: string | null
+}
+
+export interface RepairSummaryTrendPoint {
+  period: string
+  workshop_code: string
+  workshop_name: string
+  count: number
+  equipment_count: number
+}
+
+export interface RepairSummary {
+  kpi: RepairSummaryKpi
+  workshops: RepairSummaryWorkshop[]
+  top_equipment: RepairSummaryEquipment[]
+  top_faults: RepairSummaryFault[]
+  top_persons: RepairSummaryPerson[]
+  trend: RepairSummaryTrendPoint[]
+  trend_granularity: 'week' | 'month'
+}
+
+export interface RepairSummaryFilters {
+  date_from?: string
+  date_to?: string
+  workshops?: string[]
+  keyword?: string
+  equipment?: string
+  person?: string
+  fault?: string
+  result?: string
+  top_limit?: number
+}
+
+export type RepairSummarySortField =
+  | 'workshop'
+  | 'repair_count'
+  | 'equipment_count'
+  | 'abnormal_count'
+  | 'person_count'
+  | 'last_repaired_at'
+
+export type RepairSummaryRangeKey =
+  | '30d'
+  | '90d'
+  | 'year'
+  | 'last-year'
+  | 'all'
+
+export interface RepairSummarySettings {
+  sort_field: RepairSummarySortField
+  sort_order: 'ascend' | 'descend'
+  range_key: RepairSummaryRangeKey
+  workshops: string[] | null
+  updated_by_name: string | null
+  updated_at: string | null
+  can_edit: boolean
+}
+
+export interface RepairSummarySettingsUpdate {
+  sort_field: RepairSummarySortField
+  sort_order: 'ascend' | 'descend'
+  range_key: RepairSummaryRangeKey
+  workshops: string[] | null
+}
+
 interface ApiResponse<T> {
   code: number
   message?: string
@@ -115,7 +251,7 @@ async function getJson<T>(url: string): Promise<ApiResponse<T>> {
   return response.json()
 }
 
-async function sendJson<T>(url: string, method: 'POST' | 'PUT', body?: unknown): Promise<ApiResponse<T>> {
+async function sendJson<T>(url: string, method: 'POST' | 'PUT' | 'DELETE', body?: unknown): Promise<ApiResponse<T>> {
   const response = await fetch(url, {
     method,
     headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
@@ -138,6 +274,9 @@ export async function fetchRepairRecords(
 ): Promise<RepairRecordPage> {
   const params = new URLSearchParams()
   if (filters.workshop) params.append('workshop', filters.workshop)
+  if (filters.workshops?.length) {
+    params.append('workshops', filters.workshops.join(','))
+  }
   if (filters.date_from) params.append('date_from', filters.date_from)
   if (filters.date_to) params.append('date_to', filters.date_to)
   if (filters.keyword) params.append('keyword', filters.keyword)
@@ -166,8 +305,9 @@ export async function fetchRepairFrequency(
   return json.data ?? []
 }
 
-export async function fetchRepairResults(workshop: string): Promise<string[]> {
-  const json = await getJson<string[]>(`${BASE}/results?${workshopQuery(workshop)}`)
+export async function fetchRepairResults(workshop?: string): Promise<string[]> {
+  const query = workshop ? `?${workshopQuery(workshop)}` : ''
+  const json = await getJson<string[]>(`${BASE}/results${query}`)
   return json.data ?? []
 }
 
@@ -179,12 +319,62 @@ export interface RepairFilterOptions {
 }
 
 export async function fetchRepairFilterOptions(
-  workshop: string,
+  workshop?: string,
 ): Promise<RepairFilterOptions> {
+  const query = workshop ? `?${workshopQuery(workshop)}` : ''
   const json = await getJson<RepairFilterOptions>(
-    `${BASE}/filter-options?${workshopQuery(workshop)}`,
+    `${BASE}/filter-options${query}`,
   )
   return json.data ?? { persons: [], faults: [], equipments: [] }
+}
+
+/** 跨车间检修汇总：KPI、车间对比、榜单与趋势（全部只读） */
+export async function fetchRepairSummary(
+  filters: RepairSummaryFilters = {},
+): Promise<RepairSummary> {
+  const params = new URLSearchParams()
+  if (filters.date_from) params.append('date_from', filters.date_from)
+  if (filters.date_to) params.append('date_to', filters.date_to)
+  if (filters.workshops?.length) {
+    params.append('workshops', filters.workshops.join(','))
+  }
+  if (filters.keyword) params.append('keyword', filters.keyword)
+  if (filters.equipment) params.append('equipment', filters.equipment)
+  if (filters.person) params.append('person', filters.person)
+  if (filters.fault) params.append('fault', filters.fault)
+  if (filters.result) params.append('result_status', filters.result)
+  if (filters.top_limit) params.append('top_limit', String(filters.top_limit))
+  const json = await getJson<RepairSummary>(
+    `${BASE}/summary?${params.toString()}`,
+  )
+  return json.data
+}
+
+/** 读取检修汇总全厂默认设置（含当前用户是否有保存权限） */
+export async function fetchRepairSummarySettings(): Promise<RepairSummarySettings> {
+  const json = await getJson<RepairSummarySettings>(`${BASE}/summary/settings`)
+  return json.data
+}
+
+/** 保存检修汇总全厂默认设置 */
+export async function saveRepairSummarySettings(
+  data: RepairSummarySettingsUpdate,
+): Promise<RepairSummarySettings> {
+  const json = await sendJson<RepairSummarySettings>(
+    `${BASE}/summary/settings`,
+    'PUT',
+    data,
+  )
+  return json.data
+}
+
+/** 恢复系统默认设置 */
+export async function resetRepairSummarySettings(): Promise<RepairSummarySettings> {
+  const json = await sendJson<RepairSummarySettings>(
+    `${BASE}/summary/settings`,
+    'DELETE',
+  )
+  return json.data
 }
 
 /** 按当前筛选条件导出全部命中记录为 Excel 并触发浏览器下载 */
@@ -193,6 +383,9 @@ export async function exportRepairRecords(
 ): Promise<void> {
   const params = new URLSearchParams()
   if (filters.workshop) params.append('workshop', filters.workshop)
+  if (filters.workshops?.length) {
+    params.append('workshops', filters.workshops.join(','))
+  }
   if (filters.date_from) params.append('date_from', filters.date_from)
   if (filters.date_to) params.append('date_to', filters.date_to)
   if (filters.keyword) params.append('keyword', filters.keyword)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, datetime
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -123,3 +124,150 @@ class RepairConfigTestResult(BaseModel):
 
     success: bool
     message: str = ""
+
+
+class RepairSummaryKpi(BaseModel):
+    """检修汇总 KPI"""
+
+    total_count: int = Field(description="维修次数")
+    equipment_count: int = Field(description="涉及设备数（车间+设备名去重）")
+    workshop_count: int = Field(description="有数据的车间数")
+    total_workshops: int = Field(description="车间总数")
+    person_count: int = Field(description="维修人数")
+    abnormal_count: int = Field(description="异常/待处理记录数")
+    daily_average: float = Field(description="日均维修次数")
+    previous_total_count: int | None = Field(
+        default=None, description="上一周期维修次数（无日期范围时为空）"
+    )
+    change_rate: float | None = Field(default=None, description="环比变化百分比")
+
+
+class RepairSummaryWorkshopRow(BaseModel):
+    """检修汇总的车间对比行"""
+
+    workshop_code: str
+    workshop_name: str
+    repair_count: int
+    equipment_count: int
+    person_count: int
+    abnormal_count: int
+    last_repaired_at: date | None = None
+    last_synced_at: datetime | None = None
+    last_sync_status: str | None = None
+    configured: bool = Field(default=False, description="是否已配置飞书检修表")
+    enabled: bool = Field(default=False, description="是否启用同步")
+    status: str = Field(
+        description="normal / sync_failed / disabled / not_configured / no_records"
+    )
+
+
+class RepairSummaryEquipmentItem(BaseModel):
+    """高频设备（按车间+设备名称原文分组，不跨车间合并）"""
+
+    workshop_code: str
+    workshop_name: str
+    equipment_text: str
+    times: int
+    last_repaired_at: date | None = None
+
+
+class RepairSummaryFaultWorkshop(BaseModel):
+    """某条故障在某个车间出现的次数"""
+
+    workshop_code: str
+    workshop_name: str
+    times: int
+
+
+class RepairSummaryFaultItem(BaseModel):
+    """高频故障（故障描述原文去空白后分组）"""
+
+    fault_desc: str
+    times: int
+    equipment_count: int = Field(description="涉及设备数（车间+设备名去重）")
+    workshops: list[RepairSummaryFaultWorkshop] = Field(
+        default_factory=list, description="涉及车间及各自次数（按次数降序）"
+    )
+    last_repaired_at: date | None = None
+
+
+class RepairSummaryPersonWorkshop(BaseModel):
+    """某个维修人员在某个车间参与的次数"""
+
+    workshop_code: str
+    workshop_name: str
+    times: int
+
+
+class RepairSummaryPersonItem(BaseModel):
+    """人员工作量（按姓名聚合，优先结构化人员信息）"""
+
+    name: str
+    open_id: str | None = None
+    avatar_url: str | None = None
+    times: int = Field(description="参与维修的记录数")
+    workshop_count: int
+    workshops: list[RepairSummaryPersonWorkshop] = Field(
+        default_factory=list, description="参与车间及各自次数（按次数降序）"
+    )
+    last_repaired_at: date | None = None
+
+
+class RepairSummaryTrendPoint(BaseModel):
+    """检修趋势点（按周或按月，按车间拆分）"""
+
+    period: str = Field(description="周起始日期（YYYY-MM-DD）或月份（YYYY-MM）")
+    workshop_code: str
+    workshop_name: str
+    count: int
+    equipment_count: int
+
+
+class RepairSummaryResponse(BaseModel):
+    """跨车间检修汇总"""
+
+    kpi: RepairSummaryKpi
+    workshops: list[RepairSummaryWorkshopRow] = Field(default_factory=list)
+    top_equipment: list[RepairSummaryEquipmentItem] = Field(default_factory=list)
+    top_faults: list[RepairSummaryFaultItem] = Field(default_factory=list)
+    top_persons: list[RepairSummaryPersonItem] = Field(default_factory=list)
+    trend: list[RepairSummaryTrendPoint] = Field(default_factory=list)
+    trend_granularity: str = Field(description="week / month")
+
+
+RepairSummarySortField = Literal[
+    "workshop",
+    "repair_count",
+    "equipment_count",
+    "abnormal_count",
+    "person_count",
+    "last_repaired_at",
+]
+RepairSummaryRangeKey = Literal["30d", "90d", "year", "last-year", "all"]
+
+WORKSHOP_CODE_PATTERN = r"^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$"
+
+
+class RepairSummarySettingsResponse(BaseModel):
+    """检修汇总全厂默认设置"""
+
+    sort_field: str
+    sort_order: str
+    range_key: str
+    workshops: list[str] | None = Field(
+        default=None, description="默认车间筛选；null = 全部"
+    )
+    updated_by_name: str | None = Field(default=None, description="最近修改人")
+    updated_at: datetime | None = Field(default=None, description="最近修改时间")
+    can_edit: bool = Field(default=False, description="当前用户是否可保存默认设置")
+
+
+class RepairSummarySettingsUpdate(BaseModel):
+    """保存检修汇总全厂默认设置"""
+
+    sort_field: RepairSummarySortField = "workshop"
+    sort_order: Literal["ascend", "descend"] = "ascend"
+    range_key: RepairSummaryRangeKey = "30d"
+    workshops: list[Annotated[str, Field(pattern=WORKSHOP_CODE_PATTERN)]] | None = (
+        Field(default=None, description="默认车间筛选；null/空 = 全部")
+    )

@@ -56,6 +56,8 @@ export const EQUIPMENT_WORKSHOPS: ReadonlyArray<{ code: string; label: string }>
   { code: "201-2-dr", label: "201二车间（DR）" },
   { code: "201-3", label: "201三车间" },
   { code: "203", label: "203车间" },
+  { code: "power", label: "动力部" },
+  { code: "wastewater", label: "污水车间" },
 ]
 
 /** 设备统一工作台聚合的功能模块授权 key（无 ?module= 进入时的深链校验用） */
@@ -155,6 +157,11 @@ export const moduleMenus: ModuleMenu[] = [
       // 车间管理等入口下线，后端能力原地保留，将来按需恢复。
       // 顺序与 lib/equipment-page-permissions 的 EQUIPMENT_MODULES 一致；
       // 切换功能入口时沿用当前车间（carryQuery）
+      {
+        key: "summary",
+        label: "检修汇总",
+        path: "/equipment?module=summary",
+      },
       {
         key: "inspection",
         label: "设备巡检",
@@ -1171,6 +1178,8 @@ const pageRouteAliases: Record<string, string> = {
   // 设备统一工作台根路径不是权限页：具体功能页授权按 ?module= 解析（见 proxy
   // 与 getPostLoginPath），根路径按任一功能模块授权放行（见 AppShell consoleAccess）
   "/equipment": "equipment:console",
+  // 汇总复用设备检修授权，不新增权限实体
+  "/equipment?module=summary": "equipment:maintenance",
   "/quality/deviations": "quality:deviations:deviation-ledger",
   "/quality/capas": "quality:capas:capa-ledger",
   "/quality/complaints": "quality:complaints:complaint-ledger",

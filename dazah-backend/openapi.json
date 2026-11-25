@@ -79369,6 +79369,63 @@
         "title": "RepairConfigUpdateRequest",
         "type": "object"
       },
+      "RepairSummarySettingsUpdate": {
+        "description": "保存检修汇总全厂默认设置",
+        "properties": {
+          "range_key": {
+            "default": "30d",
+            "enum": [
+              "30d",
+              "90d",
+              "year",
+              "last-year",
+              "all"
+            ],
+            "title": "Range Key",
+            "type": "string"
+          },
+          "sort_field": {
+            "default": "workshop",
+            "enum": [
+              "workshop",
+              "repair_count",
+              "equipment_count",
+              "abnormal_count",
+              "person_count",
+              "last_repaired_at"
+            ],
+            "title": "Sort Field",
+            "type": "string"
+          },
+          "sort_order": {
+            "default": "ascend",
+            "enum": [
+              "ascend",
+              "descend"
+            ],
+            "title": "Sort Order",
+            "type": "string"
+          },
+          "workshops": {
+            "anyOf": [
+              {
+                "items": {
+                  "pattern": "^[a-z0-9][a-z0-9-]{0,8}[a-z0-9]$",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "默认车间筛选；null/空 = 全部",
+            "title": "Workshops"
+          }
+        },
+        "title": "RepairSummarySettingsUpdate",
+        "type": "object"
+      },
       "ReportBasis": {
         "additionalProperties": false,
         "properties": {
@@ -130058,6 +130115,24 @@
             }
           },
           {
+            "description": "逗号分隔的车间代码",
+            "in": "query",
+            "name": "workshops",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "逗号分隔的车间代码",
+              "title": "Workshops"
+            }
+          },
+          {
             "description": "维修日期起",
             "in": "query",
             "name": "date_from",
@@ -130415,6 +130490,24 @@
             }
           },
           {
+            "description": "逗号分隔的车间代码",
+            "in": "query",
+            "name": "workshops",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "逗号分隔的车间代码",
+              "title": "Workshops"
+            }
+          },
+          {
             "description": "维修日期起",
             "in": "query",
             "name": "date_from",
@@ -130669,6 +130762,360 @@
           }
         },
         "summary": "维修后状态去重列表（筛选项）",
+        "tags": [
+          "设备管理"
+        ]
+      }
+    },
+    "/api/v1/equipment/repair/summary": {
+      "get": {
+        "operationId": "repair_summary_api_v1_equipment_repair_summary_get",
+        "parameters": [
+          {
+            "description": "维修日期起",
+            "in": "query",
+            "name": "date_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "维修日期起",
+              "title": "Date From"
+            }
+          },
+          {
+            "description": "维修日期止",
+            "in": "query",
+            "name": "date_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "维修日期止",
+              "title": "Date To"
+            }
+          },
+          {
+            "description": "逗号分隔的车间代码；缺省全部车间",
+            "in": "query",
+            "name": "workshops",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "逗号分隔的车间代码；缺省全部车间",
+              "title": "Workshops"
+            }
+          },
+          {
+            "description": "设备/故障/人员搜索",
+            "in": "query",
+            "name": "keyword",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "设备/故障/人员搜索",
+              "title": "Keyword"
+            }
+          },
+          {
+            "description": "设备名称原文",
+            "in": "query",
+            "name": "equipment",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "设备名称原文",
+              "title": "Equipment"
+            }
+          },
+          {
+            "description": "维修人员姓名",
+            "in": "query",
+            "name": "person",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "维修人员姓名",
+              "title": "Person"
+            }
+          },
+          {
+            "description": "故障描述（模糊匹配）",
+            "in": "query",
+            "name": "fault",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "故障描述（模糊匹配）",
+              "title": "Fault"
+            }
+          },
+          {
+            "description": "维修后状态原文",
+            "in": "query",
+            "name": "result_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "维修后状态原文",
+              "title": "Result Status"
+            }
+          },
+          {
+            "description": "榜单条数",
+            "in": "query",
+            "name": "top_limit",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "description": "榜单条数",
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Top Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "检修汇总（跨车间）",
+        "tags": [
+          "设备管理"
+        ]
+      }
+    },
+    "/api/v1/equipment/repair/summary/settings": {
+      "delete": {
+        "operationId": "reset_repair_summary_settings_api_v1_equipment_repair_summary_settings_delete",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "恢复检修汇总默认设置",
+        "tags": [
+          "设备管理"
+        ]
+      },
+      "get": {
+        "operationId": "get_repair_summary_settings_api_v1_equipment_repair_summary_settings_get",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "检修汇总默认设置",
+        "tags": [
+          "设备管理"
+        ]
+      },
+      "put": {
+        "operationId": "update_repair_summary_settings_api_v1_equipment_repair_summary_settings_put",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RepairSummarySettingsUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "保存检修汇总默认设置",
         "tags": [
           "设备管理"
         ]
