@@ -100,12 +100,19 @@ async def get_material_page_rows(
     session: AsyncSession,
     *,
     page_key: str,
+    search_text: str | None = None,
+    field_values: dict[str, list[str]] | None = None,
+    limit: int | None = None,
 ) -> tuple[list[dict[str, Any]], datetime.datetime | None]:
     """物料页（飞书镜像）的原始行内容与最近同步时间。
 
     行按快照 row_order 升序返回，cells 原样透传（值为飞书原始类型：
     文本/数字/毫秒时间戳）。页面未绑定或尚未同步时返回 ([], None)。
     供跨模块消费本地镜像（如设备备件管理读五金各车间表）。
+
+    ``search_text``、``field_values``（cells 内字段的精确取值集合）与 ``limit``
+    是可选的收窄条件，供只关心部分行的调用方避免全量拉取；调用方仍应在内存中
+    复核具体字段。
     """
     from sqlalchemy import select
 
@@ -120,13 +127,29 @@ async def get_material_page_rows(
     ).scalars().first()
     if snapshot is None:
         return [], None
-    rows = (
-        await session.execute(
-            select(MaterialPageRow.cells)
-            .where(MaterialPageRow.page_snapshot_id == snapshot.id)
-            .order_by(MaterialPageRow.row_order.asc())
+    statement = (
+        select(MaterialPageRow.cells)
+        .where(MaterialPageRow.page_snapshot_id == snapshot.id)
+        .order_by(MaterialPageRow.row_order.asc())
+    )
+    if search_text:
+        escaped = (
+            search_text.replace("\\", "\\\\")
+            .replace("%", "\\%")
+            .replace("_", "\\_")
         )
-    ).all()
+        statement = statement.where(
+            MaterialPageRow.search_text.ilike(f"%{escaped}%", escape="\\")
+        )
+    for field_name, values in (field_values or {}).items():
+        if not values:
+            continue
+        statement = statement.where(
+            MaterialPageRow.cells[field_name].astext.in_(values)
+        )
+    if limit is not None:
+        statement = statement.limit(limit)
+    rows = (await session.execute(statement)).all()
     return [dict(cells) for (cells,) in rows], snapshot.last_synced_at
 
 

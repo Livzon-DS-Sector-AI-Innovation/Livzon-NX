@@ -214,7 +214,7 @@ async def test_module_coverage_http_projects_new_providers_and_rejects_non_admin
         assert modules["hr"]["coverage_percent"] == 100.0
         assert modules["hr"]["registered_count"] == 16
         assert all(page["enabled_count"] > 0 for page in modules["hr"]["pages"])
-        assert payload["covered_pages"] == 228
+        assert payload["covered_pages"] == 229
         actor.role = "user"
         denied = await client.get("/api/v1/agent/control/module-coverage")
         assert denied.status_code == 403

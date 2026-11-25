@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 from datetime import UTC, datetime
 from typing import Any
@@ -44,6 +45,15 @@ from app.modules.procurement.material_source import (
     sync_material_source,
     test_material_source_config,
 )
+from app.modules.procurement.price_service import (
+    get_material_price_detail,
+    search_material_prices,
+)
+from app.modules.procurement.price_table_fill import (
+    ColumnMapping,
+    fill_workbook,
+    preview_fill,
+)
 from app.modules.procurement.schemas import (
     ContractCategory,
     ContractGenerateRequest,
@@ -61,6 +71,12 @@ from app.modules.procurement.schemas import (
     MaterialCatalogListResponse,
     MaterialCatalogRecordResponse,
     MaterialOptionListResponse,
+    MaterialPriceDetailApiResponse,
+    MaterialPriceFillMapping,
+    MaterialPriceFillPreview,
+    MaterialPriceFillPreviewApiResponse,
+    MaterialPriceFillRow,
+    MaterialPriceSummaryListResponse,
     MaterialSourceConfigApiResponse,
     MaterialSourceConfigResponse,
     MaterialSourceConfigUpsert,
@@ -1115,3 +1131,206 @@ async def get_contract_file(
             "Content-Disposition": f"attachment; filename*=utf-8''{encoded_filename}"
         },
     )
+
+
+@router.get(
+    "/material-prices",
+    summary="查询物料历史价格",
+    description="按物料编码、名称或别名检索历史采购价格，按累计金额聚合排序。",
+    response_model=MaterialPriceSummaryListResponse,
+)
+async def list_material_price_records(
+    keyword: str | None = Query(
+        None, max_length=100, description="编码/名称/别名关键词"
+    ),
+    source_type: str | None = Query(
+        None, max_length=32, description="来源类型：erp_stock/erp_order/manual"
+    ),
+    cost_category: str | None = Query(None, max_length=64, description="成本类别"),
+    sub_inventory: str | None = Query(None, max_length=64, description="子库存"),
+    year: int | None = Query(None, ge=1900, le=2100, description="数据年度"),
+    page: int = Query(default=1, ge=1, description="页码"),
+    page_size: int = Query(default=20, ge=1, le=100, description="每页条数"),
+    db: AsyncSession = Depends(get_db),
+) -> Any:
+    rows, total = await search_material_prices(
+        db,
+        keyword=keyword,
+        source_type=source_type,
+        cost_category=cost_category,
+        sub_inventory=sub_inventory,
+        data_year=year,
+        page=page,
+        page_size=page_size,
+    )
+    data = [row.model_dump(mode="json") for row in rows]
+    return paginated_response(data, page, page_size, total)
+
+
+def _fill_mapping(raw: str | None) -> ColumnMapping | None:
+    """解析前端回传的列映射；空值表示由后端自动识别。"""
+    if raw is None or not raw.strip():
+        return None
+    try:
+        payload = json.loads(raw)
+    except ValueError as exc:
+        raise AppException(status_code=400, message="列映射格式无效") from exc
+    if not isinstance(payload, dict):
+        raise AppException(status_code=400, message="列映射格式无效")
+
+    def optional_int(value: object) -> int | None:
+        try:
+            return int(value) if value is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    def positive_int(value: object) -> int | None:
+        number = optional_int(value)
+        if number is not None and number < 1:
+            raise AppException(
+                status_code=400, message="列映射中的行号和列号必须从 1 开始"
+            )
+        return number
+
+    return ColumnMapping(
+        sheet_name=str(payload.get("sheet_name") or ""),
+        header_row=positive_int(payload.get("header_row")) or 1,
+        code_column=positive_int(payload.get("code_column")),
+        name_column=positive_int(payload.get("name_column")),
+        price_column=positive_int(payload.get("price_column")),
+        quantity_column=positive_int(payload.get("quantity_column")),
+        amount_column=positive_int(payload.get("amount_column")),
+    )
+
+
+async def _read_fill_file(file: UploadFile) -> tuple[bytes, str]:
+    filename = file.filename or ""
+    if not filename.lower().endswith((".xlsx", ".xlsm")):
+        raise AppException(
+            status_code=415,
+            message="请上传 xlsx 或 xlsm 文件；.xls 请先另存为 xlsx",
+        )
+    data = await _read_upload_file_with_limit(file, file_label="表格文件")
+    if not data:
+        raise AppException(status_code=400, message="上传文件为空")
+    return data, filename
+
+
+@router.post(
+    "/material-prices/fill/preview",
+    summary="预览表格补价匹配结果",
+    description=(
+        "上传任意 xlsx/xlsm 表格，自动识别物料编码、名称与单价列，"
+        "返回逐行匹配结果。可回传 mapping 覆盖自动识别的列。"
+    ),
+    response_model=MaterialPriceFillPreviewApiResponse,
+)
+async def preview_material_price_fill(
+    file: UploadFile = File(..., description="待补价表格"),
+    mapping: str | None = Form(None, description="列映射 JSON，可选"),
+    db: AsyncSession = Depends(get_db),
+) -> Any:
+    file_bytes, _filename = await _read_fill_file(file)
+    resolved, headers, matches, total = await preview_fill(
+        db,
+        file_bytes,
+        mapping=_fill_mapping(mapping),
+    )
+    if not resolved.fillable:
+        raise AppException(
+            status_code=422,
+            message="未能识别物料列或单价列，请重新指定列映射",
+        )
+    matched = sum(1 for match in matches if match.unit_price is not None)
+    preview = MaterialPriceFillPreview(
+        mapping=MaterialPriceFillMapping(
+            sheet_name=resolved.sheet_name,
+            header_row=resolved.header_row,
+            code_column=resolved.code_column,
+            name_column=resolved.name_column,
+            price_column=resolved.price_column,
+            quantity_column=resolved.quantity_column,
+            amount_column=resolved.amount_column,
+        ),
+        total_rows=total,
+        matched_rows=matched,
+        unmatched_rows=total - matched,
+        headers=headers,
+        rows=[
+            MaterialPriceFillRow(
+                row_number=match.row_number,
+                material_code=match.material_code,
+                material_name=match.material_name,
+                matched_code=match.matched_code,
+                matched_name=match.matched_name,
+                unit=match.unit,
+                unit_price=match.unit_price,
+                source=match.source,
+                message=match.message,
+            )
+            for match in matches[:200]
+        ],
+    )
+    return success_response(data=preview.model_dump(mode="json"))
+
+
+@router.post(
+    "/material-prices/fill",
+    summary="下载表格补价结果",
+    description=(
+        "按预览确认的映射回填单价，原表除目标列外保持不变，"
+        "并追加「匹配说明」工作表。默认只填空白单元格。"
+    ),
+)
+async def fill_material_price_table(
+    file: UploadFile = File(..., description="待补价表格"),
+    mapping: str | None = Form(None, description="列映射 JSON，可选"),
+    only_blank: bool = Form(True, description="仅填充空白单价单元格"),
+    db: AsyncSession = Depends(get_db),
+) -> Any:
+    file_bytes, filename = await _read_fill_file(file)
+    resolved, _headers, matches, _total = await preview_fill(
+        db,
+        file_bytes,
+        mapping=_fill_mapping(mapping),
+    )
+    if not resolved.fillable:
+        raise AppException(
+            status_code=422,
+            message="未能识别物料列或单价列，请重新指定列映射",
+        )
+    content, written = fill_workbook(
+        file_bytes,
+        mapping=resolved,
+        matches=matches,
+        only_blank=only_blank,
+    )
+    output_name = f"补价_{filename}"
+    encoded_filename = quote(output_name, safe="")
+    return StreamingResponse(
+        iter([content]),
+        media_type=(
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        ),
+        headers={
+            "Content-Disposition": f"attachment; filename*=utf-8''{encoded_filename}",
+            "X-Filled-Count": str(written),
+        },
+    )
+
+
+@router.get(
+    "/material-prices/{material_code}",
+    summary="获取物料价格详情",
+    description="返回指定物料的年度价格汇总与全部价格记录。",
+    response_model=MaterialPriceDetailApiResponse,
+)
+async def get_material_price_record(
+    material_code: str,
+    db: AsyncSession = Depends(get_db),
+) -> Any:
+    try:
+        detail = await get_material_price_detail(db, material_code)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return success_response(data=detail.model_dump(mode="json"))

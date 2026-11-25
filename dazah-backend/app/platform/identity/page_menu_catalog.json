@@ -1951,6 +1951,15 @@
         "children": null
       },
       {
+        "key": "material-price",
+        "name": "物料价格查询",
+        "path": "/purchasing/material-price",
+        "icon": null,
+        "permission_code": null,
+        "disabled": false,
+        "children": null
+      },
+      {
         "key": "approval",
         "name": "采购审批",
         "path": "",

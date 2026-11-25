@@ -18,6 +18,7 @@ from app.modules.procurement.material_source import (
     list_material_catalog,
 )
 from app.modules.procurement.page_access import constrain_contract_category
+from app.modules.procurement.price_service import search_material_prices
 from app.modules.procurement.schemas import (
     ContractCategory,
     ContractGenerateRequest,
@@ -484,6 +485,44 @@ async def reject_purchase_request_record(
     return _purchase_request(
         await reject_purchase_request(context.db, data.request_id, payload)
     )
+
+
+class MaterialPriceSearchInput(PageInput):
+    keyword: str | None = Field(default=None, max_length=100)
+    cost_category: str | None = Field(default=None, max_length=64)
+    sub_inventory: str | None = Field(default=None, max_length=64)
+    year: int | None = Field(default=None, ge=1900, le=2100)
+
+
+@agent_tool(
+    name="procurement.list_material_prices",
+    summary="查询物料历史采购价格",
+    input_model=MaterialPriceSearchInput,
+    method="GET",
+    path="/procurement/material-prices",
+    page_keys=("purchasing:material-price",),
+)
+async def list_material_price_records(
+    context: ToolContext, data: MaterialPriceSearchInput
+) -> dict[str, Any]:
+    rows, total = await search_material_prices(
+        context.db,
+        keyword=data.keyword,
+        source_type=None,
+        cost_category=data.cost_category,
+        sub_inventory=data.sub_inventory,
+        data_year=data.year,
+        page=data.page,
+        page_size=data.page_size,
+    )
+    return {
+        "data": [row.model_dump(mode="json") for row in rows],
+        "meta": {
+            "page": data.page,
+            "page_size": data.page_size,
+            "total": total,
+        },
+    }
 
 
 @agent_tool(

@@ -1,0 +1,29 @@
+{
+  "source_type": "erp_stock",
+  "description": "ERP 客户化收发存报表（CUX_收发存报表*.xls）",
+  "header_markers": ["物品", "供应商名称"],
+  "year_source": "date_serial_range",
+  "columns": {
+    "sub_inventory": "子库存",
+    "material_code": "物品",
+    "material_name": "物品描述",
+    "material_alias": "物料别名",
+    "unit": "主单位",
+    "material_category": "物料类别",
+    "cost_category": "成本类别",
+    "batch_no": "批次",
+    "unit_price": "批次成本",
+    "received_quantity": "采购接收数量",
+    "returned_quantity": "采购退货数量",
+    "amount": "金额",
+    "supplier_name": "供应商名称"
+  },
+  "quantity_rule": "sum_received_returned",
+  "row_key_fields": [
+    "data_year",
+    "sub_inventory",
+    "material_code",
+    "batch_no",
+    "source_row"
+  ]
+}

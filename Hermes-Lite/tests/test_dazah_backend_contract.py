@@ -81,7 +81,7 @@ def test_backend_openapi_exposes_feishu_gateway_restart_contract() -> None:
 
 @pytest.mark.parametrize("operation", [
     "quality.list_deviations", "production.list_batches", "warehouse.list_page_records",
-    "procurement.list_material_catalog", "hr.list_employees",
+    "procurement.list_material_catalog", "procurement.list_material_prices", "hr.list_employees",
     "hr.list_departments", "hr.list_contacts", "hr.list_candidates",
     "hr.list_onboarding", "hr.list_offboarding", "hr.list_position_transfers",
     "hr.list_contracts", "hr.list_contract_approval_results",

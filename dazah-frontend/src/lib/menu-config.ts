@@ -842,6 +842,7 @@ export const moduleMenus: ModuleMenu[] = [
         ],
       },
       { key: "material-library", label: "物料编码库", path: "/purchasing/material-library" },
+      { key: "material-price", label: "物料价格查询", path: "/purchasing/material-price" },
       {
         key: "approval",
         label: "采购审批",

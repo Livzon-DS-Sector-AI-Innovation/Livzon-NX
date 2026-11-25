@@ -1,6 +1,7 @@
 """Procurement database queries live here."""
 
 from datetime import date
+from decimal import Decimal
 from typing import Any
 from typing import cast as typing_cast
 from uuid import UUID
@@ -13,6 +14,7 @@ from app.modules.procurement.models import (
     ContractRecord,
     InvoiceRecognitionRecord,
     MaterialCatalogRecord,
+    MaterialPriceRecord,
     MaterialSourceConfig,
     PurchaseRequest,
     PurchaseRequestApproval,
@@ -25,6 +27,15 @@ from app.modules.procurement.page_access import (
     constrain_request_category,
     request_department_names,
 )
+
+
+def _escape_like(value: str) -> str:
+    """转义 LIKE 通配符，用户输入按字面匹配。"""
+    return (
+        value.replace("\\", "\\\\")
+        .replace("%", "\\%")
+        .replace("_", "\\_")
+    )
 
 
 class MaterialSourceConfigRepository:
@@ -822,3 +833,182 @@ class PurchaseRequestRepository:
             .values(is_deleted=True)
         )
         return True
+
+
+class MaterialPriceRepository:
+    """查询历史物料价格记录。"""
+
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def search(
+        self,
+        *,
+        keyword: str | None = None,
+        source_type: str | None = None,
+        cost_category: str | None = None,
+        sub_inventory: str | None = None,
+        data_year: int | None = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[dict[str, Any]], int]:
+        model = MaterialPriceRecord
+        filters = [model.is_deleted.is_(False)]
+        if keyword:
+            pattern = f"%{_escape_like(keyword)}%"
+            filters.append(
+                or_(
+                    model.material_code.ilike(pattern, escape="\\"),
+                    model.material_name.ilike(pattern, escape="\\"),
+                    model.material_alias.ilike(pattern, escape="\\"),
+                )
+            )
+        if source_type:
+            filters.append(model.source_type == source_type)
+        if cost_category:
+            filters.append(model.cost_category == cost_category)
+        if sub_inventory:
+            filters.append(model.sub_inventory == sub_inventory)
+        if data_year is not None:
+            filters.append(model.data_year == data_year)
+
+        grouped = (
+            select(
+                model.material_code.label("material_code"),
+                func.max(model.material_name).label("material_name"),
+                func.max(model.unit).label("unit"),
+                func.max(model.cost_category).label("cost_category"),
+                func.string_agg(
+                    func.distinct(model.sub_inventory),
+                    "、",
+                ).label("sub_inventory"),
+                func.count().label("batch_count"),
+                func.count(func.distinct(model.supplier_name)).label("supplier_count"),
+                func.max(model.data_year).label("latest_year"),
+                func.coalesce(func.min(model.unit_price), 0).label("min_price"),
+                func.coalesce(func.max(model.unit_price), 0).label("max_price"),
+                func.coalesce(func.avg(model.unit_price), 0).label("avg_price"),
+                func.coalesce(func.sum(model.quantity), 0).label("total_quantity"),
+                func.coalesce(func.sum(model.amount), 0).label("total_amount"),
+                func.coalesce(
+                    func.bool_or(model.price_flag == "suspicious"),
+                    False,
+                ).label("has_suspicious"),
+            )
+            .where(*filters)
+            .group_by(model.material_code)
+            .subquery()
+        )
+        total = await self.session.scalar(select(func.count()).select_from(grouped))
+        result = await self.session.execute(
+            select(grouped)
+            .order_by(
+                grouped.c.total_amount.desc(),
+                grouped.c.material_code.asc(),
+            )
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        return [dict(row._mapping) for row in result.all()], int(total or 0)
+
+    async def list_records(self, material_code: str) -> list[MaterialPriceRecord]:
+        result = await self.session.execute(
+            select(MaterialPriceRecord)
+            .where(
+                MaterialPriceRecord.material_code == material_code,
+                MaterialPriceRecord.is_deleted.is_(False),
+            )
+            .order_by(
+                MaterialPriceRecord.data_year.asc(),
+                MaterialPriceRecord.batch_no.asc(),
+                MaterialPriceRecord.id.asc(),
+            )
+        )
+        return list(result.scalars().all())
+
+    async def latest_price_by_codes(
+        self, codes: list[str]
+    ) -> dict[str, dict[str, Any]]:
+        """每个物料最新年度的平均单价与名称。"""
+        if not codes:
+            return {}
+        model = MaterialPriceRecord
+        yearly = (
+            select(
+                model.material_code.label("material_code"),
+                model.data_year.label("data_year"),
+                func.max(model.material_name).label("material_name"),
+                func.max(model.unit).label("unit"),
+                func.avg(model.unit_price).label("avg_price"),
+            )
+            .where(
+                model.material_code.in_(codes),
+                model.is_deleted.is_(False),
+                model.unit_price > 0,
+            )
+            .group_by(model.material_code, model.data_year)
+            .subquery()
+        )
+        statement = (
+            select(
+                yearly.c.material_code,
+                yearly.c.data_year,
+                yearly.c.material_name,
+                yearly.c.unit,
+                yearly.c.avg_price,
+            )
+            .distinct(yearly.c.material_code)
+            .order_by(yearly.c.material_code, yearly.c.data_year.desc())
+        )
+        result = await self.session.execute(statement)
+        return {
+            row.material_code: {
+                "material_name": row.material_name,
+                "unit": row.unit,
+                "data_year": row.data_year,
+                "avg_price": row.avg_price,
+            }
+            for row in result.all()
+        }
+
+    async def search_by_name(
+        self, keyword: str, *, limit: int = 8
+    ) -> list[tuple[str, str, str, Decimal]]:
+        """按名称片段返回候选物料（编码、名称、单位、最新年度均价）。"""
+        cleaned = keyword.strip()
+        if not cleaned:
+            return []
+        model = MaterialPriceRecord
+        pattern = f"%{_escape_like(cleaned)}%"
+        yearly = (
+            select(
+                model.material_code.label("material_code"),
+                model.data_year.label("data_year"),
+                func.max(model.material_name).label("material_name"),
+                func.max(model.unit).label("unit"),
+                func.avg(model.unit_price).label("avg_price"),
+            )
+            .where(
+                model.material_name.ilike(pattern),
+                model.is_deleted.is_(False),
+                model.unit_price > 0,
+            )
+            .group_by(model.material_code, model.data_year)
+            .subquery()
+        )
+        statement = (
+            select(
+                yearly.c.material_code,
+                yearly.c.material_name,
+                yearly.c.unit,
+                yearly.c.avg_price,
+            )
+            .distinct(yearly.c.material_code)
+            .order_by(yearly.c.material_code, yearly.c.data_year.desc())
+            .limit(limit)
+        )
+        result = await self.session.execute(statement)
+        return [
+            (row.material_code, row.material_name, row.unit, row.avg_price)
+            for row in result.all()
+        ]

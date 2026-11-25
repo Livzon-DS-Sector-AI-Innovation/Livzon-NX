@@ -10100,6 +10100,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/procurement/material-prices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 查询物料历史价格
+         * @description 按物料编码、名称或别名检索历史采购价格，按累计金额聚合排序。
+         */
+        get: operations["list_material_price_records_api_v1_procurement_material_prices_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/procurement/material-prices/fill": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 下载表格补价结果
+         * @description 按预览确认的映射回填单价，原表除目标列外保持不变，并追加「匹配说明」工作表。默认只填空白单元格。
+         */
+        post: operations["fill_material_price_table_api_v1_procurement_material_prices_fill_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/procurement/material-prices/fill/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 预览表格补价匹配结果
+         * @description 上传任意 xlsx/xlsm 表格，自动识别物料编码、名称与单价列，返回逐行匹配结果。可回传 mapping 覆盖自动识别的列。
+         */
+        post: operations["preview_material_price_fill_api_v1_procurement_material_prices_fill_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/procurement/material-prices/{material_code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 获取物料价格详情
+         * @description 返回指定物料的年度价格汇总与全部价格记录。
+         */
+        get: operations["get_material_price_record_api_v1_procurement_material_prices__material_code__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/procurement/material-source-config": {
         parameters: {
             query?: never;
@@ -38148,6 +38228,25 @@ export interface components {
             /** File */
             file: string;
         };
+        /** Body_fill_material_price_table_api_v1_procurement_material_prices_fill_post */
+        Body_fill_material_price_table_api_v1_procurement_material_prices_fill_post: {
+            /**
+             * File
+             * @description 待补价表格
+             */
+            file: string;
+            /**
+             * Mapping
+             * @description 列映射 JSON，可选
+             */
+            mapping?: string | null;
+            /**
+             * Only Blank
+             * @description 仅填充空白单价单元格
+             * @default true
+             */
+            only_blank: boolean;
+        };
         /** Body_generate_authorization_letter_api_v1_registration_authorization_letters_generate_post */
         Body_generate_authorization_letter_api_v1_registration_authorization_letters_generate_post: {
             /**
@@ -38610,6 +38709,19 @@ export interface components {
         Body_preview_deviation_import_api_v1_quality_deviations_import_preview_post: {
             /** File */
             file: string;
+        };
+        /** Body_preview_material_price_fill_api_v1_procurement_material_prices_fill_preview_post */
+        Body_preview_material_price_fill_api_v1_procurement_material_prices_fill_preview_post: {
+            /**
+             * File
+             * @description 待补价表格
+             */
+            file: string;
+            /**
+             * Mapping
+             * @description 列映射 JSON，可选
+             */
+            mapping?: string | null;
         };
         /** Body_preview_oot_limit_notice_import_api_v1_quality_oos_oot_oot_limit_products_import_preview_post */
         Body_preview_oot_limit_notice_import_api_v1_quality_oos_oot_oot_limit_products_import_preview_post: {
@@ -55385,6 +55497,479 @@ export interface components {
              * @description 规格型号
              */
             rule_model: string;
+        };
+        /**
+         * MaterialPriceBatch
+         * @description 单条价格记录。
+         */
+        MaterialPriceBatch: {
+            /**
+             * Amount
+             * @description 金额
+             */
+            amount: string;
+            /**
+             * Batch No
+             * @description 批次号
+             * @default
+             */
+            batch_no: string;
+            /**
+             * Data Date
+             * @description 业务日期
+             */
+            data_date?: string | null;
+            /**
+             * Data Year
+             * @description 数据年度
+             */
+            data_year: number;
+            /**
+             * Department
+             * @description 申购部门
+             * @default
+             */
+            department: string;
+            /**
+             * Doc No
+             * @description 单据号
+             * @default
+             */
+            doc_no: string;
+            /**
+             * Id
+             * Format: uuid
+             * @description 记录 ID
+             */
+            id: string;
+            /**
+             * Price Flag
+             * @description 价格标记
+             * @default normal
+             */
+            price_flag: string;
+            /**
+             * Quantity
+             * @description 采购数量
+             */
+            quantity: string;
+            /**
+             * Source Type
+             * @description 来源类型
+             * @default erp_stock
+             */
+            source_type: string;
+            /**
+             * Sub Inventory
+             * @description 子库存
+             * @default
+             */
+            sub_inventory: string;
+            /**
+             * Supplier Name
+             * @description 供应商名称
+             * @default
+             */
+            supplier_name: string;
+            /**
+             * Unit
+             * @description 主单位
+             * @default
+             */
+            unit: string;
+            /**
+             * Unit Price
+             * @description 单位价格
+             */
+            unit_price: string;
+        };
+        /**
+         * MaterialPriceDetail
+         * @description 物料价格详情。
+         */
+        MaterialPriceDetail: {
+            /**
+             * Batches
+             * @description 价格明细
+             */
+            batches?: components["schemas"]["MaterialPriceBatch"][];
+            /**
+             * Cost Category
+             * @description 成本类别
+             * @default
+             */
+            cost_category: string;
+            /**
+             * Live Batches
+             * @description 仓储实时入库明细（实时镜像）
+             */
+            live_batches?: components["schemas"]["MaterialPriceBatch"][];
+            /**
+             * Material Alias
+             * @description 物料别名
+             * @default
+             */
+            material_alias: string;
+            /**
+             * Material Category
+             * @description 物料类别
+             * @default
+             */
+            material_category: string;
+            /**
+             * Material Code
+             * @description 物料编码
+             */
+            material_code: string;
+            /**
+             * Material Name
+             * @description 物料名称
+             * @default
+             */
+            material_name: string;
+            /**
+             * Sub Inventory
+             * @description 子库存（多个用顿号连接）
+             * @default
+             */
+            sub_inventory: string;
+            /**
+             * Unit
+             * @description 主单位
+             * @default
+             */
+            unit: string;
+            /**
+             * Years
+             * @description 年度价格汇总
+             */
+            years?: components["schemas"]["MaterialPriceYear"][];
+        };
+        /** MaterialPriceDetailApiResponse */
+        MaterialPriceDetailApiResponse: {
+            /**
+             * Code
+             * @description 响应状态码
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["MaterialPriceDetail"];
+            /**
+             * Message
+             * @description 响应消息
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /**
+         * MaterialPriceFillMapping
+         * @description 表格补价的列映射；不传时由后端自动识别。
+         */
+        MaterialPriceFillMapping: {
+            /**
+             * Amount Column
+             * @description 金额列
+             */
+            amount_column?: number | null;
+            /**
+             * Code Column
+             * @description 物料编码列
+             */
+            code_column?: number | null;
+            /**
+             * Header Row
+             * @description 表头所在行（1 起）
+             * @default 1
+             */
+            header_row: number;
+            /**
+             * Name Column
+             * @description 物料名称列
+             */
+            name_column?: number | null;
+            /**
+             * Price Column
+             * @description 单价列
+             */
+            price_column?: number | null;
+            /**
+             * Quantity Column
+             * @description 数量列
+             */
+            quantity_column?: number | null;
+            /**
+             * Sheet Name
+             * @description 工作表名称，空则用当前工作表
+             * @default
+             */
+            sheet_name: string;
+        };
+        /** MaterialPriceFillPreview */
+        MaterialPriceFillPreview: {
+            /**
+             * Headers
+             * @description 表头文本（按列顺序，供手动映射）
+             */
+            headers?: string[];
+            /** @description 实际使用的列映射 */
+            mapping: components["schemas"]["MaterialPriceFillMapping"];
+            /**
+             * Matched Rows
+             * @description 已匹配行数
+             * @default 0
+             */
+            matched_rows: number;
+            /**
+             * Rows
+             * @description 逐行匹配结果（截断预览）
+             */
+            rows?: components["schemas"]["MaterialPriceFillRow"][];
+            /**
+             * Total Rows
+             * @description 参与匹配的数据行数
+             * @default 0
+             */
+            total_rows: number;
+            /**
+             * Unmatched Rows
+             * @description 未匹配行数
+             * @default 0
+             */
+            unmatched_rows: number;
+        };
+        /** MaterialPriceFillPreviewApiResponse */
+        MaterialPriceFillPreviewApiResponse: {
+            /**
+             * Code
+             * @description 响应状态码
+             * @default 200
+             */
+            code: number;
+            data: components["schemas"]["MaterialPriceFillPreview"];
+            /**
+             * Message
+             * @description 响应消息
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** MaterialPriceFillRow */
+        MaterialPriceFillRow: {
+            /**
+             * Matched Code
+             * @description 匹配到的物料编码
+             */
+            matched_code?: string | null;
+            /**
+             * Matched Name
+             * @description 匹配到的物料名称
+             */
+            matched_name?: string | null;
+            /**
+             * Material Code
+             * @description 原表物料编码
+             * @default
+             */
+            material_code: string;
+            /**
+             * Material Name
+             * @description 原表物料名称
+             * @default
+             */
+            material_name: string;
+            /**
+             * Message
+             * @description 匹配说明
+             * @default
+             */
+            message: string;
+            /**
+             * Row Number
+             * @description 原表行号
+             */
+            row_number: number;
+            /**
+             * Source
+             * @description 匹配来源
+             * @default unmatched
+             */
+            source: string;
+            /**
+             * Unit
+             * @description 单位
+             * @default
+             */
+            unit: string;
+            /**
+             * Unit Price
+             * @description 匹配到的单价
+             */
+            unit_price?: string | null;
+        };
+        /**
+         * MaterialPriceSummary
+         * @description 物料价格检索结果（按物料聚合）。
+         */
+        MaterialPriceSummary: {
+            /**
+             * Avg Price
+             * @description 历史平均单价
+             */
+            avg_price: string;
+            /**
+             * Batch Count
+             * @description 价格记录数
+             * @default 0
+             */
+            batch_count: number;
+            /**
+             * Cost Category
+             * @description 成本类别
+             * @default
+             */
+            cost_category: string;
+            /**
+             * Has Suspicious
+             * @description 是否含疑单位异常价格
+             * @default false
+             */
+            has_suspicious: boolean;
+            /**
+             * Latest Year
+             * @description 最近年度
+             */
+            latest_year: number;
+            /**
+             * Live Batch Count
+             * @description 仓储实时入库记录数
+             * @default 0
+             */
+            live_batch_count: number;
+            /**
+             * Live Latest Date
+             * @description 仓储最近入库日期
+             */
+            live_latest_date?: string | null;
+            /**
+             * Live Latest Price
+             * @description 仓储最近一次入库单价
+             */
+            live_latest_price?: string | null;
+            /**
+             * Material Code
+             * @description 物料编码
+             */
+            material_code: string;
+            /**
+             * Material Name
+             * @description 物料名称
+             * @default
+             */
+            material_name: string;
+            /**
+             * Max Price
+             * @description 历史最高单价
+             */
+            max_price: string;
+            /**
+             * Min Price
+             * @description 历史最低单价
+             */
+            min_price: string;
+            /**
+             * Sub Inventory
+             * @description 子库存（多个用顿号连接）
+             * @default
+             */
+            sub_inventory: string;
+            /**
+             * Supplier Count
+             * @description 供应商数
+             * @default 0
+             */
+            supplier_count: number;
+            /**
+             * Total Amount
+             * @description 累计采购金额
+             */
+            total_amount: string;
+            /**
+             * Total Quantity
+             * @description 累计采购数量
+             */
+            total_quantity: string;
+            /**
+             * Unit
+             * @description 主单位
+             * @default
+             */
+            unit: string;
+        };
+        /** MaterialPriceSummaryListResponse */
+        MaterialPriceSummaryListResponse: {
+            /**
+             * Code
+             * @description 响应状态码
+             * @default 200
+             */
+            code: number;
+            /** Data */
+            data: components["schemas"]["MaterialPriceSummary"][];
+            /**
+             * Message
+             * @description 响应消息
+             * @default success
+             */
+            message: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /**
+         * MaterialPriceYear
+         * @description 按年度汇总的价格区间。
+         */
+        MaterialPriceYear: {
+            /**
+             * Avg Price
+             * @description 年度平均单价
+             */
+            avg_price: string;
+            /**
+             * Batch Count
+             * @description 记录数
+             * @default 0
+             */
+            batch_count: number;
+            /**
+             * Data Year
+             * @description 数据年度
+             */
+            data_year: number;
+            /**
+             * Max Price
+             * @description 年度最高单价
+             */
+            max_price: string;
+            /**
+             * Min Price
+             * @description 年度最低单价
+             */
+            min_price: string;
+            /**
+             * Quantity
+             * @description 年度采购数量
+             */
+            quantity: string;
         };
         /** MaterialSourceConfigApiResponse */
         MaterialSourceConfigApiResponse: {
@@ -100113,6 +100698,155 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MaterialOptionListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_material_price_records_api_v1_procurement_material_prices_get: {
+        parameters: {
+            query?: {
+                /** @description 编码/名称/别名关键词 */
+                keyword?: string | null;
+                /** @description 来源类型：erp_stock/erp_order/manual */
+                source_type?: string | null;
+                /** @description 成本类别 */
+                cost_category?: string | null;
+                /** @description 子库存 */
+                sub_inventory?: string | null;
+                /** @description 数据年度 */
+                year?: number | null;
+                /** @description 页码 */
+                page?: number;
+                /** @description 每页条数 */
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaterialPriceSummaryListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fill_material_price_table_api_v1_procurement_material_prices_fill_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_fill_material_price_table_api_v1_procurement_material_prices_fill_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_material_price_fill_api_v1_procurement_material_prices_fill_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_preview_material_price_fill_api_v1_procurement_material_prices_fill_preview_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaterialPriceFillPreviewApiResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_material_price_record_api_v1_procurement_material_prices__material_code__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                material_code: string;
+            };
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MaterialPriceDetailApiResponse"];
                 };
             };
             /** @description Validation Error */

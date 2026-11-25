@@ -2232,6 +2232,12 @@
       "route_path": "/purchasing/material-library",
       "actions": {}
     },
+    "purchasing:material-price": {
+      "status": "active",
+      "module_code": "procurement",
+      "route_path": "/purchasing/material-price",
+      "actions": {}
+    },
     "purchasing:order": {
       "status": "active",
       "module_code": "procurement",

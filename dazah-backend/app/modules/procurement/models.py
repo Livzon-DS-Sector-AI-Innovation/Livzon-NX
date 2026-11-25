@@ -817,3 +817,173 @@ class PurchaseRequestApproval(BaseModel):
         nullable=False,
         comment="审批时间",
     )
+
+
+class MaterialPriceRecord(BaseModel):
+    """历史物料采购价格（ERP 收发存与后续离线表格导入）。"""
+
+    __tablename__ = "material_price_records"
+    __table_args__ = (
+        Index("uq_procurement_price_row_key", "row_key", unique=True),
+        Index("ix_procurement_price_code", "material_code"),
+        Index("ix_procurement_price_name", "material_name"),
+        Index("ix_procurement_price_year", "data_year"),
+        Index("ix_procurement_price_category", "cost_category"),
+        Index("ix_procurement_price_supplier", "supplier_name"),
+        Index("ix_procurement_price_source", "source_type"),
+        {"schema": "procurement"},
+    )
+
+    data_year: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        comment="数据年度",
+    )
+    data_date: Mapped[date | None] = mapped_column(
+        Date,
+        nullable=True,
+        comment="业务日期（订单/入库单有，年度汇总表为空）",
+    )
+    doc_no: Mapped[str] = mapped_column(
+        String(128),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="单据号",
+    )
+    department: Mapped[str] = mapped_column(
+        String(200),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="申购部门",
+    )
+    sub_inventory: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="子库存",
+    )
+    batch_no: Mapped[str] = mapped_column(
+        String(128),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="批次号",
+    )
+    material_code: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        comment="物料编码",
+    )
+    material_name: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="物料名称",
+    )
+    material_alias: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="物料别名",
+    )
+    unit: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="主单位",
+    )
+    material_category: Mapped[str] = mapped_column(
+        String(128),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="物料类别",
+    )
+    cost_category: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="成本类别",
+    )
+    unit_price: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4),
+        nullable=False,
+        default=Decimal("0"),
+        server_default="0",
+        comment="单位价格",
+    )
+    quantity: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4),
+        nullable=False,
+        default=Decimal("0"),
+        server_default="0",
+        comment="采购数量",
+    )
+    amount: Mapped[Decimal] = mapped_column(
+        Numeric(18, 2),
+        nullable=False,
+        default=Decimal("0"),
+        server_default="0",
+        comment="金额",
+    )
+    supplier_name: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="供应商名称",
+    )
+    price_flag: Mapped[str] = mapped_column(
+        String(16),
+        nullable=False,
+        default="normal",
+        server_default="normal",
+        comment="价格标记：normal/suspicious",
+    )
+    source_type: Mapped[str] = mapped_column(
+        String(32),
+        nullable=False,
+        default="erp_stock",
+        server_default="erp_stock",
+        comment="来源类型：erp_stock/erp_order/manual",
+    )
+    row_key: Mapped[str] = mapped_column(
+        String(128),
+        nullable=False,
+        comment="幂等指纹",
+    )
+    source_file: Mapped[str] = mapped_column(
+        String(255),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="来源文件名",
+    )
+    source_sheet: Mapped[str] = mapped_column(
+        String(128),
+        nullable=False,
+        default="",
+        server_default="",
+        comment="来源工作表",
+    )
+    source_row: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default="0",
+        comment="来源行号",
+    )
+    raw_data: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=dict,
+        server_default="{}",
+        comment="原始行数据",
+    )

@@ -10,6 +10,7 @@ import type {
   ContractGenerateRequest,
   InvoiceRecognitionRecordDeleteResponse,
   InvoiceRecognitionResponse,
+  MaterialPriceFillPreviewApiResponse,
   MaterialSourceConfigApiResponse,
   MaterialSourceConfigUpsert,
   MaterialSourceProbeApiResponse,
@@ -249,6 +250,68 @@ export async function generateProcurementContract(
     contentType,
     base64: Buffer.from(arrayBuffer).toString('base64'),
     recordId: response.headers.get('x-contract-record-id') || undefined,
+  }
+}
+
+export type MaterialPriceFillDownload =
+  | { ok: true; filename: string; base64: string; filledCount: number }
+  | { ok: false; message: string }
+
+export async function previewMaterialPriceFill(
+  formData: FormData,
+): Promise<MaterialPriceFillPreviewApiResponse> {
+  const headers = await procurementHeaders()
+  const response = await fetch(
+    `${API_BASE}/api/v1/procurement/material-prices/fill/preview`,
+    {
+      method: 'POST',
+      headers,
+      body: formData,
+      cache: 'no-store',
+    },
+  )
+  return parseJsonResponse<MaterialPriceFillPreviewApiResponse>(
+    response,
+    '表格解析失败',
+  )
+}
+
+export async function generateMaterialPriceFill(
+  formData: FormData,
+): Promise<MaterialPriceFillDownload> {
+  const headers = await procurementHeaders()
+  const response = await fetch(
+    `${API_BASE}/api/v1/procurement/material-prices/fill`,
+    {
+      method: 'POST',
+      headers,
+      body: formData,
+      cache: 'no-store',
+    },
+  )
+
+  if (!response.ok) {
+    let message = '表格补价失败'
+    try {
+      const errorBody = await response.json()
+      message = errorBody.detail || errorBody.message || message
+    } catch {
+      message = `${message}: ${response.status} ${response.statusText}`
+    }
+    return { ok: false, message }
+  }
+
+  const filename =
+    parseDownloadFilename(response.headers.get('content-disposition')) ||
+    '补价结果.xlsx'
+  const filledCount = Number(response.headers.get('x-filled-count') || 0)
+  const arrayBuffer = await response.arrayBuffer()
+
+  return {
+    ok: true,
+    filename,
+    base64: Buffer.from(arrayBuffer).toString('base64'),
+    filledCount: Number.isFinite(filledCount) ? filledCount : 0,
   }
 }
 

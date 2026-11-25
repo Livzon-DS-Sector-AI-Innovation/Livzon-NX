@@ -17,7 +17,12 @@ function load(source) {
   }).outputText
   vm.runInNewContext(code, { module: loadedModule, exports: loadedModule.exports, require: (specifier) => {
     if (!specifier.startsWith('.')) throw new Error(`Static menu has external dependency: ${specifier}`)
-    return load(path.resolve(path.dirname(filename), `${specifier}.ts`))
+    const resolved = path.resolve(path.dirname(filename), specifier)
+    // JSON data files are imported as-is; only TypeScript sources get the .ts suffix.
+    if (resolved.endsWith('.json')) {
+      return { __esModule: true, default: JSON.parse(fs.readFileSync(resolved, 'utf8')) }
+    }
+    return load(`${resolved}.ts`)
   } }, { filename })
   return loadedModule.exports
 }
