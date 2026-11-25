@@ -1041,3 +1041,195 @@ def test_traffic_guard_does_not_claim_manual_gate_created_before_close_lock(tmp_
     assert locked
     assert (control.state_dir / "public" / "maintenance").exists()
     assert not (control.state_dir / "traffic-guard-owned").exists()
+
+
+def test_quality_worker_overlay_uses_backend_content_id_and_profile(tmp_path, monkeypatch):
+    control, manifest = deployment_control(tmp_path, monkeypatch)
+    images = manifest["images"]
+    worker = cd.QUALITY_WORKER
+    with pytest.raises(cd.Refused, match="pinned backend"):
+        control.release_overlay({**images, worker: "sha256:" + "c" * 64})
+    assert not (control.current / "compose.release.yml").exists()
+
+    control.release_overlay({**images, worker: images["app"]})
+    overlay = cd.read_json(control.current / "compose.release.yml")["services"]
+    assert overlay[worker]["image"] == overlay["app"]["image"]
+    assert overlay["app"]["environment"] == {"QUALITY_READ_MIRROR_SCHEDULER": "worker"}
+    assert control.runtime_apps() == (*cd.APPS, worker)
+    seen = []
+    monkeypatch.setattr(cd, "command", lambda args, **kwargs: seen.append(args))
+    control.compose("stop", worker)
+    assert seen[0][-4:] == ["--profile", cd.QUALITY_WORKER_PROFILE, "stop", worker]
+
+    control.release_overlay(images)
+    overlay = cd.read_json(control.current / "compose.release.yml")["services"]
+    assert worker not in overlay
+    assert overlay["app"]["environment"] == {"QUALITY_READ_MIRROR_SCHEDULER": "api"}
+
+
+def test_quality_worker_readiness_checks_pin_and_api_handoff(tmp_path, monkeypatch):
+    control, manifest = deployment_control(tmp_path, monkeypatch)
+    worker = cd.QUALITY_WORKER
+    image = manifest["images"]["app"]
+    inventory = control.containers()
+    inventory[worker] = {"id": worker, "state": "running", "health": "healthy"}
+    assert not control.applications_ready(inventory, proxy=False)
+    control.release_overlay({**manifest["images"], worker: image})
+    for health in ("starting", "unhealthy", "none"):
+        inventory[worker]["health"] = health
+        assert not control.applications_ready(inventory, proxy=False)
+    inventory[worker]["health"] = "healthy"
+    assert control.applications_ready(inventory, proxy=False)
+
+    engine_image, api_mode, probes = image, "worker", []
+    monkeypatch.setattr(cd, "command", lambda args, **kw: (
+        api_mode if ".Config.Env" in args[-2] else engine_image
+    ))
+    monkeypatch.setattr(control, "compose", lambda *args, **kw: probes.append(args))
+    control.probe_quality_worker(inventory)
+    assert probes == [("exec", "-T", worker, *cd.QUALITY_WORKER_PROBE)]
+    api_mode = ""
+    with pytest.raises(cd.Refused, match="hand off"):
+        control.probe_quality_worker(inventory)
+    api_mode = "worker"
+    engine_image = "sha256:" + "c" * 64
+    with pytest.raises(cd.Refused, match="differs from the release"):
+        control.probe_quality_worker(inventory)
+
+
+@pytest.mark.parametrize("prior_worker", [False, True])
+def test_quality_worker_release_readiness_failure_restores_prior_owner(
+    tmp_path, monkeypatch, prior_worker,
+):
+    control, manifest = deployment_control(tmp_path, monkeypatch)
+    worker = cd.QUALITY_WORKER
+    old_image = "sha256:" + "a" * 64
+    new_image = manifest["images"]["app"]
+    control.config["quality_read_mirror_scheduler"] = "api" if prior_worker else "worker"
+    inventory = control.containers()
+    if prior_worker:
+        prior = {s: old_image for s in (*cd.APPS, "migrate", worker)}
+        control.release_overlay(prior)
+        inventory[worker] = {"id": worker, "state": "running", "health": "healthy"}
+    else:
+        manifest["images"][worker] = new_image
+
+    calls, revisions = [], iter(["old", "new"])
+    monkeypatch.setattr(control, "revision", lambda: next(revisions))
+    monkeypatch.setattr(control, "containers", lambda: inventory)
+    monkeypatch.setattr(control, "probe_quality_worker", lambda _: None)
+    monkeypatch.setattr(cd, "command", lambda args, **kwargs: (
+        "0" if "{{.State.ExitCode}}" in args else old_image
+    ))
+    monkeypatch.setattr(control, "drain", lambda: calls.append(("drain",)))
+
+    def compose(*args, **kwargs):
+        calls.append(args)
+        if args[-1] == "--services":
+            return f"app\n{worker}"
+        if args == ("stop", "--timeout", "120", worker):
+            inventory[worker]["state"] = "exited"
+        if args[:3] == ("up", "-d", "--no-deps") and worker in args:
+            inventory[worker] = {"id": worker, "state": "running", "health": "healthy"}
+        return ""
+
+    def wait_ready():
+        overlay = cd.read_json(control.current / "compose.release.yml")["services"]
+        if overlay["app"]["image"] == new_image:
+            raise cd.Refused("candidate readiness failed")
+        assert (worker in control.runtime_apps()) is prior_worker
+        assert control.applications_ready(inventory, proxy=False)
+
+    monkeypatch.setattr(control, "compose", compose)
+    monkeypatch.setattr(control, "wait_ready", wait_ready)
+    with pytest.raises(cd.Refused, match="candidate readiness failed"):
+        control.deploy("a" * 40, manifest)
+
+    stop_worker = ("stop", "--timeout", "120", worker)
+    assert calls.index(("drain",)) < calls.index(stop_worker)
+    if prior_worker:
+        assert calls.index(stop_worker) < calls.index(("stop", "--timeout", "120", "hermes-lite", "app", "frontend"))
+    else:
+        assert calls.index(("up", "-d", "--no-deps", worker)) < calls.index(stop_worker)
+        assert calls.index(stop_worker) < calls.index(("up", "-d", "--no-deps", *cd.APPS))
+    overlay = cd.read_json(control.current / "compose.release.yml")["services"]
+    assert overlay["app"]["image"] == old_image
+    assert (worker in overlay) is prior_worker
+    assert (inventory[worker]["state"] == "running") is prior_worker
+    assert cd.read_json(control.state_file)["phase"] == "application_rolled_back"
+    assert not (control.state_dir / "public" / "maintenance").exists()
+
+
+def test_unclean_worker_stop_keeps_maintenance_closed(tmp_path, monkeypatch):
+    control, manifest = deployment_control(tmp_path, monkeypatch)
+    worker = cd.QUALITY_WORKER
+    old_image = "sha256:" + "a" * 64
+    control.release_overlay({s: old_image for s in (*cd.APPS, "migrate", worker)})
+    inventory = control.containers()
+    inventory[worker] = {"id": worker, "state": "running", "health": "healthy"}
+    monkeypatch.setattr(control, "containers", lambda: inventory)
+    monkeypatch.setattr(control, "probe_quality_worker", lambda _: None)
+    monkeypatch.setattr(cd, "command", lambda args, **kw: "137" if "{{.State.ExitCode}}" in args else old_image)
+    calls = []
+
+    def compose(*args, **kwargs):
+        calls.append(args)
+        if args[0] == "stop":
+            inventory[worker]["state"] = "exited"
+
+    monkeypatch.setattr(control, "compose", compose)
+    with pytest.raises(cd.Refused, match="did not stop cleanly"):
+        control.deploy("a" * 40, manifest)
+    assert calls == [("stop", "--timeout", "120", worker)]
+    assert (control.state_dir / "public" / "maintenance").exists()
+    assert cd.read_json(control.state_file)["phase"] == "recovery_required"
+
+
+def test_traffic_guard_preserves_online_access_during_worker_outage(tmp_path, monkeypatch):
+    control, manifest = deployment_control(tmp_path, monkeypatch)
+    worker = cd.QUALITY_WORKER
+    control.release_overlay({**manifest["images"], worker: manifest["images"]["app"]})
+    inventory = {
+        s: {"state": "running", "health": "healthy"} for s in (*cd.DEPS, *cd.APPS, "nginx")
+    }
+    inventory[worker] = {"state": "running", "health": "unhealthy"}
+    monkeypatch.setattr(control, "containers", lambda: inventory)
+    monkeypatch.setattr(cd, "lock", lambda _: contextlib.nullcontext())
+    assert not control.applications_ready(inventory)
+    control.traffic_guard()
+    assert not (control.state_dir / "public" / "maintenance").exists()
+
+    control.maintenance(True)
+    (control.state_dir / "traffic-guard-owned").touch()
+    calls = []
+    monkeypatch.setattr(control, "wait_ready", lambda **kwargs: calls.append(kwargs))
+    control.traffic_guard()
+    assert calls == [{"timeout": 15, "include_worker": False}]
+    assert not (control.state_dir / "public" / "maintenance").exists()
+
+
+def test_isolated_worker_validation_uses_pinned_images_and_requires_clean_exit(tmp_path, monkeypatch):
+    control, _ = deployment_control(tmp_path, monkeypatch)
+    backend_id = "sha256:" + "b" * 64
+    redis_id = "sha256:" + "d" * 64
+    calls = []
+
+    def command(args, **kwargs):
+        calls.append(args)
+        if "redis-cli" in args:
+            return "OK"
+        if "{{.State.Status}}" in args:
+            return "running"
+        if "{{.State.ExitCode}}" in args:
+            return "137"
+        return ""
+
+    monkeypatch.setattr(cd, "command", command)
+    with pytest.raises(cd.Refused, match="failed to stop cleanly in isolation"):
+        control.validate_quality_worker("isolated", "fixture-db", "fixture-redis",
+                                        "fixture-worker", backend_id, redis_id)
+    assert calls[0][-1] == redis_id
+    assert calls[1][-2:] == ["dazah:maintenance:phase", "starting"]
+    assert calls[2][-4:] == [backend_id, *cd.QUALITY_WORKER_COMMAND]
+    assert ("docker", "exec", "fixture-worker", *cd.QUALITY_WORKER_PROBE) in map(tuple, calls)
+    assert all("never" in args for args in calls if args[:2] == ["docker", "run"])

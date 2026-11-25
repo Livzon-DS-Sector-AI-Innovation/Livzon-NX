@@ -10,7 +10,6 @@
   "/hr/training/ledger/new": "hr:training:training-ledger",
   "/hr/training/new-employee/[planId]": "hr:training:new-employee-training",
   "/hr/training/notification": "hr:training:sign-in-sheet",
-  "/hr/training/onboarding": "hr:employee-management:profile",
   "/production/batches": "production:overview",
   "/production/batches/data/doramectin": "production:overview",
   "/production/batches/data/l-phenylalanine": "production:overview",

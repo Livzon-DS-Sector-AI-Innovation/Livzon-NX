@@ -26,6 +26,7 @@ from app.modules.hr.models import (
 from app.modules.hr.new_employee_training_repository import (
     NewEmployeeTrainingRepository,
 )
+from app.modules.hr.page_access import assert_employee_department
 from app.modules.hr.position_training_mapping_repository import (
     PositionTrainingMappingRepository,
 )
@@ -34,6 +35,7 @@ from app.modules.hr.schemas import (
     NewEmployeeTrainingStartResponse,
     NewEmployeeTrainingStats,
 )
+from app.platform.identity.data_scope import DepartmentScope
 
 logger = logging.getLogger(__name__)
 
@@ -301,6 +303,7 @@ class NewEmployeeTrainingService:
         hire_date: date,
         user_id: UUID | None,
         *,
+        employee_scope: DepartmentScope,
         sub_department: str | None = None,
         training_position: str | None = None,
         employee_id: UUID | None = None,
@@ -317,23 +320,24 @@ class NewEmployeeTrainingService:
         - 查重：同名 + 同部门已有未删除计划 → 返回现有计划（不重复创建）。
         - 培训截止日期 = 入职日期 + TRAINING_DEADLINE_DAYS（与自动拉取一致）。
         """
-        # 1) 档案匹配：请求未携带 employee_id 时按姓名查询员工档案
         from app.modules.hr.repository import EmployeeRepository
         from app.modules.hr.training_dept_resolver import resolve_training_department
 
-        emp_repo = EmployeeRepository(self.session)
-        if employee_id is None:
-            matched, _ = await emp_repo.list_employees(
-                keyword=name, page=1, page_size=100
-            )
-            exact = [e for e in matched if e.name == name]
-            if len(exact) == 1:
-                employee = exact[0]
-                employee_id = employee.id
-                department = employee.department
-                sub_department = employee.sub_department
-                position = employee.position or position
-                hire_date = employee.hire_date
+        name = name.strip()
+        matched = await EmployeeRepository(self.session).find_training_employees(
+            [name], employee_scope, employee_id=employee_id, limit=2
+        )
+        if employee_id is not None and not matched:
+            raise NotFoundException("可用于当前培训计划的员工档案")
+        employee = matched[0] if len(matched) == 1 else None
+        if employee is not None:
+            employee_id = employee.id
+            department = employee.department
+            sub_department = employee.sub_department
+            position = employee.position or position
+            hire_date = employee.hire_date
+        else:
+            assert_employee_department(employee_scope, department, sub_department)
 
         # 1.5) 落库前归一：档案带出的一级部门（201车间/动力科）或手输别名写法
         #      → 培训规范名（201一车间/201二车间（MC）/动力部），与列表页 Tab 一致；
@@ -346,14 +350,10 @@ class NewEmployeeTrainingService:
             ) or department
 
         # 2) 培训岗位：显式传入优先；档案唯一命中且未传时解析映射默认
-        if not training_position and employee_id is not None:
-            employee_by_id = await emp_repo.get_by_id(employee_id)
-            if employee_by_id:
-                training_position = await self._resolve_training_position(
-                    employee_by_id.department,
-                    employee_by_id.sub_department,
-                    employee_by_id.position or "",
-                )
+        if not training_position and employee is not None:
+            training_position = await self._resolve_training_position(
+                employee.department, employee.sub_department, employee.position or ""
+            )
 
         # 3) 查重：同名 + 同部门已有未删除计划 → 直接返回现有计划
         existing = await self.repo.get_by_name_and_department(name, department)

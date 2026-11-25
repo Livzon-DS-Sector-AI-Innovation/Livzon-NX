@@ -178,11 +178,12 @@ async def test_training_scope_plan_and_attachment_routes_cover_success_paths(
             time_start="09:00",
             time_end="10:00",
             instructor="讲师",
-            trainees="张三",
+            trainees=["张三"],
             exclude_session_id=None,
         ),
         service=service,
         current_user=user,
+        db=db,
     )
     assert (
         await api.list_training_departments(db=db, service=service, current_user=user)
@@ -540,10 +541,10 @@ async def test_hr_import_export_public_create_and_candidate_notice_routes(
                     "name": "培训记录",
                     "header_row": 1,
                     "mapping": {
-                        "1": "employee_name",
-                        "2": "training_date",
-                        "3": "training_subject",
-                        "4": "duration_hours",
+                        "1": "training_date",
+                        "2": "training_content",
+                        "3": "duration_hours",
+                        "4": "instructor",
                     },
                 }
             ],
@@ -555,7 +556,7 @@ async def test_hr_import_export_public_create_and_candidate_notice_routes(
     )
     assert confirmed["data"]["created"] == 1  # type: ignore[index]
     assert len(mapping_repo.created) == 1
-    with pytest.raises(AppException, match="sheets 参数格式错误"):
+    with pytest.raises(AppException) as invalid_import:
         await api.confirm_training_import(
             UploadFile(filename="training.xlsx", file=BytesIO(workbook_bytes)),
             "质量部",
@@ -564,6 +565,10 @@ async def test_hr_import_export_public_create_and_candidate_notice_routes(
             session=db,
             current_user=user,
         )
+    assert invalid_import.value.status_code == 400
+    assert invalid_import.value.detail_msg == {
+        "error_code": "HR_TRAINING_IMPORT_MAPPING_INVALID"
+    }
 
     employee = SimpleNamespace(id=uuid4(), name="公开员工", feishu_record_id=None)
 

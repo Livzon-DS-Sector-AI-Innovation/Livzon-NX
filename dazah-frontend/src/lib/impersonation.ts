@@ -1,5 +1,6 @@
 export const IMPERSONATION_COOKIE = 'impersonation_token'
 export const IMPERSONATION_RECOVERY_PATH = '/auth/impersonation'
+export const IMPERSONATION_SETTINGS_RECOVERY_REASON = 'system-settings'
 export const IMPERSONATION_SETTINGS_PATH = '/settings?tab=permissions&view=impersonation'
 
 export function getEffectiveToken(cookies: {

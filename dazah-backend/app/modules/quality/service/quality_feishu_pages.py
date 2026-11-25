@@ -1,18 +1,18 @@
 from __future__ import annotations
 
-import json
+import asyncio
 import logging
 import re
 import uuid
 from datetime import UTC, date, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 
 import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppException, NotFoundException
-from app.core.redis import cache_delete, cache_get, cache_set
+from app.core.read_through_cache import CacheFill, ReadThroughCache
 from app.modules.quality import repository
 from app.modules.quality.models import CapaPlanTrack, ChangeControl
 from app.modules.quality.service import (
@@ -975,16 +975,8 @@ def _parse_validation_due_date(raw: Any) -> date | None:
 
 
 async def _invalidate_validation_list_cache(entity_code: str) -> None:
-    """清除指定实体的验证列表缓存（写操作后调用，保证列表即时刷新）。"""
-    try:
-        from app.core.redis import redis_client
-
-        async for key in redis_client.scan_iter(
-            f"quality:validation:list:{entity_code}:*"
-        ):
-            await cache_delete(key)
-    except Exception:
-        logger.warning("验证列表缓存清理失败（忽略）", exc_info=True)
+    """写操作后切换版本，避免正在读取的旧数据覆盖刷新后的列表。"""
+    await _validation_list_cache.invalidate_group(_validation_revision_key(entity_code))
 
 
 async def _resolve_bitable_user_ids_from_names(
@@ -1558,6 +1550,7 @@ async def _search_validation_records_safe(
     entity_code: str,
     *,
     user_id_type: str = "open_id",
+    raise_on_failure: bool = False,
 ) -> list[dict[str, Any]]:
     """搜索验证记录；全字段搜索被高级权限受限字段拒绝时按白名单字段重试。
 
@@ -1566,9 +1559,7 @@ async def _search_validation_records_safe(
     人员字段统一以 union_id 命名空间回读（与人员选择器写入一致）。
     """
     try:
-        return await _search_entity_records(
-            db, entity_code, user_id_type=user_id_type
-        )
+        return await _search_entity_records(db, entity_code, user_id_type=user_id_type)
     except Exception:
         pass
     try:
@@ -1590,6 +1581,8 @@ async def _search_validation_records_safe(
             and not str(item.get("field_name")).startswith("无权限")
         ]
         if not safe_names:
+            if raise_on_failure:
+                raise ValueError("No readable fields in the validation ledger")
             return []
         return await _search_entity_records(
             db,
@@ -1597,8 +1590,61 @@ async def _search_validation_records_safe(
             field_names=safe_names,
             user_id_type=user_id_type,
         )
-    except Exception:
+    except Exception as exc:
+        if raise_on_failure:
+            logger.warning("Validation ledger read failed (%s)", type(exc).__name__)
+            raise AppException(
+                status_code=502, message="飞书验证台账暂不可读取"
+            ) from exc
         return []
+
+
+def _decode_validation_items(value: object) -> list[dict[str, Any]] | None:
+    if not isinstance(value, list):
+        return None
+    for item in value:
+        if not isinstance(item, dict) or not isinstance(item.get("record_id"), str):
+            return None
+        for field in ("drafted_at", "approved_at", "drafted_at_1", "approved_at_1"):
+            if item.get(field) is not None:
+                item[field] = date.fromisoformat(item[field])
+        for field in ("created_at", "updated_at"):
+            if item.get(field) is not None:
+                item[field] = datetime.fromisoformat(item[field])
+    return cast(list[dict[str, Any]], value)
+
+
+_validation_list_cache = ReadThroughCache(
+    "quality validation list", max_loads=3, decode=_decode_validation_items
+)
+
+
+def _validation_revision_key(entity_code: str) -> str:
+    return f"quality:validation:revision:{entity_code}"
+
+
+async def _load_validation_items(
+    db: AsyncSession, entity_code: str
+) -> CacheFill[list[dict[str, Any]]]:
+    try:
+        async with asyncio.timeout(30):
+            try:
+                await _resolve_runtime_entity(db, entity_code, direction="pull")
+            except AppException:
+                return CacheFill([], None)
+            records = await _search_validation_records_safe(
+                db, entity_code, user_id_type="union_id", raise_on_failure=True
+            )
+    except TimeoutError as exc:
+        raise AppException(status_code=504, message="飞书验证台账查询超时") from exc
+    items = [_map_validation_base_item(record) for record in records]
+    items = [item for item in items if not item.get("is_empty_row")]
+    await _apply_ai_validation_categories(db, items)
+    items.sort(
+        key=lambda x: str(x.get("updated_at") or x.get("created_at") or ""),
+        reverse=True,
+    )
+    return CacheFill(items, 60 if items else 10)
 
 
 async def list_validation_records_from_feishu(
@@ -1620,39 +1666,14 @@ async def list_validation_records_from_feishu(
 ) -> dict[str, Any]:
     """从飞书拉取验证记录列表。year 指定时严格读取对应年度表（未配置则为空）。
 
-    结果带 60 秒短时缓存（Redis），降低重复打开/翻页的飞书全量拉取开销；
-    写操作（增删改/批量删）会清除对应实体的缓存。
+    按飞书台账缓存快照，再根据请求筛选和分页，避免不同查询重复拉取同一台账。
     """
     entity_code = _entity_code_for_validation_type(validation_type, year)
-    cache_key = (
-        f"quality:validation:list:{entity_code}:{validation_type or ''}:"
-        f"{status or ''}:{department or ''}:{keyword or ''}:"
-        f"{planned_end_date_from or ''}:{planned_end_date_to or ''}:"
-        f"{drafted_at_from or ''}:{drafted_at_to or ''}:"
-        f"{int(bool(exclude_completed))}:{page}:{page_size}"
+    items = await _validation_list_cache.get_or_load(
+        f"quality:validation:snapshot:{entity_code}",
+        lambda: _load_validation_items(db, entity_code),
+        revision_key=_validation_revision_key(entity_code),
     )
-    cached = await cache_get(cache_key)
-    if cached is not None:
-        try:
-            cached_data = json.loads(cached)
-            if isinstance(cached_data, dict):
-                return cached_data
-        except (TypeError, ValueError):
-            pass
-
-    try:
-        _, entity = await _resolve_runtime_entity(db, entity_code, direction="pull")
-    except AppException:
-        return _build_page_result([], 0, page, page_size)
-
-    records = await _search_validation_records_safe(
-        db, entity_code, user_id_type="union_id"
-    )
-
-    items = [_map_validation_base_item(record) for record in records]
-    # 隐藏仅部门（无其他业务信息）的占位行
-    items = [item for item in items if not item.get("is_empty_row")]
-    await _apply_ai_validation_categories(db, items)
 
     # Filter by validation_type if specified (for child pages)
     if validation_type:
@@ -1666,9 +1687,7 @@ async def list_validation_records_from_feishu(
         items = [item for item in items if item.get("status") == status]
     if exclude_completed:
         items = [
-            item
-            for item in items
-            if not _is_validation_completed(item.get("status"))
+            item for item in items if not _is_validation_completed(item.get("status"))
         ]
     if department:
         items = [item for item in items if item.get("department") == department]
@@ -1720,20 +1739,10 @@ async def list_validation_records_from_feishu(
             item for item in items if (item.get("drafted_at") or date.max) <= drafted_to
         ]
 
-    items.sort(
-        key=lambda x: str(x.get("updated_at") or x.get("created_at") or ""),
-        reverse=True,
-    )
     start = (page - 1) * page_size
-    result = _build_page_result(
+    return _build_page_result(
         items[start : start + page_size], len(items), page, page_size
     )
-    await cache_set(
-        cache_key,
-        json.dumps(result, ensure_ascii=False, default=str),
-        ex=60,
-    )
-    return result
 
 
 async def get_validation_record_from_feishu(

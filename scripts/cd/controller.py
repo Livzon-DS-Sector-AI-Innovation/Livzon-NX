@@ -24,6 +24,10 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 APPS = ("app", "hermes-lite", "frontend")
+QUALITY_WORKER = "quality-read-mirror-worker"
+QUALITY_WORKER_PROFILE = "quality-mirror-worker"
+QUALITY_WORKER_COMMAND = (".venv/bin/python", "-m", "app.modules.quality.read_mirror_worker")
+QUALITY_WORKER_PROBE = (".venv/bin/python", "-m", "app.platform.scheduler.worker_health")
 DEPS = ("db", "redis", "minio")
 UNSAFE_PHASES = {"quiescing", "backup", "migrating", "starting", "verifying", "observing", "recovery_required"}
 SHA = re.compile(r"[0-9a-f]{40}\Z")
@@ -354,7 +358,73 @@ class Controller:
         for name in files:
             if (self.current / name).exists():
                 argv += ["-f", str(self.current / name)]
+        if QUALITY_WORKER in self.runtime_apps():
+            argv += ["--profile", QUALITY_WORKER_PROFILE]
         return command(argv + list(args), timeout=timeout, output=output)
+
+    def worker_requested(self) -> bool:
+        mode = self.config.get("quality_read_mirror_scheduler", "api")
+        if mode not in ("api", "worker"):
+            raise Refused("invalid quality read mirror scheduler mode")
+        return mode == "worker"
+
+    def runtime_apps(self) -> tuple[str, ...]:
+        overlay = read_json(self.current / "compose.release.yml", {})
+        return (*APPS, QUALITY_WORKER) if QUALITY_WORKER in overlay.get("services", {}) else APPS
+
+    def applications_ready(self, inventory: dict, *, proxy: bool = True) -> bool:
+        apps = self.runtime_apps()
+        required = (*DEPS, *apps)
+        if proxy:
+            required += ("nginx",)
+        if not all(self.healthy(inventory.get(service, {})) for service in required):
+            return False
+        worker = inventory.get(QUALITY_WORKER, {})
+        if QUALITY_WORKER in apps:
+            return worker.get("health") == "healthy"
+        return worker.get("state") in (None, "created", "exited")
+
+    def probe_quality_worker(self, inventory: dict) -> None:
+        services = read_json(self.current / "compose.release.yml", {})["services"]
+        expected = services["app"]["image"]
+        if services[QUALITY_WORKER]["image"] != expected:
+            raise Refused("quality mirror worker image differs from the pinned backend")
+        for service in ("app", QUALITY_WORKER):
+            actual = command(["docker", "inspect", "--format", "{{.Image}}", inventory[service]["id"]])
+            if actual != expected:
+                raise Refused("running quality mirror worker or backend image differs from the release")
+        mode_selector = ('{{range .Config.Env}}{{if eq . "QUALITY_READ_MIRROR_SCHEDULER=worker"}}'
+                         'worker{{end}}{{end}}')
+        if command(["docker", "inspect", "--format", mode_selector, inventory["app"]["id"]]) != "worker":
+            raise Refused("API is not configured to hand off quality mirror scheduling")
+        self.compose("exec", "-T", QUALITY_WORKER, *QUALITY_WORKER_PROBE, timeout=20)
+
+    def stop_quality_worker(self) -> None:
+        if QUALITY_WORKER not in self.runtime_apps():
+            return
+        was_running = self.containers().get(QUALITY_WORKER, {}).get("state") == "running"
+        self.compose("stop", "--timeout", "120", QUALITY_WORKER, timeout=150)
+        stopped = self.containers().get(QUALITY_WORKER, {})
+        if stopped.get("state") not in (None, "created", "exited"):
+            raise Refused("quality mirror worker did not stop")
+        if was_running and stopped.get("state") == "exited":
+            exit_code = command(["docker", "inspect", "--format", "{{.State.ExitCode}}", stopped["id"]])
+            if exit_code != "0":
+                raise Refused("quality mirror worker did not stop cleanly")
+
+    def restore_application_release(self, images: dict, phase: str) -> None:
+        try:
+            self.stop_quality_worker()
+            self.release_overlay(images)
+            self.resume_work()
+            self.compose("up", "-d", "--no-deps", *self.runtime_apps())
+            self.compose("up", "-d", "--no-deps", "--force-recreate", "nginx")
+            self.wait_ready()
+            self.maintenance(False)
+        except Exception:
+            self.phase("recovery_required", traffic_opened=False)
+            raise
+        self.phase(phase, traffic_opened=True)
 
     def maintenance(self, active: bool) -> None:
         marker = self.state_dir / "public" / "maintenance"
@@ -428,16 +498,19 @@ class Controller:
                 if not all(self.healthy(inventory.get(s, {})) for s in (*DEPS, *APPS, "nginx")):
                     self.maintenance(True)
                     raise Refused("service became unavailable during maintenance notice")
+                if not self.applications_ready(inventory):
+                    raise Refused("quality mirror scheduler became unavailable during maintenance notice")
                 time.sleep(min(3, max(0, deadline - time.monotonic())))
         except BaseException:
             path.unlink(missing_ok=True)
             raise
 
-    def wait_ready(self, timeout=180) -> None:
+    def wait_ready(self, timeout=180, *, include_worker=True) -> None:
         end = time.monotonic() + timeout
         while time.monotonic() < end:
             inventory = self.containers()
-            if all(self.healthy(inventory.get(s, {})) for s in (*DEPS, *APPS, "nginx")):
+            ready = all(self.healthy(inventory.get(s, {})) for s in (*DEPS, *APPS, "nginx"))
+            if ready and (not include_worker or self.applications_ready(inventory)):
                 self.compose("exec", "-T", "db", "sh", "-c", 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"')
                 self.compose("exec", "-T", "redis", "redis-cli", "ping")
                 self.compose("exec", "-T", "minio", "curl", "-fsS", "http://127.0.0.1:9000/minio/health/ready")
@@ -453,6 +526,8 @@ class Controller:
                 probe = Path(__file__).with_name("readiness.py").read_text()
                 self.compose("exec", "-T", "app", ".venv/bin/python", "-c", probe, timeout=20)
                 self.verify_schema()
+                if include_worker and QUALITY_WORKER in self.runtime_apps():
+                    self.probe_quality_worker(inventory)
                 return
             time.sleep(5)
         raise Refused("application readiness timeout")
@@ -506,7 +581,7 @@ class Controller:
                 return
             if any(record.get("blocked") for record in read_json(self.state_dir / "watchdog.json", {}).values()):
                 return
-            self.wait_ready(timeout=15)
+            self.wait_ready(timeout=15, include_worker=False)
             self.maintenance(False)
             owned.unlink(missing_ok=True)
             self.event("traffic_guard_reopened")
@@ -530,14 +605,27 @@ class Controller:
         return self.compose("exec", "-T", "db", "sh", "-c",
                             'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc "select version_num from alembic_version order by version_num"')
 
+    @staticmethod
+    def validate_release_images(images: dict, *, worker: bool) -> None:
+        required = {*APPS, "migrate"}
+        if worker:
+            required.add(QUALITY_WORKER)
+        if not isinstance(images, dict) or set(images) != required:
+            raise Refused("incomplete application image set for the quality mirror scheduler mode")
+        if any(not isinstance(image, str) or not re.fullmatch(r"sha256:[a-f0-9]{64}", image)
+               for image in images.values()):
+            raise Refused("image must be pinned by local content ID")
+        if worker and images[QUALITY_WORKER] != images["app"]:
+            raise Refused("quality mirror worker must use the pinned backend image")
+
     def release_overlay(self, images: dict) -> None:
-        if set(images) != {"app", "frontend", "hermes-lite", "migrate"}:
-            raise Refused("incomplete application image set")
-        for image in images.values():
-            if not re.fullmatch(r"sha256:[a-f0-9]{64}", image):
-                raise Refused("image must be pinned by local content ID")
-        atomic_json(self.current / "compose.release.yml", {"services": {
-            service: {"image": image, "pull_policy": "never"} for service, image in images.items()}})
+        worker = QUALITY_WORKER in images
+        self.validate_release_images(images, worker=worker)
+        services = {service: {"image": image, "pull_policy": "never"} for service, image in images.items()}
+        services["app"]["environment"] = {
+            "QUALITY_READ_MIRROR_SCHEDULER": "worker" if worker else "api",
+        }
+        atomic_json(self.current / "compose.release.yml", {"services": services})
 
     def site_checksums(self) -> dict:
         names = ("compose.yml", "compose.edge.yml", ".env", "nginx.default.conf",
@@ -550,6 +638,12 @@ class Controller:
             raise Refused("disk headroom insufficient for release switch")
         if manifest.get("site_files") != self.site_checksums():
             raise Refused("site configuration changed since validation")
+        worker = self.worker_requested()
+        self.validate_release_images(manifest.get("images", {}), worker=worker)
+        if worker and QUALITY_WORKER not in self.compose(
+            "--profile", QUALITY_WORKER_PROFILE, "config", "--services"
+        ).splitlines():
+            raise Refused("site Compose does not define the quality mirror worker")
         prior_state = read_json(self.state_file, {})
         before = self.revision()
         migration = manifest.get("migration", {})
@@ -560,9 +654,12 @@ class Controller:
             raise Refused("migration not approved for unattended deployment")
         previous = {}
         inventory = self.containers()
-        if not all(self.healthy(inventory.get(s, {})) for s in (*DEPS, *APPS)):
+        if not self.applications_ready(inventory, proxy=False):
             raise Refused("existing deployment is not healthy; refusing upgrade")
-        for service in APPS:
+        previous_apps = self.runtime_apps()
+        if QUALITY_WORKER in previous_apps:
+            self.probe_quality_worker(inventory)
+        for service in previous_apps:
             previous[service] = command(["docker", "inspect", "--format", "{{.Image}}", inventory[service]["id"]])
         previous["migrate"] = previous["app"]
         atomic_json(self.state_dir / "previous-images.json", previous)
@@ -576,20 +673,20 @@ class Controller:
         # Failure to drain must not restart containers or reopen traffic.
         self.drain()
         try:
+            self.stop_quality_worker()
+        except Exception:
+            self.phase("recovery_required", traffic_opened=False)
+            raise
+        try:
             self.compose("stop", "--timeout", "120", "hermes-lite", "app", "frontend", timeout=400)
             self.phase("backup")
             backup = self.backup("predeploy")
             self.phase("backup", backup=str(backup))
             self.release_overlay(manifest["images"])
-            self.compose("config", "--quiet")
+            profile = ("--profile", QUALITY_WORKER_PROFILE) if worker else ()
+            self.compose(*profile, "config", "--quiet")
         except Exception:
-            self.release_overlay(previous)
-            self.resume_work()
-            self.compose("up", "-d", "--no-deps", *APPS)
-            self.compose("up", "-d", "--no-deps", "--force-recreate", "nginx")
-            self.wait_ready()
-            self.maintenance(False)
-            self.phase("aborted_before_migration", traffic_opened=True)
+            self.restore_application_release(previous, "aborted_before_migration")
             raise
         try:
             self.phase("migrating")
@@ -599,19 +696,14 @@ class Controller:
             migrated = True
             self.phase("starting")
             self.resume_work()
-            for service in APPS:
+            for service in self.runtime_apps():
                 self.compose("up", "-d", "--no-deps", service)
             self.compose("up", "-d", "--no-deps", "--force-recreate", "nginx")
             self.phase("verifying")
             self.wait_ready()
         except Exception:
             if migrated and (not changed or migration.get("backward_compatible") is True):
-                self.release_overlay(previous)
-                self.compose("up", "-d", "--no-deps", *APPS)
-                self.compose("up", "-d", "--no-deps", "--force-recreate", "nginx")
-                self.wait_ready()
-                self.maintenance(False)
-                self.phase("application_rolled_back", traffic_opened=True)
+                self.restore_application_release(previous, "application_rolled_back")
             else:
                 self.phase("recovery_required")
             raise
@@ -729,7 +821,7 @@ class Controller:
                     "release_version": release_version, "archive_attempts": archive_attempts,
                     "database_revision": self.revision(),
                     "consistency": "writers_stopped" if kind == "predeploy" else "online_independent_copies",
-                    "images": {s: command(["docker", "inspect", "--format", "{{.Image}}", inventory[s]["id"]]) for s in (*APPS, *DEPS)},
+                    "images": {s: command(["docker", "inspect", "--format", "{{.Image}}", inventory[s]["id"]]) for s in (*self.runtime_apps(), *DEPS)},
                     "external": False})
         self.event("backup_complete", backup=target.name)
         self.prune_backups()
@@ -1141,6 +1233,13 @@ class Controller:
         network = f"dazah-cd-test-{sha[:12]}"
         database = f"{network}-db"
         backend = f"{network}-backend"
+        redis = f"{network}-redis"
+        worker = f"{network}-quality-worker"
+        worker_enabled = self.worker_requested()
+        if worker_enabled and QUALITY_WORKER not in self.compose(
+            "--profile", QUALITY_WORKER_PROFILE, "config", "--services"
+        ).splitlines():
+            raise Refused("site Compose does not define the quality mirror worker")
         command(["docker", "network", "create", "--internal", network])
         try:
             command(["docker", "run", "-d", "--name", database, "--network", network,
@@ -1192,6 +1291,16 @@ class Controller:
             command(args + [".venv/bin/python", "-c", "from app.main import app; assert app.openapi()['paths']"], timeout=120)
             images = {service: command(["docker", "image", "inspect", "--format", "{{.Id}}", f"dazah/{target}:cd-{sha}"])
                       for service, target in (("app", "backend"), ("migrate", "backend"), ("frontend", "frontend"), ("hermes-lite", "hermes"))}
+            if worker_enabled:
+                images[QUALITY_WORKER] = images["app"]
+                redis_container = self.containers().get("redis", {})
+                if not self.healthy(redis_container):
+                    raise Refused("no healthy site Redis image for isolated quality mirror validation")
+                redis_image = command(["docker", "inspect", "--format", "{{.Image}}", redis_container["id"]])
+                if not re.fullmatch(r"sha256:[a-f0-9]{64}", redis_image):
+                    raise Refused("isolated Redis image must be pinned by local content ID")
+                self.validate_quality_worker(network, database, redis, worker, images["app"], redis_image)
+            self.validate_release_images(images, worker=worker_enabled)
             manifest = {"sha": sha, "run_id": candidate["run_id"], "images": images, "files": build["files"],
                         "base_images": build["base_images"], "source_archive_sha256": build["source_archive_sha256"],
                         "site_files": self.site_checksums(),
@@ -1201,9 +1310,49 @@ class Controller:
             atomic_json(self.state_dir / "accepted" / f"{sha}.json", {"manifest_sha256": digest(release / "manifest.json")})
             self.phase("validated")
         finally:
-            for name in (backend, database):
+            for name in (worker, redis, backend, database):
                 subprocess.run(["docker", "rm", "-f", name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=30)
             command(["docker", "network", "rm", network])
+
+
+    def validate_quality_worker(self, network: str, database: str, redis: str,
+                                worker: str, image: str, redis_image: str) -> None:
+        command(["docker", "run", "-d", "--pull", "never", "--name", redis, "--network", network,
+                 "--memory", "128m", "--pids-limit", "64", redis_image])
+        # Keep the scheduler idle while validating registration and dependency readiness.
+        for _ in range(15):
+            try:
+                if command(["docker", "exec", redis, "redis-cli", "SET",
+                            "dazah:maintenance:phase", "starting"], timeout=5) == "OK":
+                    break
+            except Refused:
+                pass
+            time.sleep(1)
+        else:
+            raise Refused("isolated quality mirror Redis readiness failed")
+        command(["docker", "run", "-d", "--pull", "never", "--name", worker, "--network", network,
+                 "--memory", "1024m", "--cpus", "1", "--pids-limit", "128",
+                 "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
+                 "--read-only", "--tmpfs", "/tmp:rw,mode=1777,size=16m",
+                 "-e", "APP_ENV=test", "-e", "FRONTEND_URL=http://localhost:3000",
+                 "-e", "QUALITY_READ_MIRROR_SCHEDULER=worker",
+                 "-e", f"DATABASE_URL=postgresql+asyncpg://postgres@{database}:5432/postgres",
+                 "-e", f"REDIS_URL=redis://{redis}:6379/0",
+                 "-e", "MINIO_ENABLED=false", image, *QUALITY_WORKER_COMMAND])
+        deadline = time.monotonic() + 60
+        while time.monotonic() < deadline:
+            if command(["docker", "inspect", "--format", "{{.State.Status}}", worker]) != "running":
+                break
+            try:
+                command(["docker", "exec", worker, *QUALITY_WORKER_PROBE], timeout=15)
+            except Refused:
+                time.sleep(2)
+                continue
+            command(["docker", "stop", "--time", "15", worker], timeout=20)
+            if command(["docker", "inspect", "--format", "{{.State.ExitCode}}", worker]) != "0":
+                raise Refused("quality mirror worker failed to stop cleanly in isolation")
+            return
+        raise Refused("isolated quality mirror worker readiness failed")
 
 
 @contextlib.contextmanager

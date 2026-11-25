@@ -1,14 +1,20 @@
 'use client'
 
-import { ReloadOutlined, SettingOutlined } from '@ant-design/icons'
+import { ReloadOutlined, SettingOutlined, ThunderboltOutlined } from '@ant-design/icons'
 import { Button, Card, Empty, Space, Tooltip, Typography, theme } from 'antd'
 import type { EChartsOption } from 'echarts'
 import { useRouter } from 'next/navigation'
-import { useTransition } from 'react'
+import { useState, useTransition } from 'react'
 
+import { generateTobaccoGiftAiAnalysisAction } from '@/actions/administration'
 import PlatformNotice from '@/components/shared/PlatformNotice'
 import ThemedEChart from '@/components/shared/ThemedEChart'
-import type { TobaccoGiftChartItem, TobaccoGiftDashboardStats } from '@/types/administration'
+import { getUserErrorMessage } from '@/lib/user-error'
+import type {
+  TobaccoGiftAiAnalysis,
+  TobaccoGiftChartItem,
+  TobaccoGiftDashboardStats,
+} from '@/types/administration'
 
 interface TobaccoGiftDashboardProps {
   stats: TobaccoGiftDashboardStats | null
@@ -141,6 +147,47 @@ interface MetricCardProps {
   hint?: string
 }
 
+function AiAnalysisCard({ analysis }: { analysis: TobaccoGiftAiAnalysis }) {
+  const sections: Array<{ title: string; items: string[] }> = [
+    { title: '关键发现', items: analysis.insights },
+    { title: '异常提示', items: analysis.anomalies },
+    { title: '管理建议', items: analysis.suggestions },
+  ]
+  return (
+    <Card
+      size="small"
+      title="AI 分析"
+      extra={
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          {formatSyncedAt(analysis.generated_at)} · 仅供参考，不替代人工核对
+        </Typography.Text>
+      }
+    >
+      <Typography.Paragraph style={{ marginBottom: 12 }}>{analysis.summary}</Typography.Paragraph>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        {sections.map((section) => (
+          <div key={section.title}>
+            <Typography.Text strong style={{ display: 'block', marginBottom: 4 }}>
+              {section.title}
+            </Typography.Text>
+            {section.items.length ? (
+              <ul className="m-0 list-disc pl-5">
+                {section.items.map((item) => (
+                  <li key={item}>
+                    <Typography.Text>{item}</Typography.Text>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <Typography.Text type="secondary">无</Typography.Text>
+            )}
+          </div>
+        ))}
+      </div>
+    </Card>
+  )
+}
+
 function MetricCard({ label, value, accent, hint }: MetricCardProps) {
   const { token } = theme.useToken()
   return (
@@ -179,6 +226,26 @@ export function TobaccoGiftDashboard({ stats, error }: TobaccoGiftDashboardProps
   const { token } = theme.useToken()
   const router = useRouter()
   const [refreshing, startRefresh] = useTransition()
+  const [analysis, setAnalysis] = useState<TobaccoGiftAiAnalysis | null>(null)
+  const [aiError, setAiError] = useState<string | null>(null)
+  const [aiPending, startAi] = useTransition()
+
+  const runAiAnalysis = () => {
+    setAiError(null)
+    startAi(async () => {
+      try {
+        const result = await generateTobaccoGiftAiAnalysisAction()
+        if (result.ok) {
+          setAnalysis(result.data)
+        } else {
+          setAiError(result.message)
+        }
+      } catch (cause) {
+        // Server Action 正常返回结构化结果；这里只兜真正的意外抛出
+        setAiError(getUserErrorMessage(cause, 'AI 分析生成失败，请稍后重试'))
+      }
+    })
+  }
 
   const missingTables = stats
     ? [
@@ -192,17 +259,19 @@ export function TobaccoGiftDashboard({ stats, error }: TobaccoGiftDashboardProps
   return (
     <main className="mx-auto max-w-[1600px] px-6 py-7">
       <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <Typography.Title level={3} className="!mb-1">
-            烟酒礼品仪表台
-          </Typography.Title>
-          <Typography.Text type="secondary">
-            数据来自飞书多维表格本地镜像 · 物品清单同步于
-            {formatSyncedAt(stats?.inventory_synced_at)} · 领用记录同步于
-            {formatSyncedAt(stats?.requisition_synced_at)}
-          </Typography.Text>
-        </div>
+        <Typography.Title level={3} className="!mb-1">
+          烟酒礼品仪表台
+        </Typography.Title>
         <Space wrap>
+          <Tooltip title="基于当前台账统计生成 AI 分析（仅供参考，不替代人工核对）">
+            <Button
+              icon={<ThunderboltOutlined />}
+              loading={aiPending}
+              onClick={runAiAnalysis}
+            >
+              AI 分析
+            </Button>
+          </Tooltip>
           <Tooltip title="重新读取本地镜像数据（不含飞书重新同步；手动同步在飞书设置页）">
             <Button
               icon={<ReloadOutlined />}
@@ -214,6 +283,16 @@ export function TobaccoGiftDashboard({ stats, error }: TobaccoGiftDashboardProps
           </Tooltip>
         </Space>
       </div>
+
+      {aiError ? (
+        <PlatformNotice
+          type="error"
+          showIcon
+          className="mb-4"
+          title="AI 分析生成失败"
+          description={aiError}
+        />
+      ) : null}
 
       {error ? (
         <PlatformNotice
@@ -250,6 +329,11 @@ export function TobaccoGiftDashboard({ stats, error }: TobaccoGiftDashboardProps
 
       {stats ? (
         <>
+          {analysis ? (
+            <div className="mb-4">
+              <AiAnalysisCard analysis={analysis} />
+            </div>
+          ) : null}
           <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <MetricCard
               label="物品品类"

@@ -10,8 +10,8 @@ from uuid import UUID, uuid4
 
 from fastapi import Depends, File, Form, Query, Request, UploadFile
 from fastapi.encoders import jsonable_encoder
-from fastapi.responses import StreamingResponse
-from openpyxl import Workbook
+from fastapi.responses import JSONResponse, StreamingResponse
+from openpyxl import Workbook, load_workbook
 from openpyxl.styles import (
     Alignment,
     Border,
@@ -19,11 +19,14 @@ from openpyxl.styles import (
     PatternFill,
     Side,
 )
+from openpyxl.utils.exceptions import InvalidFileException
+from openpyxl.worksheet.worksheet import Worksheet
 from pydantic import BaseModel as _PydanticBaseModel
 from pydantic import Field
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.concurrency import run_in_threadpool
 
 from app.core.config import get_settings
 from app.core.database import get_db
@@ -45,7 +48,6 @@ from app.modules.hr.contract_api import _fmt_contract_seq
 from app.modules.hr.contract_api import router as contract_router
 from app.modules.hr.contract_settings_api import router as contract_settings_router
 from app.modules.hr.date_format import fmt_date_str
-from app.modules.hr.document_generator import generate_onboarding_training_record
 from app.modules.hr.error_contract import (
     HrBusinessError,
     HrBusinessErrorCode,
@@ -90,8 +92,8 @@ from app.modules.hr.position_training_mapping_api import (
 from app.modules.hr.practical_exam_document_generator import (
     generate_practical_exam_zip,
     parse_practical_exam_questions,
+    save_practical_exam_template,
 )
-from app.modules.hr.prejob_document_generator import generate_prejob_training_plan
 from app.modules.hr.push_settings_schemas import SendNoticeRequest, SendNoticeResult
 from app.modules.hr.push_settings_service import PushSettingsService
 from app.modules.hr.recruitment_service import (
@@ -139,6 +141,7 @@ from app.modules.hr.schemas import (
     ImportFeishuMembersResult,
     ImportPreviewData,
     ImportPreviewResponse,
+    ImportSheetConfirm,
     ImportSheetPreview,
     JobPostingCreate,
     JobPostingResponse,
@@ -163,6 +166,7 @@ from app.modules.hr.schemas import (
     PositionTransferRejectNodeRequest,
     PositionTransferSubmitRequest,
     PracticalExamExportRequest,
+    PracticalExamImportResult,
     SendOfferEmailPayload,
     TeamCreate,
     TeamResponse,
@@ -188,6 +192,7 @@ from app.modules.hr.schemas import (
     TrainingSessionFromLedgerRequest,
     TrainingSessionOut,
     TrainingSessionUpsert,
+    TrainingSignInEmployee,
     TrainingSignInSheetInput,
 )
 from app.modules.hr.service import (
@@ -1488,64 +1493,6 @@ async def feishu_approval_webhook(  # public endpoint - webhook from Feishu
 
 
 @router.get(
-    "/employees/{employee_id}/onboarding-training-record",
-    summary="导出员工入职培训记录",
-)
-async def export_onboarding_training_record(
-    employee_id: UUID,
-    service: EmployeeService = Depends(get_employee_service),
-    current_user: CurrentUser = None,
-) -> Any:
-    """根据员工数据自动生成并下载入职培训记录 Word 文档。"""
-    _require_user(current_user)
-    employee = await service.get_employee(employee_id)
-    try:
-        buffer: BytesIO = generate_onboarding_training_record(employee)
-    except FileNotFoundError as e:
-        raise AppException(status_code=400, message=str(e))
-
-    def _iterfile() -> Any:
-        buffer.seek(0)
-        yield buffer.read()
-
-    filename = f"onboarding_training_record_{employee.employee_number}.docx"
-    return StreamingResponse(
-        _iterfile(),
-        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
-
-
-@router.get(
-    "/employees/{employee_id}/prejob-training-plan",
-    summary="导出员工岗前培训计划",
-)
-async def export_prejob_training_plan(
-    employee_id: UUID,
-    service: EmployeeService = Depends(get_employee_service),
-    current_user: CurrentUser = None,
-) -> Any:
-    """根据员工数据自动生成并下载岗前培训计划 Excel 文档。"""
-    _require_user(current_user)
-    employee = await service.get_employee(employee_id)
-    try:
-        buffer: BytesIO = generate_prejob_training_plan(employee)
-    except FileNotFoundError as e:
-        raise AppException(status_code=400, message=str(e))
-
-    def _iterfile() -> Any:
-        buffer.seek(0)
-        yield buffer.read()
-
-    filename = f"prejob_training_plan_{employee.employee_number}.xlsx"
-    return StreamingResponse(
-        _iterfile(),
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
-
-
-@router.get(
     "/employees/{employee_id}/onboarding-evaluation",
     summary="导出员工上岗评估表",
 )
@@ -1579,6 +1526,36 @@ async def export_onboarding_evaluation_by_employee(
         _iterfile(),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get(
+    "/training-sign-in/employees",
+    summary="查询培训签到可选员工",
+    response_model=ApiResponseEnvelope[list[TrainingSignInEmployee]],
+)
+async def list_training_sign_in_employees(
+    page_params: PageParams = Depends(),
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> JSONResponse:
+    from app.modules.hr.repository import EmployeeRepository
+    from app.platform.identity.data_scope import resolve_user_department_scope
+
+    _require_user(current_user)
+    assert current_user is not None
+    scope = await resolve_user_department_scope(db, current_user)
+    employees, total = await EmployeeRepository(db).list_training_sign_in_employees(
+        scope, page=page_params.page, page_size=page_params.page_size
+    )
+    return paginated_response(
+        data=[
+            TrainingSignInEmployee.model_validate(employee).model_dump(mode="json")
+            for employee in employees
+        ],
+        total=total,
+        page=page_params.page,
+        page_size=page_params.page_size,
     )
 
 
@@ -1628,14 +1605,16 @@ async def export_training_notification(
     except FileNotFoundError as e:
         raise AppException(status_code=400, message=str(e))
 
-    # 自动关联创建培训台账记录
-    employee_service = EmployeeService(service.repo.session)
-    for name in payload.trainee_names:
-        emp = await employee_service.repo.list_employees(
-            keyword=name, page=1, page_size=1
-        )
-        if emp[0] and emp[0][0]:
-            employee = emp[0][0]
+    from app.modules.hr.repository import EmployeeRepository
+    from app.platform.identity.data_scope import resolve_user_department_scope
+
+    names = {name.strip() for name in payload.trainee_names if name.strip()}
+    if names:
+        assert current_user is not None
+        db = service.repo.session
+        scope = await resolve_user_department_scope(db, current_user)
+        employees = await EmployeeRepository(db).find_training_employees(names, scope)
+        for employee in employees:
             if employee.employee_number in {"110000673", "110001372"}:
                 await service.create_from_notification(
                     employee_number=employee.employee_number,
@@ -2710,8 +2689,9 @@ async def check_training_conflict(
     payload: TrainingConflictCheckRequest,
     service: TrainingLedgerService = Depends(get_training_ledger_service),
     current_user: CurrentUser = None,
+    db: AsyncSession = Depends(get_db),
 ) -> Any:
-    _require_user(current_user)
+    dept_alias_set = await _resolve_visible_scope(db, current_user)
     result = await service.check_conflict(
         training_date=payload.training_date,
         time_start=payload.time_start,
@@ -2719,6 +2699,7 @@ async def check_training_conflict(
         instructor=payload.instructor,
         trainees=payload.trainees,
         exclude_session_id=payload.exclude_session_id,
+        dept_alias_set=dept_alias_set,
     )
     return success_response(data=result)
 
@@ -3981,10 +3962,54 @@ def _get_import_mapping_repo(session: AsyncSession) -> Any:
     return TrainingImportMappingRepository(session)
 
 
+def _load_training_import_workbook(content: bytes, *, read_only: bool) -> Workbook:
+    try:
+        return load_workbook(BytesIO(content), data_only=True, read_only=read_only)
+    except (
+        zipfile.BadZipFile,
+        InvalidFileException,
+        KeyError,
+        SyntaxError,
+        ValueError,
+    ) as exc:
+        raise HrBusinessError(
+            400,
+            "无法读取培训台账文件，请上传可正常打开的 .xlsx 工作簿。",
+            HrBusinessErrorCode.HR_TRAINING_IMPORT_WORKBOOK_INVALID,
+        ) from exc
+
+
+def _training_import_columns(mapping: object, column_count: int) -> dict[int, str]:
+    if not isinstance(mapping, dict):
+        raise ValueError("列映射必须为对象")
+    columns: dict[int, str] = {}
+    fields: set[str] = set()
+    allowed_fields = set(_DEPT_LEDGER_HEADER_ALIASES.values())
+    for key, field in mapping.items():
+        if field == "":
+            continue
+        if (
+            not isinstance(key, str)
+            or re.fullmatch(r"0|[1-9][0-9]{0,4}", key) is None
+            or int(key) >= column_count
+        ):
+            raise ValueError("列索引无效或超出工作表范围")
+        if not isinstance(field, str) or field not in allowed_fields:
+            raise ValueError("存在无法导入的字段")
+        if field in fields:
+            raise ValueError("同一字段只能映射一列")
+        columns[int(key)] = field
+        fields.add(field)
+    return columns
+
+
 @router.post(
     "/training-ledgers/import-preview",
     summary="AI识别导入预览",
     response_model=ImportPreviewResponse,
+    responses={
+        400: hr_error_response(HrBusinessErrorCode.HR_TRAINING_IMPORT_WORKBOOK_INVALID)
+    },
 )
 async def preview_training_import(
     file: UploadFile = File(..., description="Excel文件(.xlsx)"),
@@ -3993,30 +4018,30 @@ async def preview_training_import(
     current_user: CurrentUser = None,
 ) -> Any:
     "分析 Excel 所有工作表：记忆表 → 规则别名 → AI 兜底，返回列映射与样例供人工确认."
-    from openpyxl import load_workbook
-
     from app.modules.hr.training_import_ai import (
         analyze_headers_by_llm,
         field_catalog_payload,
         header_fingerprint,
     )
 
-    _require_user(current_user)
+    await _assert_dept_in_scope(session, current_user, department)
     _, content = await read_upload_secure(
         file,
         max_bytes=get_settings().MAX_UPLOAD_SIZE_MB * 1024 * 1024,
         allowed_extensions={".xlsx"},
         what="培训导入预览文件",
     )
-    wb = load_workbook(BytesIO(content), data_only=True, read_only=True)
+    wb = await run_in_threadpool(
+        _load_training_import_workbook, content, read_only=True
+    )
     mapping_repo = _get_import_mapping_repo(session)
 
     # AI 识别 sheet 数上限：多 sheet 文件（如 QC）避免逐 sheet 串行调 LLM 拖垮请求
     max_ai_sheets = 2
     ai_done = 0
     sheets_payload: list[ImportSheetPreview] = []
-    for sname in wb.sheetnames:
-        ws = wb[sname]
+    for ws in wb.worksheets:
+        sname = ws.title
         preview = ImportSheetPreview(name=sname)
 
         # ① 严格定位表头
@@ -4033,7 +4058,10 @@ async def preview_training_import(
                 import json as _json
 
                 try:
-                    mapping = _json.loads(memory.mapping_json)
+                    cached = _training_import_columns(
+                        _json.loads(memory.mapping_json), len(headers)
+                    )
+                    mapping = {str(index): field for index, field in cached.items()}
                 except ValueError:
                     mapping = {}
                 if mapping:
@@ -4081,6 +4109,7 @@ async def preview_training_import(
         sheets=sheets_payload,
         field_catalog=field_catalog_payload(),
     )
+    wb.close()
     return success_response(data=data.model_dump(mode="json"))
 
 
@@ -4088,6 +4117,13 @@ async def preview_training_import(
     "/training-ledgers/import-confirm",
     summary="确认导入并记住格式",
     response_model=ImportConfirmResponse,
+    responses={
+        400: hr_error_response(
+            HrBusinessErrorCode.HR_TRAINING_IMPORT_WORKBOOK_INVALID,
+            HrBusinessErrorCode.HR_TRAINING_IMPORT_MAPPING_INVALID,
+            HrBusinessErrorCode.HR_TRAINING_IMPORT_NO_ROWS,
+        )
+    },
 )
 async def confirm_training_import(
     file: UploadFile = File(..., description="Excel文件(.xlsx)"),
@@ -4100,18 +4136,20 @@ async def confirm_training_import(
     """按用户确认的列映射执行导入，并把映射存入记忆表供下次复用."""
     import json as _json
 
-    from openpyxl import load_workbook
-
     from app.modules.hr.models import TrainingImportMapping
     from app.modules.hr.training_import_ai import header_fingerprint
 
-    _require_user(current_user)
+    await _assert_dept_in_scope(session, current_user, department)
     try:
         payload = ImportConfirmRequest(
             department=department, sheets=_json.loads(sheets)
         )
-    except ValueError:
-        raise AppException(status_code=400, message="sheets 参数格式错误")
+    except ValueError as exc:
+        raise HrBusinessError(
+            400,
+            "工作表选择或列映射格式无效，请重新确认导入设置。",
+            HrBusinessErrorCode.HR_TRAINING_IMPORT_MAPPING_INVALID,
+        ) from exc
 
     _, content = await read_upload_secure(
         file,
@@ -4119,32 +4157,51 @@ async def confirm_training_import(
         allowed_extensions={".xlsx"},
         what="培训导入确认文件",
     )
-    wb = load_workbook(BytesIO(content), data_only=True)
+    wb = await run_in_threadpool(
+        _load_training_import_workbook, content, read_only=False
+    )
+    validated_sheets: list[tuple[ImportSheetConfirm, Worksheet, dict[int, str]]] = []
+    seen_sheets: set[str] = set()
+    for sheet_cfg in payload.sheets:
+        try:
+            ws = wb[sheet_cfg.name]
+            if not isinstance(ws, Worksheet):
+                raise ValueError("所选内容不是数据工作表")
+            if sheet_cfg.name in seen_sheets:
+                raise ValueError("工作表重复选择")
+            if sheet_cfg.header_row > ws.max_row:
+                raise ValueError("表头行超出工作表范围")
+            col_map = _training_import_columns(sheet_cfg.mapping, ws.max_column)
+        except (ValueError, KeyError) as exc:
+            reason = str(exc) if isinstance(exc, ValueError) else "工作表不存在"
+            raise HrBusinessError(
+                400,
+                f"工作表「{sheet_cfg.name}」的导入设置无效：{reason}。",
+                HrBusinessErrorCode.HR_TRAINING_IMPORT_MAPPING_INVALID,
+            ) from exc
+        seen_sheets.add(sheet_cfg.name)
+        if {"training_content", "training_datetime", "training_date"}.intersection(
+            col_map.values()
+        ):
+            validated_sheets.append((sheet_cfg, ws, col_map))
     mapping_repo = _get_import_mapping_repo(session)
 
     created = 0
     trainee_matched = 0
     per_sheet: list[str] = []
-    for sheet_cfg in payload.sheets:
-        if sheet_cfg.name not in wb.sheetnames:
-            raise AppException(
-                status_code=400, message=f"工作表「{sheet_cfg.name}」不存在"
-            )
-        ws = wb[sheet_cfg.name]
-        col_map = {int(k): v for k, v in sheet_cfg.mapping.items() if v}
-        if not col_map:
-            continue
+    for sheet_cfg, sheet, col_map in validated_sheets:
         sheet_created, sheet_matched = await _import_rows_with_mapping(
-            ws, sheet_cfg.header_row, col_map, department, service
+            sheet, sheet_cfg.header_row, col_map, department, service
         )
         created += sheet_created
         trainee_matched += sheet_matched
         per_sheet.append(f"[{sheet_cfg.name}]{sheet_created}条")
+        if sheet_created == 0:
+            continue
 
         # 存入记忆表（表头指纹 → 映射）
-        # read_only 模式不支持 ws[行号] 随机访问，改用 iter_rows 定位表头行
         header_row_values = next(
-            ws.iter_rows(
+            sheet.iter_rows(
                 min_row=sheet_cfg.header_row,
                 max_row=sheet_cfg.header_row,
                 values_only=True,
@@ -4174,8 +4231,10 @@ async def confirm_training_import(
             )
 
     if created == 0:
-        raise AppException(
-            status_code=400, message="未导入任何数据，请检查列映射与数据行"
+        raise HrBusinessError(
+            400,
+            "未找到可导入的数据，请映射培训内容或培训日期，并检查表头下方的数据行。",
+            HrBusinessErrorCode.HR_TRAINING_IMPORT_NO_ROWS,
         )
     message = (
         f"成功导入{created}条台账记录到{department}：{'、'.join(per_sheet)}。"
@@ -5130,6 +5189,9 @@ async def export_oral_exam(
 @router.post(
     "/training-practical-exam/export",
     summary="生成实操培训考核结果表（APP13，每人一份，打包zip）",
+    responses={
+        400: hr_error_response(HrBusinessErrorCode.HR_PRACTICAL_EXAM_TEMPLATE_INVALID)
+    },
 )
 async def export_practical_exam(
     payload: PracticalExamExportRequest,
@@ -5137,7 +5199,7 @@ async def export_practical_exam(
 ) -> Any:
     _require_user(current_user)
     try:
-        buffer = generate_practical_exam_zip(payload)
+        buffer = await run_in_threadpool(generate_practical_exam_zip, payload)
     except FileNotFoundError as e:
         raise AppException(status_code=400, message=str(e))
 
@@ -5185,6 +5247,10 @@ async def export_training_attachment(
 @router.post(
     "/training-practical-exam/import",
     summary="导入实操试题（APP13格式docx，提取描述与培训日期）",
+    response_model=ApiResponseEnvelope[PracticalExamImportResult],
+    responses={
+        400: hr_error_response(HrBusinessErrorCode.HR_PRACTICAL_EXAM_TEMPLATE_INVALID)
+    },
 )
 async def import_practical_exam_questions(
     file: UploadFile = File(..., description="APP13格式的实操试题docx"),
@@ -5197,20 +5263,17 @@ async def import_practical_exam_questions(
         allowed_extensions={".docx", ".doc"},
         what="实操试题",
     )
+    data = await run_in_threadpool(parse_practical_exam_questions, content)
     try:
-        data = parse_practical_exam_questions(content)
-    except FileNotFoundError as e:
-        raise AppException(status_code=400, message=str(e))
-    except Exception as e:
-        raise AppException(status_code=400, message=f"解析实操试题失败：{e}")
-    # 保存导入的 docx 作为导出基底（保留试题段落结构/方框，导出时只填部门/姓名/日期）
-    from app.modules.hr.practical_exam_document_generator import _imported_template_path
-
-    try:
-        _imported_template_path().write_bytes(content)
-    except Exception:
+        await run_in_threadpool(save_practical_exam_template, content)
+    except OSError as exc:
         logger.exception("保存实操试题导入文件失败")
-    return success_response(data=data, message="导入成功")
+        raise AppException(
+            status_code=503, message="实操试题暂时无法保存，请稍后重试"
+        ) from exc
+    return ApiResponseEnvelope(
+        data=PracticalExamImportResult.model_validate(data), message="导入成功"
+    )
 
 
 @router.get(

@@ -1,11 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  exportPositionTrainingConfirmation,
   fetchDeptApprovalConfigNames,
   fetchEmployeeDepartments,
   fetchEmployeeStats,
+  fetchNewEmployeeTrainingCandidates,
   fetchOnboardingAttachmentContent,
   fetchTrainingDeptMappings,
+  fetchTrainingSignInEmployees,
 } from './hr'
 
 function jsonResponse(body: unknown, status = 200) {
@@ -19,6 +22,55 @@ describe('hr client onboarding/dept fetchers', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     vi.clearAllMocks()
+  })
+
+  it('looks up exact-name candidates through the new-employee training page endpoint', async () => {
+    const employee = { id: 'employee-1', name: '李四', department: '培训部', sub_department: null, position: '操作员', hire_date: '2026-11-24', employee_number: 'E01' }
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ code: 200, data: [employee] }))
+      .mockResolvedValueOnce(jsonResponse({ code: 403 }, 403))
+    vi.stubGlobal('fetch', fetchMock)
+    const controller = new AbortController()
+
+    await expect(fetchNewEmployeeTrainingCandidates('李四', controller.signal)).resolves.toEqual([employee])
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/hr/new-employee-training/employee-candidates?name=%E6%9D%8E%E5%9B%9B',
+      { cache: 'no-store', signal: controller.signal },
+    )
+    await expect(fetchNewEmployeeTrainingCandidates('李四')).rejects.toThrow('匹配新员工档案失败')
+  })
+
+  it('reads every scoped page of the sign-in employee directory', async () => {
+    const first = Array.from({ length: 200 }, (_, index) => ({
+      name: `测试员工${index}`, department: '质量部', sub_department: null,
+    }))
+    const last = { name: '末页员工', department: '生产部', sub_department: '一车间' }
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ data: first, meta: { total: 201 } }))
+      .mockResolvedValueOnce(jsonResponse({ data: [last], meta: { total: 201 } }))
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(fetchTrainingSignInEmployees()).resolves.toEqual([...first, last])
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      '/api/v1/hr/training-sign-in/employees?page=1&page_size=200',
+      '/api/v1/hr/training-sign-in/employees?page=2&page_size=200',
+    ])
+  })
+
+  it('downloads the APP14 workbook for the current training plan', async () => {
+    const mediaType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    const fetchMock = vi.fn().mockResolvedValue(new Response('workbook', {
+      headers: { 'content-type': mediaType },
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const workbook = await exportPositionTrainingConfirmation('plan-1')
+
+    expect(workbook.type).toBe(mediaType)
+    await expect(workbook.text()).resolves.toBe('workbook')
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/v1/hr/new-employee-training/plans/plan-1/export-confirmation',
+      { cache: 'no-store' },
+    )
   })
 
   it('downloads onboarding attachment content as blob', async () => {

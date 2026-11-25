@@ -4,6 +4,7 @@ import logging
 from datetime import date, timedelta
 from io import BytesIO
 from typing import Any
+from urllib.parse import quote
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
@@ -15,7 +16,9 @@ from app.core.deps import CurrentUser
 from app.core.exceptions import AppException, NotFoundException
 from app.core.response import paginated_response, success_response
 from app.modules.hr.new_employee_training_service import NewEmployeeTrainingService
+from app.modules.hr.repository import EmployeeRepository
 from app.modules.hr.schemas import (
+    NewEmployeeTrainingEmployeeCandidate,
     NewEmployeeTrainingItemAdd,
     NewEmployeeTrainingManualAdd,
     NewEmployeeTrainingPlanGenerate,
@@ -23,6 +26,8 @@ from app.modules.hr.schemas import (
     NewEmployeeTrainingStartRequest,
     NewEmployeeTrainingStartResponse,
 )
+from app.platform.identity.data_scope import resolve_user_department_scope
+from app.shared.schemas import ApiResponseEnvelope
 
 logger = logging.getLogger(__name__)
 
@@ -129,13 +134,16 @@ async def manual_add_plan(
     员工在档案中时自动带出档案信息（入职日期以档案为准）；
     不在档案时按前端传入值创建。
     """
-    user_id = _require_user(current_user)
+    _require_user(current_user)
+    assert current_user is not None
+    employee_scope = await resolve_user_department_scope(db, current_user)
     plan = await service.create_manual_plan(
         name=body.name,
         department=body.department,
         position=body.position,
         hire_date=body.hire_date,
-        user_id=user_id,
+        user_id=current_user.id,
+        employee_scope=employee_scope,
         sub_department=body.sub_department,
         training_position=body.training_position,
         employee_id=body.employee_id,
@@ -146,6 +154,27 @@ async def manual_add_plan(
         message="培训计划已生成"
         if resp and resp["items"]
         else "已生成培训计划（该岗位暂无岗位培训清单，可手动添加教材）",
+    )
+
+
+@router.get(
+    "/employee-candidates",
+    summary="按姓名匹配新员工培训档案",
+    response_model=ApiResponseEnvelope[list[NewEmployeeTrainingEmployeeCandidate]],
+)
+async def list_employee_candidates(
+    name: str = Query(..., min_length=1, max_length=64),
+    db: AsyncSession = Depends(get_db),
+    current_user: CurrentUser = None,
+) -> ApiResponseEnvelope[list[NewEmployeeTrainingEmployeeCandidate]]:
+    _require_user(current_user)
+    assert current_user is not None
+    scope = await resolve_user_department_scope(db, current_user)
+    employees = await EmployeeRepository(db).find_training_employees(
+        [name.strip()], scope, limit=100
+    )
+    return ApiResponseEnvelope(
+        data=[NewEmployeeTrainingEmployeeCandidate.model_validate(e) for e in employees]
     )
 
 
@@ -297,8 +326,11 @@ async def export_confirmation(
         f"岗位培训确认表_{plan_data['employee_name']}_"
         f"{plan_data['employee_number'] or 'nonumber'}.xlsx"
     )
+    encoded_filename = quote(filename, safe="")
     return StreamingResponse(
         _iterfile(),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"
+        },
     )

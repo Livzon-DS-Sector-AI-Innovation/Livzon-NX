@@ -1,18 +1,21 @@
 """Administration module ORM models.
 
-行政管理模块当前承载「烟酒礼品管理」的飞书只读镜像：
+行政管理模块承载「烟酒礼品管理」的飞书只读镜像与「公告通知」原生台账：
 
 - ``administration.feishu_configs``：行政模块飞书应用凭证（secret 加密存储）。
 - ``administration.feishu_read_*``：通用只读镜像六表（入口/数据表/字段/记录/
   页面绑定/同步运行），由平台层 ``ModuleFeishuReadMirrorService`` 读写。
+- ``administration.notices``：公告台账（AI 识别元数据入账；公告内容与原文
+  仅 operate 权限可读，列表/详情响应永不包含内容字段）。
 """
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 from sqlalchemy import (
     Boolean,
+    Date,
     DateTime,
     Index,
     Integer,
@@ -283,4 +286,54 @@ class AdministrationFeishuReadSyncRun(BaseModel):
     )
     completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
+    )
+
+
+class AdministrationNotice(BaseModel):
+    """公告台账。
+
+    台账元数据（编号/标题/发布单位/日期/类别/备注）对有页面权限者可见；
+    ``content`` 与原文存档仅经 operate 绑定的专用端点下发，列表与详情
+    响应永不包含内容字段。``search_text`` 只拼元数据，避免关键字搜索
+    泄露内容线索。
+    """
+
+    __tablename__ = "notices"
+    __table_args__ = (
+        Index("ix_administration_notices_published_at", "published_at"),
+        Index("ix_administration_notices_category", "category"),
+        {"schema": "administration"},
+    )
+
+    notice_no: Mapped[str] = mapped_column(
+        String(100), nullable=False, default="", server_default=""
+    )
+    title: Mapped[str] = mapped_column(
+        String(255), nullable=False, default="", server_default=""
+    )
+    publisher: Mapped[str] = mapped_column(
+        String(255), nullable=False, default="", server_default=""
+    )
+    published_at: Mapped[date | None] = mapped_column(Date, nullable=True)
+    category: Mapped[str] = mapped_column(
+        String(50), nullable=False, default="", server_default=""
+    )
+    content: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default=""
+    )
+    remark: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source_file_name: Mapped[str] = mapped_column(
+        String(255), nullable=False, default="", server_default=""
+    )
+    source_storage_key: Mapped[str] = mapped_column(
+        String(500), nullable=False, default="", server_default=""
+    )
+    source_content_type: Mapped[str] = mapped_column(
+        String(100), nullable=False, default="", server_default=""
+    )
+    source_size_bytes: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    search_text: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default=""
     )

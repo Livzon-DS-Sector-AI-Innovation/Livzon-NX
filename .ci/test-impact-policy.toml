@@ -1,6 +1,9 @@
 version = 1
 production_roots = [
   "scripts/cd/",
+  "scripts/deploy-production.ps1",
+  "scripts/deploy-production-remote.sh",
+  "scripts/poseidon-executor.py",
   "dazah-backend/app/",
   "dazah-backend/alembic/",
   "dazah-frontend/src/",
@@ -23,6 +26,8 @@ production_roots = [
 ]
 production_include = [
   "^scripts/cd/.*\\.py$",
+  "^scripts/deploy-production\\.ps1$",
+  "^scripts/(deploy-production-remote\\.sh|poseidon-executor\\.py)$",
   "^dazah-backend/app/.*\\.py$",
   "^dazah-backend/alembic/.*\\.py$",
   "^dazah-frontend/src/.*\\.(ts|tsx)$",
@@ -37,6 +42,18 @@ ignore = [
   "\\.pyc$",
   "^Hermes-Lite/scripts/ci\\.sh$",
 ]
+
+[[rules]]
+id = "production-release-package"
+description = "生产发布包的内容变化必须验证制品交付"
+source = "^scripts/deploy-production\\.ps1$"
+tests = ["^scripts/tests/test_production_image_package\\.py$"]
+
+[[rules]]
+id = "project-release-executor"
+description = "项目部署入口和标准执行器必须验证版本和共享锁边界"
+source = "^scripts/(deploy-production-remote\\.sh|poseidon-executor\\.py)$"
+tests = ["^scripts/tests/test_(poseidon_executor|production_proxy_deployment)\\.py$"]
 
 [[rules]]
 id = "cd-controller"

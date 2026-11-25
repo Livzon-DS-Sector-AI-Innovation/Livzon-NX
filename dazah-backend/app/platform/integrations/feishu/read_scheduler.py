@@ -1,12 +1,16 @@
 """Daily schedulers for quality read-only Feishu mirrors."""
 
+import logging
+import time
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import Settings
 from app.core.llm.encryption import decrypt_api_key
 from app.core.secrets import decrypt_secret
 from app.modules.production.models import (
@@ -31,7 +35,14 @@ from app.platform.integrations.feishu.read_mirror import (
     ModuleFeishuReadMirrorService,
     ReadMirrorModels,
 )
-from app.platform.scheduler import ScheduleConfig, ScheduleStrategy, TaskGenerator
+from app.platform.scheduler import (
+    ScheduleConfig,
+    SchedulerRegistry,
+    ScheduleStrategy,
+    TaskGenerator,
+)
+
+logger = logging.getLogger(__name__)
 
 QUALITY_MODELS = ReadMirrorModels(
     root=QualityFeishuReadSourceRoot,
@@ -40,6 +51,7 @@ QUALITY_MODELS = ReadMirrorModels(
     record=QualityFeishuReadRecord,
     binding=QualityFeishuReadPageBinding,
     sync_run=QualityFeishuReadSyncRun,
+    fence_sync_runs=True,
 )
 
 PRODUCTION_MODELS = ReadMirrorModels(
@@ -102,7 +114,20 @@ class QualityFeishuReadDailySyncGenerator(_DailyReadMirrorGenerator):
     name = "quality.feishu_read_daily_sync"
     resource_model = QualityFeishuReadResource
 
-    async def execute_one(self, session: Any, item: Any) -> None:
+    async def execute_one(self, session: AsyncSession, item: str) -> None:
+        resource_id = UUID(str(item))
+        started = time.monotonic()
+        try:
+            await self._sync_due(session, resource_id)
+        except Exception as exc:
+            await session.rollback()
+            # The Redis/Feishu exception may contain connection or source details.
+            raise RuntimeError(
+                f"Quality mirror {resource_id} sync failed ({type(exc).__name__}, "
+                f"{time.monotonic() - started:.2f}s)"
+            ) from None
+
+    async def _sync_due(self, session: AsyncSession, resource_id: UUID) -> None:
         config = await session.scalar(
             select(QualityFeishuAppSettings)
             .where(
@@ -111,8 +136,12 @@ class QualityFeishuReadDailySyncGenerator(_DailyReadMirrorGenerator):
             )
             .order_by(QualityFeishuAppSettings.updated_at.desc())
         )
-        if config is None or not config.app_secret:
+        if config is None or not config.app_id or not config.app_secret:
+            logger.warning(
+                "Quality mirror %s skipped: app configuration missing", resource_id
+            )
             return
+        started = time.monotonic()
         service = ModuleFeishuReadMirrorService(
             session,
             module_code="quality",
@@ -120,4 +149,19 @@ class QualityFeishuReadDailySyncGenerator(_DailyReadMirrorGenerator):
             app_secret=decrypt_api_key(config.app_secret),
             models=QUALITY_MODELS,
         )
-        await service.sync_resource(UUID(str(item)))
+        result = await service.sync_due_resource(resource_id, datetime.now(UTC).date())
+        if result is not None:
+            logger.info(
+                "Quality mirror %s completed (records=%s, elapsed=%.2fs)",
+                resource_id,
+                result["record_count"],
+                time.monotonic() - started,
+            )
+
+
+def register_quality_read_mirror(
+    registry: SchedulerRegistry, settings: Settings, *, owner: Literal["api", "worker"]
+) -> None:
+    if settings.QUALITY_READ_MIRROR_SCHEDULER == owner:
+        registry.register_generator(QualityFeishuReadDailySyncGenerator())
+        logger.info("Quality read mirror scheduler registered (owner=%s)", owner)

@@ -242,6 +242,27 @@
   }
 }
 
+@media (max-width: 575px) {
+  .container .summary {
+    display: block;
+  }
+
+  .container .summaryLabel {
+    white-space: nowrap;
+  }
+
+  .container .name {
+    display: inline-block;
+    max-inline-size: 100%;
+  }
+
+  .container .notice:global(.ant-alert) :global(.ant-alert-actions) {
+    flex: 1 1 100%;
+    width: auto;
+    min-inline-size: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .notice:global(.ant-alert) {
     animation: none;

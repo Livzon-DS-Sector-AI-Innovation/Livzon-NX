@@ -1,4 +1,4 @@
-"""印章管理/废旧物资页四处登记守护：lifecycle/菜单种子/路由目录/page_policy 一致。"""
+"""行政镜像页登记守护：印章/废旧物资/宿舍管理四处登记一致。"""
 
 import json
 from pathlib import Path
@@ -7,6 +7,7 @@ BACKEND_ROOT = Path(__file__).resolve().parents[3]
 PAGES = {
     "admin:seals": "/admin/seals",
     "admin:scrap-materials": "/admin/scrap-materials",
+    "admin:dormitory": "/admin/dormitory",
 }
 
 
@@ -23,8 +24,10 @@ def test_lifecycle_registers_mirror_pages():
         assert entry["route_path"] == route
         assert entry["module_code"] == "administration"
         assert entry["status"] == "active"
-        # 只读镜像页无高风险动作
-        assert entry["actions"] == {}
+        # 只读镜像页无破坏性动作；台账导出属敏感导出（数据离开系统）
+        assert entry["actions"] == {
+            "sensitive_export": {"status": "active", "category": "sensitive_export"}
+        }
 
 
 def test_menu_seed_includes_mirror_pages():
@@ -36,7 +39,11 @@ def test_menu_seed_includes_mirror_pages():
             yield from _walk(node.get("children") or [])
 
     flat = [n for n in _walk(_LEGACY_SEED_MENUS)]
-    for key, name in (("seals", "印章管理"), ("scrap-materials", "废旧物资")):
+    for key, name in (
+        ("seals", "印章管理"),
+        ("scrap-materials", "废旧物资"),
+        ("dormitory", "宿舍管理"),
+    ):
         matched = [n for n in flat if n.get("key") == key]
         assert matched, f"菜单种子缺 {name} 项"
         assert matched[0].get("path") == PAGES[f"admin:{key}"]

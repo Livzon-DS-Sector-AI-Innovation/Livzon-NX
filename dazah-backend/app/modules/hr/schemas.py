@@ -1,10 +1,10 @@
 """HR business request and response schemas live here."""
 
 from datetime import date, datetime
-from typing import Any, Literal
+from typing import Any, Literal, Self
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 # ─── Department-level Approval Config Schemas ───
 
@@ -1404,13 +1404,31 @@ class TrainingConflictCheckRequest(BaseModel):
     """培训时间冲突检测请求."""
 
     training_date: date = Field(..., description="培训日期")
-    time_start: str = Field(..., max_length=8, description="开始时间 HH:MM")
-    time_end: str = Field(..., max_length=8, description="结束时间 HH:MM")
+    time_start: str = Field(
+        ..., pattern=r"^(?:[01][0-9]|2[0-3]):[0-5][0-9]$", description="开始时间 HH:MM"
+    )
+    time_end: str = Field(
+        ..., pattern=r"^(?:[01][0-9]|2[0-3]):[0-5][0-9]$", description="结束时间 HH:MM"
+    )
     instructor: str | None = Field(None, description="授课人")
     trainees: list[str] = Field(default_factory=list, description="参训人员姓名列表")
-    exclude_session_id: str | None = Field(
+    exclude_session_id: UUID | None = Field(
         None, description="排除的会话ID（编辑时排除自身）"
     )
+
+    @model_validator(mode="after")
+    def validate_time_order(self) -> Self:
+        if self.time_start >= self.time_end:
+            raise ValueError("培训结束时间必须晚于开始时间")
+        return self
+
+
+class TrainingSignInEmployee(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    name: str
+    department: str
+    sub_department: str | None
 
 
 class InstructorConflictItem(BaseModel):
@@ -1982,6 +2000,11 @@ class PracticalExamPersonItem(BaseModel):
     name: str = Field(..., description="姓名")
     department: str | None = Field(None, description="部门")
     description: str | None = Field(None, description="实操考核情况描述")
+
+
+class PracticalExamImportResult(BaseModel):
+    description: str
+    training_date: str
 
 
 class PracticalExamExportRequest(BaseModel):
@@ -2856,6 +2879,18 @@ class NewEmployeeTrainingPlanGenerate(BaseModel):
     training_position: str | None = Field(
         None, max_length=128, description="培训岗位（可选，优先使用映射）"
     )
+
+
+class NewEmployeeTrainingEmployeeCandidate(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    name: str
+    department: str
+    sub_department: str | None
+    position: str | None
+    hire_date: date
+    employee_number: str | None
 
 
 class NewEmployeeTrainingManualAdd(BaseModel):

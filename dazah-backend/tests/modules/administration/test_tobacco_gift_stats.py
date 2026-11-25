@@ -206,25 +206,29 @@ def test_extract_inventory_matches_dashboard_definitions() -> None:
 
 def test_extract_requisitions_excludes_void_and_counts_received_only() -> None:
     stock = _extract_inventory(_inventory_table())
-    usage = _extract_requisitions(
-        _requisition_table(), stock.name_by_record, inventory_available=True
-    )
+    usage = _extract_requisitions(_requisition_table(), stock.name_by_record)
     # 已领用物品总数只计状态为「已领用」的单：2 + 3
     assert usage.received_total == 5
     # 作废单（茅台 50）不计；未作废单不论审批状态都计入领取分析
     assert usage.quantity_by_item["茅台"] == 4
     assert usage.quantity_by_item["中华"] == 4
     assert usage.quantity_by_item["五粮液"] == 2
-    # 关联到已删除物品的记录合并为一根「已删除物品」柱子，不露出原始 record_id
-    assert usage.quantity_by_item["已删除物品"] == 7
-    # 员工维度按申请人
+    # 悬空关联（物品已删且无名称）不进按物品的图表，不编造标签
+    assert not any("已删除" in name for name in usage.quantity_by_item)
+    assert not any(name.startswith("物品·") for name in usage.quantity_by_item)
+    # 但数量仍计入已领用总数与员工统计（真实领用发生）
+    assert usage.received_total == 5
     assert usage.quantity_by_employee == {"张三": 5, "李四": 11, "王五": 1}
 
 
-def test_unresolved_items_are_not_called_deleted_without_inventory() -> None:
-    usage = _extract_requisitions(_requisition_table(), {}, inventory_available=False)
-    assert "物品·ec-wly" in usage.quantity_by_item
+def test_unresolved_items_are_skipped_from_item_charts() -> None:
+    # 名称映射为空（物品清单未镜像）：全部关联不可解析，不进按物品的图表
+    usage = _extract_requisitions(_requisition_table(), {})
+    assert usage.quantity_by_item == {}
     assert not any(name.startswith("已删除") for name in usage.quantity_by_item)
+    assert not any(name.startswith("物品·") for name in usage.quantity_by_item)
+    # 数量本身仍计入已领用总数（真实领用发生）
+    assert usage.received_total == 5
 
 
 # ---------- 仪表台服务（mock 仓库） ----------
@@ -314,7 +318,9 @@ async def test_decorate_records_replaces_link_ids_with_names(
                 "fields": {
                     "领用物品（一）": {"link_record_ids": ["rec-wly"]},
                     "领用物品（二）": {"link_record_ids": []},
-                    "领用物品（三）": {"link_record_ids": ["rec-gone"]},
+                    # 飞书对空关联常返回裸空字典，同样要装饰为空串
+                    "领用物品（三）": {},
+                    "领用物品（四）": {"link_record_ids": ["rec-gone"]},
                     "领用数量（一）": 2,
                 },
             },
@@ -325,7 +331,9 @@ async def test_decorate_records_replaces_link_ids_with_names(
     fields = decorated["records"][0]["fields"]
     assert fields["领用物品（一）"] == "五粮液"
     assert fields["领用物品（二）"] == ""
-    assert fields["领用物品（三）"] == "已删除物品"
+    assert fields["领用物品（三）"] == ""
+    # 悬空关联（物品已删）与空关联一样显示空串（前端渲染为 "-"），不编造名称
+    assert fields["领用物品（四）"] == ""
     assert fields["领用数量（一）"] == 2
     assert decorated["records"][1]["fields"] == {}
 

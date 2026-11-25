@@ -26,6 +26,7 @@ MERGE_HEAD = "b098d78d072c"
 PERSONS_COLUMN_REVISION = "db1d4d7f5632"
 MERGE_WITH_MAIN = "698173f2428c"
 REPAIR_TABLES_REVISION = "8910770ab796"
+MERGE_PERSONS_AND_NOTICES = "c7e3a1b9d5f2"
 
 
 def _load(file_name: str):
@@ -171,13 +172,18 @@ def test_migration_history_has_the_merge_as_its_single_head():
     config.set_main_option("script_location", str(_backend_root() / "alembic"))
     script = ScriptDirectory.from_config(config)
 
-    assert script.get_heads() == [PERSONS_COLUMN_REVISION]
+    # persons 迁移（db1d4d7f5632）与主线公告迁移（b6d8a2e4c9f1）并行开发，
+    # 由合并版本 c7e3a1b9d5f2 收口为唯一 head
+    assert script.get_heads() == [MERGE_PERSONS_AND_NOTICES]
     revisions = {revision.revision for revision in script.walk_revisions()}
     assert {
         REPAIR_TABLES_REVISION,
         MERGE_WITH_MAIN,
         MERGE_HEAD,
+        PERSONS_COLUMN_REVISION,
         "b4f2c8d1e3a5",
+        "b6d8a2e4c9f1",
+        MERGE_PERSONS_AND_NOTICES,
     } <= revisions
 
 

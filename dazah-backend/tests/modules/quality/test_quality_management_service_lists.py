@@ -1847,6 +1847,7 @@ async def test_create_deviation_fails_when_feishu_code_source_unavailable(
 
 
 @pytest.mark.anyio
+@pytest.mark.usefixtures("uncached_validation_ledger")
 async def test_list_validation_records_from_feishu_applies_page_filters(
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,

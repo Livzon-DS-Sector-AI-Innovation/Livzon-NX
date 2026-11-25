@@ -26,6 +26,19 @@ warnings.filterwarnings(
 )
 
 
+@pytest.fixture
+def uncached_validation_ledger(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep mocked Feishu results scoped to the test that supplies them."""
+    from app.modules.quality.service import quality_feishu_pages
+
+    async def load_current_ledger(_key, load, **_kwargs):
+        return (await load()).value
+
+    monkeypatch.setattr(
+        quality_feishu_pages._validation_list_cache, "get_or_load", load_current_ledger
+    )
+
+
 @pytest.fixture(autouse=True)
 def _grant_quality_permissions(monkeypatch: pytest.MonkeyPatch) -> None:
     """质量端点内精校验依赖 resolve_user_permissions；测试用户视为通配权限。

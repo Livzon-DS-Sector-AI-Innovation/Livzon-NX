@@ -39,6 +39,7 @@ def test_convert_word_attachment_text_extracts_docx(monkeypatch) -> None:
 def test_public_api_exports_surface() -> None:
     assert set(public_api.__all__) == {
         "convert_word_attachment_text",
+        "office_content_to_pdf",
         "get_module_feishu_app_credentials",
         "get_qa_reminder_recipients",
     }

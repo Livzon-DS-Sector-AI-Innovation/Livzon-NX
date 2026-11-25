@@ -1,7 +1,8 @@
 'use client'
 
 import { UserOutlined, SettingOutlined } from '@ant-design/icons'
-import { Avatar, Button, Card, Checkbox, Drawer, Dropdown, Empty, Image, Input, Select, Space, Table, Tabs, Typography } from 'antd'
+import { PlusOutlined } from '@ant-design/icons'
+import { Avatar, Button, Card, Checkbox, Drawer, Dropdown, Empty, Image, Input, Select, Space, Table, Tabs, Typography, message } from 'antd'
 import Alert from '@/components/shared/PlatformNotice'
 import type { ColumnsType as AntColumnsType } from 'antd/es/table'
 import { useQuery, QueryClient, QueryClientProvider } from '@tanstack/react-query'
@@ -12,9 +13,11 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   fetchMappedPageData,
   fetchMappedPageDataset,
+  fetchMappedPageExport,
   fetchPersonAvatars,
   mappedAttachmentUrl,
 } from '@/lib/api/mapped-feishu'
+import { getUserErrorMessage } from '@/lib/user-error'
 import type {
   WarehouseDataset,
   WarehouseDatasetRecord,
@@ -33,6 +36,15 @@ interface MappedDatasetPageProps {
   enablePersonAvatars?: boolean
   /** 按字段名在表格中隐藏（详情抽屉仍完整展示）。 */
   hiddenFieldNames?: string[]
+  /** 开启台账导出（Excel/PDF，按当前筛选/排序导出全量，含图片与头像）。 */
+  enableExport?: boolean
+  /**
+   * 指定页签的默认排序（用户未手动选排序时生效）。表格无日期字段时
+   * 平台不会自动排序，用这个 prop 指定按业务字段（如房间编号）升序。
+   */
+  defaultSort?: { tabName: string; fieldName: string; direction: 'asc' | 'desc' }
+  /** 按页签联动的新增入口：激活匹配页签时显示对应按钮（新窗口打开表单）。 */
+  createForms?: Array<{ tabLabel: string; label: string; url: string }>
 }
 
 interface PersonItem {
@@ -310,6 +322,9 @@ function MappedDatasetPageContent({
   initialPageData,
   enablePersonAvatars = false,
   hiddenFieldNames,
+  enableExport = false,
+  defaultSort,
+  createForms,
 }: MappedDatasetPageProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -319,11 +334,23 @@ function MappedDatasetPageContent({
   const [pageSize, setPageSize] = useState(Number(searchParams.get('page_size') || 50))
   const [visibleFieldsByBinding, setVisibleFieldsByBinding] = useState<Record<string, string[]>>({})
   const [detail, setDetail] = useState<DetailValue>(null)
-  const [filterFieldId, setFilterFieldId] = useState<string>()
-  const [filterOperator, setFilterOperator] = useState('contains')
-  const [filterValue, setFilterValue] = useState('')
+  const [filters, setFilters] = useState<
+    Array<{ field_id: string; operator: string; value: string }>
+  >([])
   const [sortFieldId, setSortFieldId] = useState<string>()
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
+  const [exporting, setExporting] = useState<'xlsx' | 'pdf' | null>(null)
+
+  const activeFilters = useMemo(
+    () =>
+      filters.filter(
+        (item) => item.field_id && item.value.trim(),
+      ) as Array<{ field_id: string; operator: string; value: string }>,
+    [filters],
+  )
+  const filtersKey = activeFilters
+    .map((item) => `${item.field_id}:${item.operator}:${item.value}`)
+    .join('|')
 
   const initialBindingVersion = (initialPageData?.bindings || [])
     .map((item) => item.id)
@@ -335,10 +362,26 @@ function MappedDatasetPageContent({
   })
   const bindings = pageQuery.data?.bindings || []
   const defaultBinding = bindings.find((item) => item.is_default) || bindings[0]
+  // 页签切换由本组件 state 直接驱动：router.replace 后 useSearchParams 不保证
+  // 立即重渲染（URL 仍同步写入，供刷新/分享直达），避免点击页签后界面不切换。
+  const [activeBindingOverride, setActiveBindingOverride] = useState<string | null>(null)
   const activeBinding =
-    bindings.find((item) => item.id === requestedBinding) || defaultBinding
+    bindings.find(
+      (item) => item.id === (activeBindingOverride ?? requestedBinding),
+    ) || defaultBinding
 
   const activeBindingId = activeBinding?.id
+  const bindingTabName = activeBinding?.tab_label
+  /** 默认排序只在指定页签、且用户未手动选排序时生效（按字段名传给后端）。 */
+  const defaultSortActive = Boolean(
+    defaultSort && bindingTabName === defaultSort.tabName && !sortFieldId,
+  )
+  const effectiveSortFieldId = sortFieldId || (defaultSortActive && defaultSort ? defaultSort.fieldName : undefined)
+  const effectiveSortDirection: 'asc' | 'desc' = sortFieldId
+    ? sortDirection
+    : defaultSortActive && defaultSort
+      ? defaultSort.direction
+      : 'desc'
 
   // 显式类型注解：queryKey 依赖下方派生的 autoSortField（来自本 query 的字段快照），
   // 会形成推断循环，注解后即为两段式（先取字段再按日期倒序重取）。
@@ -351,11 +394,10 @@ function MappedDatasetPageContent({
       keyword,
       page,
       pageSize,
-      filterFieldId,
-      filterOperator,
-      filterValue,
+      filtersKey,
       sortFieldId,
       sortDirection,
+      defaultSortActive,
     ],
     enabled: Boolean(activeBinding?.id),
     queryFn: () =>
@@ -363,9 +405,9 @@ function MappedDatasetPageContent({
         keyword: keyword || undefined,
         page,
         page_size: pageSize,
-        filters: filterFieldId && filterValue ? [{ field_id: filterFieldId, operator: filterOperator, value: filterValue }] : undefined,
-        sort_field: sortFieldId || undefined,
-        sort_direction: sortFieldId ? sortDirection : 'desc',
+        filters: activeFilters.length ? activeFilters : undefined,
+        sort_field: effectiveSortFieldId || undefined,
+        sort_direction: effectiveSortFieldId ? effectiveSortDirection : 'desc',
       }),
   })
 
@@ -374,9 +416,22 @@ function MappedDatasetPageContent({
     () => fields.find((field) => DATE_FIELD_TYPES.has(fieldTypeId(field))),
     [fields],
   )
-  // 未手动选排序时按日期字段倒序（最新在最上面）。字段快照来自主查询，
+  // 排序控件展示用：默认排序按字段名下发，控件需要映射回字段 id 才能显示为选中态。
+  const sortSelectValue = useMemo(() => {
+    if (sortFieldId) return sortFieldId
+    if (defaultSortActive && defaultSort) {
+      return (
+        fields.find((field) => field.field_name === defaultSort.fieldName)?.field_id ??
+        defaultSort.fieldName
+      )
+    }
+    return undefined
+  }, [sortFieldId, defaultSortActive, defaultSort, fields])
+  // 未手动选排序且无默认排序时按日期字段倒序（最新在最上面）。字段快照来自主查询，
   // 排序结果由第二个查询补取：结果就绪则优先展示，未就绪回退主查询数据。
-  const needsDateSort = Boolean(!sortFieldId && activeBindingId && dateField)
+  const needsDateSort = Boolean(
+    !sortFieldId && !defaultSortActive && activeBindingId && dateField,
+  )
   const sortedQuery: UseQueryResult<WarehouseDataset, Error> = useQuery({
     queryKey: [
       'mapped-page-dataset-sorted',
@@ -386,9 +441,7 @@ function MappedDatasetPageContent({
       keyword,
       page,
       pageSize,
-      filterFieldId,
-      filterOperator,
-      filterValue,
+      filtersKey,
       dateField?.field_id,
     ],
     enabled: needsDateSort,
@@ -397,7 +450,7 @@ function MappedDatasetPageContent({
         keyword: keyword || undefined,
         page,
         page_size: pageSize,
-        filters: filterFieldId && filterValue ? [{ field_id: filterFieldId, operator: filterOperator, value: filterValue }] : undefined,
+        filters: activeFilters.length ? activeFilters : undefined,
         sort_field: dateField!.field_id,
         sort_direction: 'desc',
       }),
@@ -529,7 +582,35 @@ function MappedDatasetPageContent({
     next.set('dataset', bindingId)
     next.delete('page')
     setPage(1)
+    setFilters([])
+    setActiveBindingOverride(bindingId)
     router.replace(`?${next.toString()}`)
+  }
+
+  const runExport = (format: 'xlsx' | 'pdf') => {
+    if (!activeBinding) return
+    setExporting(format)
+    fetchMappedPageExport(moduleCode, pageKey, activeBinding.id, {
+      format,
+      columns: displayFields.map((field) => field.field_id),
+      filters: activeFilters,
+      sort_field: effectiveSortFieldId || dateField?.field_id,
+      sort_direction: effectiveSortFieldId ? effectiveSortDirection : 'desc',
+    })
+      .then(async (blob) => {
+        const url = URL.createObjectURL(blob)
+        const anchor = document.createElement('a')
+        anchor.href = url
+        anchor.download = `${title}-${new Date().toISOString().slice(0, 10)}.${format}`
+        document.body.appendChild(anchor)
+        anchor.click()
+        anchor.remove()
+        URL.revokeObjectURL(url)
+      })
+      .catch((error: unknown) => {
+        message.error(getUserErrorMessage(error, '导出失败，请稍后重试'))
+      })
+      .finally(() => setExporting(null))
   }
 
   if (pageQuery.isError) {
@@ -556,45 +637,86 @@ function MappedDatasetPageContent({
             }}
             style={{ width: 280 }}
           />
-          {enableAdvancedQuery ? <Select
-            allowClear
-            placeholder="筛选字段"
-            value={filterFieldId}
-            options={fields.map((item) => ({ label: item.field_name, value: item.field_id }))}
-            onChange={(value) => { setFilterFieldId(value); setPage(1) }}
-            style={{ width: 150 }}
-          /> : null}
-          {enableAdvancedQuery ? <Select
-            value={filterOperator}
-            onChange={(value) => { setFilterOperator(value); setPage(1) }}
-            options={[
-              { label: '包含', value: 'contains' },
-              { label: '等于', value: 'eq' },
-              { label: '不等于', value: 'ne' },
-              { label: '大于', value: 'gt' },
-              { label: '大于等于', value: 'gte' },
-              { label: '小于', value: 'lt' },
-              { label: '小于等于', value: 'lte' },
-            ]}
-            style={{ width: 110 }}
-          /> : null}
-          {enableAdvancedQuery ? <Input
-            allowClear
-            placeholder="筛选值"
-            value={filterValue}
-            onChange={(event) => { setFilterValue(event.target.value); setPage(1) }}
-            style={{ width: 150 }}
-          /> : null}
+          {enableAdvancedQuery ? <Dropdown
+            trigger={['click']}
+            dropdownRender={() => (
+              <Card size="small" title="多条件筛选（同时满足）" className="w-[560px]">
+                <div className="flex flex-col gap-2">
+                  {filters.map((filter, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      <Select
+                        placeholder="筛选字段"
+                        value={filter.field_id || undefined}
+                        options={fields.map((item) => ({ label: item.field_name, value: item.field_id }))}
+                        onChange={(value) => {
+                          setFilters((current) => current.map((item, i) => (i === index ? { ...item, field_id: String(value) } : item)))
+                          setPage(1)
+                        }}
+                        style={{ width: 170 }}
+                      />
+                      <Select
+                        value={filter.operator}
+                        options={[
+                          { label: '包含', value: 'contains' },
+                          { label: '等于', value: 'eq' },
+                          { label: '不等于', value: 'ne' },
+                          { label: '大于', value: 'gt' },
+                          { label: '大于等于', value: 'gte' },
+                          { label: '小于', value: 'lt' },
+                          { label: '小于等于', value: 'lte' },
+                        ]}
+                        onChange={(value) => {
+                          setFilters((current) => current.map((item, i) => (i === index ? { ...item, operator: String(value) } : item)))
+                          setPage(1)
+                        }}
+                        style={{ width: 104 }}
+                      />
+                      <Input
+                        allowClear
+                        placeholder="筛选值"
+                        value={filter.value}
+                        onChange={(event) => {
+                          setFilters((current) => current.map((item, i) => (i === index ? { ...item, value: event.target.value } : item)))
+                          setPage(1)
+                        }}
+                        style={{ width: 150 }}
+                      />
+                      <Button
+                        type="text"
+                        danger
+                        onClick={() => {
+                          setFilters((current) => current.filter((_, i) => i !== index))
+                          setPage(1)
+                        }}
+                      >
+                        删除
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    type="dashed"
+                    onClick={() => setFilters((current) => [...current, { field_id: '', operator: 'contains', value: '' }])}
+                  >
+                    添加条件
+                  </Button>
+                </div>
+              </Card>
+            )}
+          >
+            <Button>
+              筛选{activeFilters.length ? `（${activeFilters.length}）` : ''}
+            </Button>
+          </Dropdown> : null}
           {enableAdvancedQuery ? <Select
             allowClear
             placeholder="排序字段"
-            value={sortFieldId}
+            value={sortSelectValue}
             options={fields.map((item) => ({ label: item.field_name, value: item.field_id }))}
             onChange={(value) => { setSortFieldId(value); setPage(1) }}
             style={{ width: 150 }}
           /> : null}
           {enableAdvancedQuery ? <Select
-            value={sortDirection}
+            value={effectiveSortDirection}
             onChange={(value) => { setSortDirection(value); setPage(1) }}
             options={[{ label: '升序', value: 'asc' }, { label: '降序', value: 'desc' }]}
             style={{ width: 90 }}
@@ -623,9 +745,37 @@ function MappedDatasetPageContent({
           >
             <Button icon={<SettingOutlined />}>列设置</Button>
           </Dropdown>
+          {(createForms || [])
+            .filter((item) => item.tabLabel === (activeBinding?.tab_label || ''))
+            .map((item) => (
+              <Button
+                key={item.url}
+                type="primary"
+                icon={<PlusOutlined />}
+                href={item.url}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {item.label}
+              </Button>
+            ))}
           <Button onClick={() => activeQuery.refetch()} loading={activeQuery.isFetching}>
             刷新本地数据
           </Button>
+          {enableExport && activeBinding ? <>
+            <Button
+              loading={exporting === 'xlsx'}
+              onClick={() => runExport('xlsx')}
+            >
+              导出 Excel
+            </Button>
+            <Button
+              loading={exporting === 'pdf'}
+              onClick={() => runExport('pdf')}
+            >
+              导出 PDF
+            </Button>
+          </> : null}
         </Space> : null}
       </div>
 

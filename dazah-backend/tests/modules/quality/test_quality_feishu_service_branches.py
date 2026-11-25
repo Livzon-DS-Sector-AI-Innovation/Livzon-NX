@@ -171,6 +171,7 @@ async def test_deviation_report_create_update_delete_uses_shared_entity_pipeline
 
 
 @pytest.mark.asyncio
+@pytest.mark.usefixtures("uncached_validation_ledger")
 async def test_validation_listing_handles_missing_base_and_filters_dates(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

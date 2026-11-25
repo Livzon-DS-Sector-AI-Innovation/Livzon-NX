@@ -37,6 +37,7 @@ def test_dependency_readiness_and_cleanup(monkeypatch, failure):
             events.append("redis")
             if failure == "redis":
                 raise RuntimeError("not ready")
+            return True
         async def aclose(self):
             events.append("redis-close")
     for name in ("app", "app.core", "redis"):
@@ -60,3 +61,43 @@ def test_dependency_readiness_and_cleanup(monkeypatch, failure):
         asyncio.run(ready.check())
         assert events[:3] == ["database", "redis", "storage"]
     assert events[-2:] == ["redis-close", "dispose"]
+
+
+@pytest.mark.parametrize("failure", [None, "http", "redis", "false-ping"])
+def test_container_healthcheck_tests_live_app_and_redis(monkeypatch, failure):
+    events = []
+
+    class Redis:
+        @classmethod
+        def from_url(cls, url, **kwargs):
+            assert url == "redis://test"
+            return cls()
+
+        async def ping(self):
+            events.append("redis")
+            if failure == "redis":
+                raise ConnectionError("synthetic disconnect")
+            return failure != "false-ping"
+
+        async def aclose(self):
+            events.append("redis-close")
+
+    monkeypatch.setitem(sys.modules, "redis.asyncio", SimpleNamespace(Redis=Redis))
+    monkeypatch.setitem(
+        sys.modules,
+        "app.core.config",
+        SimpleNamespace(get_settings=lambda: SimpleNamespace(REDIS_URL="redis://test")),
+    )
+
+    def liveness(url, *, timeout):
+        assert url == "http://127.0.0.1:8000/health"
+        assert timeout == 2
+        events.append("http")
+        return nullcontext(SimpleNamespace(status=503 if failure == "http" else 200))
+
+    monkeypatch.setattr(ready, "urlopen", liveness)
+    with pytest.raises((ConnectionError, RuntimeError)) if failure else nullcontext():
+        asyncio.run(ready.check(healthcheck=True))
+    assert events == (
+        ["http", "redis-close"] if failure == "http" else ["http", "redis", "redis-close"]
+    )

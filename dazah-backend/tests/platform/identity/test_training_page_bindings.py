@@ -109,6 +109,42 @@ def test_position_mapping_post_open_to_new_employee_page():
     )
 
 
+def test_training_export_permissions_keep_current_routes():
+    employee = "/api/v1/hr/employees/{employee_id}/"
+    assert api_binding_for_route("GET", employee + "onboarding-training-record") is None
+    assert api_binding_for_route("GET", employee + "prejob-training-plan") is None
+    assert _binding_pages("GET", employee + "onboarding-evaluation") == (
+        PROFILE_PAGE_KEY,
+    )
+
+    confirmation_export = api_binding_for_route(
+        "GET", "/api/v1/hr/new-employee-training/plans/{plan_id}/export-confirmation"
+    )
+    assert confirmation_export is not None
+    assert confirmation_export.page_keys == (NEW_EMPLOYEE_PAGE_KEY,)
+    assert confirmation_export.sensitive_action == "sensitive_export"
+
+
+def test_new_employee_candidate_lookup_is_limited_to_training_page():
+    path = "/api/v1/hr/new-employee-training/employee-candidates"
+    assert _binding_pages("GET", path) == (NEW_EMPLOYEE_PAGE_KEY,)
+    binding = api_binding_for_route("GET", path)
+    assert binding is not None and binding.permission == "operate"
+
+
+def test_training_tools_are_bound_only_to_the_pages_that_use_them():
+    assert _binding_pages(
+        "GET", "/api/v1/hr/position-training-lists/departments/{department}/positions"
+    ) == ("hr:training:position-training", NEW_EMPLOYEE_PAGE_KEY)
+    assert _binding_pages("GET", "/api/v1/hr/training-sign-in/employees") == (
+        SIGN_IN_PAGE_KEY,
+    )
+    assert _binding_pages("POST", "/api/v1/hr/training-ledgers/check-conflict") == (
+        "hr:training:training-ledger",
+        SIGN_IN_PAGE_KEY,
+    )
+
+
 def _app(db, user):
     app = FastAPI()
     app.include_router(

@@ -166,11 +166,36 @@ services:
       minio:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", ".venv/bin/python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).read()"]
+      test: ["CMD", ".venv/bin/python", "-c", "import runpy; runpy.run_path('/opt/dazah-readiness.py', run_name='__main__')", "--healthcheck"]
       interval: 30s
       timeout: 5s
       start_period: 30s
       retries: 5
+    logging: *default-logging
+
+  quality-read-mirror-worker:
+    profiles: ["quality-mirror-worker"]
+    image: dazah/backend:dev
+    command: [".venv/bin/python", "-m", "app.modules.quality.read_mirror_worker"]
+    restart: unless-stopped
+    stop_grace_period: 31m
+    env_file:
+      - ${DAZAH_ENV_FILE:-.env.local}
+    environment:
+      APP_ENV: development
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://postgres:postgres@db:5432/dazah}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+    volumes:
+      - ./dazah-backend/app:/app/app:ro
+      - ./dazah-backend/alembic:/app/alembic:ro
+      - ./dazah-backend/alembic.ini:/app/alembic.ini:ro
+    networks:
+      - backend
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     logging: *default-logging
 
   hermes-lite:

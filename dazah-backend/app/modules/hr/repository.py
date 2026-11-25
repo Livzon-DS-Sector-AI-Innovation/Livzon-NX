@@ -1,6 +1,6 @@
 """HR database queries live here."""
 
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from datetime import date
 from datetime import datetime as dt
 from typing import TYPE_CHECKING, Any, cast
@@ -19,7 +19,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import load_only, selectinload
 from sqlalchemy.sql import Select
 from sqlalchemy.sql.elements import ColumnElement
 
@@ -47,6 +47,7 @@ from app.modules.hr.page_access import (
     employee_department_expression,
     employee_page_scope,
 )
+from app.platform.identity.data_scope import DepartmentScope, department_in_clause
 
 if TYPE_CHECKING:
     from app.modules.hr.models import HrCustomTrainingDepartment, TrainingDeptMapping
@@ -160,6 +161,49 @@ def employee_contract_round(
 class EmployeeRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
+
+    async def find_training_employees(
+        self,
+        names: Collection[str],
+        scope: DepartmentScope,
+        *,
+        employee_id: UUID | None = None,
+        limit: int | None = None,
+    ) -> list[Employee]:
+        if not names or (not scope.is_all and not scope.department_names):
+            return []
+        stmt = select(Employee).where(
+            Employee.name.in_(names), Employee.is_deleted.is_(False)
+        )
+        dept_filter = department_in_clause(employee_department_expression(), scope)
+        if dept_filter is not None:
+            stmt = stmt.where(dept_filter)
+        if employee_id is not None:
+            stmt = stmt.where(Employee.id == employee_id)
+        stmt = stmt.order_by(Employee.created_at.desc(), Employee.id).limit(limit)
+        return list((await self.session.scalars(stmt)).all())
+
+    async def list_training_sign_in_employees(
+        self, scope: DepartmentScope, *, page: int, page_size: int
+    ) -> tuple[list[Employee], int]:
+        conditions = [Employee.is_deleted.is_(False)]
+        dept_filter = department_in_clause(employee_department_expression(), scope)
+        if dept_filter is not None:
+            conditions.append(dept_filter)
+        total = await self.session.scalar(
+            select(func.count()).select_from(Employee).where(*conditions)
+        )
+        stmt = (
+            select(Employee)
+            .options(
+                load_only(Employee.name, Employee.department, Employee.sub_department)
+            )
+            .where(*conditions)
+            .order_by(Employee.name, Employee.id)
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
+        return list((await self.session.scalars(stmt)).all()), total or 0
 
     async def get_by_id(
         self, employee_id: UUID, *, for_update: bool = False
@@ -1503,14 +1547,21 @@ class TrainingLedgerRepository:
         )
         return list(result.scalars().all())
 
-    async def list_by_date(self, training_date: date) -> list[TrainingLedger]:
+    async def list_by_date(
+        self, training_date: date, *, dept_alias_set: set[str] | None = None
+    ) -> list[TrainingLedger]:
         """查询指定日期的所有未删除台账记录."""
-        result = await self.session.execute(
-            select(TrainingLedger).where(
-                TrainingLedger.training_date == training_date,
-                TrainingLedger.is_deleted.is_(False),
-            )
+        stmt = select(TrainingLedger).where(
+            TrainingLedger.training_date == training_date,
+            TrainingLedger.is_deleted.is_(False),
         )
+        if dept_alias_set is not None:
+            stmt = stmt.where(
+                func.coalesce(
+                    TrainingLedger.ledger_department, TrainingLedger.teaching_dept
+                ).in_(dept_alias_set)
+            )
+        result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
     async def create(self, record: TrainingLedger) -> TrainingLedger:

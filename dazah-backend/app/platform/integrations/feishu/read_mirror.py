@@ -2,17 +2,21 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import inspect
 import json
+import logging
 import re
 import uuid
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 
 import httpx
-from sqlalchemy import Numeric, cast, func, select
+from redis.exceptions import RedisError
+from sqlalchemy import Numeric, cast, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppException
@@ -22,8 +26,12 @@ from app.modules.warehouse.feishu_client import (
     parse_feishu_root_token,
 )
 
+logger = logging.getLogger(__name__)
+
+
 #: 数值型镜像字段类型（数字/日期/创建与修改时间），排序时按数值比较。
 _RECORD_NUMERIC_FIELD_TYPES = {2, 5, 1001, 1002}
+_RECORD_FILTER_OPERATORS = frozenset({"contains", "eq", "ne", "gt", "gte", "lt", "lte"})
 
 
 def _record_order_expression(
@@ -32,13 +40,64 @@ def _record_order_expression(
     field_type: int | None,
     direction: str,
 ) -> Any:
-    """镜像记录 raw_fields 字段的排序表达式（JSONB 取文本，数值型按数值比较）。"""
+    """镜像记录 raw_fields 字段的排序表达式（JSONB 取文本，数值型按数值比较）。
+
+    空值统一排最后：升序 nulls_first 会把整页空行顶到最前
+    （员工住宿退宿清单等表存在 raw_fields 为空的记录），与倒序 nulls_last
+    保持对称。
+    """
     text_expr = record_model.raw_fields[field_name].astext
     if field_type in _RECORD_NUMERIC_FIELD_TYPES:
         text_expr = cast(text_expr, Numeric)
     if direction == "asc":
-        return text_expr.asc().nulls_first()
+        return text_expr.asc().nulls_last()
     return text_expr.desc().nulls_last()
+
+
+def _record_filter_expression(
+    record_model: type[Any],
+    field_name: str,
+    field_type: int | None,
+    operator: str,
+    value: str,
+) -> Any:
+    """镜像记录单条件筛选表达式；条件之间由调用方以 AND 组合。"""
+    if operator not in _RECORD_FILTER_OPERATORS:
+        raise AppException(message="不支持的筛选操作符", status_code=400)
+    text_expr = record_model.raw_fields[field_name].astext
+    if operator == "contains":
+        escaped = value.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
+        return text_expr.ilike(f"%{escaped}%")
+    if field_type in _RECORD_NUMERIC_FIELD_TYPES:
+        try:
+            number = float(value)
+        except ValueError as exc:
+            raise AppException(
+                message="该字段为数值或日期类型，筛选值必须是数字", status_code=400
+            ) from exc
+        column_expr = cast(text_expr, Numeric)
+        if operator == "eq":
+            return column_expr == number
+        if operator == "ne":
+            return column_expr != number
+        if operator == "gt":
+            return column_expr > number
+        if operator == "gte":
+            return column_expr >= number
+        if operator == "lt":
+            return column_expr < number
+        return column_expr <= number
+    if operator == "eq":
+        return text_expr == value
+    if operator == "ne":
+        return text_expr != value
+    if operator == "gt":
+        return text_expr > value
+    if operator == "gte":
+        return text_expr >= value
+    if operator == "lt":
+        return text_expr < value
+    return text_expr <= value
 
 
 @dataclass(frozen=True)
@@ -49,6 +108,7 @@ class ReadMirrorModels:
     record: type[Any]
     binding: type[Any]
     sync_run: type[Any]
+    fence_sync_runs: bool = False
 
 
 class ModuleFeishuReadMirrorService:
@@ -193,26 +253,94 @@ class ModuleFeishuReadMirrorService:
         return list(result.scalars().all())
 
     async def sync_resource(self, resource_id: uuid.UUID) -> dict[str, Any]:
+        result = await self._sync_with_lease(resource_id)
+        assert result is not None
+        return result
+
+    async def sync_due_resource(
+        self, resource_id: uuid.UUID, due_on: date
+    ) -> dict[str, Any] | None:
+        """Recheck the date under the same lock used by manual sync."""
+        return await self._sync_with_lease(resource_id, due_on=due_on)
+
+    async def _sync_with_lease(
+        self, resource_id: uuid.UUID, *, due_on: date | None = None
+    ) -> dict[str, Any] | None:
         lock_key = f"{self.module_code}:feishu:read-sync:{resource_id}"
         lock_value = uuid.uuid4().hex
-        acquired = await redis_client.set(lock_key, lock_value, ex=30 * 60, nx=True)
+        redis_timeout = 5 if self.models.fence_sync_runs else None
+        async with asyncio.timeout(redis_timeout):
+            acquired = await redis_client.set(lock_key, lock_value, ex=30 * 60, nx=True)
         if not acquired:
+            if due_on is not None:
+                logger.info("Mirror %s sync skipped: resource lock held", resource_id)
+                return None
             raise AppException(message="该数据表正在同步，请稍后重试", status_code=409)
         try:
+            if self.models.fence_sync_runs:
+                return await self._sync_resource_locked(
+                    resource_id, due_on=due_on, lease=(lock_key, lock_value)
+                )
             return await self._sync_resource_locked(resource_id)
         finally:
-            cleanup = redis_client.eval(
-                "if redis.call('get',KEYS[1]) == ARGV[1] then "
-                "return redis.call('del',KEYS[1]) else return 0 end",
-                1,
-                lock_key,
-                lock_value,
-            )
-            if inspect.isawaitable(cleanup):
-                await cleanup
+            try:
+                cleanup = redis_client.eval(
+                    "if redis.call('get',KEYS[1]) == ARGV[1] then "
+                    "return redis.call('del',KEYS[1]) else return 0 end",
+                    1,
+                    lock_key,
+                    lock_value,
+                )
+                if inspect.isawaitable(cleanup):
+                    async with asyncio.timeout(redis_timeout):
+                        await cleanup
+            except (RedisError, TimeoutError) as exc:
+                if not self.models.fence_sync_runs:
+                    raise
+                logger.warning(
+                    "Mirror %s lock cleanup failed (%s)",
+                    resource_id,
+                    type(exc).__name__,
+                )
 
-    async def _sync_resource_locked(self, resource_id: uuid.UUID) -> dict[str, Any]:
-        resource = await self._resource(resource_id)
+    async def _require_lease(self, lease: tuple[str, str]) -> None:
+        async with asyncio.timeout(5):
+            owner = await redis_client.get(lease[0])
+        if owner != lease[1]:
+            raise AppException(message="同步已失去资源锁，请重新同步", status_code=409)
+
+    async def _sync_resource_locked(
+        self,
+        resource_id: uuid.UUID,
+        *,
+        due_on: date | None = None,
+        lease: tuple[str, str] | None = None,
+    ) -> dict[str, Any] | None:
+        if lease is None:
+            resource = await self._resource(resource_id)
+        else:
+            resource = await self._resource(resource_id, for_update=True)
+            await self._require_lease(lease)
+            if (
+                due_on is not None
+                and resource.last_complete_sync_at is not None
+                and resource.last_complete_sync_at.astimezone(UTC).date() >= due_on
+            ):
+                await self.session.rollback()
+                return None
+            # A previous process may have died after committing its running record.
+            run_model = self.models.sync_run
+            await self.session.execute(
+                update(run_model)
+                .where(
+                    run_model.resource_id == resource_id, run_model.status == "running"
+                )
+                .values(
+                    status="failed",
+                    error_message="同步中断，已由后续执行接管",
+                    completed_at=datetime.now(UTC),
+                )
+            )
         version = uuid.uuid4()
         run = self.models.sync_run(
             resource_id=resource.id,
@@ -228,8 +356,8 @@ class ModuleFeishuReadMirrorService:
         try:
             client = self._client(resource.app_token)
             raw_fields = await client.list_fields(resource.table_id, page_size=100)
-            fields = await self._replace_fields(resource.id, raw_fields)
-            names_by_id = {item.field_id: item.field_name for item in fields}
+            if lease is None:
+                fields = await self._replace_fields(resource_id, raw_fields)
             records: list[dict[str, Any]] = []
             seen: set[str] = set()
             page_token: str | None = None
@@ -261,6 +389,12 @@ class ModuleFeishuReadMirrorService:
                 raise RuntimeError(
                     f"完整性校验失败：飞书 total={expected_total}，唯一记录={len(seen)}"
                 )
+            if lease is not None:
+                # Serialize final writes against the transaction starting any successor.
+                resource = await self._resource(resource_id, for_update=True)
+                await self._require_lease(lease)
+                fields = await self._replace_fields(resource_id, raw_fields)
+            names_by_id = {item.field_id: item.field_name for item in fields}
             for item in records:
                 raw = item.get("fields") if isinstance(item.get("fields"), dict) else {}
                 search_text = json.dumps(raw, ensure_ascii=False, default=str)
@@ -291,20 +425,51 @@ class ModuleFeishuReadMirrorService:
             run.expected_count = expected_total
             run.actual_count = len(records)
             run.completed_at = datetime.now(UTC)
+            if lease is not None:
+                await self.session.flush()
+                await self._require_lease(lease)
             await self.session.commit()
-            return {"resource_id": str(resource.id), "record_count": len(records)}
-        except Exception as exc:
-            await self.session.rollback()
+            return {"resource_id": str(resource_id), "record_count": len(records)}
+        except (Exception, asyncio.CancelledError) as exc:
+            if lease is not None or not isinstance(exc, asyncio.CancelledError):
+                await self._fail_sync_run(
+                    resource_id, run_id, exc, fenced=lease is not None
+                )
+            raise
+
+    async def _fail_sync_run(
+        self,
+        resource_id: uuid.UUID,
+        run_id: uuid.UUID,
+        exc: Exception | asyncio.CancelledError,
+        *,
+        fenced: bool,
+    ) -> None:
+        await self.session.rollback()
+        if fenced:
+            resource = await self._resource(resource_id, for_update=True)
+            failed_run = await self.session.get(
+                self.models.sync_run, run_id, populate_existing=True
+            )
+            if failed_run is None or failed_run.status != "running":
+                await self.session.rollback()
+                return
+        else:
             resource = await self._resource(resource_id)
             failed_run = await self.session.get(self.models.sync_run, run_id)
-            resource.sync_status = "failed"
-            resource.sync_error = self._safe_error(exc)
-            if failed_run is not None:
-                failed_run.status = "failed"
-                failed_run.error_message = self._safe_error(exc)
-                failed_run.completed_at = datetime.now(UTC)
-            await self.session.commit()
-            raise
+        if isinstance(exc, asyncio.CancelledError):
+            error = "同步执行已取消"
+        elif fenced:
+            error = f"镜像同步失败（{type(exc).__name__}）"
+        else:
+            error = self._safe_error(exc)
+        resource.sync_status = "failed"
+        resource.sync_error = error
+        if failed_run is not None:
+            failed_run.status = "failed"
+            failed_run.error_message = error
+            failed_run.completed_at = datetime.now(UTC)
+        await self.session.commit()
 
     async def replace_bindings(
         self, page_key: str, items: list[dict[str, Any]]
@@ -379,6 +544,7 @@ class ModuleFeishuReadMirrorService:
         keyword: str | None,
         sort_field: str | None = None,
         sort_direction: str = "desc",
+        filters: Sequence[Mapping[str, str]] | None = None,
     ) -> dict[str, Any]:
         binding, resource = await self._bound_resource(page_key, binding_id)
         fields = await self._fields(resource.id)
@@ -416,6 +582,32 @@ class ModuleFeishuReadMirrorService:
             ]
             if keyword:
                 conditions.append(self.models.record.search_text.ilike(f"%{keyword}%"))
+            field_index = {
+                **{f.field_id: f for f in fields},
+                **{f.field_name: f for f in fields},
+            }
+            for item in filters or ():
+                field_meta = field_index.get(str(item.get("field", "")))
+                if field_meta is None:
+                    raise AppException(
+                        message="筛选字段不属于该数据表", status_code=404
+                    )
+                value = str(item.get("value", "")).strip()
+                if not value:
+                    continue
+                try:
+                    filter_type: int | None = int(field_meta.field_type)
+                except (TypeError, ValueError):
+                    filter_type = None
+                conditions.append(
+                    _record_filter_expression(
+                        self.models.record,
+                        field_meta.field_name,
+                        filter_type,
+                        str(item.get("operator", "contains")),
+                        value,
+                    )
+                )
             total = int(
                 await self.session.scalar(
                     select(func.count())
@@ -649,13 +841,16 @@ class ModuleFeishuReadMirrorService:
             raise AppException(message="飞书入口不存在", status_code=404)
         return root
 
-    async def _resource(self, resource_id: uuid.UUID) -> Any:
-        resource = await self.session.scalar(
-            select(self.models.resource).where(
-                self.models.resource.id == resource_id,
-                self.models.resource.is_deleted.is_(False),
-            )
+    async def _resource(
+        self, resource_id: uuid.UUID, *, for_update: bool = False
+    ) -> Any:
+        stmt = select(self.models.resource).where(
+            self.models.resource.id == resource_id,
+            self.models.resource.is_deleted.is_(False),
         )
+        if for_update:
+            stmt = stmt.with_for_update().execution_options(populate_existing=True)
+        resource = await self.session.scalar(stmt)
         if resource is None:
             raise AppException(message="飞书数据表资源不存在", status_code=404)
         return resource
@@ -692,6 +887,10 @@ class ModuleFeishuReadMirrorService:
         if row is None:
             raise AppException(message="页面数据表绑定不存在", status_code=404)
         return row[0], row[1]
+
+    def client_for_resource(self, app_token: str) -> WarehouseFeishuClient:
+        """公开的按资源构建客户端入口（模块侧导出等编排场景使用）。"""
+        return self._client(app_token)
 
     def _client(self, app_token: str) -> WarehouseFeishuClient:
         if not self.app_id or not self.app_secret:
