@@ -393,6 +393,161 @@ describe('RepairSummaryPage', () => {
     expect(buttonNamed('恢复默认')).toBeUndefined()
   })
 
+  it('resets the global defaults with confirmation', async () => {
+    await renderPage()
+
+    const resetButton = buttonNamed('恢复默认')
+    expect(resetButton).toBeTruthy()
+    await click(resetButton)
+
+    const confirm = Array.from(document.querySelectorAll('button')).find(
+      (button) =>
+        (button.textContent || '').replace(/\s+/g, '') === '恢复' &&
+        button.closest('.ant-popover'),
+    )
+    expect(confirm).toBeTruthy()
+    await click(confirm)
+
+    expect(api.resetRepairSummarySettings).toHaveBeenCalledTimes(1)
+    expect(lastNotice()).toContain('已恢复系统默认设置')
+  })
+
+  it('reports a save failure instead of claiming success', async () => {
+    await renderPage()
+
+    api.saveRepairSummarySettings.mockRejectedValueOnce(
+      new Error('没有保存默认设置的权限'),
+    )
+    await click(buttonNamed('保存为默认'))
+    expect(lastNotice()).toContain('没有保存默认设置的权限')
+  })
+
+  it('sorts by equipment, abnormal, person and last repair date', async () => {
+    const custom = summaryFixture()
+    const base = custom.workshops[0]
+    custom.workshops = [
+      {
+        ...base,
+        workshop_code: '203',
+        workshop_name: '203车间',
+        repair_count: 1,
+        equipment_count: 5,
+        abnormal_count: 3,
+        person_count: 4,
+        last_repaired_at: '2026-11-20',
+      },
+      {
+        ...base,
+        workshop_code: '102-1',
+        workshop_name: '102一车间',
+        repair_count: 1,
+        equipment_count: 1,
+        abnormal_count: 0,
+        person_count: 1,
+        last_repaired_at: '2026-11-10',
+      },
+    ]
+    api.fetchRepairSummary.mockResolvedValue(custom)
+    await renderPage()
+
+    const clickHeader = async (label: string) => {
+      const header = Array.from(container.querySelectorAll('thead th')).find(
+        (th) => th.textContent?.includes(label),
+      )
+      const sorter = header?.querySelector('.ant-table-column-sorters') ?? header
+      await click(sorter)
+      await settle()
+    }
+    const firstRow = () =>
+      Array.from(
+        container.querySelectorAll('.ant-table-tbody .ant-table-row'),
+      )[0]?.textContent || ''
+
+    for (const label of ['设备数', '异常', '人数', '最近维修']) {
+      await clickHeader(label)
+      expect(firstRow()).toContain('203车间')
+    }
+  })
+
+  it('reports summary and detail load failures', async () => {
+    api.fetchRepairSummary.mockRejectedValueOnce(new Error('汇总加载失败'))
+    api.fetchRepairRecords.mockRejectedValueOnce(new Error('明细加载失败'))
+    await renderPage()
+
+    const notices = Array.from(
+      document.querySelectorAll('.ant-message-notice'),
+    )
+      .map((node) => node.textContent || '')
+      .join(' ')
+    expect(notices).toContain('汇总加载失败')
+    expect(notices).toContain('明细加载失败')
+  })
+
+  it('clears the active ranking filter from the tag close icon', async () => {
+    await renderPage()
+
+    const rank = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent?.includes('离心泵A'),
+    )
+    await click(rank)
+    expect(container.textContent).toContain('已筛选：离心泵A')
+
+    const close = container.querySelector('.ant-tag-close-icon')
+    expect(close).toBeTruthy()
+    await click(close)
+    expect(api.fetchRepairSummary).toHaveBeenLastCalledWith(
+      expect.objectContaining({ equipment: undefined }),
+    )
+  })
+
+  it('clears all filters with the reset button', async () => {
+    await renderPage()
+
+    const rank = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent?.includes('离心泵A'),
+    )
+    await click(rank)
+    expect(container.textContent).toContain('已筛选：离心泵A')
+
+    await click(buttonNamed('重置'))
+    expect(api.fetchRepairSummary).toHaveBeenLastCalledWith(
+      expect.objectContaining({ equipment: undefined }),
+    )
+    expect(container.textContent).not.toContain('已筛选：离心泵A')
+  })
+
+  it('reports export failures instead of claiming a download started', async () => {
+    await renderPage()
+
+    api.exportRepairRecords.mockRejectedValueOnce(
+      new Error('符合条件的记录超过导出上限'),
+    )
+    await click(buttonNamed('导出'))
+    expect(lastNotice()).toContain('超过导出上限')
+  })
+
+  it('switches between this-year and all-time presets', async () => {
+    await renderPage()
+
+    const clickPreset = async (label: string) => {
+      const item = Array.from(container.querySelectorAll('.ant-segmented-item')).find(
+        (node) => node.textContent?.trim() === label,
+      )
+      await click(item?.querySelector('input'))
+    }
+
+    await clickPreset('今年')
+    expect(api.fetchRepairSummary).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        date_from: dayjs().startOf('year').format('YYYY-MM-DD'),
+      }),
+    )
+    await clickPreset('全部')
+    expect(api.fetchRepairSummary).toHaveBeenLastCalledWith(
+      expect.objectContaining({ date_from: undefined }),
+    )
+  })
+
   it('defaults to workshop order and toggles header sorting between two directions', async () => {
     const custom = summaryFixture()
     const base = custom.workshops[0]
