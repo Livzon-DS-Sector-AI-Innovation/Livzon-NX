@@ -25,3 +25,7 @@ export const SCRAP_PLACEMENT_FORM_URL =
 /** 废旧物资领用申请新增表单（页面「领用申请」页签的新增按钮入口）。 */
 export const SCRAP_REQUISITION_FORM_URL =
   'https://j0eukrlohu.feishu.cn/share/base/form/shrcn0Cr0wTk4Z1AY2c89MlexXb'
+
+/** 新增印章（用章）申请表单（印章管理页「印章台账」页签的新增按钮入口）。 */
+export const SEAL_REQUISITION_FORM_URL =
+  'https://j0eukrlohu.feishu.cn/share/base/form/shrcnWAFOyeRKftcfnNZ5aAs7s4'
