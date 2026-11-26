@@ -13,15 +13,17 @@ COPY docker/apt-download.conf /etc/apt/apt.conf.d/80dazah-download
 # The base image's cleanup hook otherwise empties the BuildKit package cache.
 RUN rm -f /etc/apt/apt.conf.d/docker-clean
 
-# libreoffice-writer/draw：.doc/.wps 转 docx 及 wmf/emf 图片转 png 依赖；
-# fonts-noto-cjk 中文字体；catdoc/antiword 文本级兜底
+# libreoffice-writer：.doc/.wps 转 docx；draw：wmf/emf 图片转 png；
+# calc：.xls/.xlsx/.csv 转 PDF（镜像页导出/模板导出/附件预览）；
+# impress：.ppt/.pptx 转 PDF（附件预览）；fonts-noto-cjk 中文字体；
+# catdoc/antiword 文本级兜底
 # Debian Bookworm 的 GPGME 安全修复最低版本（CVE-2026-129975）。
 RUN --mount=type=cache,id=dazah-debian-apt,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,id=dazah-debian-apt-lists,target=/var/lib/apt/lists,sharing=locked \
     apt-get update \
     && apt-get upgrade -y --no-install-recommends \
     && apt-get install -y --no-install-recommends \
-        libreoffice-writer libreoffice-draw \
+        libreoffice-calc libreoffice-impress libreoffice-writer libreoffice-draw \
         fonts-noto-cjk catdoc antiword libgpgme11 libgpgmepp6 \
     && for package in libgpgme11 libgpgmepp6; do \
         installed_version="$(dpkg-query -W -f='${Version}' "$package")" \
