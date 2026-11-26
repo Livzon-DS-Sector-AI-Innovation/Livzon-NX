@@ -1,5 +1,5 @@
 import { MappedDatasetPage } from '@/components/feishu-data'
-import { ADMIN_SEALS_PAGE_KEY } from '@/lib/administration-pages'
+import { ADMIN_SEALS_PAGE_KEY, SEAL_REQUISITION_FORM_URL } from '@/lib/administration-pages'
 
 export default function SealsPage() {
   return (
@@ -18,6 +18,13 @@ export default function SealsPage() {
         '分管领导审批',
         '部门负责人审批',
         '审批状态',
+      ]}
+      createForms={[
+        {
+          tabLabel: '印章台账',
+          label: '新增印章申请',
+          url: SEAL_REQUISITION_FORM_URL,
+        },
       ]}
     />
   )

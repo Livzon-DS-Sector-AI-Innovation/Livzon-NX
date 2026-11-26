@@ -106,7 +106,7 @@ describe('administration pages', () => {
     })
   })
 
-  it('renders the seals mirror without any extra form entry', () => {
+  it('renders the seals mirror with its tab-linked create form', () => {
     const element = SealsPage() as unknown as ElementLike
     expect(element.props).toMatchObject({
       moduleCode: 'administration',
@@ -114,6 +114,13 @@ describe('administration pages', () => {
       title: '印章管理',
       enableAdvancedQuery: false,
       enablePersonAvatars: true,
+      createForms: [
+        {
+          tabLabel: '印章台账',
+          label: '新增印章申请',
+          url: 'https://j0eukrlohu.feishu.cn/share/base/form/shrcnWAFOyeRKftcfnNZ5aAs7s4',
+        },
+      ],
     })
   })
 
