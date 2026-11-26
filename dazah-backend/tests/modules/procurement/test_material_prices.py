@@ -85,8 +85,6 @@ class FakePriceRepository:
             "min_price": min(row.unit_price for row in rows),
             "max_price": max(row.unit_price for row in rows),
             "avg_price": sum(row.unit_price for row in rows) / len(rows),
-            "total_quantity": sum(row.quantity for row in rows),
-            "total_amount": sum(row.amount for row in rows),
             "has_suspicious": any(row.price_flag == "suspicious" for row in rows),
         }
         return ([summary], 1) if rows else ([], 0)
@@ -171,7 +169,6 @@ async def test_search_returns_aggregated_summary():
     # 实时层只补充最近入库价，不并入历史金额统计
     assert rows[0].live_batch_count == 1
     assert rows[0].live_latest_price == Decimal("36.00")
-    assert rows[0].total_amount == Decimal("1591.20")
 
 
 @pytest.mark.anyio
@@ -180,6 +177,14 @@ async def test_search_without_match_returns_empty():
         rows, total = await price_service.search_material_prices(
             session, keyword="不存在的物料"
         )
+    assert rows == []
+    assert total == 0
+
+@pytest.mark.anyio
+async def test_search_without_ask_returns_empty():
+    """未输入关键词且未带筛选时，不返回全量数据。"""
+    async with _session() as session:
+        rows, total = await price_service.search_material_prices(session)
     assert rows == []
     assert total == 0
 

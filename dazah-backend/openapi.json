@@ -60898,18 +60898,6 @@
             "title": "Supplier Count",
             "type": "integer"
           },
-          "total_amount": {
-            "description": "累计采购金额",
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Total Amount",
-            "type": "string"
-          },
-          "total_quantity": {
-            "description": "累计采购数量",
-            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
-            "title": "Total Quantity",
-            "type": "string"
-          },
           "unit": {
             "default": "",
             "description": "主单位",
@@ -60922,9 +60910,7 @@
           "latest_year",
           "min_price",
           "max_price",
-          "avg_price",
-          "total_quantity",
-          "total_amount"
+          "avg_price"
         ],
         "title": "MaterialPriceSummary",
         "type": "object"

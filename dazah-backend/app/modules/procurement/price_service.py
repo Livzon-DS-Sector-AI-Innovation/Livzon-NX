@@ -75,6 +75,15 @@ async def search_material_prices(
     page: int = 1,
     page_size: int = 20,
 ) -> tuple[list[MaterialPriceSummary], int]:
+    if not (
+        (keyword and keyword.strip())
+        or source_type
+        or cost_category
+        or sub_inventory
+        or data_year is not None
+    ):
+        return [], 0
+
     rows, total = await MaterialPriceRepository(db).search(
         keyword=keyword,
         source_type=source_type,

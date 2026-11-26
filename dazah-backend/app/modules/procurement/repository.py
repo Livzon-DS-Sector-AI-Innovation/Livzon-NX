@@ -898,8 +898,6 @@ class MaterialPriceRepository:
                 func.coalesce(func.min(model.unit_price), 0).label("min_price"),
                 func.coalesce(func.max(model.unit_price), 0).label("max_price"),
                 func.coalesce(func.avg(model.unit_price), 0).label("avg_price"),
-                func.coalesce(func.sum(model.quantity), 0).label("total_quantity"),
-                func.coalesce(func.sum(model.amount), 0).label("total_amount"),
                 func.coalesce(
                     func.bool_or(model.price_flag == "suspicious"),
                     False,
@@ -912,10 +910,7 @@ class MaterialPriceRepository:
         total = await self.session.scalar(select(func.count()).select_from(grouped))
         result = await self.session.execute(
             select(grouped)
-            .order_by(
-                grouped.c.total_amount.desc(),
-                grouped.c.material_code.asc(),
-            )
+            .order_by(grouped.c.material_code.asc())
             .offset((page - 1) * page_size)
             .limit(page_size)
         )
