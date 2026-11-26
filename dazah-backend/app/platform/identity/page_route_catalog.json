@@ -138,6 +138,7 @@
     "/purchasing/contract-summary",
     "/purchasing/invoice-recognition",
     "/purchasing/material-library",
+    "/purchasing/material-price",
     "/purchasing/order",
     "/purchasing/request/[category]",
     "/purchasing/request/urgent",

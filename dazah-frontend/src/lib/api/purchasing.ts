@@ -6,6 +6,8 @@ import type {
   ContractRecordListResponse,
   MaterialOptionListResponse,
   MaterialCatalogListResponse,
+  MaterialPriceDetailApiResponse,
+  MaterialPriceSummaryListResponse,
   MaterialSourceConfigApiResponse,
   PurchaseOrderListResponse,
   PurchaseRequestApiResponse,
@@ -280,4 +282,33 @@ async function fetchApiWithServerFallback<T>(
 ): Promise<T> {
   const response = await fetchWithServerFallback(path, requestHeaders, signal)
   return response.json()
+}
+
+export async function fetchMaterialPrices(
+  query: {
+    keyword?: string
+    source_type?: string
+    cost_category?: string
+    sub_inventory?: string
+    year?: number
+    page?: number
+    page_size?: number
+  } = {},
+  requestHeaders?: HeadersInit,
+): Promise<MaterialPriceSummaryListResponse> {
+  const path = `/api/v1/procurement/material-prices${buildQueryString(query)}`
+  return fetchApiWithServerFallback<MaterialPriceSummaryListResponse>(
+    path,
+    requestHeaders,
+  )
+}
+
+export async function fetchMaterialPriceDetail(
+  materialCode: string,
+  requestHeaders?: HeadersInit,
+): Promise<MaterialPriceDetailApiResponse> {
+  return fetchApiWithServerFallback<MaterialPriceDetailApiResponse>(
+    `/api/v1/procurement/material-prices/${encodeURIComponent(materialCode)}`,
+    requestHeaders,
+  )
 }

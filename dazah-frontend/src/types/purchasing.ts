@@ -70,3 +70,18 @@ export type SupplierImportResponse = components['schemas']['SupplierImportRespon
 export type SupplierImportResult = components['schemas']['SupplierImportResult']
 export type SupplierListResponse = components['schemas']['SupplierListResponse']
 export type SupplierResponse = components['schemas']['SupplierResponse']
+export type MaterialPriceSummary = components['schemas']['MaterialPriceSummary']
+export type MaterialPriceSummaryListResponse =
+  components['schemas']['MaterialPriceSummaryListResponse']
+export type MaterialPriceBatch = components['schemas']['MaterialPriceBatch']
+export type MaterialPriceYear = components['schemas']['MaterialPriceYear']
+export type MaterialPriceDetail = components['schemas']['MaterialPriceDetail']
+export type MaterialPriceDetailApiResponse =
+  components['schemas']['MaterialPriceDetailApiResponse']
+export type MaterialPriceFillMapping =
+  components['schemas']['MaterialPriceFillMapping']
+export type MaterialPriceFillRow = components['schemas']['MaterialPriceFillRow']
+export type MaterialPriceFillPreview =
+  components['schemas']['MaterialPriceFillPreview']
+export type MaterialPriceFillPreviewApiResponse =
+  components['schemas']['MaterialPriceFillPreviewApiResponse']

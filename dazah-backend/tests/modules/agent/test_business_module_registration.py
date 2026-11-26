@@ -172,9 +172,10 @@ async def test_module_coverage_http_projects_new_providers_and_rejects_non_admin
         ):
             assert modules[code]["state"] in {"partial", "integrated"}
             assert modules[code]["registered_count"] > 0
+        # 采购模块除「物料价格查询」外保持全量 agent 接入；价格查询页不注册工具
         assert (
             modules["procurement"]["covered_pages"]
-            == modules["procurement"]["total_pages"]
+            == modules["procurement"]["total_pages"] - 1
         )
         assert modules["production"]["state"] == "partial"
         assert modules["production"]["covered_pages"] == 21

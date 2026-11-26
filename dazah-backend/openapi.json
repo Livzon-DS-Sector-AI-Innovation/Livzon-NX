@@ -16851,6 +16851,39 @@
         "title": "Body_extract_exam_document_text_api_v1_hr_ai_exam_extract_text_post",
         "type": "object"
       },
+      "Body_fill_material_price_table_api_v1_procurement_material_prices_fill_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "description": "待补价表格",
+            "title": "File",
+            "type": "string"
+          },
+          "mapping": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "列映射 JSON，可选",
+            "title": "Mapping"
+          },
+          "only_blank": {
+            "default": true,
+            "description": "仅填充空白单价单元格",
+            "title": "Only Blank",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_fill_material_price_table_api_v1_procurement_material_prices_fill_post",
+        "type": "object"
+      },
       "Body_generate_authorization_letter_api_v1_registration_authorization_letters_generate_post": {
         "properties": {
           "administration_route": {
@@ -17819,6 +17852,33 @@
           "file"
         ],
         "title": "Body_preview_deviation_import_api_v1_quality_deviations_import_preview_post",
+        "type": "object"
+      },
+      "Body_preview_material_price_fill_api_v1_procurement_material_prices_fill_preview_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "description": "待补价表格",
+            "title": "File",
+            "type": "string"
+          },
+          "mapping": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "列映射 JSON，可选",
+            "title": "Mapping"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_preview_material_price_fill_api_v1_procurement_material_prices_fill_preview_post",
         "type": "object"
       },
       "Body_preview_oot_limit_notice_import_api_v1_quality_oos_oot_oot_limit_products_import_preview_post": {
@@ -60273,6 +60333,689 @@
           "rule_model"
         ],
         "title": "MaterialOptionResponse",
+        "type": "object"
+      },
+      "MaterialPriceBatch": {
+        "description": "单条价格记录。",
+        "properties": {
+          "amount": {
+            "description": "金额",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Amount",
+            "type": "string"
+          },
+          "batch_no": {
+            "default": "",
+            "description": "批次号",
+            "title": "Batch No",
+            "type": "string"
+          },
+          "data_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "业务日期",
+            "title": "Data Date"
+          },
+          "data_year": {
+            "description": "数据年度",
+            "title": "Data Year",
+            "type": "integer"
+          },
+          "department": {
+            "default": "",
+            "description": "申购部门",
+            "title": "Department",
+            "type": "string"
+          },
+          "doc_no": {
+            "default": "",
+            "description": "单据号",
+            "title": "Doc No",
+            "type": "string"
+          },
+          "id": {
+            "description": "记录 ID",
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "price_flag": {
+            "default": "normal",
+            "description": "价格标记",
+            "title": "Price Flag",
+            "type": "string"
+          },
+          "quantity": {
+            "description": "采购数量",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Quantity",
+            "type": "string"
+          },
+          "source_type": {
+            "default": "erp_stock",
+            "description": "来源类型",
+            "title": "Source Type",
+            "type": "string"
+          },
+          "sub_inventory": {
+            "default": "",
+            "description": "子库存",
+            "title": "Sub Inventory",
+            "type": "string"
+          },
+          "supplier_name": {
+            "default": "",
+            "description": "供应商名称",
+            "title": "Supplier Name",
+            "type": "string"
+          },
+          "unit": {
+            "default": "",
+            "description": "主单位",
+            "title": "Unit",
+            "type": "string"
+          },
+          "unit_price": {
+            "description": "单位价格",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Unit Price",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "data_year",
+          "unit_price",
+          "quantity",
+          "amount"
+        ],
+        "title": "MaterialPriceBatch",
+        "type": "object"
+      },
+      "MaterialPriceDetail": {
+        "description": "物料价格详情。",
+        "properties": {
+          "batches": {
+            "description": "价格明细",
+            "items": {
+              "$ref": "#/components/schemas/MaterialPriceBatch"
+            },
+            "title": "Batches",
+            "type": "array"
+          },
+          "cost_category": {
+            "default": "",
+            "description": "成本类别",
+            "title": "Cost Category",
+            "type": "string"
+          },
+          "live_batches": {
+            "description": "仓储实时入库明细（实时镜像）",
+            "items": {
+              "$ref": "#/components/schemas/MaterialPriceBatch"
+            },
+            "title": "Live Batches",
+            "type": "array"
+          },
+          "material_alias": {
+            "default": "",
+            "description": "物料别名",
+            "title": "Material Alias",
+            "type": "string"
+          },
+          "material_category": {
+            "default": "",
+            "description": "物料类别",
+            "title": "Material Category",
+            "type": "string"
+          },
+          "material_code": {
+            "description": "物料编码",
+            "title": "Material Code",
+            "type": "string"
+          },
+          "material_name": {
+            "default": "",
+            "description": "物料名称",
+            "title": "Material Name",
+            "type": "string"
+          },
+          "sub_inventory": {
+            "default": "",
+            "description": "子库存（多个用顿号连接）",
+            "title": "Sub Inventory",
+            "type": "string"
+          },
+          "unit": {
+            "default": "",
+            "description": "主单位",
+            "title": "Unit",
+            "type": "string"
+          },
+          "years": {
+            "description": "年度价格汇总",
+            "items": {
+              "$ref": "#/components/schemas/MaterialPriceYear"
+            },
+            "title": "Years",
+            "type": "array"
+          }
+        },
+        "required": [
+          "material_code"
+        ],
+        "title": "MaterialPriceDetail",
+        "type": "object"
+      },
+      "MaterialPriceDetailApiResponse": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "description": "响应状态码",
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/MaterialPriceDetail"
+          },
+          "message": {
+            "default": "success",
+            "description": "响应消息",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "MaterialPriceDetailApiResponse",
+        "type": "object"
+      },
+      "MaterialPriceFillMapping": {
+        "description": "表格补价的列映射；不传时由后端自动识别。",
+        "properties": {
+          "amount_column": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "金额列",
+            "title": "Amount Column"
+          },
+          "code_column": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "物料编码列",
+            "title": "Code Column"
+          },
+          "header_row": {
+            "default": 1,
+            "description": "表头所在行（1 起）",
+            "minimum": 1.0,
+            "title": "Header Row",
+            "type": "integer"
+          },
+          "name_column": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "物料名称列",
+            "title": "Name Column"
+          },
+          "price_column": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "单价列",
+            "title": "Price Column"
+          },
+          "quantity_column": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "数量列",
+            "title": "Quantity Column"
+          },
+          "sheet_name": {
+            "default": "",
+            "description": "工作表名称，空则用当前工作表",
+            "title": "Sheet Name",
+            "type": "string"
+          }
+        },
+        "title": "MaterialPriceFillMapping",
+        "type": "object"
+      },
+      "MaterialPriceFillPreview": {
+        "properties": {
+          "headers": {
+            "description": "表头文本（按列顺序，供手动映射）",
+            "items": {
+              "type": "string"
+            },
+            "title": "Headers",
+            "type": "array"
+          },
+          "mapping": {
+            "$ref": "#/components/schemas/MaterialPriceFillMapping",
+            "description": "实际使用的列映射"
+          },
+          "matched_rows": {
+            "default": 0,
+            "description": "已匹配行数",
+            "title": "Matched Rows",
+            "type": "integer"
+          },
+          "rows": {
+            "description": "逐行匹配结果（截断预览）",
+            "items": {
+              "$ref": "#/components/schemas/MaterialPriceFillRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "total_rows": {
+            "default": 0,
+            "description": "参与匹配的数据行数",
+            "title": "Total Rows",
+            "type": "integer"
+          },
+          "unmatched_rows": {
+            "default": 0,
+            "description": "未匹配行数",
+            "title": "Unmatched Rows",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "mapping"
+        ],
+        "title": "MaterialPriceFillPreview",
+        "type": "object"
+      },
+      "MaterialPriceFillPreviewApiResponse": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "description": "响应状态码",
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "$ref": "#/components/schemas/MaterialPriceFillPreview"
+          },
+          "message": {
+            "default": "success",
+            "description": "响应消息",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "MaterialPriceFillPreviewApiResponse",
+        "type": "object"
+      },
+      "MaterialPriceFillRow": {
+        "properties": {
+          "matched_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "匹配到的物料编码",
+            "title": "Matched Code"
+          },
+          "matched_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "匹配到的物料名称",
+            "title": "Matched Name"
+          },
+          "material_code": {
+            "default": "",
+            "description": "原表物料编码",
+            "title": "Material Code",
+            "type": "string"
+          },
+          "material_name": {
+            "default": "",
+            "description": "原表物料名称",
+            "title": "Material Name",
+            "type": "string"
+          },
+          "message": {
+            "default": "",
+            "description": "匹配说明",
+            "title": "Message",
+            "type": "string"
+          },
+          "row_number": {
+            "description": "原表行号",
+            "title": "Row Number",
+            "type": "integer"
+          },
+          "source": {
+            "default": "unmatched",
+            "description": "匹配来源",
+            "title": "Source",
+            "type": "string"
+          },
+          "unit": {
+            "default": "",
+            "description": "单位",
+            "title": "Unit",
+            "type": "string"
+          },
+          "unit_price": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "匹配到的单价",
+            "title": "Unit Price"
+          }
+        },
+        "required": [
+          "row_number"
+        ],
+        "title": "MaterialPriceFillRow",
+        "type": "object"
+      },
+      "MaterialPriceSummary": {
+        "description": "物料价格检索结果（按物料聚合）。",
+        "properties": {
+          "avg_price": {
+            "description": "历史平均单价",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Avg Price",
+            "type": "string"
+          },
+          "batch_count": {
+            "default": 0,
+            "description": "价格记录数",
+            "title": "Batch Count",
+            "type": "integer"
+          },
+          "cost_category": {
+            "default": "",
+            "description": "成本类别",
+            "title": "Cost Category",
+            "type": "string"
+          },
+          "has_suspicious": {
+            "default": false,
+            "description": "是否含疑单位异常价格",
+            "title": "Has Suspicious",
+            "type": "boolean"
+          },
+          "latest_year": {
+            "description": "最近年度",
+            "title": "Latest Year",
+            "type": "integer"
+          },
+          "live_batch_count": {
+            "default": 0,
+            "description": "仓储实时入库记录数",
+            "title": "Live Batch Count",
+            "type": "integer"
+          },
+          "live_latest_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "仓储最近入库日期",
+            "title": "Live Latest Date"
+          },
+          "live_latest_price": {
+            "anyOf": [
+              {
+                "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "仓储最近一次入库单价",
+            "title": "Live Latest Price"
+          },
+          "material_code": {
+            "description": "物料编码",
+            "title": "Material Code",
+            "type": "string"
+          },
+          "material_name": {
+            "default": "",
+            "description": "物料名称",
+            "title": "Material Name",
+            "type": "string"
+          },
+          "max_price": {
+            "description": "历史最高单价",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Max Price",
+            "type": "string"
+          },
+          "min_price": {
+            "description": "历史最低单价",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Min Price",
+            "type": "string"
+          },
+          "sub_inventory": {
+            "default": "",
+            "description": "子库存（多个用顿号连接）",
+            "title": "Sub Inventory",
+            "type": "string"
+          },
+          "supplier_count": {
+            "default": 0,
+            "description": "供应商数",
+            "title": "Supplier Count",
+            "type": "integer"
+          },
+          "total_amount": {
+            "description": "累计采购金额",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Amount",
+            "type": "string"
+          },
+          "total_quantity": {
+            "description": "累计采购数量",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Total Quantity",
+            "type": "string"
+          },
+          "unit": {
+            "default": "",
+            "description": "主单位",
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "material_code",
+          "latest_year",
+          "min_price",
+          "max_price",
+          "avg_price",
+          "total_quantity",
+          "total_amount"
+        ],
+        "title": "MaterialPriceSummary",
+        "type": "object"
+      },
+      "MaterialPriceSummaryListResponse": {
+        "properties": {
+          "code": {
+            "default": 200,
+            "description": "响应状态码",
+            "title": "Code",
+            "type": "integer"
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/MaterialPriceSummary"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "message": {
+            "default": "success",
+            "description": "响应消息",
+            "title": "Message",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "MaterialPriceSummaryListResponse",
+        "type": "object"
+      },
+      "MaterialPriceYear": {
+        "description": "按年度汇总的价格区间。",
+        "properties": {
+          "avg_price": {
+            "description": "年度平均单价",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Avg Price",
+            "type": "string"
+          },
+          "batch_count": {
+            "default": 0,
+            "description": "记录数",
+            "title": "Batch Count",
+            "type": "integer"
+          },
+          "data_year": {
+            "description": "数据年度",
+            "title": "Data Year",
+            "type": "integer"
+          },
+          "max_price": {
+            "description": "年度最高单价",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Max Price",
+            "type": "string"
+          },
+          "min_price": {
+            "description": "年度最低单价",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Min Price",
+            "type": "string"
+          },
+          "quantity": {
+            "description": "年度采购数量",
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Quantity",
+            "type": "string"
+          }
+        },
+        "required": [
+          "data_year",
+          "min_price",
+          "max_price",
+          "avg_price",
+          "quantity"
+        ],
+        "title": "MaterialPriceYear",
         "type": "object"
       },
       "MaterialSourceConfigApiResponse": {
@@ -159660,6 +160403,358 @@
           }
         },
         "summary": "联想采购物料编码",
+        "tags": [
+          "采购管理"
+        ]
+      }
+    },
+    "/api/v1/procurement/material-prices": {
+      "get": {
+        "description": "按物料编码、名称或别名检索历史采购价格，按累计金额聚合排序。",
+        "operationId": "list_material_price_records_api_v1_procurement_material_prices_get",
+        "parameters": [
+          {
+            "description": "编码/名称/别名关键词",
+            "in": "query",
+            "name": "keyword",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 100,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "编码/名称/别名关键词",
+              "title": "Keyword"
+            }
+          },
+          {
+            "description": "来源类型：erp_stock/erp_order/manual",
+            "in": "query",
+            "name": "source_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 32,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "来源类型：erp_stock/erp_order/manual",
+              "title": "Source Type"
+            }
+          },
+          {
+            "description": "成本类别",
+            "in": "query",
+            "name": "cost_category",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "成本类别",
+              "title": "Cost Category"
+            }
+          },
+          {
+            "description": "子库存",
+            "in": "query",
+            "name": "sub_inventory",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "子库存",
+              "title": "Sub Inventory"
+            }
+          },
+          {
+            "description": "数据年度",
+            "in": "query",
+            "name": "year",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 2100,
+                  "minimum": 1900,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "数据年度",
+              "title": "Year"
+            }
+          },
+          {
+            "description": "页码",
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "description": "页码",
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "每页条数",
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "description": "每页条数",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaterialPriceSummaryListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "查询物料历史价格",
+        "tags": [
+          "采购管理"
+        ]
+      }
+    },
+    "/api/v1/procurement/material-prices/fill": {
+      "post": {
+        "description": "按预览确认的映射回填单价，原表除目标列外保持不变，并追加「匹配说明」工作表。默认只填空白单元格。",
+        "operationId": "fill_material_price_table_api_v1_procurement_material_prices_fill_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_fill_material_price_table_api_v1_procurement_material_prices_fill_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Fill Material Price Table Api V1 Procurement Material Prices Fill Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "下载表格补价结果",
+        "tags": [
+          "采购管理"
+        ]
+      }
+    },
+    "/api/v1/procurement/material-prices/fill/preview": {
+      "post": {
+        "description": "上传任意 xlsx/xlsm 表格，自动识别物料编码、名称与单价列，返回逐行匹配结果。可回传 mapping 覆盖自动识别的列。",
+        "operationId": "preview_material_price_fill_api_v1_procurement_material_prices_fill_preview_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_preview_material_price_fill_api_v1_procurement_material_prices_fill_preview_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaterialPriceFillPreviewApiResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "预览表格补价匹配结果",
+        "tags": [
+          "采购管理"
+        ]
+      }
+    },
+    "/api/v1/procurement/material-prices/{material_code}": {
+      "get": {
+        "description": "返回指定物料的年度价格汇总与全部价格记录。",
+        "operationId": "get_material_price_record_api_v1_procurement_material_prices__material_code__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "material_code",
+            "required": true,
+            "schema": {
+              "title": "Material Code",
+              "type": "string"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MaterialPriceDetailApiResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "获取物料价格详情",
         "tags": [
           "采购管理"
         ]

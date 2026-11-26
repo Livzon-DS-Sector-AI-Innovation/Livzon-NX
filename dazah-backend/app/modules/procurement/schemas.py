@@ -768,3 +768,138 @@ class ContractRecordApiResponse(BaseModel):
     message: str = Field("success", description="响应消息")
     data: ContractRecordResponse
     meta: dict[str, Any] | None = None
+
+
+class MaterialPriceSummary(BaseModel):
+    """物料价格检索结果（按物料聚合）。"""
+
+    material_code: str = Field(..., description="物料编码")
+    material_name: str = Field("", description="物料名称")
+    unit: str = Field("", description="主单位")
+    cost_category: str = Field("", description="成本类别")
+    sub_inventory: str = Field("", description="子库存（多个用顿号连接）")
+    batch_count: int = Field(0, description="价格记录数")
+    supplier_count: int = Field(0, description="供应商数")
+    latest_year: int = Field(..., description="最近年度")
+    min_price: Decimal = Field(..., description="历史最低单价")
+    max_price: Decimal = Field(..., description="历史最高单价")
+    avg_price: Decimal = Field(..., description="历史平均单价")
+    total_quantity: Decimal = Field(..., description="累计采购数量")
+    total_amount: Decimal = Field(..., description="累计采购金额")
+    has_suspicious: bool = Field(False, description="是否含疑单位异常价格")
+    live_batch_count: int = Field(0, description="仓储实时入库记录数")
+    live_latest_price: Decimal | None = Field(
+        None, description="仓储最近一次入库单价"
+    )
+    live_latest_date: date | None = Field(None, description="仓储最近入库日期")
+
+
+class MaterialPriceSummaryListResponse(BaseModel):
+    code: int = Field(200, description="响应状态码")
+    message: str = Field("success", description="响应消息")
+    data: list[MaterialPriceSummary]
+    meta: dict[str, Any] | None = None
+
+
+class MaterialPriceBatch(BaseModel):
+    """单条价格记录。"""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID = Field(..., description="记录 ID")
+    data_year: int = Field(..., description="数据年度")
+    data_date: date | None = Field(None, description="业务日期")
+    doc_no: str = Field("", description="单据号")
+    department: str = Field("", description="申购部门")
+    sub_inventory: str = Field("", description="子库存")
+    batch_no: str = Field("", description="批次号")
+    supplier_name: str = Field("", description="供应商名称")
+    unit: str = Field("", description="主单位")
+    unit_price: Decimal = Field(..., description="单位价格")
+    quantity: Decimal = Field(..., description="采购数量")
+    amount: Decimal = Field(..., description="金额")
+    price_flag: str = Field("normal", description="价格标记")
+    source_type: str = Field("erp_stock", description="来源类型")
+
+
+class MaterialPriceYear(BaseModel):
+    """按年度汇总的价格区间。"""
+
+    data_year: int = Field(..., description="数据年度")
+    batch_count: int = Field(0, description="记录数")
+    min_price: Decimal = Field(..., description="年度最低单价")
+    max_price: Decimal = Field(..., description="年度最高单价")
+    avg_price: Decimal = Field(..., description="年度平均单价")
+    quantity: Decimal = Field(..., description="年度采购数量")
+
+
+class MaterialPriceDetail(BaseModel):
+    """物料价格详情。"""
+
+    material_code: str = Field(..., description="物料编码")
+    material_name: str = Field("", description="物料名称")
+    material_alias: str = Field("", description="物料别名")
+    unit: str = Field("", description="主单位")
+    material_category: str = Field("", description="物料类别")
+    cost_category: str = Field("", description="成本类别")
+    sub_inventory: str = Field("", description="子库存（多个用顿号连接）")
+    years: list[MaterialPriceYear] = Field(
+        default_factory=list, description="年度价格汇总"
+    )
+    batches: list[MaterialPriceBatch] = Field(
+        default_factory=list, description="价格明细"
+    )
+    live_batches: list[MaterialPriceBatch] = Field(
+        default_factory=list, description="仓储实时入库明细（实时镜像）"
+    )
+
+
+class MaterialPriceDetailApiResponse(BaseModel):
+    code: int = Field(200, description="响应状态码")
+    message: str = Field("success", description="响应消息")
+    data: MaterialPriceDetail
+    meta: dict[str, Any] | None = None
+
+
+class MaterialPriceFillMapping(BaseModel):
+    """表格补价的列映射；不传时由后端自动识别。"""
+
+    sheet_name: str = Field("", description="工作表名称，空则用当前工作表")
+    header_row: int = Field(1, ge=1, description="表头所在行（1 起）")
+    code_column: int | None = Field(None, ge=1, description="物料编码列")
+    name_column: int | None = Field(None, ge=1, description="物料名称列")
+    price_column: int | None = Field(None, ge=1, description="单价列")
+    quantity_column: int | None = Field(None, ge=1, description="数量列")
+    amount_column: int | None = Field(None, ge=1, description="金额列")
+
+
+class MaterialPriceFillRow(BaseModel):
+    row_number: int = Field(..., description="原表行号")
+    material_code: str = Field("", description="原表物料编码")
+    material_name: str = Field("", description="原表物料名称")
+    matched_code: str | None = Field(None, description="匹配到的物料编码")
+    matched_name: str | None = Field(None, description="匹配到的物料名称")
+    unit: str = Field("", description="单位")
+    unit_price: Decimal | None = Field(None, description="匹配到的单价")
+    source: str = Field("unmatched", description="匹配来源")
+    message: str = Field("", description="匹配说明")
+
+
+class MaterialPriceFillPreview(BaseModel):
+    mapping: MaterialPriceFillMapping = Field(..., description="实际使用的列映射")
+    total_rows: int = Field(0, description="参与匹配的数据行数")
+    matched_rows: int = Field(0, description="已匹配行数")
+    unmatched_rows: int = Field(0, description="未匹配行数")
+    headers: list[str] = Field(
+        default_factory=list, description="表头文本（按列顺序，供手动映射）"
+    )
+    rows: list[MaterialPriceFillRow] = Field(
+        default_factory=list, description="逐行匹配结果（截断预览）"
+    )
+
+
+class MaterialPriceFillPreviewApiResponse(BaseModel):
+    code: int = Field(200, description="响应状态码")
+    message: str = Field("success", description="响应消息")
+    data: MaterialPriceFillPreview
+    meta: dict[str, Any] | None = None
