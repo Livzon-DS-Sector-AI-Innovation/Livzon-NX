@@ -784,8 +784,6 @@ class MaterialPriceSummary(BaseModel):
     min_price: Decimal = Field(..., description="历史最低单价")
     max_price: Decimal = Field(..., description="历史最高单价")
     avg_price: Decimal = Field(..., description="历史平均单价")
-    total_quantity: Decimal = Field(..., description="累计采购数量")
-    total_amount: Decimal = Field(..., description="累计采购金额")
     has_suspicious: bool = Field(False, description="是否含疑单位异常价格")
     live_batch_count: int = Field(0, description="仓储实时入库记录数")
     live_latest_price: Decimal | None = Field(

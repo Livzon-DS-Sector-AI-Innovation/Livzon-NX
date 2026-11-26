@@ -55897,16 +55897,6 @@ export interface components {
              */
             supplier_count: number;
             /**
-             * Total Amount
-             * @description 累计采购金额
-             */
-            total_amount: string;
-            /**
-             * Total Quantity
-             * @description 累计采购数量
-             */
-            total_quantity: string;
-            /**
              * Unit
              * @description 主单位
              * @default

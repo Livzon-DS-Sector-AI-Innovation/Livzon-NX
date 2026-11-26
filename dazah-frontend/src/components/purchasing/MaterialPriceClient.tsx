@@ -63,9 +63,8 @@ const yearOptions = Array.from({ length: 8 }, (_, index) => {
 })
 
 type MaterialPriceClientProps = {
-  initialRecords: MaterialPriceSummary[]
-  initialTotal: number
-  initialLoadFailed?: boolean
+  initialRecords?: MaterialPriceSummary[]
+  initialTotal?: number
 }
 
 type MaterialPriceMode = 'query' | 'fill'
@@ -118,7 +117,6 @@ function buildChartOption(detail: MaterialPriceDetail | null) {
 export function MaterialPriceClient({
   initialRecords,
   initialTotal,
-  initialLoadFailed = false,
 }: MaterialPriceClientProps) {
   const { message } = App.useApp()
   const [mode, setMode] = useState<MaterialPriceMode>('query')
@@ -135,6 +133,13 @@ export function MaterialPriceClient({
   const [detailLoading, setDetailLoading] = useState(false)
 
   const loadRecords = async (nextPage = page) => {
+    // 未输入关键词且未选筛选时不查询，页面保持空态
+    if (!keyword.trim() && !costCategory && !subInventory && dataYear === undefined) {
+      setRecords([])
+      setTotal(0)
+      setPage(1)
+      return
+    }
     setLoading(true)
     try {
       const response = await fetchMaterialPrices({
@@ -260,14 +265,6 @@ export function MaterialPriceClient({
         ) : (
           '-'
         ),
-    },
-    {
-      title: '累计金额',
-      dataIndex: 'total_amount',
-      key: 'total_amount',
-      width: 150,
-      align: 'right',
-      render: (value) => formatMoney(value),
     },
   ]
 
@@ -501,12 +498,6 @@ export function MaterialPriceClient({
             查询
           </Button>
         </div>
-
-        {initialLoadFailed && (
-          <div className="px-4 py-3 text-[13px] text-[var(--color-steel)]">
-            首屏数据加载失败，可点击刷新重试。
-          </div>
-        )}
 
         <Table<MaterialPriceSummary>
           columns={columns}

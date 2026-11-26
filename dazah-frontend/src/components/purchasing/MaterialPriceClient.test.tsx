@@ -32,8 +32,6 @@ const summary = {
   min_price: '15.04',
   max_price: '34.51',
   avg_price: '34.12',
-  total_quantity: '1000',
-  total_amount: '34120',
   has_suspicious: true,
   live_batch_count: 2,
   live_latest_price: '36.00',
@@ -201,27 +199,52 @@ describe('MaterialPriceClient', () => {
     expect(text).toContain('B001')
   })
 
-  it('reloads records via search and refresh controls', async () => {
-    render(<MaterialPriceClient initialRecords={[summary]} initialTotal={1} />)
+  it('keeps page empty until an ask, then searches', async () => {
+    api.fetchMaterialPrices.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: [summary],
+      meta: { page: 1, page_size: 20, total: 1 },
+    })
+    render(<MaterialPriceClient />)
+    // 打开页面即空态，不请求数据
+    expect(api.fetchMaterialPrices).not.toHaveBeenCalled()
+    expect(container.textContent).toContain('未找到匹配的物料价格记录')
+
+    // 无条件点击刷新同样不请求
     const refreshTop = Array.from(container.querySelectorAll('button')).find(
       (item) => item.textContent?.includes('刷新'),
     )
-    expect(refreshTop).not.toBeNull()
     await act(async () => {
       refreshTop?.click()
       await Promise.resolve()
     })
-    expect(api.fetchMaterialPrices).toHaveBeenCalledTimes(1)
+    expect(api.fetchMaterialPrices).not.toHaveBeenCalled()
 
-    const refresh = Array.from(container.querySelectorAll('button')).find(
-      (item) => item.textContent?.includes('刷新'),
-    )
-    expect(refresh).not.toBeNull()
+    // 输入关键词后点查询，才请求并展示结果
+    const input = container.querySelector<HTMLInputElement>('input.ant-input')
+    expect(input).not.toBeNull()
+    const setValue = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      'value',
+    )?.set
+    expect(setValue).toBeDefined()
     await act(async () => {
-      refresh?.click()
+      setValue!.call(input!, '隔膜垫')
+      input!.dispatchEvent(new Event('input', { bubbles: true }))
       await Promise.resolve()
     })
-    expect(api.fetchMaterialPrices).toHaveBeenCalledTimes(2)
+    await act(async () => {
+      const searchBtn = Array.from(container.querySelectorAll('button')).find(
+        (item) => item.textContent?.trim() === '查询',
+      )
+      searchBtn?.click()
+      await Promise.resolve()
+    })
+    expect(api.fetchMaterialPrices).toHaveBeenCalledTimes(1)
+    expect(api.fetchMaterialPrices.mock.calls[0][0]).toMatchObject({
+      keyword: '隔膜垫',
+    })
     expect(container.textContent).toContain('共 1 条')
   })
 
