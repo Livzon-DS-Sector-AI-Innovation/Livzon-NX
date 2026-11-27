@@ -255,5 +255,8 @@ def test_production_tool_bindings_identify_unintegrated_scheduling_page():
     covered = {key for spec in specs for key in spec.page_keys}
     pages = {page.page_key for page in PAGES_BY_MODULE["production"]}
     assert covered <= pages
-    assert pages - covered == {"production:plan:auto-scheduling", "production:anomalies"}
+    assert pages - covered == {
+        "production:plan:auto-scheduling",
+        "production:anomalies",
+    }
     assert all(not spec.write and not spec.human_decision_required for spec in specs)
