@@ -129,6 +129,11 @@ export const moduleMenus: ModuleMenu[] = [
         ],
       },
       {
+        key: "anomalies",
+        label: "异常记录",
+        path: "/production/anomalies",
+      },
+      {
         key: "shift-log",
         label: "生产日志",
         path: "",

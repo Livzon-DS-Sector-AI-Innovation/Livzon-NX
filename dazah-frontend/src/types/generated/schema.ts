@@ -14632,6 +14632,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/production/schedule-anomalies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 排产异常记录列表 */
+        get: operations["list_schedule_anomalies_api_v1_production_schedule_anomalies_get"];
+        put?: never;
+        /** 登记排产异常 */
+        post: operations["create_schedule_anomaly_api_v1_production_schedule_anomalies_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/production/schedule-anomalies/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 导出排产异常记录 Excel */
+        get: operations["export_schedule_anomalies_api_v1_production_schedule_anomalies_export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/production/schedule-constraints": {
         parameters: {
             query?: never;
@@ -66879,6 +66914,48 @@ export interface components {
             unit?: string | null;
         };
         /**
+         * ScheduleAnomalyBody
+         * @description 排产异常记录写入体（空值/空白由服务层统一校验并转业务 400）。
+         */
+        ScheduleAnomalyBody: {
+            /**
+             * Anomaly Type
+             * @description 异常类型
+             */
+            anomaly_type: string;
+            /**
+             * Batch No
+             * @description 批号
+             */
+            batch_no: string;
+            /**
+             * Event Date
+             * Format: date
+             * @description 异常发生日期
+             */
+            event_date: string;
+            /**
+             * Product Code
+             * @default FA
+             */
+            product_code: string;
+            /**
+             * Reason
+             * @description 原因（必填）
+             */
+            reason: string;
+            /**
+             * Remark
+             * @description 备注（选填）
+             */
+            remark?: string | null;
+            /**
+             * Tank No
+             * @description 罐号（选填）
+             */
+            tank_no?: string | null;
+        };
+        /**
          * ScheduleConstraintBody
          * @description 排产约束配置写入体（全字段可空，空值表示该项检查跳过）。
          */
@@ -112678,6 +112755,127 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_schedule_anomalies_api_v1_production_schedule_anomalies_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                /** @description 产品代码 */
+                product?: string;
+                /** @description 按批号筛选 */
+                batch_no?: string | null;
+                /** @description 按异常类型筛选 */
+                anomaly_type?: string | null;
+                /** @description 发生日期起（含） */
+                date_from?: string | null;
+                /** @description 发生日期止（含） */
+                date_to?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_schedule_anomaly_api_v1_production_schedule_anomalies_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduleAnomalyBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_schedule_anomalies_api_v1_production_schedule_anomalies_export_get: {
+        parameters: {
+            query?: {
+                /** @description 产品代码 */
+                product?: string;
+                /** @description 按批号筛选 */
+                batch_no?: string | null;
+                /** @description 按异常类型筛选 */
+                anomaly_type?: string | null;
+                /** @description 发生日期起（含） */
+                date_from?: string | null;
+                /** @description 发生日期止（含） */
+                date_to?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                auth_token?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

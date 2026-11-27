@@ -5476,6 +5476,12 @@
           "category": "destructive"
         }
       }
+    },
+    "production:anomalies": {
+      "status": "active",
+      "module_code": "production",
+      "route_path": "/production/anomalies",
+      "actions": {}
     }
   }
 }

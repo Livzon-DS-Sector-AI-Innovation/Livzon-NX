@@ -90,6 +90,12 @@ async def test_sync_resolves_people_and_writes_jsonb() -> None:
                         "total": 1,
                     }
                 ),
+                list_fields=AsyncMock(
+                    return_value=[
+                        {"field_name": candidates[0]}
+                        for candidates in seed_culture_sync.FIELD_CANDIDATES.values()
+                    ]
+                ),
                 _request=AsyncMock(
                     return_value={
                         "user": {

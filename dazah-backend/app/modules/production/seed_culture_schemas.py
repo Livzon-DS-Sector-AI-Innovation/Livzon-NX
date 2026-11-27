@@ -52,6 +52,11 @@ class SeedCultureCreate(BaseModel):
     ammonium_sulfate_batch: str | None = Field(None, description="硫酸铵/批号")
     soybean_meal_batch: str | None = Field(None, description="黄豆饼粉/批号")
     calcium_carbonate_batch: str | None = Field(None, description="碳酸钙/批号")
+    maltodextrin_batch: str | None = Field(None, description="麦芽糊精/批号")
+    cottonseed_meal_batch: str | None = Field(None, description="棉籽饼粉/批号")
+    yeast_extract_batch: str | None = Field(None, description="酵母浸粉/批号")
+    dimethylbutyric_acid_batch: str | None = Field(None, description="二甲基丁酸/批号")
+    antifoam_batch: str | None = Field(None, description="消泡剂/批号")
     prepare_operator: list[PersonRef] | None = Field(
         None, description="配制操作人/复核人"
     )
@@ -68,6 +73,10 @@ class SeedCultureCreate(BaseModel):
     shaker_setup_operator: list[PersonRef] | None = Field(
         None, description="上摇床摆东西人员"
     )
+    shaker_operator: list[PersonRef] | None = Field(
+        None, description="上摇床人员/复核人"
+    )
+    bottle_washing: list[PersonRef] | None = Field(None, description="洗瓶子")
     shaker_no: str | None = Field(None, description="摇床编号")
     shaker_start_date: date | None = Field(None, description="上摇床日期")
     inoculation_operator: list[PersonRef] | None = Field(
@@ -100,6 +109,8 @@ class SeedCultureCreate(BaseModel):
         "prepare_operator",
         "sterilization_operator",
         "shaker_setup_operator",
+        "shaker_operator",
+        "bottle_washing",
         "inoculation_operator",
         "tank_setup_operator",
         "merge_operator",
@@ -121,6 +132,11 @@ class SeedCultureUpdate(BaseModel):
     ammonium_sulfate_batch: str | None = Field(None, description="硫酸铵/批号")
     soybean_meal_batch: str | None = Field(None, description="黄豆饼粉/批号")
     calcium_carbonate_batch: str | None = Field(None, description="碳酸钙/批号")
+    maltodextrin_batch: str | None = Field(None, description="麦芽糊精/批号")
+    cottonseed_meal_batch: str | None = Field(None, description="棉籽饼粉/批号")
+    yeast_extract_batch: str | None = Field(None, description="酵母浸粉/批号")
+    dimethylbutyric_acid_batch: str | None = Field(None, description="二甲基丁酸/批号")
+    antifoam_batch: str | None = Field(None, description="消泡剂/批号")
     prepare_operator: list[PersonRef] | None = Field(
         None, description="配制操作人/复核人"
     )
@@ -137,6 +153,10 @@ class SeedCultureUpdate(BaseModel):
     shaker_setup_operator: list[PersonRef] | None = Field(
         None, description="上摇床摆东西人员"
     )
+    shaker_operator: list[PersonRef] | None = Field(
+        None, description="上摇床人员/复核人"
+    )
+    bottle_washing: list[PersonRef] | None = Field(None, description="洗瓶子")
     shaker_no: str | None = Field(None, description="摇床编号")
     shaker_start_date: date | None = Field(None, description="上摇床日期")
     inoculation_operator: list[PersonRef] | None = Field(
@@ -169,6 +189,8 @@ class SeedCultureUpdate(BaseModel):
         "prepare_operator",
         "sterilization_operator",
         "shaker_setup_operator",
+        "shaker_operator",
+        "bottle_washing",
         "inoculation_operator",
         "tank_setup_operator",
         "merge_operator",
@@ -191,6 +213,11 @@ class SeedCultureResponse(BaseModel):
     ammonium_sulfate_batch: str | None = None
     soybean_meal_batch: str | None = None
     calcium_carbonate_batch: str | None = None
+    maltodextrin_batch: str | None = None
+    cottonseed_meal_batch: str | None = None
+    yeast_extract_batch: str | None = None
+    dimethylbutyric_acid_batch: str | None = None
+    antifoam_batch: str | None = None
     prepare_operator: list[PersonRef] | None = None
     sterilization_operator: list[PersonRef] | None = None
     ph_before_adjust: float | None = None
@@ -201,6 +228,8 @@ class SeedCultureResponse(BaseModel):
     amino_nitrogen: float | None = None
     strain_tube_no: str | None = None
     shaker_setup_operator: list[PersonRef] | None = None
+    shaker_operator: list[PersonRef] | None = None
+    bottle_washing: list[PersonRef] | None = None
     shaker_no: str | None = None
     shaker_start_date: date | None = None
     inoculation_operator: list[PersonRef] | None = None
@@ -229,6 +258,8 @@ class SeedCultureResponse(BaseModel):
         "prepare_operator",
         "sterilization_operator",
         "shaker_setup_operator",
+        "shaker_operator",
+        "bottle_washing",
         "inoculation_operator",
         "tank_setup_operator",
         "merge_operator",

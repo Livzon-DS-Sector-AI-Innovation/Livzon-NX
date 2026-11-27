@@ -182,6 +182,15 @@
         ]
       },
       {
+        "key": "anomalies",
+        "name": "异常记录",
+        "path": "/production/anomalies",
+        "icon": null,
+        "permission_code": null,
+        "disabled": false,
+        "children": null
+      },
+      {
         "key": "shift-log",
         "name": "生产日志",
         "path": "",

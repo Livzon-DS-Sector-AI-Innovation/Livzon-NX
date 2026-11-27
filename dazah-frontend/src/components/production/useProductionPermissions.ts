@@ -25,6 +25,7 @@ export const PRODUCTION_PAGE_KEYS = {
   salesPlan: 'production:plan:sales-plan',
   scheduling: 'production:plan:scheduling',
   autoScheduling: 'production:plan:auto-scheduling',
+  anomalies: 'production:anomalies',
   shiftLogDeviation: 'production:shift-log:shift-log-deviation',
   shiftLogQuality: 'production:shift-log:shift-log-quality',
   shiftLogSummary: 'production:shift-log:shift-log-summary',
@@ -85,6 +86,17 @@ export function hasProductionSchedulingProduct(
   if (!hasProductionPagePermission(user, PRODUCTION_PAGE_KEYS.scheduling, 'query')) return false
   if (user?.role === 'admin') return true
   const grant = user?.page_permissions?.find((item) => item.page_key === PRODUCTION_PAGE_KEYS.scheduling)
+  return grant?.visible_sections == null || grant.visible_sections.includes(productCode)
+}
+
+export function hasProductionAnomalyProduct(
+  user: ProductionPermissionUser | null | undefined,
+  productCode: string,
+): boolean {
+  if (!PRODUCTION_SCHEDULING_SECTIONS.some((item) => item.key === productCode)) return false
+  if (!hasProductionPagePermission(user, PRODUCTION_PAGE_KEYS.anomalies, 'query')) return false
+  if (user?.role === 'admin') return true
+  const grant = user?.page_permissions?.find((item) => item.page_key === PRODUCTION_PAGE_KEYS.anomalies)
   return grant?.visible_sections == null || grant.visible_sections.includes(productCode)
 }
 

@@ -33,6 +33,38 @@ def _person(name: str, open_id: str | None = None, avatar: str | None = None):
     return SimpleNamespace(name=name, open_id=open_id, avatar_url=avatar)
 
 
+def test_aggregate_dr_includes_product_specific_roles() -> None:
+    """多拉菌素统计含特有环节（上摇床、洗瓶子），基础产品不含。"""
+    records = [
+        _record(
+            "DR-S1",
+            date(2026, 11, 5),
+            prepare_operator=[_person("王五", "ou_w")],
+            shaker_operator=[_person("王五", "ou_w")],
+            bottle_washing=[_person("赵六")],
+        ),
+    ]
+
+    # 多拉菌素：含特有环节（王五=配制+上摇床，赵六=洗瓶子，两人两行）
+    rows = aggregate_person_monthly(
+        records, date(2026, 11, 1), date(2026, 11, 30), product_name="多拉菌素"
+    )
+    assert len(rows) == 2
+    by_name = {row["name"]: row for row in rows}
+    assert by_name["王五"]["role_counts"]["上摇床"] == 1
+    assert by_name["王五"]["role_counts"]["配制"] == 1
+    assert by_name["赵六"]["role_counts"]["洗瓶子"] == 1
+
+    # 基础产品：统计环节不含特有环节
+    rows = aggregate_person_monthly(
+        records, date(2026, 11, 1), date(2026, 11, 30), product_name="盐酸林可霉素"
+    )
+    assert len(rows) == 1
+    assert "上摇床" not in rows[0]["role_counts"]
+    assert "洗瓶子" not in rows[0]["role_counts"]
+    assert rows[0]["role_counts"]["配制"] == 1
+
+
 def test_aggregate_counts_roles_and_dedupes_batches() -> None:
     """同一人同批多环节计 1 批、各环节分别计数；月外记录剔除。"""
     records = [

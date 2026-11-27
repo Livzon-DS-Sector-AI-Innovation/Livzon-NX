@@ -39,6 +39,15 @@ SYNC_MODULES = [
     "seed_culture_sync",
 ]
 
+# seed_culture_sync 新链路会先 list_fields 解析候选列名，测试需一并 mock
+# （list_fields 返回 [{"field_name": 飞书字段名}, ...]，取每列首个候选名）
+FIELD_FIELD_ITEMS = [
+    {"field_name": candidates[0]}
+    for candidates in importlib.import_module(
+        "app.modules.production.seed_culture_sync"
+    ).FIELD_CANDIDATES.values()
+]
+
 FUNC_NAMES = {
     "broth_receive_sync": "sync_broth_receive",
     "centrifuge1_sync": "sync_centrifuge1",
@@ -116,10 +125,17 @@ async def test_sync_empty_records(module_name: str) -> None:
     module, func = _load_module(module_name)
     session = _session()
     with patch.object(module, "decrypt_secret", return_value="secret"):
-        with patch.object(
-            module.ProductionFeishuClient,
-            "list_records",
-            new=AsyncMock(return_value={"items": []}),
+        with (
+            patch.object(
+                module.ProductionFeishuClient,
+                "list_records",
+                new=AsyncMock(return_value={"items": []}),
+            ),
+            patch.object(
+                module.ProductionFeishuClient,
+                "list_fields",
+                new=AsyncMock(return_value=list(FIELD_FIELD_ITEMS)),
+            ),
         ):
             result = await func(_config(), session)
     assert isinstance(result, dict)
@@ -133,14 +149,21 @@ async def test_sync_creates_records(module_name: str) -> None:
     session = _session(existing=None)
     batch_key = _batch_no_field(module)
     with patch.object(module, "decrypt_secret", return_value="secret"):
-        with patch.object(
-            module.ProductionFeishuClient,
-            "list_records",
-            new=AsyncMock(
-                return_value={
-                    "items": [{"record_id": "r1", "fields": {batch_key: "B001"}}]
-                }
-            ),  # noqa: E501
+        with (
+            patch.object(
+                module.ProductionFeishuClient,
+                "list_records",
+                new=AsyncMock(
+                    return_value={
+                        "items": [{"record_id": "r1", "fields": {batch_key: "B001"}}]
+                    }
+                ),  # noqa: E501
+            ),
+            patch.object(
+                module.ProductionFeishuClient,
+                "list_fields",
+                new=AsyncMock(return_value=list(FIELD_FIELD_ITEMS)),
+            ),
         ):
             result = await func(_config(), session)
     assert isinstance(result, dict)
@@ -155,14 +178,21 @@ async def test_sync_updates_existing_records(module_name: str) -> None:
     session = _session(existing=(1,))
     batch_key = _batch_no_field(module)
     with patch.object(module, "decrypt_secret", return_value="secret"):
-        with patch.object(
-            module.ProductionFeishuClient,
-            "list_records",
-            new=AsyncMock(
-                return_value={
-                    "items": [{"record_id": "r1", "fields": {batch_key: "B001"}}]
-                }
-            ),  # noqa: E501
+        with (
+            patch.object(
+                module.ProductionFeishuClient,
+                "list_records",
+                new=AsyncMock(
+                    return_value={
+                        "items": [{"record_id": "r1", "fields": {batch_key: "B001"}}]
+                    }
+                ),  # noqa: E501
+            ),
+            patch.object(
+                module.ProductionFeishuClient,
+                "list_fields",
+                new=AsyncMock(return_value=list(FIELD_FIELD_ITEMS)),
+            ),
         ):
             result = await func(_config(), session)
     assert isinstance(result, dict)
@@ -174,12 +204,21 @@ async def test_sync_skips_records_without_batch_no(module_name: str) -> None:
     module, func = _load_module(module_name)
     session = _session()
     with patch.object(module, "decrypt_secret", return_value="secret"):
-        with patch.object(
-            module.ProductionFeishuClient,
-            "list_records",
-            new=AsyncMock(
-                return_value={"items": [{"record_id": "r1", "fields": {"备注": "x"}}]}
-            ),  # noqa: E501
+        with (
+            patch.object(
+                module.ProductionFeishuClient,
+                "list_records",
+                new=AsyncMock(
+                    return_value={
+                        "items": [{"record_id": "r1", "fields": {"备注": "x"}}]
+                    }
+                ),  # noqa: E501
+            ),
+            patch.object(
+                module.ProductionFeishuClient,
+                "list_fields",
+                new=AsyncMock(return_value=list(FIELD_FIELD_ITEMS)),
+            ),
         ):
             result = await func(_config(), session)
     assert isinstance(result, dict)
@@ -265,10 +304,17 @@ async def test_sync_filters_non_dict_items(module_name: str) -> None:
     module, func = _load_module(module_name)
     session = _session()
     with patch.object(module, "decrypt_secret", return_value="secret"):
-        with patch.object(
-            module.ProductionFeishuClient,
-            "list_records",
-            new=AsyncMock(return_value={"items": [None, "text", 42]}),
+        with (
+            patch.object(
+                module.ProductionFeishuClient,
+                "list_records",
+                new=AsyncMock(return_value={"items": [None, "text", 42]}),
+            ),
+            patch.object(
+                module.ProductionFeishuClient,
+                "list_fields",
+                new=AsyncMock(return_value=list(FIELD_FIELD_ITEMS)),
+            ),
         ):
             result = await func(_config(), session)
     assert isinstance(result, dict)

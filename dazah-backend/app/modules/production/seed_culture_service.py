@@ -11,7 +11,8 @@ from app.modules.production.seed_culture_repository import SeedCultureRepository
 from app.modules.production.seed_culture_schemas import coerce_person_refs
 
 # 人员环节列 → 绩效角色标签（列值与飞书位表人员字段一一对应）
-ROLE_LABELS: dict[str, str] = {
+# 基础环节为全产品共用；多拉菌素有特有环节（上摇床、洗瓶子）
+BASE_ROLE_LABELS: dict[str, str] = {
     "prepare_operator": "配制",
     "sterilization_operator": "消毒",
     "shaker_setup_operator": "摇床摆放",
@@ -20,6 +21,22 @@ ROLE_LABELS: dict[str, str] = {
     "tank_setup_operator": "进罐",
     "workshop_inoculation_operator": "车间接种",
 }
+
+DR_ROLE_LABELS: dict[str, str] = {
+    **BASE_ROLE_LABELS,
+    "shaker_operator": "上摇床",
+    "bottle_washing": "洗瓶子",
+}
+
+# 兼容引用：既有代码/测试默认基础环节
+ROLE_LABELS: dict[str, str] = BASE_ROLE_LABELS
+
+
+def role_labels_for(product_name: str) -> dict[str, str]:
+    """按产品返回统计环节（多拉菌素含特有环节，其余产品用基础环节）。"""
+    if product_name == "多拉菌素":
+        return DR_ROLE_LABELS
+    return BASE_ROLE_LABELS
 
 
 def _person_attr(person: Any, attr: str) -> Any:
@@ -33,20 +50,23 @@ def aggregate_person_monthly(
     records: list[Any],
     month_start: date_type,
     month_end: date_type,
+    product_name: str = "",
 ) -> list[dict[str, Any]]:
     """按 月 × 人 聚合菌种参与情况（月度绩效依据）。
 
     以 prepare_date 归属月份；同一人一 batch 担任多环节计 1 批、
     各环节分别计数；身份以 open_id 优先、缺省按姓名归组。
+    统计环节按产品区分（多拉菌素含上摇床、洗瓶子）。
     返回按参与批次数降序的行列表。
     """
+    role_labels = role_labels_for(product_name)
     stats: dict[str, dict[str, Any]] = {}
     for record in records:
         prepare_date = getattr(record, "prepare_date", None)
         if prepare_date is None or not (month_start <= prepare_date <= month_end):
             continue
         batch_no = str(getattr(record, "batch_no", ""))
-        for role_col, label in ROLE_LABELS.items():
+        for role_col, label in role_labels.items():
             people = coerce_person_refs(getattr(record, role_col, None))
             if not isinstance(people, list):
                 continue
@@ -62,7 +82,7 @@ def aggregate_person_monthly(
                         "open_id": open_id,
                         "avatar_url": _person_attr(person, "avatar_url"),
                         "batch_set": set(),
-                        "role_counts": {lab: 0 for lab in ROLE_LABELS.values()},
+                        "role_counts": {lab: 0 for lab in role_labels.values()},
                         "details": [],
                     }
                     stats[key] = entry
@@ -165,4 +185,6 @@ class SeedCultureService:
         records, _total = await self.repo.list(
             page=1, page_size=1000, product_name=product_name
         )
-        return aggregate_person_monthly(records, month_start, month_end)
+        return aggregate_person_monthly(
+            records, month_start, month_end, product_name
+        )

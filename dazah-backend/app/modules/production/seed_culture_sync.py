@@ -17,45 +17,54 @@ from app.modules.production.production_feishu_models import ProductionFeishuConf
 
 logger = logging.getLogger(__name__)
 
-# 飞书字段名 → seed_cultures 数据库列名
-FIELD_MAPPING = {
-    "摇瓶批号": "batch_no",
-    "配置日期": "prepare_date",
-    "葡萄糖/批号": "glucose_batch",
-    "玉米淀粉/批号": "corn_starch_batch",
-    "玉米浆/批号": "corn_syrup_batch",
-    "硫酸铵/批号": "ammonium_sulfate_batch",
-    "黄豆饼粉/批号": "soybean_meal_batch",
-    "碳酸钙/批号": "calcium_carbonate_batch",
-    "配制操作人/复核人": "prepare_operator",
-    "种子消毒人员": "sterilization_operator",
-    "调前PH": "ph_before_adjust",
-    "调后PH": "ph_after_adjust",
-    "消后PH": "ph_after_sterilization",
-    "还原糖": "reducing_sugar",
-    "总糖": "total_sugar",
-    "氨基氮": "amino_nitrogen",
-    "冻管菌号": "strain_tube_no",
-    "上摇床摆东西人员": "shaker_setup_operator",
-    "摇床编号": "shaker_no",
-    "上摇床日期": "shaker_start_date",
-    "接种人员/复核人": "inoculation_operator",
-    "用具编号": "tool_no",
-    "并瓶时间": "merge_time",
-    "并瓶数量(瓶）": "merge_count",
-    "并瓶周期": "merge_cycle",
-    "并瓶PH": "merge_ph",
-    "并瓶菌浓": "merge_bacteria_density",
-    "并瓶总糖": "merge_total_sugar",
-    "并瓶还原糖": "merge_reducing_sugar",
-    "并瓶氨基氮": "merge_amino_nitrogen",
-    "进罐摆东西人员": "tank_setup_operator",
-    "钢瓶编号": "cylinder_no",
-    "并瓶操作人/复核人": "merge_operator",
-    "车间接种人员": "workshop_inoculation_operator",
-    "备注（罐号）": "tank_remarks",
-    "罐产": "tank_yield",
-    "备注": "remarks",
+# 数据库列名 → 飞书字段名候选（第一个在表里存在的生效）。
+# 同一套菌种台账在多产品间列名有差异（如多拉菌素配方物料与林可不同），
+# 候选按"林可名在前、其他产品变体在后"排列。
+FIELD_CANDIDATES: dict[str, tuple[str, ...]] = {
+    "batch_no": ("摇瓶批号",),
+    "prepare_date": ("配置日期",),
+    "glucose_batch": ("葡萄糖/批号",),
+    "corn_starch_batch": ("玉米淀粉/批号",),
+    "corn_syrup_batch": ("玉米浆/批号",),
+    "ammonium_sulfate_batch": ("硫酸铵/批号",),
+    "soybean_meal_batch": ("黄豆饼粉/批号",),
+    "calcium_carbonate_batch": ("碳酸钙/批号",),
+    "maltodextrin_batch": ("麦芽糊精/批号",),
+    "cottonseed_meal_batch": ("棉籽饼粉/批号",),
+    "yeast_extract_batch": ("酵母浸粉/批号",),
+    "dimethylbutyric_acid_batch": ("二甲基丁酸/批号",),
+    "antifoam_batch": ("消泡剂/批号",),
+    "shaker_operator": ("上摇床人员/复核人",),
+    "bottle_washing": ("洗瓶子",),
+    "prepare_operator": ("配制操作人/复核人",),
+    "sterilization_operator": ("种子消毒人员",),
+    "ph_before_adjust": ("调前PH",),
+    "ph_after_adjust": ("调后PH",),
+    "ph_after_sterilization": ("消后PH",),
+    "reducing_sugar": ("还原糖",),
+    "total_sugar": ("总糖",),
+    "amino_nitrogen": ("氨基氮",),
+    "strain_tube_no": ("冻管菌号",),
+    "shaker_setup_operator": ("上摇床摆东西人员",),
+    "shaker_no": ("摇床编号",),
+    "shaker_start_date": ("上摇床日期",),
+    "inoculation_operator": ("接种人员/复核人",),
+    "tool_no": ("用具编号", "用具"),
+    "merge_time": ("并瓶时间",),
+    "merge_count": ("并瓶数量(瓶）",),
+    "merge_cycle": ("并瓶周期",),
+    "merge_ph": ("并瓶PH",),
+    "merge_bacteria_density": ("并瓶菌浓",),
+    "merge_total_sugar": ("并瓶总糖",),
+    "merge_reducing_sugar": ("并瓶还原糖",),
+    "merge_amino_nitrogen": ("并瓶氨基氮",),
+    "tank_setup_operator": ("进罐摆东西人员",),
+    "cylinder_no": ("钢瓶编号",),
+    "merge_operator": ("并瓶操作人/复核人",),
+    "workshop_inoculation_operator": ("车间接种人员",),
+    "tank_remarks": ("备注（罐号）",),
+    "tank_yield": ("罐产",),
+    "remarks": ("备注",),
 }
 
 TYPE_CONVERTERS = {
@@ -77,7 +86,14 @@ TYPE_CONVERTERS = {
     "tank_yield": lambda v: float(v) if v else None,
 }
 
-STRING_FIELDS = {k for k in FIELD_MAPPING.values() if k not in TYPE_CONVERTERS}
+# 兼容视图：字段名 → 列（历史引用）；候选结构见 FIELD_CANDIDATES
+FIELD_MAPPING = {
+    name: col
+    for col, candidates in FIELD_CANDIDATES.items()
+    for name in candidates
+}
+
+STRING_FIELDS = {k for k in FIELD_CANDIDATES if k not in TYPE_CONVERTERS}
 DATE_FIELDS = {"prepare_date", "shaker_start_date", "merge_time"}
 
 # 飞书成员类型字段：同步解析 open_id → 姓名+头像，入库为 JSONB 数组
@@ -89,6 +105,8 @@ PERSON_FIELDS = {
     "tank_setup_operator",
     "merge_operator",
     "workshop_inoculation_operator",
+    "shaker_operator",
+    "bottle_washing",
 }
 
 
@@ -211,10 +229,22 @@ async def sync_seed_culture_to_table(
     person_cache: dict[str, dict[str, Any]] = {}
     unresolved_people = 0
     rows = []
+    # 表内实际字段名 → 每列取第一个命中的候选（不同产品位表列名有差异）
+    table_field_names = {
+        str(f.get("field_name"))
+        for f in await client.list_fields(config.table_id)
+        if f.get("field_name")
+    }
+    effective_mapping = {
+        db_col: name
+        for db_col, candidates in FIELD_CANDIDATES.items()
+        for name in candidates
+        if name in table_field_names
+    }
     for item in items:
         fields = item.get("fields", {})
         mapped: dict[str, Any] = {"product_name": config.product_name or ""}
-        for feishu_name, db_col in FIELD_MAPPING.items():
+        for db_col, feishu_name in effective_mapping.items():
             raw = fields.get(feishu_name)
             if raw is None:
                 continue

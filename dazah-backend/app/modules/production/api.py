@@ -1106,6 +1106,13 @@ from app.modules.production.schedule_excel_api import (  # noqa: E402
 router.include_router(schedule_excel_router, tags=["生产管理 - 排产计划存档"])
 
 
+from app.modules.production.schedule_anomaly_api import (  # noqa: E402
+    router as schedule_anomaly_router,
+)
+
+router.include_router(schedule_anomaly_router, tags=["生产管理 - 排产异常记录"])
+
+
 from app.modules.production.schedule_draft_api import (  # noqa: E402
     router as schedule_draft_router,
 )

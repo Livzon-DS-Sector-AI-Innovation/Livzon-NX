@@ -904,3 +904,41 @@ export interface FlBoard {
   recent_completed: FlBoardBatch[]
   generated_at: string
 }
+
+// ============ 排产异常记录 ============
+
+/** 排产计划外异常类型 */
+export type ScheduleAnomalyType =
+  | 'delayed'
+  | 'reduced'
+  | 'reseeded'
+  | 'contamination'
+  | 'other'
+
+/** 排产异常记录（人工登记计划外变化） */
+export interface ScheduleAnomalyRecord {
+  id: string
+  product_code: string
+  batch_no: string
+  tank_no?: string | null
+  anomaly_type: ScheduleAnomalyType
+  anomaly_type_label: string
+  /** 异常发生日期（YYYY-MM-DD） */
+  event_date: string
+  reason: string
+  remark?: string | null
+  created_by_name?: string | null
+  created_at?: string | null
+  updated_at?: string | null
+}
+
+/** 排产异常登记入参 */
+export interface ScheduleAnomalyInput {
+  product_code: string
+  batch_no: string
+  tank_no?: string | null
+  anomaly_type: ScheduleAnomalyType
+  event_date: string
+  reason: string
+  remark?: string | null
+}

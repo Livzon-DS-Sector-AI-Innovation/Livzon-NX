@@ -19,6 +19,11 @@ export interface SeedCultureRecord {
   ammonium_sulfate_batch?: string | null
   soybean_meal_batch?: string | null
   calcium_carbonate_batch?: string | null
+  maltodextrin_batch?: string | null
+  cottonseed_meal_batch?: string | null
+  yeast_extract_batch?: string | null
+  dimethylbutyric_acid_batch?: string | null
+  antifoam_batch?: string | null
   prepare_operator?: SeedCulturePerson[] | null
   sterilization_operator?: SeedCulturePerson[] | null
   ph_before_adjust?: number | null
@@ -29,6 +34,8 @@ export interface SeedCultureRecord {
   amino_nitrogen?: number | null
   strain_tube_no?: string | null
   shaker_setup_operator?: SeedCulturePerson[] | null
+  shaker_operator?: SeedCulturePerson[] | null
+  bottle_washing?: SeedCulturePerson[] | null
   shaker_no?: string | null
   shaker_start_date?: string | null
   inoculation_operator?: SeedCulturePerson[] | null
@@ -62,6 +69,11 @@ export interface SeedCultureCreate {
   ammonium_sulfate_batch?: string | null
   soybean_meal_batch?: string | null
   calcium_carbonate_batch?: string | null
+  maltodextrin_batch?: string | null
+  cottonseed_meal_batch?: string | null
+  yeast_extract_batch?: string | null
+  dimethylbutyric_acid_batch?: string | null
+  antifoam_batch?: string | null
   prepare_operator?: SeedCulturePerson[] | null
   sterilization_operator?: SeedCulturePerson[] | null
   ph_before_adjust?: number | null
@@ -72,6 +84,8 @@ export interface SeedCultureCreate {
   amino_nitrogen?: number | null
   strain_tube_no?: string | null
   shaker_setup_operator?: SeedCulturePerson[] | null
+  shaker_operator?: SeedCulturePerson[] | null
+  bottle_washing?: SeedCulturePerson[] | null
   shaker_no?: string | null
   shaker_start_date?: string | null
   inoculation_operator?: SeedCulturePerson[] | null

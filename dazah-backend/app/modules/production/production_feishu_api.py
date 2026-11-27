@@ -87,6 +87,7 @@ async def upsert_feishu_config(
         select(ProductionFeishuConfig)
         .where(
             ProductionFeishuConfig.product_name == body.product_name,
+            ProductionFeishuConfig.sync_target == body.sync_target,
             ProductionFeishuConfig.is_deleted.is_(False),
         )
         .order_by(ProductionFeishuConfig.created_at.desc())
