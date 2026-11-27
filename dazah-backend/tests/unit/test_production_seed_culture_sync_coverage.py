@@ -57,10 +57,21 @@ async def test_seed_culture_parsing_variants() -> Any:
     with patch.object(mod, "decrypt_secret", return_value="secret"):
         with patch.object(
             mod.ProductionFeishuClient,
-            "list_records",
-            new=AsyncMock(return_value={"items": items}),
+            "list_fields",
+            new=AsyncMock(
+                return_value=[
+                    {"field_name": name}
+                    for names in mod.FIELD_CANDIDATES.values()
+                    for name in names
+                ]
+            ),
         ):
-            out = await mod.sync_seed_culture_to_table(_config(), session)
+            with patch.object(
+                mod.ProductionFeishuClient,
+                "list_records",
+                new=AsyncMock(return_value={"items": items}),
+            ):
+                out = await mod.sync_seed_culture_to_table(_config(), session)
     assert out["created"] == 5  # r1~r4 + r7 有 batch_no；r5/r6 跳过
     session.execute.assert_awaited()
 

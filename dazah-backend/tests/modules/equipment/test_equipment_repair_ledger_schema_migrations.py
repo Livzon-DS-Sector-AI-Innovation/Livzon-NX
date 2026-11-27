@@ -172,7 +172,7 @@ def test_migration_history_has_the_merge_as_its_single_head():
 
     # 公告通知台账迁移（b6d8a2e4c9f1）挂在合并迁移之后成为唯一 head——
     # 并行开发的新迁移落在 b098d78d072c 之上时的常规收口
-    assert script.get_heads() == ["c3f7a1d9e2b4"]
+    assert script.get_heads() == ["c9d4e7f2a8b1"]
     revisions = {revision.revision for revision in script.walk_revisions()}
     assert {
         REPAIR_TABLES_REVISION,
