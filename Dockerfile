@@ -59,6 +59,18 @@ RUN --mount=type=cache,id=dazah-debian-apt,target=/var/cache/apt,sharing=locked 
     && mkdir -p /home/app/.cache \
     && chown -R app:app /home/app/.cache/ms-playwright
 
+# Linux-pam 目录遍历安全修复（CVE-2025-6020）：playwright --with-deps 会装入
+# libpam 依赖，断言不低于 Debian 安全修复版本（与上方 GPGME 断言同模式）
+RUN --mount=type=cache,id=dazah-debian-apt,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,id=dazah-debian-apt-lists,target=/var/lib/apt/lists,sharing=locked \
+    apt-get update \
+    && apt-get install -y --no-install-recommends libpam0g libpam-modules \
+    && for package in libpam0g libpam-modules; do \
+        installed_version="$(dpkg-query -W -f='${Version}' "$package")" \
+        && dpkg --compare-versions "$installed_version" ge 1.5.2-6+deb12u3 \
+        || { echo "$package $installed_version is below the Linux-pam security fix" >&2; exit 1; }; \
+    done
+
 COPY scripts/cd/conversion_limit.py /usr/local/bin/dazah-conversion
 COPY scripts/cd/readiness.py /opt/dazah-readiness.py
 RUN sed -i 's/\r$//' /usr/local/bin/dazah-conversion \

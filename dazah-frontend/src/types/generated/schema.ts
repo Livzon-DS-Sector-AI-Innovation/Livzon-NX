@@ -67140,10 +67140,20 @@ export interface components {
              */
             ammonium_sulfate_batch?: string | null;
             /**
+             * Antifoam Batch
+             * @description 消泡剂/批号
+             */
+            antifoam_batch?: string | null;
+            /**
              * Batch No
              * @description 摇瓶批号
              */
             batch_no: string;
+            /**
+             * Bottle Washing
+             * @description 洗瓶子
+             */
+            bottle_washing?: components["schemas"]["PersonRef"][] | null;
             /**
              * Calcium Carbonate Batch
              * @description 碳酸钙/批号
@@ -67160,10 +67170,20 @@ export interface components {
              */
             corn_syrup_batch?: string | null;
             /**
+             * Cottonseed Meal Batch
+             * @description 棉籽饼粉/批号
+             */
+            cottonseed_meal_batch?: string | null;
+            /**
              * Cylinder No
              * @description 钢瓶编号
              */
             cylinder_no?: string | null;
+            /**
+             * Dimethylbutyric Acid Batch
+             * @description 二甲基丁酸/批号
+             */
+            dimethylbutyric_acid_batch?: string | null;
             /**
              * Glucose Batch
              * @description 葡萄糖/批号
@@ -67174,6 +67194,11 @@ export interface components {
              * @description 接种人员/复核人
              */
             inoculation_operator?: components["schemas"]["PersonRef"][] | null;
+            /**
+             * Maltodextrin Batch
+             * @description 麦芽糊精/批号
+             */
+            maltodextrin_batch?: string | null;
             /**
              * Merge Amino Nitrogen
              * @description 并瓶氨基氮
@@ -67266,6 +67291,11 @@ export interface components {
              */
             shaker_no?: string | null;
             /**
+             * Shaker Operator
+             * @description 上摇床人员/复核人
+             */
+            shaker_operator?: components["schemas"]["PersonRef"][] | null;
+            /**
              * Shaker Setup Operator
              * @description 上摇床摆东西人员
              */
@@ -67320,6 +67350,11 @@ export interface components {
              * @description 车间接种人员
              */
             workshop_inoculation_operator?: components["schemas"]["PersonRef"][] | null;
+            /**
+             * Yeast Extract Batch
+             * @description 酵母浸粉/批号
+             */
+            yeast_extract_batch?: string | null;
         };
         /** SeedCultureUpdate */
         SeedCultureUpdate: {
@@ -67334,10 +67369,20 @@ export interface components {
              */
             ammonium_sulfate_batch?: string | null;
             /**
+             * Antifoam Batch
+             * @description 消泡剂/批号
+             */
+            antifoam_batch?: string | null;
+            /**
              * Batch No
              * @description 摇瓶批号
              */
             batch_no?: string | null;
+            /**
+             * Bottle Washing
+             * @description 洗瓶子
+             */
+            bottle_washing?: components["schemas"]["PersonRef"][] | null;
             /**
              * Calcium Carbonate Batch
              * @description 碳酸钙/批号
@@ -67354,10 +67399,20 @@ export interface components {
              */
             corn_syrup_batch?: string | null;
             /**
+             * Cottonseed Meal Batch
+             * @description 棉籽饼粉/批号
+             */
+            cottonseed_meal_batch?: string | null;
+            /**
              * Cylinder No
              * @description 钢瓶编号
              */
             cylinder_no?: string | null;
+            /**
+             * Dimethylbutyric Acid Batch
+             * @description 二甲基丁酸/批号
+             */
+            dimethylbutyric_acid_batch?: string | null;
             /**
              * Glucose Batch
              * @description 葡萄糖/批号
@@ -67368,6 +67423,11 @@ export interface components {
              * @description 接种人员/复核人
              */
             inoculation_operator?: components["schemas"]["PersonRef"][] | null;
+            /**
+             * Maltodextrin Batch
+             * @description 麦芽糊精/批号
+             */
+            maltodextrin_batch?: string | null;
             /**
              * Merge Amino Nitrogen
              * @description 并瓶氨基氮
@@ -67459,6 +67519,11 @@ export interface components {
              */
             shaker_no?: string | null;
             /**
+             * Shaker Operator
+             * @description 上摇床人员/复核人
+             */
+            shaker_operator?: components["schemas"]["PersonRef"][] | null;
+            /**
              * Shaker Setup Operator
              * @description 上摇床摆东西人员
              */
@@ -67513,6 +67578,11 @@ export interface components {
              * @description 车间接种人员
              */
             workshop_inoculation_operator?: components["schemas"]["PersonRef"][] | null;
+            /**
+             * Yeast Extract Batch
+             * @description 酵母浸粉/批号
+             */
+            yeast_extract_batch?: string | null;
         };
         /**
          * SendNoticeRequest

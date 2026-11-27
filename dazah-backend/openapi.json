@@ -86773,10 +86773,37 @@
             "description": "硫酸铵/批号",
             "title": "Ammonium Sulfate Batch"
           },
+          "antifoam_batch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "消泡剂/批号",
+            "title": "Antifoam Batch"
+          },
           "batch_no": {
             "description": "摇瓶批号",
             "title": "Batch No",
             "type": "string"
+          },
+          "bottle_washing": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/PersonRef"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "洗瓶子",
+            "title": "Bottle Washing"
           },
           "calcium_carbonate_batch": {
             "anyOf": [
@@ -86814,6 +86841,18 @@
             "description": "玉米浆/批号",
             "title": "Corn Syrup Batch"
           },
+          "cottonseed_meal_batch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "棉籽饼粉/批号",
+            "title": "Cottonseed Meal Batch"
+          },
           "cylinder_no": {
             "anyOf": [
               {
@@ -86825,6 +86864,18 @@
             ],
             "description": "钢瓶编号",
             "title": "Cylinder No"
+          },
+          "dimethylbutyric_acid_batch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "二甲基丁酸/批号",
+            "title": "Dimethylbutyric Acid Batch"
           },
           "glucose_batch": {
             "anyOf": [
@@ -86852,6 +86903,18 @@
             ],
             "description": "接种人员/复核人",
             "title": "Inoculation Operator"
+          },
+          "maltodextrin_batch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "麦芽糊精/批号",
+            "title": "Maltodextrin Batch"
           },
           "merge_amino_nitrogen": {
             "anyOf": [
@@ -87071,6 +87134,21 @@
             "description": "摇床编号",
             "title": "Shaker No"
           },
+          "shaker_operator": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/PersonRef"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "上摇床人员/复核人",
+            "title": "Shaker Operator"
+          },
           "shaker_setup_operator": {
             "anyOf": [
               {
@@ -87215,6 +87293,18 @@
             ],
             "description": "车间接种人员",
             "title": "Workshop Inoculation Operator"
+          },
+          "yeast_extract_batch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "酵母浸粉/批号",
+            "title": "Yeast Extract Batch"
           }
         },
         "required": [
@@ -87249,6 +87339,18 @@
             "description": "硫酸铵/批号",
             "title": "Ammonium Sulfate Batch"
           },
+          "antifoam_batch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "消泡剂/批号",
+            "title": "Antifoam Batch"
+          },
           "batch_no": {
             "anyOf": [
               {
@@ -87260,6 +87362,21 @@
             ],
             "description": "摇瓶批号",
             "title": "Batch No"
+          },
+          "bottle_washing": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/PersonRef"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "洗瓶子",
+            "title": "Bottle Washing"
           },
           "calcium_carbonate_batch": {
             "anyOf": [
@@ -87297,6 +87414,18 @@
             "description": "玉米浆/批号",
             "title": "Corn Syrup Batch"
           },
+          "cottonseed_meal_batch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "棉籽饼粉/批号",
+            "title": "Cottonseed Meal Batch"
+          },
           "cylinder_no": {
             "anyOf": [
               {
@@ -87308,6 +87437,18 @@
             ],
             "description": "钢瓶编号",
             "title": "Cylinder No"
+          },
+          "dimethylbutyric_acid_batch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "二甲基丁酸/批号",
+            "title": "Dimethylbutyric Acid Batch"
           },
           "glucose_batch": {
             "anyOf": [
@@ -87335,6 +87476,18 @@
             ],
             "description": "接种人员/复核人",
             "title": "Inoculation Operator"
+          },
+          "maltodextrin_batch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "麦芽糊精/批号",
+            "title": "Maltodextrin Batch"
           },
           "merge_amino_nitrogen": {
             "anyOf": [
@@ -87560,6 +87713,21 @@
             "description": "摇床编号",
             "title": "Shaker No"
           },
+          "shaker_operator": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/PersonRef"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "上摇床人员/复核人",
+            "title": "Shaker Operator"
+          },
           "shaker_setup_operator": {
             "anyOf": [
               {
@@ -87704,6 +87872,18 @@
             ],
             "description": "车间接种人员",
             "title": "Workshop Inoculation Operator"
+          },
+          "yeast_extract_batch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "酵母浸粉/批号",
+            "title": "Yeast Extract Batch"
           }
         },
         "title": "SeedCultureUpdate",
