@@ -90,12 +90,12 @@ async def test_module_coverage_http_inventory_disabled_and_admin_boundary(
         assert dossier_page["registered_count"] == 0
         assert modules["warehouse"]["coverage_percent"] == 100.0
         assert modules["warehouse"]["covered_pages"] == 47
-        assert modules["production"]["coverage_percent"] == 95.5
+        assert modules["production"]["coverage_percent"] == 91.3
         assert {
             page["page_key"]
             for page in modules["production"]["pages"]
             if page["registered_count"] == 0
-        } == {"production:plan:auto-scheduling"}
+        } == {"production:plan:auto-scheduling", "production:anomalies"}
         assert modules["production"]["covered_pages"] == 21
         assert modules["quality"]["registered_count"] == 89
         assert modules["quality"]["covered_pages"] == 59
