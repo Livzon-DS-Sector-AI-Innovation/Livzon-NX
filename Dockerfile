@@ -52,12 +52,20 @@ RUN --mount=type=cache,id=dazah-backend-uv,target=/home/app/.cache/uv,sharing=lo
     uv sync --frozen --no-dev
 
 # Playwright Chromium：法规雷达与法规跟踪（CDE）的 JS 渲染站点抓取依赖；
-# 浏览器装入 app 用户缓存目录并归属 app，运行时可被 Playwright 找到
+# 浏览器装入 app 用户缓存目录并归属 app，运行时可被 Playwright 找到；
+# 随层升级 libpam 至 Linux-pam 目录遍历安全修复版本（CVE-2025-6020）并断言
 RUN --mount=type=cache,id=dazah-debian-apt,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,id=dazah-debian-apt-lists,target=/var/lib/apt/lists,sharing=locked \
     .venv/bin/playwright install --with-deps chromium \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends libpam0g libpam-modules \
     && mkdir -p /home/app/.cache \
-    && chown -R app:app /home/app/.cache/ms-playwright
+    && chown -R app:app /home/app/.cache/ms-playwright \
+    && for package in libpam0g libpam-modules; do \
+        installed_version="$(dpkg-query -W -f='${Version}' "$package")" \
+        && dpkg --compare-versions "$installed_version" ge 1.5.2-6+deb12u3 \
+        || { echo "$package $installed_version is below the Linux-pam security fix" >&2; exit 1; }; \
+    done
 
 COPY scripts/cd/conversion_limit.py /usr/local/bin/dazah-conversion
 COPY scripts/cd/readiness.py /opt/dazah-readiness.py
