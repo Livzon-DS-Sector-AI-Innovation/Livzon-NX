@@ -10,6 +10,9 @@ from app.platform.integrations.feishu.utils import OPEN_API_BASE_URL
 
 TOKEN_TTL = 90 * 60
 
+# 飞书认证失败错误码：token 失效/非法（缓存 token 被服务端作废等）
+AUTH_ERROR_CODES = {99991661, 99991663, 99991668}
+
 
 def _cache_key(app_id: str) -> str:
     digest = hashlib.sha256(app_id.encode()).hexdigest()[:24]
@@ -22,11 +25,12 @@ class ProductionFeishuClient:
         self.app_secret = app_secret
         self.app_token = app_token
 
-    async def _get_token(self) -> str:
+    async def _get_token(self, *, force_refresh: bool = False) -> str:
         cache_key = _cache_key(self.app_id)
-        cached = await redis_client.get(cache_key)
-        if cached:
-            return str(cached)
+        if not force_refresh:
+            cached = await redis_client.get(cache_key)
+            if cached:
+                return str(cached)
 
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.post(
@@ -43,8 +47,9 @@ class ProductionFeishuClient:
         await redis_client.set(cache_key, token, ex=TOKEN_TTL)
         return str(token)
 
-    async def _request(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
-        token = await self._get_token()
+    async def _send(
+        self, method: str, path: str, token: str, **kwargs: Any
+    ) -> tuple[dict[str, Any], httpx.Response]:
         async with httpx.AsyncClient(base_url=OPEN_API_BASE_URL, timeout=30) as client:
             resp = await client.request(
                 method,
@@ -55,8 +60,25 @@ class ProductionFeishuClient:
                 },
                 **kwargs,
             )
-            resp.raise_for_status()
+        try:
             body = resp.json()
+        except ValueError:
+            body = {}
+        return body, resp
+
+    async def _request(self, method: str, path: str, **kwargs: Any) -> dict[str, Any]:
+        token = await self._get_token()
+        body, resp = await self._send(method, path, token, **kwargs)
+        # 缓存 token 可能被服务端提前作废（应用更新/密钥轮换等）：
+        # 认证失败时清缓存强制刷新，重试一次；非认证类 4xx 不重试
+        auth_failed = resp.status_code in (400, 401) or (
+            isinstance(body, dict) and body.get("code") in AUTH_ERROR_CODES
+        )
+        if auth_failed:
+            token = await self._get_token(force_refresh=True)
+            body, resp = await self._send(method, path, token, **kwargs)
+        resp.raise_for_status()
+        body = resp.json()
         if body.get("code") != 0:
             raise RuntimeError(body.get("msg", str(body)))
         return body.get("data") or {}

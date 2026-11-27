@@ -33,6 +33,8 @@ PAGE_VISIBLE_SECTIONS = {
     "production:overview": PRODUCTION_OVERVIEW_VISIBLE_SECTIONS,
     "production:plan:scheduling": PRODUCTION_OVERVIEW_VISIBLE_SECTIONS
     - {"FL", "sales_plan"},
+    "production:anomalies": PRODUCTION_OVERVIEW_VISIBLE_SECTIONS
+    - {"FL", "sales_plan"},
 }
 PAGE_SCOPE_TYPES = frozenset(
     {
@@ -3475,6 +3477,7 @@ def _production_api_bindings() -> tuple[PageApiBinding, ...]:
     process_context = overview
     sales_plan_page = ("production:plan:sales-plan",)
     scheduling_page = ("production:plan:scheduling",)
+    anomalies_page = ("production:anomalies",)
     auto_scheduling_page = ("production:plan:auto-scheduling",)
     deviation_page = ("production:shift-log:shift-log-deviation",)
     summary_page = ("production:shift-log:shift-log-summary",)
@@ -3661,9 +3664,14 @@ def _production_api_bindings() -> tuple[PageApiBinding, ...]:
     )
     # 停产状态：GET 供概览/排产页导航块与看板渲染（读）；POST 设置/解除停产
     # 仅概览页操作权限（前端切换时二次确认 + 5 秒倒计时）
-    add("GET", "/production-line-status", overview + scheduling_page)
+    # 异常记录页的产线导航块同样读取停产状态（只读）
+    add("GET", "/production-line-status", overview + scheduling_page + anomalies_page)
     # 停产/复产事件时间线（只读）：概览停产确认弹窗与停产历史查看
-    add("GET", "/production-line-status/events", overview + scheduling_page)
+    add(
+        "GET",
+        "/production-line-status/events",
+        overview + scheduling_page + anomalies_page,
+    )
     add("POST", "/production-line-status", overview, "operate")
     # 生产汇总：五产线发酵/提炼关键指标聚合（只读），由生产概览页调用；
     # 当前月汇总服务端隐藏停产产线（历史月份照常显示）
@@ -3751,6 +3759,28 @@ def _production_api_bindings() -> tuple[PageApiBinding, ...]:
         "GET",
         "/schedule-excel/{archive_id}/validation",
         scheduling_page,
+        scope_adapter="production.plan",
+    )
+    # 排产异常记录：人工登记计划外变化（延后/减批/补种/染菌等），
+    # 独立台账页与概览页产线展开卡都可读写；产品可见范围与排产页一致
+    add(
+        "GET",
+        "/schedule-anomalies",
+        anomalies_page + overview,
+        scope_adapter="production.plan",
+    )
+    # 导出 Excel 与列表同权限口径（query），按当前产品与筛选条件导出
+    add(
+        "GET",
+        "/schedule-anomalies/export",
+        anomalies_page + overview,
+        scope_adapter="production.plan",
+    )
+    add(
+        "POST",
+        "/schedule-anomalies",
+        anomalies_page + overview,
+        "operate",
         scope_adapter="production.plan",
     )
     add(

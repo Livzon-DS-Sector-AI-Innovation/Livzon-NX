@@ -32,6 +32,8 @@ import type {
   ScheduleDraftParams,
   ScheduleDraftResult,
   ScheduleDraftRecord,
+  ScheduleAnomalyInput,
+  ScheduleAnomalyRecord,
   FermentationBatchActual,
   FermentationBatchActualFormData,
   ProductionSummary,
@@ -817,4 +819,43 @@ export async function saveProductionBoardPreferences(
       body: JSON.stringify(pref),
     },
   )
+}
+
+// ============ 排产异常记录 ============
+
+export interface ScheduleAnomalyQueryParams {
+  product: string
+  page?: number
+  page_size?: number
+  batch_no?: string
+  anomaly_type?: string
+  date_from?: string
+  date_to?: string
+}
+
+export async function getScheduleAnomalies(params: ScheduleAnomalyQueryParams) {
+  const searchParams = new URLSearchParams()
+  searchParams.set('product', params.product)
+  if (params.page) searchParams.set('page', String(params.page))
+  if (params.page_size) searchParams.set('page_size', String(params.page_size))
+  if (params.batch_no) searchParams.set('batch_no', params.batch_no)
+  if (params.anomaly_type) searchParams.set('anomaly_type', params.anomaly_type)
+  if (params.date_from) searchParams.set('date_from', params.date_from)
+  if (params.date_to) searchParams.set('date_to', params.date_to)
+  return fetchApi<ScheduleAnomalyRecord[]>(
+    `/api/v1/production/schedule-anomalies?${searchParams.toString()}`,
+  )
+}
+
+export async function createScheduleAnomaly(data: ScheduleAnomalyInput) {
+  const response = await fetchApi<ScheduleAnomalyRecord>(
+    '/api/v1/production/schedule-anomalies',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    },
+  )
+  revalidatePath('/production/anomalies')
+  return response
 }

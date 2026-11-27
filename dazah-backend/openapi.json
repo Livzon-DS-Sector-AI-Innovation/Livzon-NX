@@ -86296,6 +86296,77 @@
         "title": "SalesPlanDetailUpdate",
         "type": "object"
       },
+      "ScheduleAnomalyBody": {
+        "description": "排产异常记录写入体（空值/空白由服务层统一校验并转业务 400）。",
+        "properties": {
+          "anomaly_type": {
+            "description": "异常类型",
+            "maxLength": 24,
+            "minLength": 1,
+            "title": "Anomaly Type",
+            "type": "string"
+          },
+          "batch_no": {
+            "description": "批号",
+            "maxLength": 64,
+            "title": "Batch No",
+            "type": "string"
+          },
+          "event_date": {
+            "description": "异常发生日期",
+            "format": "date",
+            "title": "Event Date",
+            "type": "string"
+          },
+          "product_code": {
+            "default": "FA",
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Product Code",
+            "type": "string"
+          },
+          "reason": {
+            "description": "原因（必填）",
+            "maxLength": 255,
+            "title": "Reason",
+            "type": "string"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "备注（选填）",
+            "title": "Remark"
+          },
+          "tank_no": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "罐号（选填）",
+            "title": "Tank No"
+          }
+        },
+        "required": [
+          "batch_no",
+          "anomaly_type",
+          "event_date",
+          "reason"
+        ],
+        "title": "ScheduleAnomalyBody",
+        "type": "object"
+      },
       "ScheduleConstraintBody": {
         "description": "排产约束配置写入体（全字段可空，空值表示该项检查跳过）。",
         "properties": {
@@ -86702,10 +86773,37 @@
             "description": "硫酸铵/批号",
             "title": "Ammonium Sulfate Batch"
           },
+          "antifoam_batch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "消泡剂/批号",
+            "title": "Antifoam Batch"
+          },
           "batch_no": {
             "description": "摇瓶批号",
             "title": "Batch No",
             "type": "string"
+          },
+          "bottle_washing": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/PersonRef"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "洗瓶子",
+            "title": "Bottle Washing"
           },
           "calcium_carbonate_batch": {
             "anyOf": [
@@ -86743,6 +86841,18 @@
             "description": "玉米浆/批号",
             "title": "Corn Syrup Batch"
           },
+          "cottonseed_meal_batch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "棉籽饼粉/批号",
+            "title": "Cottonseed Meal Batch"
+          },
           "cylinder_no": {
             "anyOf": [
               {
@@ -86754,6 +86864,18 @@
             ],
             "description": "钢瓶编号",
             "title": "Cylinder No"
+          },
+          "dimethylbutyric_acid_batch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "二甲基丁酸/批号",
+            "title": "Dimethylbutyric Acid Batch"
           },
           "glucose_batch": {
             "anyOf": [
@@ -86781,6 +86903,18 @@
             ],
             "description": "接种人员/复核人",
             "title": "Inoculation Operator"
+          },
+          "maltodextrin_batch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "麦芽糊精/批号",
+            "title": "Maltodextrin Batch"
           },
           "merge_amino_nitrogen": {
             "anyOf": [
@@ -87000,6 +87134,21 @@
             "description": "摇床编号",
             "title": "Shaker No"
           },
+          "shaker_operator": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/PersonRef"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "上摇床人员/复核人",
+            "title": "Shaker Operator"
+          },
           "shaker_setup_operator": {
             "anyOf": [
               {
@@ -87144,6 +87293,18 @@
             ],
             "description": "车间接种人员",
             "title": "Workshop Inoculation Operator"
+          },
+          "yeast_extract_batch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "酵母浸粉/批号",
+            "title": "Yeast Extract Batch"
           }
         },
         "required": [
@@ -87178,6 +87339,18 @@
             "description": "硫酸铵/批号",
             "title": "Ammonium Sulfate Batch"
           },
+          "antifoam_batch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "消泡剂/批号",
+            "title": "Antifoam Batch"
+          },
           "batch_no": {
             "anyOf": [
               {
@@ -87189,6 +87362,21 @@
             ],
             "description": "摇瓶批号",
             "title": "Batch No"
+          },
+          "bottle_washing": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/PersonRef"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "洗瓶子",
+            "title": "Bottle Washing"
           },
           "calcium_carbonate_batch": {
             "anyOf": [
@@ -87226,6 +87414,18 @@
             "description": "玉米浆/批号",
             "title": "Corn Syrup Batch"
           },
+          "cottonseed_meal_batch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "棉籽饼粉/批号",
+            "title": "Cottonseed Meal Batch"
+          },
           "cylinder_no": {
             "anyOf": [
               {
@@ -87237,6 +87437,18 @@
             ],
             "description": "钢瓶编号",
             "title": "Cylinder No"
+          },
+          "dimethylbutyric_acid_batch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "二甲基丁酸/批号",
+            "title": "Dimethylbutyric Acid Batch"
           },
           "glucose_batch": {
             "anyOf": [
@@ -87264,6 +87476,18 @@
             ],
             "description": "接种人员/复核人",
             "title": "Inoculation Operator"
+          },
+          "maltodextrin_batch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "麦芽糊精/批号",
+            "title": "Maltodextrin Batch"
           },
           "merge_amino_nitrogen": {
             "anyOf": [
@@ -87489,6 +87713,21 @@
             "description": "摇床编号",
             "title": "Shaker No"
           },
+          "shaker_operator": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/PersonRef"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "上摇床人员/复核人",
+            "title": "Shaker Operator"
+          },
           "shaker_setup_operator": {
             "anyOf": [
               {
@@ -87633,6 +87872,18 @@
             ],
             "description": "车间接种人员",
             "title": "Workshop Inoculation Operator"
+          },
+          "yeast_extract_batch": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "酵母浸粉/批号",
+            "title": "Yeast Extract Batch"
           }
         },
         "title": "SeedCultureUpdate",
@@ -184236,6 +184487,365 @@
         "summary": "更新销售计划明细",
         "tags": [
           "生产管理"
+        ]
+      }
+    },
+    "/api/v1/production/schedule-anomalies": {
+      "get": {
+        "operationId": "list_schedule_anomalies_api_v1_production_schedule_anomalies_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page_size",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Page Size",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "产品代码",
+            "in": "query",
+            "name": "product",
+            "required": false,
+            "schema": {
+              "default": "FA",
+              "description": "产品代码",
+              "maxLength": 32,
+              "minLength": 1,
+              "title": "Product",
+              "type": "string"
+            }
+          },
+          {
+            "description": "按批号筛选",
+            "in": "query",
+            "name": "batch_no",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "按批号筛选",
+              "title": "Batch No"
+            }
+          },
+          {
+            "description": "按异常类型筛选",
+            "in": "query",
+            "name": "anomaly_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 24,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "按异常类型筛选",
+              "title": "Anomaly Type"
+            }
+          },
+          {
+            "description": "发生日期起（含）",
+            "in": "query",
+            "name": "date_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "发生日期起（含）",
+              "title": "Date From"
+            }
+          },
+          {
+            "description": "发生日期止（含）",
+            "in": "query",
+            "name": "date_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "发生日期止（含）",
+              "title": "Date To"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response List Schedule Anomalies Api V1 Production Schedule Anomalies Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "排产异常记录列表",
+        "tags": [
+          "生产管理",
+          "生产管理 - 排产异常记录"
+        ]
+      },
+      "post": {
+        "operationId": "create_schedule_anomaly_api_v1_production_schedule_anomalies_post",
+        "parameters": [
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduleAnomalyBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Create Schedule Anomaly Api V1 Production Schedule Anomalies Post"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "登记排产异常",
+        "tags": [
+          "生产管理",
+          "生产管理 - 排产异常记录"
+        ]
+      }
+    },
+    "/api/v1/production/schedule-anomalies/export": {
+      "get": {
+        "operationId": "export_schedule_anomalies_api_v1_production_schedule_anomalies_export_get",
+        "parameters": [
+          {
+            "description": "产品代码",
+            "in": "query",
+            "name": "product",
+            "required": false,
+            "schema": {
+              "default": "FA",
+              "description": "产品代码",
+              "maxLength": 32,
+              "minLength": 1,
+              "title": "Product",
+              "type": "string"
+            }
+          },
+          {
+            "description": "按批号筛选",
+            "in": "query",
+            "name": "batch_no",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "按批号筛选",
+              "title": "Batch No"
+            }
+          },
+          {
+            "description": "按异常类型筛选",
+            "in": "query",
+            "name": "anomaly_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 24,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "按异常类型筛选",
+              "title": "Anomaly Type"
+            }
+          },
+          {
+            "description": "发生日期起（含）",
+            "in": "query",
+            "name": "date_from",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "发生日期起（含）",
+              "title": "Date From"
+            }
+          },
+          {
+            "description": "发生日期止（含）",
+            "in": "query",
+            "name": "date_to",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "发生日期止（含）",
+              "title": "Date To"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "auth_token",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Auth Token"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "导出排产异常记录 Excel",
+        "tags": [
+          "生产管理",
+          "生产管理 - 排产异常记录"
         ]
       }
     },

@@ -22,6 +22,7 @@ import {
 import dayjs from 'dayjs'
 import ReactECharts from '@/components/shared/ThemedEChart'
 import BoardNavBlocks from '@/components/production/board-nav-blocks'
+import ScheduleAnomalyLedger from '@/components/production/ScheduleAnomalyLedger'
 import BatchProgressBar from '@/components/production/batch-progress-bar'
 import FlBoardView from '@/components/production/FlBoardView'
 import ProductionSummary from '@/components/production/production-summary'
@@ -30,9 +31,10 @@ import LineStatusConfirmModal, {
   LineHaltHistoryModal,
 } from '@/components/production/line-status-confirm-modal'
 import { useProductContextStore } from '@/stores/product-context'
-import { PRODUCTION_OVERVIEW_PRODUCT_CODES } from '@/lib/production-overview-sections'
+import { PRODUCTION_OVERVIEW_PRODUCT_CODES, PRODUCTION_SCHEDULING_SECTIONS } from '@/lib/production-overview-sections'
 import { useAuthStore } from '@/stores/auth'
 import {
+  hasProductionAnomalyProduct,
   hasProductionOverviewStage,
   PRODUCTION_PAGE_KEYS,
   hasProductionOverviewSection,
@@ -225,6 +227,9 @@ export default function ProductionDashboard() {
   const { message } = App.useApp()
   const productionUser = useAuthStore((state) => state.user)
   const { canOperate, canDelete } = useProductionPermissions(PRODUCTION_PAGE_KEYS.overview)
+  const { canOperate: canOperateAnomalies } = useProductionPermissions(
+    PRODUCTION_PAGE_KEYS.anomalies,
+  )
   // 工段数据权限：发酵模块挂发酵权限，提炼汇总挂提炼权限，收率需双权限；
   // 概览页授权用户按页面数据范围（production_fermentation/extraction/all）解析
   const canFerm = hasProductionOverviewStage(productionUser, 'fermentation')
@@ -244,6 +249,8 @@ export default function ProductionDashboard() {
   // 停产切换确认：pendingHalted 为目标状态（null=关闭）；倒计时在确认框组件内
   const [haltPending, setHaltPending] = useState<boolean | null>(null)
   const [haltHistoryOpen, setHaltHistoryOpen] = useState(false)
+  // 产线异常悬浮卡：屏幕居中弹出、浮于页面之上就地查看/登记（切产线自动关闭）
+  const [anomalyOpen, setAnomalyOpen] = useState(false)
   // 周期回看：空串 = 今天所在周期；否则为所选周期内任意日期
   // 当前产品上下文（导航块切换），看板按此产品取数；
   // SUMMARY 为汇总视图（五产线聚合），非单一产品
@@ -256,6 +263,11 @@ export default function ProductionDashboard() {
     setViewDateMap((prev) => ({ ...prev, [productCode]: value }))
   // 本地保存的旧产品选择可能已被管理员撤销；恢复期间只展示允许的汇总视图。
   const isSummaryView = productCode === 'SUMMARY' || hiddenOverviewCodes.includes(productCode)
+  // 切换产线时关闭异常悬浮卡，避免把上一车间的台账带进新车间
+  // 推迟到微任务，避免 effect 内同步 setState 触发级联渲染
+  useEffect(() => {
+    void Promise.resolve().then(() => setAnomalyOpen(false))
+  }, [productCode])
   // FL 氟苯尼考为合成预混工艺：无发酵工段，概览渲染独立批次工序看板
   const isFlView = productCode === 'FL'
   // 含中试口径切换只对 DR（多拉菌素，中试线 B30x 产量进平均分子）有意义；
@@ -1312,6 +1324,18 @@ export default function ProductionDashboard() {
                 停产历史
               </Button>
             )}
+            {/* 当前产线的计划外异常台账入口：屏幕居中弹出悬浮大卡片，
+                浮于页面之上就地查看/登记，不跳转页面 */}
+            {!isSummaryView && hasProductionAnomalyProduct(productionUser, productCode) && (
+              <Button
+                size="small"
+                type="text"
+                data-testid="anomaly-ledger-entry"
+                onClick={() => setAnomalyOpen(true)}
+              >
+                异常记录
+              </Button>
+            )}
             {!isSummaryView && (
               <Select
                 size="small"
@@ -2081,6 +2105,30 @@ export default function ProductionDashboard() {
           按当前扎帐月保存；输入 310000 表示 310 吨。留空保存则清除设置。
         </Text>
       </Modal>
+      {/* 产线异常悬浮卡：屏幕居中、浮于页面之上，就地查看/登记当前产线的计划外异常 */}
+      <Modal
+        title={`${PRODUCT_NAMES[productCode] ?? PRODUCT_NAMES.FA}异常记录`}
+        open={anomalyOpen}
+        onCancel={() => setAnomalyOpen(false)}
+        footer={null}
+        centered
+        width="min(1120px, calc(100vw - 48px))"
+        mask={{ closable: true }}
+        styles={{
+          body: {
+            maxHeight: 'min(64vh, 620px)',
+            overflowY: 'auto',
+            paddingTop: 0,
+          },
+        }}
+      >
+        <ScheduleAnomalyLedger
+          visibleProducts={PRODUCTION_SCHEDULING_SECTIONS}
+          canOperate={canOperateAnomalies}
+          showHeader={false}
+        />
+      </Modal>
+
       {/* 生产线状态切换确认：确认按钮 5 秒倒计时后才可点，取消随时可点 */}
       <LineStatusConfirmModal
         productName={PRODUCT_NAMES[productCode] ?? PRODUCT_NAMES.FA}

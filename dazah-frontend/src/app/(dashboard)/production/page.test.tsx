@@ -26,6 +26,8 @@ const actions = vi.hoisted(() => ({
   getLineHaltEvents: vi.fn(),
   getProductionBoardPreferences: vi.fn(),
   saveProductionBoardPreferences: vi.fn(),
+  getScheduleAnomalies: vi.fn(),
+  createScheduleAnomaly: vi.fn(),
 }))
 
 vi.mock('@/actions/production', () => actions)
@@ -275,6 +277,13 @@ describe('ProductionHomePage (fermentation board)', () => {
       data: { product_code: 'FA', halted: true },
     })
     actions.getLineHaltEvents.mockResolvedValue({ code: 200, data: { events: [] } })
+    // 产线异常台账：默认空列表
+    actions.getScheduleAnomalies.mockResolvedValue({
+      code: 200,
+      message: 'success',
+      data: [],
+      meta: { page: 1, page_size: 20, total: 0 },
+    })
     // 产品 Tab 复位为默认值，避免用例间状态串扰
     useProductContextStore.setState({ productCode: 'FA' })
     container = document.createElement('div')
@@ -983,6 +992,29 @@ describe('ProductionHomePage (fermentation board)', () => {
     expect(text).toContain('2026-09-20 15:00　复产 · 王五')
     // 只读查看，不触发状态切换请求
     expect(actions.setProductionLineStatus).not.toHaveBeenCalled()
+  })
+
+  it('opens the floating anomaly ledger card above the page on click', async () => {
+    await render()
+    const entry = container.querySelector(
+      '[data-testid="anomaly-ledger-entry"]',
+    ) as HTMLElement
+    expect(entry).toBeTruthy()
+    expect(entry.textContent).toContain('异常记录')
+    await act(async () => {
+      entry.click()
+      await new Promise((r) => setTimeout(r, 300))
+    })
+    // 悬浮大卡片：台账拉取当前产线异常，卡片标题/登记按钮/空态出现在弹层中
+    expect(actions.getScheduleAnomalies).toHaveBeenCalledWith(
+      expect.objectContaining({ product: 'FA', page: 1, page_size: 20 }),
+    )
+    const text = (container.textContent || '') + (document.body.textContent || '')
+    expect(text).toContain('L-苯丙氨酸异常记录')
+    expect(text).toContain('登记异常')
+    expect(text).toContain('当前筛选无异常记录')
+    // 按钮文案保持不变（收起靠关闭弹层，不切换文案）
+    expect(entry.textContent).toContain('异常记录')
   })
 
   it('keeps the selected month independent per product tab', async () => {

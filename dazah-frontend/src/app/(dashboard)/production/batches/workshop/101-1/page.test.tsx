@@ -77,6 +77,13 @@ describe('SeedCulturePage (101-1) 林可台账', () => {
     })
   }
 
+  /** antd Tabs 默认保留非激活面板 DOM：激活面板外的元素查找必须限定作用域 */
+  function activePane(): HTMLElement {
+    const pane = document.querySelector('.ant-tabs-tabpane-active')
+    expect(pane).toBeTruthy()
+    return pane as HTMLElement
+  }
+
   it('renders five fixed tabs; 多拉占位, 林可带台账', async () => {
     act(() => {
       root.render(<App><SeedCulturePage /></App>)
@@ -89,8 +96,9 @@ describe('SeedCulturePage (101-1) 林可台账', () => {
       (t) => (t.textContent || '').trim(),
     )
     expect(tabs).toEqual(['多拉菌素', '盐酸林可霉素', '苯丙氨酸', '洛伐他汀', '美伐他汀'])
-    // 默认激活多拉（未配置）→ 占位
-    expect(bodyText()).toContain('多拉菌素 · 内容建设中（待产品表格配置）')
+    // 默认激活多拉：按其飞书位表渲染台账（含多拉特有字段）
+    expect(bodyText()).toContain('多拉菌素 — 菌种台账')
+    expect(bodyText()).toContain('麦芽糊精/批号')
 
     // 切到林可 → 按飞书表列渲染台账
     clickTab('盐酸林可霉素')
@@ -150,7 +158,7 @@ describe('SeedCulturePage (101-1) 林可台账', () => {
       await new Promise((r) => setTimeout(r, 80))
     })
     const lastCall = actions.getSeedCultures.mock.calls.at(-1)
-    expect(lastCall?.[0]).toMatchObject({ page: 1, page_size: 200, product_name: '盐酸林可霉素', batch_no: 'SC-2026-01' })
+    expect(lastCall?.[0]).toMatchObject({ page: 1, page_size: 200, product_name: '多拉菌素', batch_no: 'SC-2026-01' })
   })
 
   it('renders unknown member fallback and text-valued person chips', async () => {
@@ -205,7 +213,7 @@ describe('SeedCulturePage (101-1) 林可台账', () => {
     await act(async () => {
       await new Promise((r) => setTimeout(r, 80))
     })
-    const addBtn = Array.from(container.querySelectorAll('button')).find((b) => b.textContent?.includes('新建记录'))
+    const addBtn = Array.from(activePane().querySelectorAll('button')).find((b) => b.textContent?.includes('新建记录'))
     expect(addBtn).toBeTruthy()
     await act(async () => { addBtn!.click(); await new Promise((r) => setTimeout(r, 60)) })
 
@@ -264,7 +272,7 @@ describe('SeedCulturePage (101-1) 林可台账', () => {
       await new Promise((r) => setTimeout(r, 80))
     })
     // 切到人员统计视图
-    const statsBtn = Array.from(container.querySelectorAll('.ant-segmented-item')).find(
+    const statsBtn = Array.from(activePane().querySelectorAll('.ant-segmented-item')).find(
       (el) => el.textContent?.includes('人员统计'),
     )
     expect(statsBtn).toBeTruthy()

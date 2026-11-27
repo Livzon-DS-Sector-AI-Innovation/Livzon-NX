@@ -70,6 +70,7 @@
     "/no-access",
     "/page-access-notice/[...originalPath]",
     "/production",
+    "/production/anomalies",
     "/production/auto-scheduling",
     "/production/batches",
     "/production/batches/data/doramectin",

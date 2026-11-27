@@ -24,9 +24,10 @@ const { Text, Title } = Typography
 const { TextArea } = Input
 
 // 101一车间（菌种）：五个固定产品 Tab。字段配置以林可（盐酸林可霉素）
-// 飞书位表为源（37 列，列名/顺序照搬）；其余产品待各自表格配置后重建。
+// 飞书位表为源（37 列，列名/顺序照搬）；多拉菌素复用同一套字段（数据按
+// 产品名隔离，飞书多维表格在页内「同步设置」里配置）；其余产品待各自表格配置后重建。
 const PRODUCTS = [
-  { key: 'doramectin', label: '多拉菌素' },
+  { key: 'doramectin', label: '多拉菌素', productName: '多拉菌素', active: true },
   { key: 'lincomycin', label: '盐酸林可霉素', productName: '盐酸林可霉素', active: true },
   { key: 'phenylalanine', label: '苯丙氨酸' },
   { key: 'lovastatin', label: '洛伐他汀' },
@@ -75,8 +76,58 @@ const LINCOMYCIN_FIELDS: { dataIndex: string; title: string; kind: FieldKind; wi
   { dataIndex: 'remarks', title: '备注', kind: 'text', width: 140 },
 ]
 
-// 绩效统计的环节列（与后端 ROLE_LABELS 一一对应）
-const ROLE_LABELS = [
+// 多拉菌素位表列定义（与林可同为 38 列结构，配方物料与个别人员字段不同；
+// 上摇床人员/复核人、洗瓶子为多拉菌素特有人员字段）
+const DR_FIELDS: { dataIndex: string; title: string; kind: FieldKind; width: number }[] = [
+  { dataIndex: 'batch_no', title: '摇瓶批号', kind: 'text', width: 110 },
+  { dataIndex: 'prepare_date', title: '配置日期', kind: 'date', width: 100 },
+  { dataIndex: 'glucose_batch', title: '葡萄糖/批号', kind: 'text', width: 110 },
+  { dataIndex: 'maltodextrin_batch', title: '麦芽糊精/批号', kind: 'text', width: 110 },
+  { dataIndex: 'cottonseed_meal_batch', title: '棉籽饼粉/批号', kind: 'text', width: 110 },
+  { dataIndex: 'yeast_extract_batch', title: '酵母浸粉/批号', kind: 'text', width: 110 },
+  { dataIndex: 'calcium_carbonate_batch', title: '碳酸钙/批号', kind: 'text', width: 110 },
+  { dataIndex: 'dimethylbutyric_acid_batch', title: '二甲基丁酸/批号', kind: 'text', width: 120 },
+  { dataIndex: 'antifoam_batch', title: '消泡剂/批号', kind: 'text', width: 110 },
+  { dataIndex: 'prepare_operator', title: '配制操作人/复核人', kind: 'person', width: 150 },
+  { dataIndex: 'sterilization_operator', title: '种子消毒人员', kind: 'person', width: 140 },
+  { dataIndex: 'ph_before_adjust', title: '调前PH', kind: 'number', width: 80 },
+  { dataIndex: 'ph_after_adjust', title: '调后PH', kind: 'number', width: 80 },
+  { dataIndex: 'ph_after_sterilization', title: '消后PH', kind: 'number', width: 80 },
+  { dataIndex: 'reducing_sugar', title: '还原糖', kind: 'number', width: 80 },
+  { dataIndex: 'total_sugar', title: '总糖', kind: 'number', width: 80 },
+  { dataIndex: 'amino_nitrogen', title: '氨基氮', kind: 'number', width: 80 },
+  { dataIndex: 'strain_tube_no', title: '冻管菌号', kind: 'text', width: 130 },
+  { dataIndex: 'shaker_no', title: '摇床编号', kind: 'text', width: 90 },
+  { dataIndex: 'shaker_start_date', title: '上摇床日期', kind: 'date', width: 100 },
+  { dataIndex: 'shaker_operator', title: '上摇床人员/复核人', kind: 'person', width: 150 },
+  { dataIndex: 'shaker_setup_operator', title: '上摇床摆东西人员', kind: 'person', width: 160 },
+  { dataIndex: 'tool_no', title: '用具', kind: 'text', width: 90 },
+  { dataIndex: 'merge_time', title: '并瓶时间', kind: 'datetime', width: 130 },
+  { dataIndex: 'merge_count', title: '并瓶数量(瓶）', kind: 'number', width: 110 },
+  { dataIndex: 'merge_cycle', title: '并瓶周期', kind: 'text', width: 90 },
+  { dataIndex: 'merge_ph', title: '并瓶PH', kind: 'number', width: 80 },
+  { dataIndex: 'merge_bacteria_density', title: '并瓶菌浓', kind: 'number', width: 90 },
+  { dataIndex: 'merge_total_sugar', title: '并瓶总糖', kind: 'number', width: 90 },
+  { dataIndex: 'merge_reducing_sugar', title: '并瓶还原糖', kind: 'number', width: 100 },
+  { dataIndex: 'merge_amino_nitrogen', title: '并瓶氨基氮', kind: 'number', width: 100 },
+  { dataIndex: 'tank_setup_operator', title: '进罐摆东西人员', kind: 'person', width: 150 },
+  { dataIndex: 'cylinder_no', title: '钢瓶编号', kind: 'text', width: 90 },
+  { dataIndex: 'merge_operator', title: '并瓶操作人/复核人', kind: 'person', width: 150 },
+  { dataIndex: 'workshop_inoculation_operator', title: '车间接种人员', kind: 'person', width: 140 },
+  { dataIndex: 'bottle_washing', title: '洗瓶子', kind: 'person', width: 120 },
+  { dataIndex: 'tank_remarks', title: '备注（罐号）', kind: 'text', width: 110 },
+  { dataIndex: 'tank_yield', title: '罐产', kind: 'number', width: 80 },
+]
+
+// 各产品的位表列定义（当前：林可与多拉菌素；其余产品接入后补充）
+const PRODUCT_FIELDS: Record<string, typeof LINCOMYCIN_FIELDS> = {
+  多拉菌素: DR_FIELDS,
+  盐酸林可霉素: LINCOMYCIN_FIELDS,
+}
+
+// 绩效统计的环节列（与后端 role_labels_for 按产品一一对应）：
+// 基础环节全产品共用；多拉菌素含特有环节（上摇床、洗瓶子）
+const BASE_ROLE_LABELS = [
   { key: 'prepare_operator', label: '配制' },
   { key: 'sterilization_operator', label: '消毒' },
   { key: 'shaker_setup_operator', label: '摇床摆放' },
@@ -86,9 +137,13 @@ const ROLE_LABELS = [
   { key: 'workshop_inoculation_operator', label: '车间接种' },
 ]
 
-const PERSON_FIELDS = new Set(
-  LINCOMYCIN_FIELDS.filter((f) => f.kind === 'person').map((f) => f.dataIndex),
-)
+const PRODUCT_ROLE_LABELS: Record<string, { key: string; label: string }[]> = {
+  多拉菌素: [
+    ...BASE_ROLE_LABELS,
+    { key: 'shaker_operator', label: '上摇床' },
+    { key: 'bottle_washing', label: '洗瓶子' },
+  ],
+}
 
 /** 人员值归一：兼容历史文本（"张三,李四" / JSON 串）与数组 */
 function normalizePeople(value: SeedCulturePerson[] | string | null | undefined): SeedCulturePerson[] {
@@ -160,6 +215,7 @@ function PersonMonthlyStats({ productName }: { productName: string }) {
 
   useEffect(() => { load(month) }, [load, month]) // eslint-disable-line react-hooks/set-state-in-effect
 
+  const roleLabels = PRODUCT_ROLE_LABELS[productName] ?? BASE_ROLE_LABELS
   const columns: ColumnsType<PersonMonthlyRow> = [
     {
       title: '人员', dataIndex: 'name', key: 'name', width: 170, fixed: 'left',
@@ -177,7 +233,7 @@ function PersonMonthlyStats({ productName }: { productName: string }) {
       ),
     },
     { title: '参与批次', dataIndex: 'total_batches', key: 'total_batches', width: 90 },
-    ...ROLE_LABELS.map((role) => ({
+    ...roleLabels.map((role) => ({
       title: role.label, key: role.key, width: 80,
       render: (_: unknown, r: PersonMonthlyRow) => r.role_counts?.[role.label] || 0,
     })),
@@ -221,6 +277,11 @@ function PersonMonthlyStats({ productName }: { productName: string }) {
 function SeedCultureLedger({ productName, label }: { productName: string; label: string }) {
   const { message, modal } = App.useApp()
   const { canOperate, canDelete } = useProductionPermissions(PRODUCTION_PAGE_KEYS.workshop1011)
+  // 当前产品的位表列定义（多拉菌素与林可字段有差异，见 PRODUCT_FIELDS）
+  const fields = PRODUCT_FIELDS[productName] ?? LINCOMYCIN_FIELDS
+  const personFieldSet = new Set(
+    fields.filter((f) => f.kind === 'person').map((f) => f.dataIndex),
+  )
   const [form] = Form.useForm()
   const [editForm] = Form.useForm()
   const [loading, setLoading] = useState(false)
@@ -261,7 +322,7 @@ function SeedCultureLedger({ productName, label }: { productName: string; label:
         shaker_start_date: r.shaker_start_date ? dayjs(r.shaker_start_date) : null,
         merge_time: r.merge_time ? dayjs(r.merge_time) : null,
         ...Object.fromEntries(
-          LINCOMYCIN_FIELDS.filter((f) => f.kind === 'person').map((f) => [
+          fields.filter((f) => f.kind === 'person').map((f) => [
             f.dataIndex, personNames(r[f.dataIndex as keyof SeedCultureRecord]),
           ]),
         ),
@@ -289,7 +350,7 @@ function SeedCultureLedger({ productName, label }: { productName: string; label:
       const values = editing ? await editForm.validateFields() : await form.validateFields()
       const data: Record<string, unknown> = {}
       for (const [k, v] of Object.entries(values)) {
-        if (PERSON_FIELDS.has(k)) {
+        if (personFieldSet.has(k)) {
           const names = String(v || '')
             .split(/[,，、]/)
             .map((n) => n.trim())
@@ -315,7 +376,7 @@ function SeedCultureLedger({ productName, label }: { productName: string; label:
   }
 
   const columns: ColumnsType<SeedCultureRecord> = [
-    ...LINCOMYCIN_FIELDS.map((f) => ({
+    ...fields.map((f) => ({
       title: f.title,
       dataIndex: f.dataIndex,
       key: f.dataIndex,
@@ -468,7 +529,7 @@ function SeedCultureLedger({ productName, label }: { productName: string; label:
       <Modal title="记录详情" open={detailVisible} onCancel={() => setDetailVisible(false)} footer={null} width={900}>
         {detailRecord && (
           <Descriptions column={3} bordered size="small">
-            {LINCOMYCIN_FIELDS.map((f) => (
+            {fields.map((f) => (
               <Descriptions.Item key={f.dataIndex} label={f.title}>
                 {f.kind === 'person'
                   ? <PersonChips value={detailRecord[f.dataIndex as keyof SeedCultureRecord]} />

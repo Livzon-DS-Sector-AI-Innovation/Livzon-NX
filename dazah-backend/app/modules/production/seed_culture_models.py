@@ -47,6 +47,21 @@ class SeedCulture(BaseModel):
     calcium_carbonate_batch: Mapped[str | None] = mapped_column(
         String(128), nullable=True, comment="物料F/批号"
     )
+    maltodextrin_batch: Mapped[str | None] = mapped_column(
+        String(128), nullable=True, comment="麦芽糊精/批号（多拉菌素）"
+    )
+    cottonseed_meal_batch: Mapped[str | None] = mapped_column(
+        String(128), nullable=True, comment="棉籽饼粉/批号（多拉菌素）"
+    )
+    yeast_extract_batch: Mapped[str | None] = mapped_column(
+        String(128), nullable=True, comment="酵母浸粉/批号（多拉菌素）"
+    )
+    dimethylbutyric_acid_batch: Mapped[str | None] = mapped_column(
+        String(128), nullable=True, comment="二甲基丁酸/批号（多拉菌素）"
+    )
+    antifoam_batch: Mapped[str | None] = mapped_column(
+        String(128), nullable=True, comment="消泡剂/批号（多拉菌素）"
+    )
     prepare_operator: Mapped[list[dict[str, Any]] | str | None] = mapped_column(
         "prepare_operator_people", JSONB(none_as_null=True), nullable=True
     )
@@ -76,6 +91,12 @@ class SeedCulture(BaseModel):
     )
     shaker_setup_operator: Mapped[list[dict[str, Any]] | str | None] = mapped_column(
         "shaker_setup_operator_people", JSONB(none_as_null=True), nullable=True
+    )
+    shaker_operator: Mapped[list[dict[str, Any]] | str | None] = mapped_column(
+        "shaker_operator_people", JSONB(none_as_null=True), nullable=True
+    )
+    bottle_washing: Mapped[list[dict[str, Any]] | str | None] = mapped_column(
+        "bottle_washing_people", JSONB(none_as_null=True), nullable=True
     )
     shaker_no: Mapped[str | None] = mapped_column(
         String(64), nullable=True, comment="摇床编号"
